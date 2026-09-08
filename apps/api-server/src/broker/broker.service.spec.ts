@@ -83,7 +83,8 @@ describe('BrokerService', () => {
         expect.objectContaining({
           task: 'startbroker',
           token: mockHost.token,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual({ success: true });
     });
@@ -126,7 +127,8 @@ describe('BrokerService', () => {
         expect.objectContaining({
           task: 'stopbroker',
           token: mockHost.token,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual({ success: true });
     });

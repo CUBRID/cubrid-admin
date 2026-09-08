@@ -30,6 +30,7 @@ export {
   convertExvolInfoToCmsFormat,
   convertExvolArrayToCmsFormat,
 } from './cubrid/parse-exvol';
+export { mapWithConcurrency } from './concurrency/map-with-concurrency';
 export {
   parseHaDbListDbNamesFromHaConf,
   isHostHaModeOnFromCubridConf,

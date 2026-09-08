@@ -283,7 +283,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'startdb',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
     });
@@ -301,7 +302,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'ha_start',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -358,7 +360,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'stopdb',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
     });
@@ -376,7 +379,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'ha_stop',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -476,7 +480,8 @@ describe('DatabaseLifecycleService', () => {
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         `https://${mockHost.address}:${mockHost.port}/cm_api`,
-        expect.objectContaining({ task: 'ha_start' })
+        expect.objectContaining({ task: 'ha_start' }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       // Only one ha_start call for both HA databases, not one per database.
       const haStartCalls = cmsClient.postAuthenticated.mock.calls.filter(
@@ -599,12 +604,14 @@ describe('DatabaseLifecycleService', () => {
       expect(cmsClient.postAuthenticated).toHaveBeenNthCalledWith(
         1,
         expect.any(String),
-        expect.objectContaining({ task: 'ha_stop', dbname: mockDbname })
+        expect.objectContaining({ task: 'ha_stop', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(cmsClient.postAuthenticated).toHaveBeenNthCalledWith(
         2,
         expect.any(String),
-        expect.objectContaining({ task: 'ha_start', dbname: mockDbname })
+        expect.objectContaining({ task: 'ha_start', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -1193,7 +1200,9 @@ describe('DatabaseLifecycleService', () => {
           token: mockHost.token,
           dbname: mockDbname,
           delbackup: 'y',
-        }
+          async: 'yes',
+        },
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });
@@ -1217,7 +1226,8 @@ describe('DatabaseLifecycleService', () => {
         expect.objectContaining({
           task: 'deletedb',
           delbackup: 'n',
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });

@@ -46,8 +46,20 @@ import {
   isHostHaModeOnFromCubridConf,
   getSectionParams,
   parseConfigParamsBySection,
+  mapWithConcurrency,
 } from '@util';
 import { BrokerService } from '@broker';
+
+/**
+ * startdb/stopdb now go through executeAsyncCmsJobRequest, so each one
+ * consumes one of CMS's async-job slots for the duration of the call. That
+ * cap is small (CMS enforces a single-digit global limit per host, shared
+ * across every task and user), so a host with many non-HA databases must
+ * not fire startAllDatabases/stopAllDatabases's per-db calls all at once —
+ * see mapWithConcurrency below. Kept well under the cap to leave headroom
+ * for whatever else is concurrently using async jobs on the same host.
+ */
+const NON_HA_BULK_ACTION_CONCURRENCY = 4;
 
 /**
  * Service for managing database lifecycle operations.
@@ -118,7 +130,7 @@ export class DatabaseLifecycleService extends BaseService {
     // one call site covers the individual and bulk paths together.
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
-    return this.executeCmsRequest<StartDatabaseCmsRequest & { task: 'startdb' }, BaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<StartDatabaseCmsRequest & { task: 'startdb' }, BaseCmsResponse>(
       userId,
       hostUid,
       { task: 'startdb', dbname }
@@ -137,7 +149,7 @@ export class DatabaseLifecycleService extends BaseService {
     // stopDatabase, restartDatabase, and stopAllDatabases together.
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
-    return this.executeCmsRequest<StopDatabaseCmsRequest & { task: 'stopdb' }, BaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<StopDatabaseCmsRequest & { task: 'stopdb' }, BaseCmsResponse>(
       userId,
       hostUid,
       { task: 'stopdb', dbname }
@@ -371,8 +383,10 @@ export class DatabaseLifecycleService extends BaseService {
       }
     }
 
-    const results = await Promise.allSettled(
-      nonHaTargets.map((dbname) => this.startNonHaDatabase(userId, hostUid, dbname))
+    const results = await mapWithConcurrency(
+      nonHaTargets,
+      NON_HA_BULK_ACTION_CONCURRENCY,
+      (dbname) => this.startNonHaDatabase(userId, hostUid, dbname)
     );
     results.forEach((result, index) => {
       const dbname = nonHaTargets[index];
@@ -442,8 +456,10 @@ export class DatabaseLifecycleService extends BaseService {
       }
     }
 
-    const results = await Promise.allSettled(
-      nonHaTargets.map((dbname) => this.stopNonHaDatabase(userId, hostUid, dbname))
+    const results = await mapWithConcurrency(
+      nonHaTargets,
+      NON_HA_BULK_ACTION_CONCURRENCY,
+      (dbname) => this.stopNonHaDatabase(userId, hostUid, dbname)
     );
     results.forEach((result, index) => {
       const dbname = nonHaTargets[index];
@@ -1071,7 +1087,7 @@ export class DatabaseLifecycleService extends BaseService {
 
     this.logger.debug(`Deleting database: ${dbname} on host: ${hostUid}`);
 
-    await this.executeCmsRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
+    await this.executeAsyncCmsJobRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest
