@@ -249,6 +249,7 @@ const initialState = {
   dbLogsByDbName: {}, // { dbname: [logs] }
   dbLogsLoading: false,
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
+  latestBrokerListRequestId: null,
   propertyModal: {
     isOpen: false,
     brokerName: null,
@@ -294,12 +295,19 @@ const brokerSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchBrokerList.pending, (state, action) => {
+        // Per-broker status calls inside this thunk mean a host with many
+        // brokers can take a while — track the latest requestId so a slower
+        // earlier fetch (e.g. a previous host's, still in flight when the
+        // user switches focus again) can't resolve after this one and
+        // clobber its fresher data.
+        state.latestBrokerListRequestId = action.meta.requestId;
         if (!action.meta.arg?.isBackground) {
           state.loading = true;
         }
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestBrokerListRequestId) return;
         state.loading = false;
         const newBrokers = action.payload;
         if (JSON.stringify(state.brokers) !== JSON.stringify(newBrokers)) {
@@ -309,6 +317,7 @@ const brokerSlice = createSlice({
         if (!exists) state.selectedBroker = null;
       })
       .addCase(fetchBrokerList.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestBrokerListRequestId) return;
         state.loading = false;
         state.error = action.payload;
         state.brokers = [];

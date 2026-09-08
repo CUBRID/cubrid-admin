@@ -174,6 +174,7 @@ const initialState = {
   loading: false,
   actionLoading: false,
   error: null,
+  latestStartInfoRequestId: null,
 };
 
 const databaseCoreSlice = createSlice({
@@ -193,26 +194,49 @@ const databaseCoreSlice = createSlice({
       state.error = null;
     },
     resetDatabaseState: (state) => {
+      // Deliberately does NOT touch loggedInDatabases/loggingInDatabases —
+      // those are composite-keyed (hostUid:dbname) and shared across every
+      // host's tree, not just the one being reset here. This reducer fires
+      // on every plain host-focus switch (see useHostActivation.js), so
+      // clearing them here used to wipe every OTHER host's login state too
+      // each time the user simply clicked between hosts. Use
+      // clearDatabaseLoginsForHost to actually invalidate one host's logins
+      // (host deleted, host session revoked).
       state.databases = [];
       state.activeDatabases = [];
       state.haDbNames = [];
       state.selectedDatabase = null;
       state.selectedDatabaseSubItem = null;
-      state.loggedInDatabases = [];
       state.error = null;
+    },
+    clearDatabaseLoginsForHost: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid) return;
+      const prefix = `${hostUid}:`;
+      state.loggedInDatabases = state.loggedInDatabases.filter((key) => !key.startsWith(prefix));
+      Object.keys(state.loggingInDatabases).forEach((key) => {
+        if (key.startsWith(prefix)) delete state.loggingInDatabases[key];
+      });
     }
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchDatabaseStartInfo.pending, (state, action) => {
+        // A slower earlier request (e.g. a previous host's start-info, still
+        // in flight when the user switches focus again) can otherwise
+        // resolve after this one and clobber its fresher data — track the
+        // latest requestId and have fulfilled/rejected ignore anything else.
+        state.latestStartInfoRequestId = action.meta.requestId;
         if (!action.meta.arg?.isBackground) state.loading = true;
         state.error = null;
       })
       .addCase(fetchDatabaseStartInfo.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestStartInfoRequestId) return;
         state.loading = false;
         parseDbResponse(state, action.payload);
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestStartInfoRequestId) return;
         state.loading = false;
         state.error = action.payload;
         state.databases = [];
@@ -316,11 +340,12 @@ const databaseCoreSlice = createSlice({
   }
 });
 
-export const { 
-  setSelectedDatabase, 
-  setSelectedDatabaseSubItem, 
+export const {
+  setSelectedDatabase,
+  setSelectedDatabaseSubItem,
   clearDatabaseError,
-  resetDatabaseState 
+  resetDatabaseState,
+  clearDatabaseLoginsForHost
 } = databaseCoreSlice.actions;
 
 export default databaseCoreSlice.reducer;

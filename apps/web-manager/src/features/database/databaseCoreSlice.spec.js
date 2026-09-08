@@ -9,7 +9,9 @@ vi.mock('./databaseApi', () => ({
   },
 }));
 import { databaseApi } from './databaseApi';
-import reducer, { stopDatabase, loginDatabase, logoutDatabase } from './databaseCoreSlice';
+import reducer, {
+  stopDatabase, loginDatabase, logoutDatabase, resetDatabaseState, clearDatabaseLoginsForHost,
+} from './databaseCoreSlice';
 
 beforeEach(() => vi.resetAllMocks());
 const stop = () => configureStore({ reducer }).dispatch(stopDatabase({ hostUid: 'host', dbname: 'db1' }));
@@ -79,6 +81,32 @@ describe('loggedInDatabases is scoped per host, not by bare dbname', () => {
     await store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
     await store.dispatch(loginDatabase({ hostUid: 'hostB', dbname: 'demodb' }));
     await store.dispatch(logoutDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+
+    const { loggedInDatabases } = store.getState();
+    expect(loggedInDatabases).not.toContain('hostA:demodb');
+    expect(loggedInDatabases).toContain('hostB:demodb');
+  });
+
+  it('resetDatabaseState (plain host-focus switch) does not clear other hosts\' logins', async () => {
+    databaseApi.loginDatabaseWithProfile.mockResolvedValue(true);
+    const store = configureStore({ reducer });
+
+    await store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+    await store.dispatch(loginDatabase({ hostUid: 'hostB', dbname: 'demodb' }));
+    store.dispatch(resetDatabaseState());
+
+    const { loggedInDatabases } = store.getState();
+    expect(loggedInDatabases).toContain('hostA:demodb');
+    expect(loggedInDatabases).toContain('hostB:demodb');
+  });
+
+  it('clearDatabaseLoginsForHost only purges the targeted host\'s logins', async () => {
+    databaseApi.loginDatabaseWithProfile.mockResolvedValue(true);
+    const store = configureStore({ reducer });
+
+    await store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+    await store.dispatch(loginDatabase({ hostUid: 'hostB', dbname: 'demodb' }));
+    store.dispatch(clearDatabaseLoginsForHost('hostA'));
 
     const { loggedInDatabases } = store.getState();
     expect(loggedInDatabases).not.toContain('hostA:demodb');
