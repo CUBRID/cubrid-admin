@@ -110,7 +110,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
             weight={300} 
             className={value ? 'text-amber-500' : 'text-slate-400'} 
           />
-          <span className={`text-[13px] font-medium truncate ${value ? 'text-slate-900 dark:text-slate-200' : 'text-slate-400'}`}>
+          <span className={`text-15 font-medium truncate ${value ? 'text-slate-900 dark:text-slate-200' : 'text-slate-400'}`}>
             {value ? value : CM.allTables}
           </span>
         </div>
@@ -148,7 +148,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
                 }`}
               >
                 <div className={`w-2 h-2 rounded-full transition-all ${value === '' ? 'bg-amber-500 scale-125 shadow-[0_0_8px_rgba(255,188,4,0.6)]' : 'bg-slate-300 dark:bg-slate-700 group-hover:bg-amber-500/40'}`}></div>
-                <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${value === '' ? 'text-amber-500' : 'text-slate-500 dark:text-slate-400'}`}>{CM.allTables}</span>
+                <span className={`text-12 font-black uppercase tracking-[0.15em] ${value === '' ? 'text-amber-500' : 'text-slate-500 dark:text-slate-400'}`}>{CM.allTables}</span>
               </button>
             )}
 
@@ -165,7 +165,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
             {isLoading && (
               <div className="py-12 text-center space-y-4">
                 <Spinner size="md" className="mx-auto" />
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em]">{CM.processing}</p>
+                <p className="text-12 text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em]">{CM.processing}</p>
               </div>
             )}
 
@@ -183,7 +183,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
                     }`}
                   >
                     <Icon name="table" size="sm" weight={300} className={value === cls.classname ? 'text-status-dark' : 'text-slate-400 group-hover:text-amber-500'} />
-                    <span className="text-[12px] font-medium truncate leading-none select-none flex-1 lowercase">{cls.classname}</span>
+                    <span className="text-14 font-medium truncate leading-none select-none flex-1 lowercase">{cls.classname}</span>
                   </button>
                 ))}
               </div>
@@ -405,7 +405,7 @@ export default function OptimizeDatabaseModal() {
         </CaDialogGroup>
 
         <CaDialogGroup title={CM.grpOptimizeDesc}>
-          <Typography variant="p" className="text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
+          <Typography variant="p" className="text-14 leading-relaxed text-slate-600 dark:text-slate-400">
             {CM.lblOptimizeDesc}
           </Typography>
         </CaDialogGroup>

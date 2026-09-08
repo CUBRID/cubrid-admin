@@ -177,19 +177,19 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.databaseDashboard}</Typography>
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.databaseDashboard}</Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60" />
-              <Typography variant="label" className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">@{dbname}</Typography>
+              <Typography variant="label" className="text-12 text-slate-400 font-bold uppercase tracking-widest leading-none">@{dbname}</Typography>
               {isHA && isDbInHa && (
-                <span className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-600 dark:text-amber-400 tracking-wide uppercase leading-none">
+                <span className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-10 font-bold text-amber-600 dark:text-amber-400 tracking-wide uppercase leading-none">
                   HA
                 </span>
               )}
@@ -198,7 +198,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -212,7 +212,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5 shadow-xs'}`}
             title={CM.refreshDatabaseStatus}
           >
-            <Icon name="refresh" size="18px" className={(isLoading || isManualRefreshing) ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="19px" className={(isLoading || isManualRefreshing) ? 'animate-spin' : ''} />
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -224,7 +224,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
             className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all active:scale-[0.98] bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5 shadow-xs`}
             title={CM.exportMetricsCsv}
           >
-            <Icon name="ios_share" size="18px" weight={300} />
+            <Icon name="ios_share" size="19px" weight={300} />
           </button>
         </div>
       </header>
@@ -238,7 +238,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-              <Typography variant="label" className="text-[11px] text-slate-400 uppercase tracking-widest">{CM.loadingDashboard}</Typography>
+              <Typography variant="label" className="text-13 text-slate-400 uppercase tracking-widest">{CM.loadingDashboard}</Typography>
             </div>
           </div>
         ) : (

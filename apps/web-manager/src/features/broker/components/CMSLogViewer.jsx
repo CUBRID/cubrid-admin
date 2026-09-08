@@ -55,11 +55,11 @@ function CMSLogViewer({ hostUid, type }) {
       <div className="shrink-0 px-4 py-2.5 bg-white dark:bg-bk-side border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${type === 'access' ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-rose-50 dark:bg-rose-900/20'}`}>
-            <span className={`material-symbols-outlined text-[18px] ${type === 'access' ? 'text-amber-600 dark:text-bk-yellow' : 'text-rose-500'}`}>{icon}</span>
+            <span className={`material-symbols-outlined text-20 ${type === 'access' ? 'text-amber-600 dark:text-bk-yellow' : 'text-rose-500'}`}>{icon}</span>
           </div>
           <div>
-            <h2 className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">{title}</h2>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{CM.managerSystemActivity}</p>
+            <h2 className="text-14 font-semibold text-slate-800 dark:text-slate-200 leading-tight">{title}</h2>
+            <p className="text-12 text-slate-500 dark:text-slate-400 font-medium">{CM.managerSystemActivity}</p>
           </div>
         </div>
 
@@ -77,10 +77,10 @@ function CMSLogViewer({ hostUid, type }) {
             title={CM.copyVisibleEntries}
             className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all active:scale-[0.98] disabled:opacity-30 
               ${copying
-                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 !w-auto !px-3 font-bold !gap-1.5 text-[10px]'
+                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 !w-auto !px-3 font-bold !gap-1.5 text-12'
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-bk-yellow hover:border-amber-500/50 dark:hover:border-bk-yellow/50 hover:bg-white dark:hover:bg-white/5 shadow-xs'}`}
           >
-            <Icon name={copying ? 'check' : 'content_copy'} size="18px" weight={300} />
+            <Icon name={copying ? 'check' : 'content_copy'} size="19px" weight={300} />
             {copying && <span className="tracking-tight">{CM.copiedLabel}</span>}
           </button>
 
@@ -94,7 +94,7 @@ function CMSLogViewer({ hostUid, type }) {
                 ? 'bg-slate-100 dark:bg-white/5 text-slate-300 dark:text-slate-600 border-slate-200 dark:border-white/5 cursor-not-allowed opacity-50'
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-bk-yellow hover:border-amber-500/50 dark:hover:border-bk-yellow/50 hover:bg-white dark:hover:bg-white/5 shadow-xs'}`}
           >
-            <Icon name="refresh" size="18px" weight={loading ? 700 : 300} className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="19px" weight={loading ? 700 : 300} className={loading ? 'animate-spin' : ''} />
           </button>
 
           <div className="h-4 w-px bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -106,9 +106,9 @@ function CMSLogViewer({ hostUid, type }) {
               disabled={currentPage === 1 || loading || showAll}
               className="p-1 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-bk-yellow rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
-              <Icon name="chevron_left" size="18px" />
+              <Icon name="chevron_left" size="19px" />
             </button>
-            <div className={`px-3 text-[11px] font-bold text-slate-600 dark:text-slate-300 min-w-[72px] text-center font-mono ${showAll ? 'opacity-30' : ''}`}>
+            <div className={`px-3 text-13 font-bold text-slate-600 dark:text-slate-300 min-w-[72px] text-center font-mono ${showAll ? 'opacity-30' : ''}`}>
               {currentPage} / {totalPages}
             </div>
             <button
@@ -116,13 +116,13 @@ function CMSLogViewer({ hostUid, type }) {
               disabled={currentPage >= totalPages || loading || showAll}
               className="p-1 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-bk-yellow rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
-              <Icon name="chevron_right" size="18px" />
+              <Icon name="chevron_right" size="19px" />
             </button>
 
             <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
             <button
               onClick={() => setShowAll(!showAll)}
-              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap transition-colors ${
+              className={`px-2 py-1 rounded-md text-12 font-bold transition-all whitespace-nowrap transition-colors ${
                 showAll 
                 ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20' 
                 : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-white/5 hover:text-amber-600 dark:hover:text-bk-yellow'
@@ -135,7 +135,7 @@ function CMSLogViewer({ hostUid, type }) {
       </div>
 
       {/* Table Header */}
-      <div className="shrink-0 flex items-center gap-4 px-4 py-2 bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider">
+      <div className="shrink-0 flex items-center gap-4 px-4 py-2 bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-slate-800 text-12 font-bold text-slate-500 dark:text-slate-400 tracking-wider">
         <div className="w-36 shrink-0">{CM.timeLabel}</div>
         <div className="w-24 shrink-0">{CM.userLabel}</div>
         <div className="w-40 shrink-0">{CM.taskLabel}</div>
@@ -156,7 +156,7 @@ function CMSLogViewer({ hostUid, type }) {
             {paginatedLogs.map((log, idx) => (
               <div 
                 key={idx} 
-                className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group text-[12px] leading-relaxed"
+                className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group text-14 leading-relaxed"
               >
                 <div className="w-36 shrink-0 text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400 transition-colors">
                   {log.time}
@@ -166,21 +166,21 @@ function CMSLogViewer({ hostUid, type }) {
                   <span className="text-slate-700 dark:text-slate-300 font-medium truncate">{log['@user'] || 'System'}</span>
                 </div>
                 <div className="w-40 shrink-0">
-                  <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-sm border border-indigo-500/20 text-[10px] font-bold tracking-tighter">
+                  <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-sm border border-indigo-500/20 text-12 font-bold tracking-tighter">
                     {log.taskname}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0 truncate">
                   {type === 'error' ? (
                     <div className="flex gap-2 items-center">
-                      <span className="text-rose-500 dark:text-rose-400 font-bold text-[10px] bg-rose-400/10 px-1 rounded-sm shrink-0">{CM.errLabel}</span>
+                      <span className="text-rose-500 dark:text-rose-400 font-bold text-12 bg-rose-400/10 px-1 rounded-sm shrink-0">{CM.errLabel}</span>
                       <span className="text-slate-600 dark:text-slate-300 truncate" title={log.errornote?.replace('<end>', '')}>
                         {log.errornote?.replace('<end>', '')}
                       </span>
                     </div>
                   ) : (
                     <div className="flex gap-2 items-center">
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[10px] bg-emerald-400/10 px-1 rounded-sm shrink-0">{CM.successLabel}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-12 bg-emerald-400/10 px-1 rounded-sm shrink-0">{CM.successLabel}</span>
                       <span className="text-slate-500 dark:text-slate-400 italic">{CM.operationCompletedLabel(log.taskname)}</span>
                     </div>
                   )}
@@ -192,7 +192,7 @@ function CMSLogViewer({ hostUid, type }) {
       </div>
 
       {/* Footer Stats */}
-      <div className="shrink-0 px-4 py-2 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-tight">
+      <div className="shrink-0 px-4 py-2 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-12 text-slate-500 dark:text-slate-400 font-medium tracking-tight">
         <div className="flex items-center gap-4">
           <span>{CM.totalEntriesLabel(totalEntries.toLocaleString())}</span>
           {showAll ? (

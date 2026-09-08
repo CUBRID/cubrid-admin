@@ -42,21 +42,21 @@ export default function AboutModal() {
           {/* Main Info */}
           <div className="flex flex-col items-center text-center w-full">
             <SectionHeader title={CM.cubridWebManager} icon="verified" className="justify-center" />
-            <Typography variant="p" className="text-slate-500 dark:text-slate-400 text-[13px] mt-1">
+            <Typography variant="p" className="text-slate-500 dark:text-slate-400 text-15 mt-1">
               {CM.aboutTagline}
             </Typography>
           </div>
 
           {/* Version */}
           <div className="flex flex-col items-center pt-2 pb-2">
-            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-[16px]">
+            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-18">
               0.0.1 Alpha
             </Typography>
           </div>
 
           {/* Copyright Section */}
           <div className="pt-4 border-t border-slate-50 dark:border-white/5 text-center">
-            <Typography variant="caption" className="text-slate-400 dark:text-slate-500 text-[10px] tracking-widest uppercase">
+            <Typography variant="caption" className="text-slate-400 dark:text-slate-500 text-12 tracking-widest uppercase">
               {CM.copyrightNotice}
             </Typography>
           </div>

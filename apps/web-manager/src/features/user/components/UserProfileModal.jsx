@@ -104,7 +104,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
         {(error || globalError) && (
           <div className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
             <Icon name="error_outline" size="sm" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
-            <p className="text-[11.5px] text-rose-500 font-medium flex-1 leading-relaxed">{error || globalError}</p>
+            <p className="text-13 text-rose-500 font-medium flex-1 leading-relaxed">{error || globalError}</p>
           </div>
         )}
 
@@ -114,13 +114,13 @@ export default function UserProfileModal({ isOpen, onClose }) {
             {/* Avatar / Identity Card */}
             <div className="flex items-center gap-4 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10">
               <div className="w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/30">
-                <Icon name="person" size="24px" weight={400} className="text-white" />
+                <Icon name="person" size="25px" weight={400} className="text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-[14px] font-black text-slate-800 dark:text-white tracking-tight truncate">
+                <p className="text-16 font-black text-slate-800 dark:text-white tracking-tight truncate">
                   {profile.id || '—'}
                 </p>
-                <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-0.5">
+                <p className="text-12 font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-0.5">
                   {CM.administratorLabel}
                 </p>
               </div>
@@ -132,9 +132,9 @@ export default function UserProfileModal({ isOpen, onClose }) {
               <div className="rounded-xl border border-slate-200 dark:border-white/8 overflow-hidden">
               <div className="divide-y divide-slate-100 dark:divide-white/5">
                 <div className="flex items-center px-4 py-3 gap-3">
-                  <Icon name="badge" size="16px" weight={300} className="text-slate-400 shrink-0" />
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 w-24 shrink-0">{CM.userIdLabel}</span>
-                  <span className="text-[11.5px] font-bold text-slate-700 dark:text-slate-200 truncate">{profile.id || '—'}</span>
+                  <Icon name="badge" size="17px" weight={300} className="text-slate-400 shrink-0" />
+                  <span className="text-13 text-slate-400 dark:text-slate-500 w-24 shrink-0">{CM.userIdLabel}</span>
+                  <span className="text-13 font-bold text-slate-700 dark:text-slate-200 truncate">{profile.id || '—'}</span>
                 </div>
               </div>
               </div>

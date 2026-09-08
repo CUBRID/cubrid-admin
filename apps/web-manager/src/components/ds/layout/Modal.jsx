@@ -174,11 +174,11 @@ export const Modal = ({
             </div>
           )}
           <div className="flex-1">
-            <Typography variant="h4" className="text-[12px] font-medium text-slate-900 dark:text-white leading-none tracking-wide">
+            <Typography variant="h4" className="text-14 font-medium text-slate-900 dark:text-white leading-none tracking-wide">
               {title}
             </Typography>
             {subtitle && (
-              <Typography variant="p" className="text-[10px] mt-1 text-slate-500 font-medium">
+              <Typography variant="p" className="text-12 mt-1 text-slate-500 font-medium">
                 {subtitle}
               </Typography>
             )}

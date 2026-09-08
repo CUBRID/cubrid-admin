@@ -38,20 +38,20 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
+          <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 leading-tight">
             {CM.volumeCategoryMonitor}
           </Typography>
           <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
             <div className={`w-1 h-1 rounded-full ${dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-            <span className={`text-[9px] font-bold ${dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+            <span className={`text-11 font-bold ${dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
               {dashboardInterval > 0 ? CM.live : CM.paused}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <Typography variant="label" className="text-[9px] text-slate-400 font-mono tracking-tight">{dbname}</Typography>
+          <Typography variant="label" className="text-11 text-slate-400 font-mono tracking-tight">{dbname}</Typography>
           <span className="text-slate-300 dark:text-slate-700">·</span>
-          <Typography variant="label" className={`text-[9px] font-bold uppercase tracking-widest ${meta.color}`}>
+          <Typography variant="label" className={`text-11 font-bold uppercase tracking-widest ${meta.color}`}>
             {meta.label}
           </Typography>
         </div>
@@ -61,17 +61,17 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
     <div className="flex items-center gap-1.5">
       <div className="hidden lg:flex items-center gap-6 mr-4 opacity-80">
         <div className="text-right">
-          <Typography variant="label" className="text-[8px] text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.capacity}</Typography>
-          <Typography variant="p" className="text-[12px] font-black text-slate-700 dark:text-slate-200 font-mono leading-none">{formatPagesToSize(summary.total, pageSize)}</Typography>
+          <Typography variant="label" className="text-10 text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.capacity}</Typography>
+          <Typography variant="p" className="text-14 font-black text-slate-700 dark:text-slate-200 font-mono leading-none">{formatPagesToSize(summary.total, pageSize)}</Typography>
         </div>
         <div className="w-px h-6 bg-slate-200 dark:bg-white/6" />
         <div className="text-right">
-          <Typography variant="label" className="text-[8px] text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.usageLabel}</Typography>
-          <Typography variant="p" className={`text-[12px] font-black font-mono leading-none ${usageSeverity}`}>{summary.pct.toFixed(1)}%</Typography>
+          <Typography variant="label" className="text-10 text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.usageLabel}</Typography>
+          <Typography variant="p" className={`text-14 font-black font-mono leading-none ${usageSeverity}`}>{summary.pct.toFixed(1)}%</Typography>
         </div>
       </div>
 
-      <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+      <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
         {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
       </Typography>
 
@@ -84,7 +84,7 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
             : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5'}`}
         title={CM.refreshCategoryMetrics}
       >
-        <Icon name="refresh" size="18px" className={isLoading ? 'animate-spin' : ''} />
+        <Icon name="refresh" size="19px" className={isLoading ? 'animate-spin' : ''} />
       </button>
 
       <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -104,8 +104,8 @@ const CategoryStats = memo(({ volumes, summary, pageSize }) => {
         { label: CM.spaceUsage, val: `${summary.pct.toFixed(1)}%`, icon: 'donut_small', color: 'text-amber-500' },
       ].map((stat, i) => (
         <div key={i} className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm p-3.5 flex flex-col gap-1.5 shadow-xs">
-          <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{stat.label}</Typography>
-          <Typography variant="p" className={`text-[13px] font-bold font-mono tracking-tight truncate ${stat.color === 'text-slate-600' ? 'text-slate-700 dark:text-slate-200' : stat.color}`}>{stat.val}</Typography>
+          <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{stat.label}</Typography>
+          <Typography variant="p" className={`text-15 font-bold font-mono tracking-tight truncate ${stat.color === 'text-slate-600' ? 'text-slate-700 dark:text-slate-200' : stat.color}`}>{stat.val}</Typography>
         </div>
       ))}
     </div>
@@ -117,8 +117,8 @@ const UtilizationBar = memo(({ summary, usageSeverity, pageSize }) => {
   return (
     <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm px-5 py-4">
       <div className="flex items-center justify-between mb-2">
-        <Typography variant="label" className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{CM.overallUtilization}</Typography>
-        <Typography variant="label" className={`text-[10px] font-black font-mono ${usageSeverity}`}>{summary.pct.toFixed(2)}%</Typography>
+        <Typography variant="label" className="text-12 font-bold text-slate-500 uppercase tracking-widest">{CM.overallUtilization}</Typography>
+        <Typography variant="label" className={`text-12 font-black font-mono ${usageSeverity}`}>{summary.pct.toFixed(2)}%</Typography>
       </div>
       <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-none overflow-hidden">
         <div
@@ -129,8 +129,8 @@ const UtilizationBar = memo(({ summary, usageSeverity, pageSize }) => {
         </div>
       </div>
       <div className="flex justify-between mt-1.5">
-        <Typography variant="label" className="text-[9px] text-slate-400 font-mono">{formatPagesToSize(summary.used, pageSize)} {CM.usedLabel}</Typography>
-        <Typography variant="label" className="text-[9px] text-slate-400 font-mono">{formatPagesToSize(summary.free, pageSize)} {CM.freeLabel}</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-mono">{formatPagesToSize(summary.used, pageSize)} {CM.usedLabel}</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-mono">{formatPagesToSize(summary.free, pageSize)} {CM.freeLabel}</Typography>
       </div>
     </div>
   );
@@ -153,7 +153,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize }) => {
                   <div className="w-7 h-7 rounded-sm bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 shrink-0">
                     <Icon name="draft" size="sm" weight={300} />
                   </div>
-                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 font-mono" title={val}>
+                  <span className="text-15 font-semibold text-slate-700 dark:text-slate-200 font-mono" title={val}>
                     {fileName}
                   </span>
                 </div>
@@ -174,8 +174,8 @@ const VolumeTableContainer = memo(({ volumes, pageSize }) => {
                     <div className={`h-full ${barColor} transition-all duration-700ms`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[10px] font-bold font-mono text-slate-500">{formatMB(usedPages, pageSize)} MB {CM.usedLabel}</span>
-                    <span className="text-[10px] font-bold font-mono text-slate-400">{pct.toFixed(1)}%</span>
+                    <span className="text-12 font-bold font-mono text-slate-500">{formatMB(usedPages, pageSize)} MB {CM.usedLabel}</span>
+                    <span className="text-12 font-bold font-mono text-slate-400">{pct.toFixed(1)}%</span>
                   </div>
                 </div>
               );
@@ -186,7 +186,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize }) => {
             accessor: 'totalpage',
             className: 'text-right',
             render: (val) => (
-              <span className="text-[13px] font-bold text-slate-600 dark:text-slate-300 font-mono">{formatPagesToSize(val, pageSize)}</span>
+              <span className="text-15 font-bold text-slate-600 dark:text-slate-300 font-mono">{formatPagesToSize(val, pageSize)}</span>
             )
           },
           {
@@ -194,7 +194,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize }) => {
             accessor: 'totalpage',
             className: 'text-right pr-4',
             render: (val) => (
-              <span className="text-[12px] text-slate-400 font-mono">
+              <span className="text-14 text-slate-400 font-mono">
                 {parseInt(val).toLocaleString()}
               </span>
             )

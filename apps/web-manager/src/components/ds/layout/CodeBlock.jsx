@@ -20,7 +20,7 @@ export const CodeBlock = ({
   return (
     <div className={`relative group/code rounded-md bg-slate-900 border border-slate-800 overflow-hidden ${className}`}>
       <div className="flex items-center justify-between px-4 py-1.5 bg-slate-800/50 border-b border-slate-800">
-        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">{language}</span>
+        <span className="text-12 font-mono text-slate-400 uppercase tracking-wider">{language}</span>
         {copyable && (
           <button
             onClick={handleCopy}

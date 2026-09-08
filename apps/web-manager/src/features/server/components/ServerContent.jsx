@@ -197,22 +197,22 @@ const Component = function ServerContent({ hostUid }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 leading-tight">
                 {CM.serverDashboard}
               </Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences?.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
-            <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight">{hostLabel}</Typography>
+            <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight">{hostLabel}</Typography>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[12px]">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 text-14">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -228,7 +228,7 @@ const Component = function ServerContent({ hostUid }) {
           >
             <Icon 
               name="refresh" 
-              size="18px" 
+              size="19px" 
               className={isRefreshing ? 'animate-spin' : ''} 
             />
           </button>

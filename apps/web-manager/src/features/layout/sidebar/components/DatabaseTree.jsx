@@ -220,7 +220,7 @@ export default function DatabaseTree({
         <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-2">
           <Icon name="database" size="md" className="text-slate-400" weight={100} />
         </div>
-        <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-[10px]">
+        <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-12">
           No databases found
         </Typography>
       </div>
@@ -240,14 +240,14 @@ export default function DatabaseTree({
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="truncate">{db.dbname}</span>
             {isDbInHa && (
-              <span className="px-0.5 py-[0.5px] text-[7px] font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
+              <span className="px-0.5 py-[0.5px] text-9 font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
                 HA
               </span>
             )}
             {db.isProfileExists && (
               <Icon
                 name="key"
-                size="10px"
+                size="11px"
                 weight={400}
                 className="text-slate-400 dark:text-slate-500 shrink-0"
                 title={CM.databaseCredentialsSaved}
@@ -255,7 +255,7 @@ export default function DatabaseTree({
             )}
             <Icon
               name={isLoggedIn ? 'lock_open' : 'lock'}
-              size="10px"
+              size="11px"
               weight={isLoggedIn ? 500 : 400}
               className={`shrink-0 ${isLoggedIn ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-700'}`}
               title={isLoggedIn ? CM.databaseLoggedIn : CM.databaseNotLoggedIn}
@@ -369,7 +369,7 @@ const UsersFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
       {!isLoading && users?.length === 0 ? (
         <div className="px-10 py-3 opacity-30 flex items-center gap-2">
            <Icon name="block" size="xs" weight={300} />
-           <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-[8px]">{CM.emptyListLabel}</Typography>
+           <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
         </div>
       ) : (
         (users || []).map(u => {

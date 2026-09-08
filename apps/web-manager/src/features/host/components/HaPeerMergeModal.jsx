@@ -69,7 +69,7 @@ export default function HaPeerMergeModal() {
       <div className="space-y-6 p-1">
         <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl flex gap-3">
           <Icon name="info" className="text-amber-500 shrink-0" size="sm" />
-          <p className="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed">
+          <p className="text-13 text-slate-600 dark:text-slate-400 leading-relaxed">
             {CM.haPeerMergeDesc(peers.length)}{' '}
             <span className="font-semibold">{targetGroupName}</span>?
           </p>
@@ -84,22 +84,22 @@ export default function HaPeerMergeModal() {
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400">
-                  <Icon name={HA_ROLE_ICON[peer.haRole] || 'dns'} size="16px" />
+                  <Icon name={HA_ROLE_ICON[peer.haRole] || 'dns'} size="17px" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200 truncate">
+                  <p className="text-14 font-bold text-slate-800 dark:text-slate-200 truncate">
                     {peer.alias}
                   </p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                  <p className="text-12 text-slate-400 dark:text-slate-500 truncate">
                     {peer.address}:{peer.port}
                     {peer.haRole ? ` · ${HA_ROLE_LABEL[peer.haRole] || peer.haRole}` : ''}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">
+                  <p className="text-12 text-slate-400 truncate">
                     {CM.fromGroupLabel(peer.fromGroupName)}
                   </p>
                 </div>
               </div>
-              <Icon name="arrow_forward" size="14px" className="text-amber-500 shrink-0" />
+              <Icon name="arrow_forward" size="15px" className="text-amber-500 shrink-0" />
             </div>
           ))}
         </div>

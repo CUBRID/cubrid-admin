@@ -320,7 +320,7 @@ export default function BackupDatabaseModal() {
 
   const backupHistoryContent = (
     <div className="space-y-3">
-      <Typography variant="p" className="text-[12px] text-slate-600 dark:text-slate-400">
+      <Typography variant="p" className="text-14 text-slate-600 dark:text-slate-400">
         {CM.backupHistoryListHint}
       </Typography>
       <CaDialogTable

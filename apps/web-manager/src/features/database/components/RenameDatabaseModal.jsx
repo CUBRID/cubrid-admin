@@ -200,11 +200,11 @@ export default function RenameDatabaseModal() {
         </div>
       }
     >
-      <div className="space-y-4 text-[13px] py-2">
+      <div className="space-y-4 text-15 py-2">
 
         {/* Downtime Warning */}
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-[12px] text-amber-700 dark:text-amber-400">
-          <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">warning</span>
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-14 text-amber-700 dark:text-amber-400">
+          <span className="material-symbols-outlined text-18 shrink-0 mt-0.5">warning</span>
           <span>{CM.renameDowntimeHint}</span>
         </div>
 
@@ -233,8 +233,8 @@ export default function RenameDatabaseModal() {
             onChange={(e) => setForcedel(e.target.checked)}
           />
           {forcedel && (
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-[12px] text-rose-700 dark:text-rose-400">
-              <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">delete_forever</span>
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-14 text-rose-700 dark:text-rose-400">
+              <span className="material-symbols-outlined text-18 shrink-0 mt-0.5">delete_forever</span>
               <span>{CM.forceDeleteBackupVolumeWarning}</span>
             </div>
           )}

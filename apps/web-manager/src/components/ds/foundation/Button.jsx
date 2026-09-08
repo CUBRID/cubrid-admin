@@ -22,9 +22,9 @@ export const Button = React.forwardRef(({
 
 
   const sizes = {
-    sm: 'px-4 py-1.5 text-[11px] h-[32px]',
-    md: 'px-6 py-2 text-[13px] h-[40px]',
-    lg: 'px-8 py-3 text-[14.5px] h-[48px]',
+    sm: 'px-4 py-1.5 text-13 h-[32px]',
+    md: 'px-6 py-2 text-15 h-[40px]',
+    lg: 'px-8 py-3 text-16 h-[48px]',
     icon: 'p-1.5',
   };
 

@@ -67,7 +67,7 @@ export const MultiSelect = ({
                   onClick={(e) => removeOption(opt.value, e)}
                   className="text-slate-400 hover:text-rose-500 transition-colors bg-white dark:bg-slate-900 rounded-full p-0.5"
                 >
-                  <Icon name="close" size="sm" className="text-[10px]"  weight={300} />
+                  <Icon name="close" size="sm" className="text-12"  weight={300} />
                 </button>
               </Badge>
             ))
@@ -94,7 +94,7 @@ export const MultiSelect = ({
                   onClick={(e) => toggleOption(option.value, e)}
                 >
                   <div className={`flex items-center justify-center w-4 h-4 border rounded-sm shadow-xs text-white ${isSelected ? 'bg-amber-600 border-amber-600' : 'border-slate-300 dark:border-slate-600 bg-transparent'}`}>
-                    {isSelected && <Icon name="check" size="sm" className="text-[12px]"  weight={300} />}
+                    {isSelected && <Icon name="check" size="sm" className="text-14"  weight={300} />}
                   </div>
                   {option.label}
                 </div>

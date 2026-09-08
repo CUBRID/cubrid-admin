@@ -222,24 +222,24 @@ const Component = function ServiceDashboard() {
               >
                 <Icon
                   name={row.isCollapsed ? 'chevron_right' : 'keyboard_arrow_up'}
-                  size="16px"
+                  size="17px"
                   className="transition-transform duration-200"
                 />
               </button>
               <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/4 border border-slate-200 dark:border-white/8 flex items-center justify-center">
-                <Icon name="folder" size="16px" className="text-slate-400 dark:text-slate-500" />
+                <Icon name="folder" size="17px" className="text-slate-400 dark:text-slate-500" />
               </div>
               <div className="flex-1 flex items-center justify-between min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[13px] font-black text-slate-800 dark:text-slate-100 truncate">
+                  <span className="text-15 font-black text-slate-800 dark:text-slate-100 truncate">
                     {row.groupName}
                   </span>
-                  <span className="inline-flex items-center px-1.5 h-[14px] rounded-[3px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-[9px] font-black tracking-wide leading-none shrink-0 text-slate-500 dark:text-slate-400 uppercase">
+                  <span className="inline-flex items-center px-1.5 h-[14px] rounded-[3px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-11 font-black tracking-wide leading-none shrink-0 text-slate-500 dark:text-slate-400 uppercase">
                     {CM.nodesCountLabel(row.hostCount)}
                   </span>
                 </div>
                 {row.isHa && (
-                  <span className="inline-flex items-center justify-center min-w-[56px] px-1.5 h-[14px] rounded-[3px] border border-amber-500/20 bg-amber-500/10 text-[8px] font-black tracking-wide leading-none shrink-0 text-amber-600 dark:text-amber-400 uppercase ml-[12px]">
+                  <span className="inline-flex items-center justify-center min-w-[56px] px-1.5 h-[14px] rounded-[3px] border border-amber-500/20 bg-amber-500/10 text-10 font-black tracking-wide leading-none shrink-0 text-amber-600 dark:text-amber-400 uppercase ml-[12px]">
                     {CM.haBadge}
                   </span>
                 )}
@@ -282,7 +282,7 @@ const Component = function ServiceDashboard() {
               }`}>
                 <Icon
                   name="dns"
-                  size="13px"
+                  size="14px"
                   className={isConnected ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'}
                   weight={isConnected ? 400 : 300}
                 />
@@ -297,11 +297,11 @@ const Component = function ServiceDashboard() {
 
             {/* Name + role */}
             <div className="flex-1 flex items-center justify-between min-w-0">
-              <span className={`text-[13px] font-medium leading-tight truncate ${
+              <span className={`text-15 font-medium leading-tight truncate ${
                 isConnected ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'
               }`}>{displayName}</span>
               {roleConfig && (
-                <span className={`inline-flex items-center justify-center min-w-[56px] px-1.5 h-[14px] rounded-[3px] border text-[8px] font-black tracking-wide leading-none shrink-0 whitespace-nowrap ${roleConfig.className} ml-[12px]`}>
+                <span className={`inline-flex items-center justify-center min-w-[56px] px-1.5 h-[14px] rounded-[3px] border text-10 font-black tracking-wide leading-none shrink-0 whitespace-nowrap ${roleConfig.className} ml-[12px]`}>
                   {roleConfig.label}
                 </span>
               )}
@@ -315,7 +315,7 @@ const Component = function ServiceDashboard() {
       accessor: 'address', 
       render: (v, row) => {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-[11px] text-slate-500">{v || row.ip || CM.localhost}</span>;
+        return <span className="font-mono text-13 text-slate-500">{v || row.ip || CM.localhost}</span>;
       } 
     },
     { 
@@ -323,7 +323,7 @@ const Component = function ServiceDashboard() {
       accessor: 'port', 
       render: (v, row) => {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-[11px] text-slate-500">{v}</span>;
+        return <span className="font-mono text-13 text-slate-500">{v}</span>;
       } 
     },
     { 
@@ -331,7 +331,7 @@ const Component = function ServiceDashboard() {
       accessor: 'user', 
       render: (v, row) => {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
-        return <span className="text-[12px] text-slate-600 dark:text-slate-400">{row.user || row.id}</span>;
+        return <span className="text-14 text-slate-600 dark:text-slate-400">{row.user || row.id}</span>;
       } 
     },
     { 
@@ -378,7 +378,7 @@ const Component = function ServiceDashboard() {
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.tps : undefined;
         if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-[12px] text-emerald-600 dark:text-emerald-400 font-bold">{v}</span>;
+        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v}</span>;
       }
     },
     {
@@ -392,7 +392,7 @@ const Component = function ServiceDashboard() {
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.qps : undefined;
         if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-[12px] text-slate-600 dark:text-slate-300">{v}</span>;
+        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v}</span>;
       }
     },
     { 
@@ -406,7 +406,7 @@ const Component = function ServiceDashboard() {
         if (!s) return <span className="text-slate-300">—</span>;
         return (
           <div className="min-w-[150px] whitespace-nowrap">
-            <span className="text-[11px] text-slate-700 dark:text-slate-200 font-mono font-semibold whitespace-nowrap">{formatSize(s.memUsed)} / {formatSize(s.memTotal)}</span>
+            <span className="text-13 text-slate-700 dark:text-slate-200 font-mono font-semibold whitespace-nowrap">{formatSize(s.memUsed)} / {formatSize(s.memTotal)}</span>
             <MetricBar pct={s.memory} />
           </div>
         );
@@ -422,7 +422,7 @@ const Component = function ServiceDashboard() {
         if (!s) return <span className="text-slate-300">—</span>;
         return (
           <div className="min-w-[80px]">
-            <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200">{(s.cpu || 0).toFixed(1)}%</span>
+            <span className="font-mono text-13 font-semibold text-slate-700 dark:text-slate-200">{(s.cpu || 0).toFixed(1)}%</span>
             <MetricBar pct={s.cpu} />
           </div>
         );
@@ -437,7 +437,7 @@ const Component = function ServiceDashboard() {
         const s = isConnected ? summaries[row.uid] : undefined;
         if (!s) return <span className="text-slate-300">—</span>;
         return (
-          <div className="flex items-center gap-1.5 font-bold text-[10px]">
+          <div className="flex items-center gap-1.5 font-bold text-12">
             <span className="text-emerald-500">{CM.onColonLabel(s.dbOn)}</span>
             <span className="text-slate-400">{CM.offColonLabel(s.dbOff)}</span>
           </div>
@@ -456,21 +456,21 @@ const Component = function ServiceDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 leading-tight">
                 {CM.serviceDashboard}
               </Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
-            <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight mt-0.5">{CM.globalHealthOverview}</Typography>
+            <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mt-0.5">{CM.globalHealthOverview}</Typography>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[12px]">
+        <div className="flex items-center gap-1.5 text-14">
           {/* HA Role Filter Segmented Control */}
           <div className="flex items-center bg-slate-100/80 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200/50 dark:border-white/5 mr-2 shrink-0">
             {[
@@ -485,7 +485,7 @@ const Component = function ServiceDashboard() {
                   key={tab.id}
                   type="button"
                   onClick={() => setRoleFilter(tab.id)}
-                  className={`px-2.5 py-1 text-[10.5px] font-bold rounded-md transition-all duration-150 active:scale-[0.98] ${
+                  className={`px-2.5 py-1 text-12 font-bold rounded-md transition-all duration-150 active:scale-[0.98] ${
                     isActive
                       ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200/10 dark:border-white/5'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 border border-transparent'
@@ -497,7 +497,7 @@ const Component = function ServiceDashboard() {
             })}
           </div>
 
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2 shrink-0">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2 shrink-0">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -511,7 +511,7 @@ const Component = function ServiceDashboard() {
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5'}`}
             title={CM.refreshDashboard}
           >
-            <Icon name="refresh" size="18px" className={isManualRefreshing ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="19px" className={isManualRefreshing ? 'animate-spin' : ''} />
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -520,13 +520,13 @@ const Component = function ServiceDashboard() {
           <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
           <div className="flex items-center gap-4 px-3 py-1 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg shadow-xs">
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase font-bold text-slate-400 leading-none">{CM.hostsLabel}</span>
-              <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200 leading-none mt-1">{hosts?.length || 0}</span>
+              <span className="text-11 uppercase font-bold text-slate-400 leading-none">{CM.hostsLabel}</span>
+              <span className="text-15 font-bold text-slate-700 dark:text-slate-200 leading-none mt-1">{hosts?.length || 0}</span>
             </div>
             <div className="w-px h-5 bg-slate-200 dark:bg-white/10" />
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase font-bold text-emerald-500 leading-none tracking-tight">{CM.activeLabel}</span>
-              <span className="text-[13px] font-bold text-emerald-500 leading-none mt-1">{authorizedHosts?.length || 0}</span>
+              <span className="text-11 uppercase font-bold text-emerald-500 leading-none tracking-tight">{CM.activeLabel}</span>
+              <span className="text-15 font-bold text-emerald-500 leading-none mt-1">{authorizedHosts?.length || 0}</span>
             </div>
           </div>
         </div>
@@ -538,7 +538,7 @@ const Component = function ServiceDashboard() {
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}
-            className="border-none text-[12px]"
+            className="border-none text-14"
             hoverable
             sortable={false}
           />

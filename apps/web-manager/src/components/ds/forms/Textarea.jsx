@@ -17,7 +17,7 @@ export const Textarea = forwardRef(({
         ref={ref}
         rows={rows}
         disabled={disabled}
-        className={`w-full px-3 py-2 text-[12px] font-medium bg-slate-50 dark:bg-bk-main/30 border rounded focus:outline-hidden focus:border-bk-yellow/50 dark:text-slate-100 transition-all resize-y placeholder:text-slate-400 dark:placeholder:text-slate-600 ${
+        className={`w-full px-3 py-2 text-14 font-medium bg-slate-50 dark:bg-bk-main/30 border rounded focus:outline-hidden focus:border-bk-yellow/50 dark:text-slate-100 transition-all resize-y placeholder:text-slate-400 dark:placeholder:text-slate-600 ${
           error 
             ? 'border-rose-500/50 focus:border-rose-500' 
             : 'border-slate-300 dark:border-slate-800'

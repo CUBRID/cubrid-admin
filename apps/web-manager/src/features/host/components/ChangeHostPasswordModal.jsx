@@ -144,7 +144,7 @@ export default function ChangeHostPasswordModal() {
         {isSuccess ? (
           <div className="py-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
              <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
-               <Icon name="check_circle" size="32px" className="text-emerald-500" />
+               <Icon name="check_circle" size="33px" className="text-emerald-500" />
              </div>
              <Typography variant="h3" className="text-lg font-bold text-slate-900 dark:text-white mb-2">{CM.passcodeUpdated}</Typography>
              <Typography variant="p" className="text-slate-500 dark:text-slate-400 max-w-[280px]">

@@ -204,12 +204,12 @@ export default function AddHostModal({ isOpen, onClose }) {
         {apiError && (
           <div className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
             <Icon name="error_outline" size="sm" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
-            <p className="text-[11.5px] text-rose-500 font-medium flex-1 leading-relaxed">{apiError}</p>
+            <p className="text-13 text-rose-500 font-medium flex-1 leading-relaxed">{apiError}</p>
             <button
               onClick={() => dispatch(clearHostError())}
               className="text-rose-400 hover:text-rose-600 transition-colors shrink-0"
             >
-              <Icon name="close" size="16px" weight={300} />
+              <Icon name="close" size="17px" weight={300} />
             </button>
           </div>
         )}

@@ -61,7 +61,7 @@ export default function DeleteHostGroupModal() {
               <Icon name="error" size="xs" weight={300} className="text-rose-500" />
             </div>
             <div className="flex-1 min-w-0 pt-0.5">
-              <Typography variant="p" className="text-rose-500 font-bold text-[11px] leading-snug">{apiError}</Typography>
+              <Typography variant="p" className="text-rose-500 font-bold text-13 leading-snug">{apiError}</Typography>
             </div>
           </div>
         )}
@@ -70,7 +70,7 @@ export default function DeleteHostGroupModal() {
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shadow-lg shadow-rose-500/5 mb-4">
             <Icon name="warning" size="lg" weight={300} className="text-rose-500" />
           </div>
-          <Typography variant="p" className="text-[13px] text-slate-900 dark:text-white font-bold leading-relaxed">
+          <Typography variant="p" className="text-15 text-slate-900 dark:text-white font-bold leading-relaxed">
             {CM.deleteGroupConfirmTitle(groupToEditName || groupToEditId)}
           </Typography>
           <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium mt-1 max-w-[320px] leading-relaxed">
@@ -80,12 +80,12 @@ export default function DeleteHostGroupModal() {
 
         {hostsInGroup.length > 0 && (
           <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/15 rounded-xl">
-            <Typography variant="caption" className="text-amber-600 dark:text-amber-500 font-bold text-[11px] leading-snug block mb-2">
+            <Typography variant="caption" className="text-amber-600 dark:text-amber-500 font-bold text-13 leading-snug block mb-2">
               {CM.deleteGroupHostsWarning(hostsInGroup.length)}
             </Typography>
             <ul className="space-y-0.5 max-h-[120px] overflow-y-auto">
               {hostsInGroup.map((host) => (
-                <li key={host.uid} className="text-[11px] text-slate-600 dark:text-slate-400 font-mono truncate">
+                <li key={host.uid} className="text-13 text-slate-600 dark:text-slate-400 font-mono truncate">
                   {host.alias || host.id} ({host.address}:{host.port})
                 </li>
               ))}

@@ -21,6 +21,58 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
+  /*
+   * Single source of truth for every font size in the app. Previously ~140
+   * files hardcoded their own arbitrary text-[Npx] values (18 distinct raw
+   * sizes from 7px to 18px) instead of sharing a scale. This scale replaced
+   * those with 12 shared steps, initially the raw sizes shifted up by ~2px
+   * (half-steps merged into their neighbor), then nudged up another 1px —
+   * so a UI-wide "make the text bigger" request is now one edit here
+   * instead of a per-component one. The names (text-13, text-xs, ...) are
+   * scale-step labels, not a promise that text-13 renders at exactly 13px —
+   * that's what lets them keep growing here without ever renaming classes
+   * across the app again.
+   */
+  --text-9: 10px;
+  --text-10: 11px;
+  --text-11: 12px;
+  --text-12: 13px;
+  --text-13: 14px;
+  --text-14: 15px;
+  --text-15: 16px;
+  --text-16: 17px;
+  --text-17: 18px;
+  --text-18: 19px;
+  --text-19: 20px;
+  --text-20: 21px;
+
+  /* Same bump applied to Tailwind's own named scale, so components that
+     already used text-xs/sm/base/... grow along with everything else. */
+  --text-xs: 15px;
+  --text-sm: 17px;
+  --text-base: 19px;
+  --text-lg: 21px;
+  --text-xl: 23px;
+  --text-2xl: 27px;
+  --text-3xl: 33px;
+  --text-4xl: 39px;
+
+  /*
+   * font-bold/font-black/font-semibold are used ~280/~163/~128 times across
+   * the app (vs. 7 font-normal, 5 font-light) — the design already leaned
+   * heavy before the size bump above, and larger text makes that same
+   * weight look noticeably thicker (stroke width scales with font size).
+   * Stepping the heaviest few weights down one notch keeps the intended
+   * hierarchy (black > bold > semibold > medium) without going as far as
+   * a full normal/light pass, which would undersell text meant to stand
+   * out. Values are non-round on purpose, to land between two adjacent
+   * default steps without colliding into one.
+   */
+  --font-weight-black: 800;
+  --font-weight-extrabold: 750;
+  --font-weight-bold: 650;
+  --font-weight-semibold: 560;
+
   --radius-none: 0;
   --radius-sm: 0.25rem;
   --radius: 0.25rem;
@@ -182,7 +234,7 @@
 
 #sidebar.collapsed h2, 
 #sidebar.collapsed .text-sm, 
-#sidebar.collapsed .text-\[10px\], 
+#sidebar.collapsed .text-12,
 #sidebar.collapsed .text-xs, 
 #sidebar.collapsed summary .text-sm,
 #sidebar.collapsed summary .material-symbols-outlined:first-child,

@@ -86,13 +86,13 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
             className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} 
           />
           <div className={`w-7 h-7 rounded flex items-center justify-center shrink-0 ${bgAccent}`}>
-            <Icon name="description" size="16px" className={textAccent} />
+            <Icon name="description" size="17px" className={textAccent} />
           </div>
-          <span className="text-[13px] font-semibold font-mono text-slate-800 dark:text-slate-200 truncate">
+          <span className="text-15 font-semibold font-mono text-slate-800 dark:text-slate-200 truncate">
             {fileName}
           </span>
           {totalLines > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium rounded">
+            <span className="text-12 px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium rounded">
               {totalLines} lines
             </span>
           )}
@@ -105,14 +105,14 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
             className={`p-1.5 rounded-md text-slate-400 hover:${textAccent} hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all disabled:opacity-50`}
             title={CM.refreshLog}
           >
-            <Icon name="refresh" size="16px" className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="17px" className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
       {/* Card Content */}
       {isExpanded && (
-        <div className="bg-white dark:bg-bk-side max-h-[400px] overflow-auto font-mono text-[12px]">
+        <div className="bg-white dark:bg-bk-side max-h-[400px] overflow-auto font-mono text-14">
           {loading && !lines.length ? (
             <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
               <Spinner size="sm" />
@@ -130,7 +130,7 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
                   key={i}
                   className="flex gap-4 px-4 py-0.5 hover:bg-slate-50 dark:hover:bg-white/5 group transition-colors border-b border-slate-100/50 dark:border-white/2"
                 >
-                  <span className={`w-10 shrink-0 text-right text-[11px] text-slate-300 dark:text-slate-600 group-hover:${textAccent} select-none font-semibold pt-0.5`}>
+                  <span className={`w-10 shrink-0 text-right text-13 text-slate-300 dark:text-slate-600 group-hover:${textAccent} select-none font-semibold pt-0.5`}>
                     {i + 1}
                   </span>
                   <div className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-all leading-relaxed">
@@ -283,7 +283,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-tight truncate leading-tight">
               {config.title}
             </h2>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
+            <p className="text-13 text-slate-400 dark:text-slate-500 font-medium mt-0.5">
               {config.subtitle}
             </p>
           </div>
@@ -294,14 +294,14 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
             <button
               data-testid="all-logs-expand-all-btn"
               onClick={handleExpandAll}
-              className="px-3 py-1.5 text-[11px] font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-white/10 transition-colors"
+              className="px-3 py-1.5 text-13 font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-white/10 transition-colors"
             >
               {CM.expandAllBtn}
             </button>
             <button
               data-testid="all-logs-collapse-all-btn"
               onClick={handleCollapseAll}
-              className="px-3 py-1.5 text-[11px] font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 transition-colors"
+              className="px-3 py-1.5 text-13 font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 transition-colors"
             >
               {CM.collapseAllBtn}
             </button>
@@ -311,9 +311,9 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
             data-testid="all-logs-refresh-all-btn"
             onClick={handleRefreshAll}
             disabled={logsLoading}
-            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-[11px] font-bold shadow-xs ${config.borderAccent}`}
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-13 font-bold shadow-xs ${config.borderAccent}`}
           >
-            <Icon name="refresh" size="16px" className={logsLoading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="17px" className={logsLoading ? 'animate-spin' : ''} />
             {CM.refreshAllBtn}
           </button>
 
@@ -321,10 +321,10 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
             data-testid="all-logs-download-all-btn"
             onClick={handleDownloadAll}
             disabled={targetLogs.length === 0}
-            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-[11px] font-bold shadow-xs ml-1 ${config.borderAccent}`}
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-13 font-bold shadow-xs ml-1 ${config.borderAccent}`}
             title={CM.downloadAllLogs}
           >
-            <Icon name="download" size="16px" />
+            <Icon name="download" size="17px" />
             {CM.downloadAllBtn}
           </button>
         </div>
@@ -362,7 +362,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       </div>
       
       {/* Footer */}
-      <div className="shrink-0 px-5 py-2.5 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase tracking-wider">
+      <div className="shrink-0 px-5 py-2.5 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-12 text-slate-500 dark:text-slate-400 font-mono uppercase tracking-wider">
         <div className="flex items-center gap-4 font-medium">
           <span>{CM.totalFilesLabel(targetLogs.length)}</span>
           <span>{CM.hostColonLabel(hostUid)}</span>

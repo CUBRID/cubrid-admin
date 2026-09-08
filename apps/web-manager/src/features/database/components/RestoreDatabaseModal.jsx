@@ -111,9 +111,9 @@ const dirnameOf = (filePath) => {
 /* ── helpers ─────────────────────────────────────────────────── */
 const SectionLabel = ({ children, count }) => (
   <div className="flex items-center gap-3 mb-3">
-    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 whitespace-nowrap">{children}</span>
+    <span className="text-11 font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 whitespace-nowrap">{children}</span>
     {count !== undefined && (
-      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-xs bg-amber-500/10 border border-amber-500/20 text-amber-500">{count}</span>
+      <span className="text-11 font-black px-1.5 py-0.5 rounded-xs bg-amber-500/10 border border-amber-500/20 text-amber-500">{count}</span>
     )}
     <div className="flex-1 h-px bg-slate-100 dark:bg-white/5" />
   </div>
@@ -561,8 +561,8 @@ export default function RestoreDatabaseModal() {
       onSubmit={handleRestore}
       footer={
         <div className="flex items-center justify-between w-full gap-3">
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
-            <Icon name="info" size="12px" weight={300} />
+          <div className="flex items-center gap-2 text-12 text-slate-400 font-medium">
+            <Icon name="info" size="13px" weight={300} />
             <span>{CM.databaseMustBeStopped}</span>
           </div>
           <div className="flex items-center gap-3">
@@ -583,8 +583,8 @@ export default function RestoreDatabaseModal() {
     >
       <div className="space-y-4 pb-2 text-left">
         {validationError && (
-          <div className="mb-2 p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] rounded-xl flex items-center gap-2 animate-in fade-in duration-200">
-            <Icon name="error" size="14px" className="shrink-0" />
+          <div className="mb-2 p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-13 rounded-xl flex items-center gap-2 animate-in fade-in duration-200">
+            <Icon name="error" size="15px" className="shrink-0" />
             <span className="font-medium">{validationError}</span>
           </div>
         )}
@@ -681,7 +681,7 @@ export default function RestoreDatabaseModal() {
                 </div>
                 <div className="space-y-3">
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-                    <Typography variant="label" className={`text-[12px] ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
+                    <Typography variant="label" className={`text-14 ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
                       {CM.level0FileLabel}
                     </Typography>
                     <Input
@@ -693,7 +693,7 @@ export default function RestoreDatabaseModal() {
                     />
                   </div>
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-                    <Typography variant="label" className={`text-[12px] ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
+                    <Typography variant="label" className={`text-14 ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
                       {CM.level1FileLabel}
                     </Typography>
                     <Input
@@ -705,7 +705,7 @@ export default function RestoreDatabaseModal() {
                     />
                   </div>
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-                    <Typography variant="label" className={`text-[12px] ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
+                    <Typography variant="label" className={`text-14 ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
                       {CM.level2FileLabel}
                     </Typography>
                     <Input

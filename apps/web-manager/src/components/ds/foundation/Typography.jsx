@@ -20,7 +20,7 @@ export const Typography = ({
     p: 'text-slate-700 dark:text-slate-300',
     span: 'text-inherit',
     label: 'text-sm font-medium text-slate-700 dark:text-slate-300',
-    caption: 'text-[11.5px] text-slate-500 dark:text-slate-400',
+    caption: 'text-13 text-slate-500 dark:text-slate-400',
     code: 'font-mono text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded-sm text-slate-800 dark:text-slate-200',
   };
 

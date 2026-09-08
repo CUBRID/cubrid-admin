@@ -111,7 +111,7 @@ export const DatePicker = ({
         >
           <Icon name="chevron_left" size="sm" />
         </button>
-        <Typography variant="span" className="text-[12px] font-black tracking-tight text-slate-900 dark:text-white">
+        <Typography variant="span" className="text-14 font-black tracking-tight text-slate-900 dark:text-white">
           {viewDate.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', { month: 'long', year: 'numeric' })}
         </Typography>
         <button 
@@ -124,7 +124,7 @@ export const DatePicker = ({
       </div>
       <div className="grid grid-cols-7 gap-1">
         {['S','M','T','W','T','F','S'].map(d => (
-          <div key={d} className="h-8 mb-1 flex items-center justify-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{d}</div>
+          <div key={d} className="h-8 mb-1 flex items-center justify-center text-12 font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{d}</div>
         ))}
         {calendarDays.map((d, index) => {
           if (d === null) return <div key={`empty-${index}`} />;
@@ -137,7 +137,7 @@ export const DatePicker = ({
               key={ds} 
               type="button"
               onClick={() => handleDateSelect(ds)} 
-              className={`h-9 rounded-xl text-[11px] font-black transition-all cursor-pointer border ${isSelected ? 'bg-amber-500/15 dark:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30' : 'bg-transparent border-transparent hover:bg-amber-500/10 text-slate-600 dark:text-slate-300 font-bold'}`}
+              className={`h-9 rounded-xl text-13 font-black transition-all cursor-pointer border ${isSelected ? 'bg-amber-500/15 dark:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30' : 'bg-transparent border-transparent hover:bg-amber-500/10 text-slate-600 dark:text-slate-300 font-bold'}`}
             >
               {d}
             </button>
@@ -156,7 +156,7 @@ export const DatePicker = ({
           type="button"
           disabled={disabled}
           onClick={() => !disabled && (isOpen ? setIsOpen(false) : openDropdown())}
-          className={`relative w-full h-10 px-4 flex items-center justify-between bg-slate-50 dark:bg-white/3 border rounded-xl transition-all font-bold text-[13px] cursor-pointer ${
+          className={`relative w-full h-10 px-4 flex items-center justify-between bg-slate-50 dark:bg-white/3 border rounded-xl transition-all font-bold text-15 cursor-pointer ${
             isOpen ? 'border-amber-500/60 ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
           } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         >

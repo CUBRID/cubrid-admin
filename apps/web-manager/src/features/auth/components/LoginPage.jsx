@@ -119,7 +119,7 @@ export default function LoginPage() {
             title={theme === 'light' ? CM.switchToDarkMode : CM.switchToLightMode}
             className="h-8 w-8 flex items-center justify-center rounded-sm border border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
           >
-            <Icon name={theme === 'light' ? 'dark_mode' : 'light_mode'} size="18px" weight={300} />
+            <Icon name={theme === 'light' ? 'dark_mode' : 'light_mode'} size="19px" weight={300} />
           </button>
         </div>
 
@@ -130,7 +130,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-slate-900 dark:text-white font-extrabold text-base leading-none tracking-tight">CUBRID <span className="text-amber-500 font-light">Manager</span></h1>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">{CM.signIn}</p>
+            <p className="text-12 text-slate-400 dark:text-slate-500 font-medium mt-0.5">{CM.signIn}</p>
           </div>
         </div>
 
@@ -175,7 +175,7 @@ export default function LoginPage() {
             type="submit"
             data-testid="login-submit-btn"
             disabled={loading}
-            className="w-full h-10 mt-1 bg-slate-900 dark:bg-amber-500 text-white dark:text-black text-[13px] font-bold rounded-xl shadow-md hover:shadow-[0_0_12px_rgba(245,158,11,0.3)] hover:bg-slate-800 dark:hover:bg-amber-400 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 group cursor-pointer"
+            className="w-full h-10 mt-1 bg-slate-900 dark:bg-amber-500 text-white dark:text-black text-15 font-bold rounded-xl shadow-md hover:shadow-[0_0_12px_rgba(245,158,11,0.3)] hover:bg-slate-800 dark:hover:bg-amber-400 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 group cursor-pointer"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/20 dark:border-black/20 border-t-white dark:border-t-black rounded-full animate-spin" />
@@ -189,7 +189,7 @@ export default function LoginPage() {
         </form>
 
         {/* Create account link */}
-        <p className="mt-5 text-center text-[12px] text-slate-500 dark:text-slate-400">
+        <p className="mt-5 text-center text-14 text-slate-500 dark:text-slate-400">
           {CM.newToCubrid}{' '}
           <Link to="/register" className="font-bold text-slate-900 dark:text-amber-500 hover:underline underline-offset-4">{CM.createAccount}</Link>
         </p>
@@ -198,7 +198,7 @@ export default function LoginPage() {
           (window.location.protocol === 'app:' ||
             window.desktopConfig?.isDesktop ||
             window.desktopBridge) && (
-          <p className="mt-2.5 text-center text-[12px] text-slate-500 dark:text-slate-400">
+          <p className="mt-2.5 text-center text-14 text-slate-500 dark:text-slate-400">
             <Link to="/desktop/workspace" className="font-semibold text-slate-700 dark:text-slate-300 hover:text-amber-500">
               {CM.workspaceSettings}
             </Link>
@@ -206,7 +206,7 @@ export default function LoginPage() {
         )}
 
         {/* Legal footer */}
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-11 font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
           <div className="flex gap-4">
             <a href="https://www.cubrid.org" target="_blank" rel="noreferrer" className="hover:text-amber-500 transition-colors">{CM.website}</a>
             <a href="https://github.com/CUBRID" target="_blank" rel="noreferrer" className="hover:text-amber-500 transition-colors">{CM.github}</a>

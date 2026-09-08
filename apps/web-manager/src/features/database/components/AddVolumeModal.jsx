@@ -215,8 +215,8 @@ export default function AddVolumeModal() {
       onSubmit={handleAdd}
       footer={
         <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest italic">
-            <Icon name="info" size="14px" weight={300} />
+          <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-12 font-bold uppercase tracking-widest italic">
+            <Icon name="info" size="15px" weight={300} />
             <span>{CM.activeInstanceRequired}</span>
           </div>
           <div className="flex gap-3">
@@ -248,24 +248,24 @@ export default function AddVolumeModal() {
                 <Typography variant="caption" className="font-black uppercase tracking-widest text-amber-600/70 dark:text-amber-400/60 mb-0.5">
                   {CM.addVolumeTargetDb}
                 </Typography>
-                <Typography variant="h4" className="text-[14px] font-black text-amber-700 dark:text-amber-400 font-mono truncate">
+                <Typography variant="h4" className="text-16 font-black text-amber-700 dark:text-amber-400 font-mono truncate">
                   {selectedDatabase}
                 </Typography>
               </div>
             </div>
             <div className="flex flex-col items-end gap-0.5">
-              <Typography variant="caption" className="font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-[9px]">{CM.availableSpace}</Typography>
+              <Typography variant="caption" className="font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-11">{CM.availableSpace}</Typography>
               {fetchingStatus ? (
                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-100 dark:border-white/8">
                   <div className="w-2 h-2 border-[1.5px] border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">{CM.calculating}</span>
+                  <span className="text-12 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">{CM.calculating}</span>
                 </div>
               ) : (
                 <StatusBadge 
                   label={volStatus.freespace || '—'} 
                   variant="emerald" 
                   pulse={true} 
-                  className="rounded-full tabular-nums text-[12px]" 
+                  className="rounded-full tabular-nums text-14" 
                 />
               )}
             </div>
@@ -294,13 +294,13 @@ export default function AddVolumeModal() {
                   >
                     <Icon name={opt.icon} size="xs" weight={300} className={isActive ? opt.color : 'text-slate-400'} />
                   </div>
-                  <Typography variant="p" className={`font-black text-[11px] mb-0.5 transition-colors leading-none tracking-tight ${isActive ? opt.color : 'text-slate-600 dark:text-slate-400'}`}>
+                  <Typography variant="p" className={`font-black text-13 mb-0.5 transition-colors leading-none tracking-tight ${isActive ? opt.color : 'text-slate-600 dark:text-slate-400'}`}>
                     {CM[opt.labelKey]}
                   </Typography>
-                  <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">{CM[opt.descKey]}</span>
+                  <span className="text-10 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter">{CM[opt.descKey]}</span>
                   {isActive && (
                     <div className={`absolute top-2 right-2 w-4 h-4 rounded-full ${opt.bg} border ${opt.border} flex items-center justify-center shadow-xs`}>
-                      <Icon name="check" size="10px" weight={800} className={opt.color} />
+                      <Icon name="check" size="11px" weight={800} className={opt.color} />
                     </div>
                   )}
                 </button>
@@ -319,7 +319,7 @@ export default function AddVolumeModal() {
                 key={preset.mb}
                 type="button"
                 onClick={() => setSizeMB(preset.mb)}
-                className={`px-3 py-1.5 rounded-xl border text-[10px] font-black transition-all uppercase tracking-[0.1em]
+                className={`px-3 py-1.5 rounded-xl border text-12 font-black transition-all uppercase tracking-[0.1em]
                   ${sizeMB === preset.mb
                     ? 'bg-amber-500/10 border-amber-500/40 text-amber-500 shadow-xs'
                     : 'bg-white dark:bg-white/2 border-slate-100 dark:border-white/5 text-slate-400 hover:border-amber-500/30 hover:text-amber-500'
@@ -341,7 +341,7 @@ export default function AddVolumeModal() {
                 <button
                   type="button"
                   onClick={() => setSizeUnit((u) => (u === 'MB' ? 'GB' : 'MB'))}
-                  className="text-[10px] font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
+                  className="text-12 font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                   title={CM.switchUnit}
                 >
                   {sizeUnit}
@@ -351,10 +351,10 @@ export default function AddVolumeModal() {
               size="sm"
             />
             <div className="space-y-1">
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 block">{CM.blocksAllocated}</span>
+              <span className="text-12 font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 block">{CM.blocksAllocated}</span>
               <div className="h-10 px-4 flex items-center justify-between bg-slate-50/50 dark:bg-white/2 border border-slate-100 dark:border-white/5 rounded-xl">
-                <span className="text-[13px] font-black font-mono text-amber-500 tabular-nums">{numberOfPages.toLocaleString()}</span>
-                <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">pages</span>
+                <span className="text-15 font-black font-mono text-amber-500 tabular-nums">{numberOfPages.toLocaleString()}</span>
+                <span className="text-11 text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">pages</span>
               </div>
             </div>
           </div>
@@ -362,12 +362,12 @@ export default function AddVolumeModal() {
           {/* Progress bar visual */}
           <div className="p-4 bg-slate-50/50 dark:bg-white/1 border border-slate-100 dark:border-white/5 rounded-2xl space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{CM.volumeSizeVisualizer}</span>
+              <span className="text-11 font-black uppercase tracking-[0.2em] text-slate-400">{CM.volumeSizeVisualizer}</span>
               <div className="flex items-center gap-2">
-                <span className={`text-[13px] font-black font-mono ${selectedPurpose?.color || 'text-amber-500'}`}>
+                <span className={`text-15 font-black font-mono ${selectedPurpose?.color || 'text-amber-500'}`}>
                   {formatSize(sizeMB)}
                 </span>
-                <Icon name="keyboard_double_arrow_right" size="14px" className="text-slate-300 dark:text-white/10" />
+                <Icon name="keyboard_double_arrow_right" size="15px" className="text-slate-300 dark:text-white/10" />
               </div>
             </div>
             <div className="w-full h-1.5 bg-slate-100 dark:bg-white/8 rounded-full overflow-hidden">
@@ -379,7 +379,7 @@ export default function AddVolumeModal() {
                 style={{ width: `${Math.min((sizeMB / 20480) * 100, 100)}%` }}
               />
             </div>
-            <div className="flex justify-between text-[8px] text-slate-400 dark:text-slate-600 font-black uppercase tracking-widest">
+            <div className="flex justify-between text-10 text-slate-400 dark:text-slate-600 font-black uppercase tracking-widest">
               <span>Empty</span><span>5 GB</span><span>10 GB</span><span>Max (20GB)</span>
             </div>
           </div>

@@ -85,7 +85,7 @@ export default function RegisterPage() {
   // score that could disagree with what submitting the form would accept.
   const isPasswordValid = password.trim().length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
 
-  const inputBase  = 'w-full h-11 text-[13px] font-medium bg-slate-50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 dark:text-white';
+  const inputBase  = 'w-full h-11 text-15 font-medium bg-slate-50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 dark:text-white';
   const inputFocus = 'focus:border-amber-500/50 dark:focus:border-amber-500/40 focus:bg-amber-500/2 dark:focus:bg-amber-500/3';
   const inputErr   = 'border-rose-500/60 dark:border-rose-500/40';
   const inputOk    = 'border-emerald-500/50 dark:border-emerald-500/40';
@@ -134,7 +134,7 @@ export default function RegisterPage() {
         <div className="flex items-center mb-5">
           <Link
             to="/login"
-            className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors group text-[10px] font-bold uppercase tracking-wider"
+            className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors group text-12 font-bold uppercase tracking-wider"
           >
             <Icon name="arrow_back" size="sm" weight={300} className="group-hover:-translate-x-0.5 transition-transform" />
             <span>{CM.backToLogin}</span>
@@ -148,7 +148,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <h1 className="text-slate-900 dark:text-white font-extrabold text-base leading-none tracking-tight">CUBRID <span className="text-amber-500 font-light">Manager</span></h1>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">{CM.createAccount}</p>
+            <p className="text-12 text-slate-400 dark:text-slate-500 font-medium mt-0.5">{CM.createAccount}</p>
           </div>
         </div>
 
@@ -197,7 +197,7 @@ export default function RegisterPage() {
                 weight={300}
                 className={isPasswordValid ? 'text-emerald-500' : 'text-rose-500'}
               />
-              <p className={`text-[9px] font-bold uppercase tracking-widest font-mono ${isPasswordValid ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <p className={`text-11 font-bold uppercase tracking-widest font-mono ${isPasswordValid ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {isPasswordValid ? CM.passwordMeetsRequirements : CM.passwordPolicyHint}
               </p>
             </div>
@@ -223,8 +223,8 @@ export default function RegisterPage() {
           />
 
           {confirmPassword && password === confirmPassword && !errors.confirmPassword && (
-            <p className="mt-[-8px] text-[10px] text-emerald-500 font-medium flex items-center gap-1 ml-0.5 animate-in fade-in">
-              <Icon name="check_circle" size="12px" weight={400} />{CM.passwordsMatch}
+            <p className="mt-[-8px] text-12 text-emerald-500 font-medium flex items-center gap-1 ml-0.5 animate-in fade-in">
+              <Icon name="check_circle" size="13px" weight={400} />{CM.passwordsMatch}
             </p>
           )}
 
@@ -240,7 +240,7 @@ export default function RegisterPage() {
             type="submit"
             data-testid="register-submit-btn"
             disabled={loading}
-            className="w-full h-10 mt-1 bg-slate-900 dark:bg-amber-500 text-white dark:text-black text-[13px] font-bold rounded-xl shadow-md hover:shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:bg-slate-800 dark:hover:bg-amber-400 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 group cursor-pointer"
+            className="w-full h-10 mt-1 bg-slate-900 dark:bg-amber-500 text-white dark:text-black text-15 font-bold rounded-xl shadow-md hover:shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:bg-slate-800 dark:hover:bg-amber-400 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 group cursor-pointer"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/20 dark:border-black/20 border-t-white dark:border-t-black rounded-full animate-spin" />
@@ -254,13 +254,13 @@ export default function RegisterPage() {
         </form>
 
         {/* Already have account */}
-        <p className="mt-5 text-center text-[12px] text-slate-500 dark:text-slate-400">
+        <p className="mt-5 text-center text-14 text-slate-500 dark:text-slate-400">
           {CM.alreadyHaveAccount}{' '}
           <Link to="/login" className="font-bold text-slate-900 dark:text-amber-500 hover:underline underline-offset-4">{CM.signIn}</Link>
         </p>
 
         {/* Terms */}
-        <p className="mt-4 text-center text-[9px] text-slate-400/60 leading-relaxed max-w-[280px] mx-auto">
+        <p className="mt-4 text-center text-11 text-slate-400/60 leading-relaxed max-w-[280px] mx-auto">
           {CM.agreeTermsPrefix}
           <a href="#" className="underline hover:text-amber-500 transition-colors">{CM.projectTerms}</a>{CM.agreeTermsSuffix}
         </p>

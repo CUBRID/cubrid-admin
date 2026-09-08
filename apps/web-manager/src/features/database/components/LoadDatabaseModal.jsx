@@ -429,7 +429,7 @@ export default function LoadDatabaseModal() {
       subtitle={
         validationError ? (
           <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1 font-semibold transition-colors duration-150">
-            <Icon name="error" size="12px" className="shrink-0" />
+            <Icon name="error" size="13px" className="shrink-0" />
             {validationError}
           </span>
         ) : (

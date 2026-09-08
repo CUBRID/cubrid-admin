@@ -76,8 +76,8 @@ export default function DeleteQueryPlanModal() {
             </div>
           </div>
           <div className="text-center space-y-1.5 px-8">
-            <Typography variant="h4" className="text-[14px] font-black text-rose-500 tracking-tight">{CM.deletingLabel}</Typography>
-            <Typography variant="p" className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-[280px] mx-auto text-center">
+            <Typography variant="h4" className="text-16 font-black text-rose-500 tracking-tight">{CM.deletingLabel}</Typography>
+            <Typography variant="p" className="text-13 text-slate-500 font-medium leading-relaxed max-w-[280px] mx-auto text-center">
               {CM.deletingQueryPlanMsg(selectedQueryPlanId)}
             </Typography>
           </div>
@@ -95,8 +95,8 @@ export default function DeleteQueryPlanModal() {
             <Icon name="done_all" size="lg" weight={700} className="text-white" />
           </div>
           <div className="space-y-1 px-8">
-            <Typography variant="h4" className="text-[15px] font-black text-slate-900 dark:text-white tracking-tight">{CM.queryPlanDeletedTitle}</Typography>
-            <Typography variant="p" className="text-[11.5px] text-slate-500 font-medium leading-relaxed">{CM.queryPlanRemovedMsg}</Typography>
+            <Typography variant="h4" className="text-17 font-black text-slate-900 dark:text-white tracking-tight">{CM.queryPlanDeletedTitle}</Typography>
+            <Typography variant="p" className="text-13 text-slate-500 font-medium leading-relaxed">{CM.queryPlanRemovedMsg}</Typography>
           </div>
         </div>
       </Modal>
@@ -112,11 +112,11 @@ export default function DeleteQueryPlanModal() {
             <Icon name="emergency_home" size="md" weight={300} className="text-white" />
           </div>
           <div className="space-y-2 px-6">
-            <Typography variant="h4" className="text-[15px] font-black text-slate-900 dark:text-white tracking-tight text-rose-500">{CM.deletionFailed}</Typography>
-            <Typography variant="p" className="text-[11.5px] text-slate-500 font-medium leading-relaxed">{CM.deleteQueryPlanFailedMsg}</Typography>
+            <Typography variant="h4" className="text-17 font-black text-slate-900 dark:text-white tracking-tight text-rose-500">{CM.deletionFailed}</Typography>
+            <Typography variant="p" className="text-13 text-slate-500 font-medium leading-relaxed">{CM.deleteQueryPlanFailedMsg}</Typography>
           </div>
           <div className="w-full max-w-[340px] bg-rose-500/5 border border-rose-500/15 rounded-xl px-4 py-3 text-left">
-             <Typography variant="caption" className="text-rose-400 font-mono leading-relaxed break-words block text-center uppercase tracking-widest text-[10px] font-bold">
+             <Typography variant="caption" className="text-rose-400 font-mono leading-relaxed break-words block text-center uppercase tracking-widest text-12 font-bold">
               {errorMsg}
             </Typography>
           </div>
@@ -152,8 +152,8 @@ export default function DeleteQueryPlanModal() {
         </div>
         
         <div className="space-y-2">
-          <Typography variant="h4" className="text-[16px] font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteQueryPlanPrompt}</Typography>
-          <Typography variant="p" className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
+          <Typography variant="h4" className="text-18 font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteQueryPlanPrompt}</Typography>
+          <Typography variant="p" className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
             You are about to permanently remove the query plan <span className="text-rose-500 font-black uppercase tracking-tight">"{selectedQueryPlanId}"</span>. Automated capture for <span className="font-bold text-slate-900 dark:text-white">"{selectedDatabase}"</span> will cease immediately.
           </Typography>
         </div>

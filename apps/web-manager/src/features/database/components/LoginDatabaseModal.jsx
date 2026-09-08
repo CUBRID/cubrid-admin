@@ -169,7 +169,7 @@ export default function LoginDatabaseModal() {
               onClick={() => setShowPassword((s) => !s)}
               className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 flex items-center justify-center"
             >
-              <Icon name={showPassword ? 'visibility_off' : 'visibility'} size="16px" weight={300} />
+              <Icon name={showPassword ? 'visibility_off' : 'visibility'} size="17px" weight={300} />
             </button>
           }
         />

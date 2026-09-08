@@ -39,17 +39,17 @@ export default function UnloadResultModal() {
         </div>
 
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
-          <p className="text-[11px] text-slate-500">{CM.unloadResultMsg}</p>
+          <p className="text-13 text-slate-500">{CM.unloadResultMsg}</p>
 
           <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
-            <table className="w-full text-left text-[11px] border-collapse">
-              <thead className="bg-slate-50 dark:bg-background-dark/50 text-[10px] font-medium text-slate-400 border-b border-slate-100 dark:border-slate-800">
+            <table className="w-full text-left text-13 border-collapse">
+              <thead className="bg-slate-50 dark:bg-background-dark/50 text-12 font-medium text-slate-400 border-b border-slate-100 dark:border-slate-800">
                 <tr>
                   <th className="px-4 py-2">{CM.classLabel}</th>
                   <th className="px-4 py-2 text-right">{CM.resultLabel}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-mono text-[11px]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-mono text-13">
                 {rows.length > 0 ? (
                   rows.map((row, idx) => (
                     <tr key={idx}>
@@ -59,7 +59,7 @@ export default function UnloadResultModal() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={2} className="px-4 py-12 text-center text-slate-400 text-[10px]">
+                    <td colSpan={2} className="px-4 py-12 text-center text-slate-400 text-12">
                       {CM.noResultsLabel}
                     </td>
                   </tr>
@@ -73,7 +73,7 @@ export default function UnloadResultModal() {
           <button
             type="button"
             onClick={() => dispatch(closeUnloadResultModal())}
-            className="px-8 py-1.5 bg-amber-500 hover:bg-[#ffd700] text-bk-side text-[11px] font-medium rounded-sm border border-amber-500/50 min-w-[120px]"
+            className="px-8 py-1.5 bg-amber-500 hover:bg-[#ffd700] text-bk-side text-13 font-medium rounded-sm border border-amber-500/50 min-w-[120px]"
           >
             {CM.close}
           </button>

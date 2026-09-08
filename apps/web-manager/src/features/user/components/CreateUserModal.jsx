@@ -178,7 +178,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
       testId="create-user"
       footer={
         <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+          <div className="flex items-center gap-2 text-13 text-slate-400 font-medium">
             <Icon name="database" size="xs" className="opacity-40" />
             <span className="opacity-60 font-mono">{dbname}</span>
           </div>
@@ -199,10 +199,10 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             <Icon name={isEditMode ? 'manage_accounts' : 'person_add'} size="md" className="text-amber-500" />
           </div>
           <div>
-            <p className="text-[13px] font-black text-slate-800 dark:text-white">
+            <p className="text-15 font-black text-slate-800 dark:text-white">
               {isEditMode ? CM.editingUser(editingUser) : CM.newDatabaseUserTitle}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-13 text-slate-400 mt-0.5">
               {isEditMode
                 ? CM.updateCredentialsSubtitle
                 : CM.defineIdentitySubtitle}
@@ -214,7 +214,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
         <section className="space-y-3">
           <div className="flex items-center gap-2.5 mb-1">
             <span className="w-1 h-3.5 rounded-full bg-amber-500 shrink-0" />
-            <Typography variant="caption" className="font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest text-[10px]">
+            <Typography variant="caption" className="font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest text-12">
               {CM.accountSectionLabel}
             </Typography>
           </div>
@@ -244,11 +244,11 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
         <section className="space-y-3">
           <div className="flex items-center gap-2.5 mb-1">
             <span className="w-1 h-3.5 rounded-full bg-slate-400 shrink-0" />
-            <Typography variant="caption" className="font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest text-[10px]">
+            <Typography variant="caption" className="font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest text-12">
               {CM.password}
             </Typography>
             {isEditMode && (
-              <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
+              <span className="text-11 font-bold text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
                 {CM.leaveBlankToKeep}
               </span>
             )}
@@ -258,7 +258,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" required={!isEditMode} />
           </div>
           {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
-            <div className="flex items-center gap-2 text-[11px] text-rose-500 font-bold px-1">
+            <div className="flex items-center gap-2 text-13 text-rose-500 font-bold px-1">
               <Icon name="error" size="xs" />
               {CM.passwordsDoNotMatch}
             </div>

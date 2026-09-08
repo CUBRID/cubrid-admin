@@ -167,7 +167,7 @@ export default function ManageGroupMembersModal() {
         {saveError && (
           <div className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
             <Icon name="error_outline" size="sm" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
-            <Typography variant="p" className="text-[11.5px] text-rose-500 font-medium flex-1 leading-relaxed">
+            <Typography variant="p" className="text-13 text-rose-500 font-medium flex-1 leading-relaxed">
               {saveError}
             </Typography>
           </div>

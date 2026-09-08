@@ -60,7 +60,7 @@ export const ContextMenu = ({
           return (
             <div
               key={`header-${idx}`}
-              className="px-4 py-2 text-[11px] font-medium text-slate-400 border-b border-slate-100 dark:border-white/5 mb-1"
+              className="px-4 py-2 text-13 font-medium text-slate-400 border-b border-slate-100 dark:border-white/5 mb-1"
             >
               {item.header}
             </div>
