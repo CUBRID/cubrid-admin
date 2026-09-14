@@ -533,14 +533,16 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Stop the whole service on a host in one call: databases, then brokers —
-   * matching `cubrid service stop`. Every currently-active database (from
-   * start-info's `dblist`) is stopped, with HA-configured databases always
-   * included via stopAllDatabases's bulk `ha_stop` regardless of this list.
+   * Stop the whole service on a host in one call: brokers, then databases —
+   * deliberately the reverse of `cubrid service stop` (which stops the
+   * server before the broker; verified in util_service.c's STOP case).
+   * Every currently-active database (from start-info's `dblist`) is
+   * stopped, with HA-configured databases always included via
+   * stopAllDatabases's bulk `ha_stop` regardless of this list.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
-   * @returns Failures across databases and brokers; never throws for partial
+   * @returns Failures across brokers and databases; never throws for partial
    *   failures
    */
   @HandleCmsErrors()
@@ -549,23 +551,23 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string
   ): Promise<{ failed: Array<{ name: string; error: string }> }> {
     // See startWholeService's matching comment — checked once, up front, so
-    // a job-in-progress block can't happen only after databases already
+    // a job-in-progress block can't happen only after brokers already
     // stopped.
     await this.assertNoActiveJob(userId, hostUid);
 
     const failed: Array<{ name: string; error: string }> = [];
-
-    const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
-    const dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
-
-    const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
-    failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
 
     try {
       await this.brokerService.stopAllBrokers(userId, hostUid);
     } catch (err: unknown) {
       failed.push({ name: 'brokers', error: err instanceof Error ? err.message : String(err) });
     }
+
+    const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
+    const dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
+
+    const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
+    failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
 
     return { failed };
   }
