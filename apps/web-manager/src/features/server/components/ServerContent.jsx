@@ -10,7 +10,7 @@ import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
 import { fetchDatabaseVolumes } from '../../database/databaseMonitoringSlice';
 import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
-import { isHaClusterMissingMaster } from '../../host/haPeerUtils';
+import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
 import DatabaseListSection from './server/DatabaseListSection';
@@ -179,11 +179,14 @@ const Component = function ServerContent({ hostUid }) {
     return names;
   }, [haHeartbeat]);
 
+  const haDbServerModes = React.useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
+
   const dbListDisplay = databases.map(db => ({
     db: db.dbname,
     autoStart: autoStartDBs.includes(db.dbname),
     status: activeDatabases.includes(db.dbname) ? CM.statusOn : CM.statusOff,
-    isHA: isHA && haDbs.has(db.dbname)
+    isHA: isHA && haDbs.has(db.dbname),
+    haState: isHA && haDbs.has(db.dbname) ? haDbServerModes.get(db.dbname) : null,
   }));
 
   return (

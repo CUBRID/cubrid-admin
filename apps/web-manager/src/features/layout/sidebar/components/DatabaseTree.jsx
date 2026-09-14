@@ -20,6 +20,7 @@ import {
 import { fetchDatabaseUsers } from '../../../user/userSlice';
 import { openTab } from '../../layoutSlice';
 import { dbKey } from '../../../database/dbKey';
+import { getHaDbServerModes, HA_DB_STATE_CONFIG } from '../../../host/haPeerUtils';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -113,7 +114,9 @@ export default function DatabaseTree({
 
     return names;
   }, [haHeartbeat]);
-  
+
+  const haDbServerModes = useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
+
   const databases = useSelector(selectDatabases, shallowEqual);
   const activeDatabases = useSelector(selectActiveDatabases, shallowEqual);
   const loading = useSelector(selectLoading);
@@ -236,12 +239,18 @@ export default function DatabaseTree({
         const isDbSelected = db.dbname === selectedDatabase && !selectedDatabaseSubItem;
 
         const isDbInHa = isHostHA && haDbs.has(db.dbname);
+        const haDbState = isDbInHa ? HA_DB_STATE_CONFIG[haDbServerModes.get(db.dbname)] : null;
         const label = (
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="truncate">{db.dbname}</span>
             {isDbInHa && (
               <span className="px-0.5 py-[0.5px] text-9 font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
                 HA
+              </span>
+            )}
+            {haDbState && (
+              <span className={`px-0.5 py-[0.5px] text-9 font-black leading-none border rounded-sm scale-90 shrink-0 uppercase ${haDbState.className}`}>
+                {CM[haDbState.cmKey]}
               </span>
             )}
             {db.isProfileExists && (
