@@ -17,8 +17,8 @@
   --color-background-light: #f6f6f8;
   --color-background-dark: #121212;
 
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /*

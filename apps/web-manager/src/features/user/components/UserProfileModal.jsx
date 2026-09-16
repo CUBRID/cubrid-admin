@@ -38,6 +38,9 @@ export default function UserProfileModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
+  const isValidNewPassword = (password) =>
+    password.trim().length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+
   const handleSave = async () => {
     setError(null);
     try {
@@ -49,13 +52,24 @@ export default function UserProfileModal({ isOpen, onClose }) {
         setError(CM.newPasswordsDoNotMatchMsg);
         return;
       }
+      if (!isValidNewPassword(passwords.newPassword)) {
+        setError(CM.weakNewPasswordMsg);
+        return;
+      }
       setLoading(true);
       await authApi.updatePassword(passwords.oldPassword, passwords.newPassword);
       setPasswords({ oldPassword: '', newPassword: '', confirmPassword: '' });
       setEditMode(null);
       setLoading(false);
     } catch (err) {
-      setError(err.response?.data?.message || CM.unexpectedErrorMsg);
+      const code = err.response?.data?.code;
+      if (code === 'OLD_PASSWORD_MISMATCH') {
+        setError(CM.currentPasswordIncorrectMsg);
+      } else if (code === 'BAD_NEW_PASSWORD') {
+        setError(CM.weakNewPasswordMsg);
+      } else {
+        setError(CM.unexpectedErrorMsg);
+      }
       setLoading(false);
     }
   };

@@ -61,7 +61,7 @@ export default function ChangeHostPasswordModal() {
     if (!currentHost) return;
 
     try {
-      // 1. Change the passcode on the remote host (CUBRID CMS)
+      // 1. Change the password on the remote host (CUBRID CMS)
       // Aligned with api-server SetDbmtPasswdRequest structure: targetid, newpassword
       const payload = {
         targetid: currentHost.id,
@@ -76,7 +76,7 @@ export default function ChangeHostPasswordModal() {
         address: currentHost.address,
         port: Number(currentHost.port),
         alias: currentHost.alias,
-        password: formData.password, // Update with the new passcode
+        password: formData.password, // Update with the new password
       };
       
       await dispatch(editHost({ hostUid: changePasswordHostUid, payload: localPayload })).unwrap();

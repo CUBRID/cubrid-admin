@@ -129,7 +129,7 @@ export default function LoginPage() {
             <img src="/cubrid-logo.png" alt="CUBRID" className="w-6 h-6 object-contain dark:brightness-100" />
           </div>
           <div>
-            <h1 className="text-slate-900 dark:text-white font-extrabold text-base leading-none tracking-tight">CUBRID <span className="text-amber-500 font-light">Manager</span></h1>
+            <h1 className="text-slate-900 dark:text-white font-extrabold text-base leading-none tracking-tight">Next CUBRID <span className="text-amber-500 font-light">Admin</span></h1>
             <p className="text-12 text-slate-400 dark:text-slate-500 font-medium mt-0.5">{CM.signIn}</p>
           </div>
         </div>
