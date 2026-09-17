@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 export CI="${CI:-true}"
 export CUBRID_CMS_PORT="${CUBRID_CMS_PORT:-28001}"
 export CUBRID_BROKER_PORT="${CUBRID_BROKER_PORT:-38000}"
-export CUBRID_IMAGE="${CUBRID_IMAGE:-cubrid-webmanager/cubrid:11.4.5.1906-4e4fa29-debug}"
+export CUBRID_IMAGE="${CUBRID_IMAGE:-cubrid/cubrid:11.4}"
 export CUBRID_CONTAINER_NAME="${CUBRID_CONTAINER_NAME:-cubrid-e2e-ephemeral}"
 
 # TCP Test Suite Environment (Targeting local Ephemeral Docker CMS)

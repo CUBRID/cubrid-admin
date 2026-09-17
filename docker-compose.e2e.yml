@@ -2,7 +2,7 @@ name: cwm-e2e-ephemeral
 
 services:
   cubrid-cms:
-    image: ${CUBRID_IMAGE:-cubrid-webmanager/cubrid:11.4.5.1906-4e4fa29-debug}
+    image: ${CUBRID_IMAGE:-cubrid/cubrid:11.4}
     container_name: ${CUBRID_CONTAINER_NAME:-cubrid-e2e-ephemeral}
     restart: "no"
     ports:
@@ -14,6 +14,7 @@ services:
       - "${CUBRID_BROKER_PORT:-38000}:33000"
     environment:
       - CUBRID_VOLUME_SIZE=100M
+      - CUBRID_DB=demodb
       - CUBRID_ONLINE_DB=demodb
       - CUBRID_OFFLINE_DB=db1
       - CUBRID_COMPONENTS=ALL
