@@ -1,0 +1,27 @@
+name: cwm-e2e-ephemeral
+
+services:
+  cubrid-cms:
+    image: ${CUBRID_IMAGE:-cubrid-webmanager/cubrid:11.4.5.1906-4e4fa29-debug}
+    container_name: ${CUBRID_CONTAINER_NAME:-cubrid-e2e-ephemeral}
+    restart: "no"
+    ports:
+      # Use 28001/38000 as local defaults to avoid collisions with
+      # existing cubrid-11.4 (8001/33000) or cubrid-webmanager-e2e-cms
+      # (18001/33001) containers already running on developer machines.
+      # GitHub CI runners start clean so the default is always free there.
+      - "${CUBRID_CMS_PORT:-28001}:8001"
+      - "${CUBRID_BROKER_PORT:-38000}:33000"
+    environment:
+      - CUBRID_VOLUME_SIZE=100M
+      - CUBRID_ONLINE_DB=demodb
+      - CUBRID_OFFLINE_DB=db1
+      - CUBRID_COMPONENTS=ALL
+      - CUBRID_LOCALE=en_US.utf8
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8001 && exec 3>&- && exec 3<&-"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
