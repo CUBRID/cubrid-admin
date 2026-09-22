@@ -375,9 +375,9 @@ export const CM = {
   changePassword: 'Change Password',
   userManagement: 'User Management',
   cmsAccountManagement: 'CMS Account Management',
-  serverVersion: 'Server Version',
-  server: 'Server',
-  serverColon: (s) => `Server: ${s}`,
+  serverVersion: 'Host Engine Version',
+  server: 'Host',
+  serverColon: (s) => `Host: ${s}`,
   databaseColon: (db) => `Database: ${db}`,
   allDatabases: 'All Databases',
   allBrokers: 'All Brokers',
@@ -414,8 +414,8 @@ export const CM = {
   serverLogs: 'Server logs',
   sqlLog: 'SQL Log',
   noHostSelectedTitle: 'No Host Selected',
-  selectServerFromList: 'Select a server from the list above to view details.',
-  serverListAbove: 'Server list above',
+  selectServerFromList: 'Select a host from the list above to view details.',
+  serverListAbove: 'Host list above',
   admin: 'Admin',
   managerConsole: 'Admin Console',
 
@@ -432,7 +432,7 @@ export const CM = {
   newConnection: 'New Connection',
   friendlyName: 'Alias',
   ipAddressDomain: 'IP Address / Domain',
-  ipAddressDomainDescription: 'The machine running the CUBRID server (CMS) you want to manage — not the address you use to access Next CUBRID Admin itself.',
+  ipAddressDomainDescription: 'The machine running the CUBRID host (CMS) you want to manage — not the address you use to access Next CUBRID Admin itself.',
   modifyHost: 'Modify Host',
   removeHostConnection: 'Remove Host Connection',
   keepHost: 'Keep Host',
@@ -467,7 +467,7 @@ export const CM = {
   brokerPermission: 'Broker authority:',
 
   // Server dashboard
-  serverDashboard: 'Server Dashboard',
+  serverDashboard: 'Host Dashboard',
   refreshDashboard: 'Refresh dashboard',
   syncedAt: (t) => `Synced ${t}`,
   databases: 'Databases',
@@ -1887,7 +1887,7 @@ export const CM = {
   recoveryInstructionsSent: 'Recovery instructions have been sent to',
   checkSpamMsg: 'The link expires in 15 minutes. Check your spam folder if it doesn\'t arrive.',
   resendRecoveryEmail: 'Resend recovery email',
-  serverListHeader: 'Server List',
+  serverListHeader: 'Host List',
   resourcesHeader: 'Resources',
 
   // CMSUserManagementModal
@@ -2055,7 +2055,7 @@ export const CM = {
   friendlyNamePlaceholder: 'e.g. Production Server',
   backupPlanIdPlaceholder: 'backup_plan_1',
   backupDirPlaceholder: '/var/backups',
-  exportFilenamePlaceholder: 'export_servers',
+  exportFilenamePlaceholder: 'export_hosts',
   localeDescriptions: {
     'en_US.iso88591': 'English, Western European',
     'en_US.utf8': 'English, Universal',

@@ -42,7 +42,7 @@ export default function ImportExportHostModal() {
   const [passwordDrafts, setPasswordDrafts] = useState({});
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [fileName, setFileName] = useState('export_servers');
+  const [fileName, setFileName] = useState('export_hosts');
   const [exportFormat, setExportFormat] = useState('nativeXml');
   const [importGroupName, setImportGroupName] = useState('Imported');
   const fileInputRef = useRef(null);
@@ -160,7 +160,7 @@ export default function ImportExportHostModal() {
     setIsProcessing(true);
     try {
       if (importExportMode === 'export') {
-        const baseName = fileName || 'export_servers';
+        const baseName = fileName || 'export_hosts';
         if (exportFormat === 'caXml') {
           const hostsToExport = hosts.filter(h => selectedHosts.includes(h.uid));
           exportHostsToXml(hostsToExport, `${baseName}.xml`);
