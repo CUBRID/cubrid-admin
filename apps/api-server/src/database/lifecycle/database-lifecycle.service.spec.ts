@@ -12,6 +12,7 @@ import { DatabaseConfigService } from '../config/database-config.service';
 import { BrokerService } from '@broker';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
 import { DatabaseError } from '@error/database/database-error';
+import { ValidationError } from '@error/validation/validation-error';
 import { DatabaseErrorCode } from '@error/database/database-error-code';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
@@ -945,6 +946,33 @@ describe('DatabaseLifecycleService', () => {
 
       const result = await service.createDatabase(mockUserId, mockHostUid, request);
 
+      expect(result.startDatabase).toEqual({
+        success: true,
+        data: mockStartInfoForCreate,
+      });
+    });
+
+    it('starts the database via a direct startdb call, without needing a stored login profile', async () => {
+      // A database this job just created can never have a stored db-login
+      // profile yet (nothing has logged into it before), so going through
+      // startNonHaDatabase()'s ensureDbLogin() gate would always throw
+      // MissingDBCredentials. startdb itself needs no db user credentials
+      // (see ensureDbLogin's own comment), so createDatabase() must send it
+      // directly rather than satisfying that gate indirectly. Prove it by
+      // making ensureDbLogin fail exactly as it would for a brand-new
+      // database, and confirming the start step never calls it at all.
+      databaseUserService.ensureDbLogin.mockRejectedValue(
+        ValidationError.MissingDBCredentials('testdb', ['id', 'password'])
+      );
+
+      const request = {
+        ...mockCreateDbRequest,
+        setAutoStart: true,
+      };
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, request);
+
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
       expect(result.startDatabase).toEqual({
         success: true,
         data: mockStartInfoForCreate,

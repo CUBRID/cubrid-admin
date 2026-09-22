@@ -843,17 +843,27 @@ export class DatabaseLifecycleService extends BaseService {
     // 1-1. Start database when requested OR when updateUser needs DB access.
     // userinfo/updateuser CMS tasks require the database to be running.
     //
-    // Calls startNonHaDatabase() directly instead of the public startDatabase()
-    // wrapper: this whole createDatabase() call already runs inside this job's
-    // own active-job lock (registered by CmsJobService.createJob before
-    // executeCmsForJob invokes us), so startDatabase()'s assertNoActiveJob()
-    // would see that same still-running job and always throw
-    // OPERATION_IN_PROGRESS on itself. A freshly created database is also
-    // never HA (createDatabaseInternal above rejects HA hosts outright), so
-    // the HA branch startDatabase() would otherwise check is moot here.
+    // Sends the CMS `startdb` task directly instead of going through either
+    // startDatabase() or startNonHaDatabase(): this whole createDatabase()
+    // call already runs inside this job's own active-job lock (registered by
+    // CmsJobService.createJob before executeCmsForJob invokes us), so
+    // startDatabase()'s assertNoActiveJob() would see that same still-running
+    // job and always throw OPERATION_IN_PROGRESS on itself. And
+    // startNonHaDatabase() gates on ensureDbLogin(), which requires a stored
+    // db-login profile — a database this job just created can never have
+    // one (nothing has logged into it before), so it would always throw
+    // MissingDBCredentials. Neither check means anything for a database
+    // we're still in the middle of creating in this same job, and `startdb`
+    // itself needs no db user credentials (see ensureDbLogin's own comment),
+    // so both gates are just skipped here rather than satisfied indirectly.
+    // A freshly created database is also never HA (createDatabaseInternal
+    // above rejects HA hosts outright), so no ha_start branch is needed.
     if (setAutoStart || wantsPasswordChange) {
       try {
-        await this.startNonHaDatabase(userId, hostUid, createDbRequest.dbname);
+        await this.executeAsyncCmsJobRequest<
+          StartDatabaseCmsRequest & { task: 'startdb' },
+          BaseCmsResponse
+        >(userId, hostUid, { task: 'startdb', dbname: createDbRequest.dbname });
         const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
         response.startDatabase = {
           success: true,
