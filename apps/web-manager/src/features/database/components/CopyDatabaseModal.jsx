@@ -334,6 +334,7 @@ export default function CopyDatabaseModal() {
       maxWidth="820px"
       testId="copy-database"
       onSubmit={handleCopy}
+      submitDisabled={!formData.destName.trim()}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="copy-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>

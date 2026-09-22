@@ -56,7 +56,10 @@ export default function LoginDatabaseModal() {
 
   const handleLogin = async (e) => {
     if (e) e.preventDefault();
-    if (!formData.dbuser) return;
+    if (!formData.dbuser.trim()) {
+      endError(CM.usernameRequired);
+      return;
+    }
 
     startAction();
     try {

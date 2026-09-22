@@ -184,6 +184,7 @@ export default function RenameDatabaseModal() {
       maxWidth="560px"
       testId="rename-database"
       onSubmit={handleRename}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="rename-database-cancel-btn" variant="secondary" onClick={handleClose}>{CM.cancel}</Button>

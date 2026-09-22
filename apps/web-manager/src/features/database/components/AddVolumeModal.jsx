@@ -213,6 +213,7 @@ export default function AddVolumeModal() {
       maxWidth="560px"
       testId="add-volume"
       onSubmit={handleAdd}
+      submitDisabled={!path || !sizeMB || fetchingStatus}
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-12 font-bold uppercase tracking-widest italic">

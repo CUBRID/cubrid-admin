@@ -101,6 +101,7 @@ export default function ChangeHostPasswordModal() {
       isOpen={isChangePasswordModalOpen}
       onClose={handleClose}
       onSubmit={!isSuccess ? handleSubmit : undefined}
+      submitDisabled={loading}
       title={isSuccess ? CM.success : CM.changeManagerPasscode}
       icon={isSuccess ? "check_circle" : "lock"}
       loading={loading}

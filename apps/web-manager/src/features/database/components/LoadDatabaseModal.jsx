@@ -440,6 +440,7 @@ export default function LoadDatabaseModal() {
       maxWidth="720px"
       testId="load-database"
       onSubmit={handleFormSubmit}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="load-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>

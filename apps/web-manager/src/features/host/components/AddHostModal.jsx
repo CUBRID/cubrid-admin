@@ -165,6 +165,7 @@ export default function AddHostModal({ isOpen, onClose }) {
       isOpen={isOpen}
       onClose={handleClose}
       onSubmit={handleSave}
+      submitDisabled={loading}
       title={CM.newConnection}
       icon="add_link"
       maxWidth="max-w-[500px]"

@@ -49,6 +49,7 @@ export default function HaPeerMergeModal() {
       maxWidth="max-w-[480px]"
       loading={isMerging || loading}
       onSubmit={handleMerge}
+      submitDisabled={isMerging || loading}
       footer={
         <>
           <Button variant="secondary" onClick={() => dispatch(clearPendingHaMerge())} disabled={isMerging}>

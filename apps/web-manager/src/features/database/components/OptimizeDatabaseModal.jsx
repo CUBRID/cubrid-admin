@@ -297,13 +297,6 @@ export default function OptimizeDatabaseModal() {
     resetAction();
   };
 
-  // Mirrors the footer button's disabled={isLoadingClasses} gate, which
-  // handleOptimize itself doesn't check.
-  const handleFormSubmit = () => {
-    if (isLoadingClasses) return;
-    handleOptimize();
-  };
-
   /* ─── LOADING view ─── */
   if (isLoading) {
     return (
@@ -358,7 +351,8 @@ export default function OptimizeDatabaseModal() {
       icon="auto_fix_high"
       maxWidth="480px"
       testId="optimize-database"
-      onSubmit={handleFormSubmit}
+      onSubmit={handleOptimize}
+      submitDisabled={isActive || isLoadingClasses}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="optimize-database-cancel-btn" variant="secondary" onClick={handleClose}>

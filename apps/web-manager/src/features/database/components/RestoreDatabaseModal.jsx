@@ -559,6 +559,7 @@ export default function RestoreDatabaseModal() {
       maxWidth="680px"
       testId="restore-database"
       onSubmit={handleRestore}
+      submitDisabled={isExecuteDisabled}
       footer={
         <div className="flex items-center justify-between w-full gap-3">
           <div className="flex items-center gap-2 text-12 text-slate-400 font-medium">

@@ -452,6 +452,7 @@ export default function ImportExportHostModal() {
   // step. The password-prompt confirmation step and the initial file-picker
   // step have no text inputs, so Enter there never reaches this handler.
   const handleFormSubmit = isPasswordStep ? handleApplyImportedPasswords : handleAction;
+  const isSubmitDisabled = isPasswordStep ? isProcessing : (selectedHosts.length === 0 || isProcessing);
 
   return (
     <Modal
@@ -463,6 +464,7 @@ export default function ImportExportHostModal() {
       maxWidth="max-w-[720px]"
       testId="import-export-host"
       onSubmit={handleFormSubmit}
+      submitDisabled={isSubmitDisabled}
       subtitle={isPasswordPromptStep
         ? CM.pendingPasswordsSubtitle(pendingPasswordHosts.length)
         : isPasswordStep

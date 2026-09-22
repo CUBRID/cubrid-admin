@@ -145,6 +145,7 @@ export default function ManageGroupMembersModal() {
       maxWidth="max-w-[620px]"
       testId="manage-group-members"
       onSubmit={handleSave}
+      submitDisabled={isSaving}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="manage-group-members-cancel-btn" variant="secondary" onClick={handleClose} disabled={isSaving}>

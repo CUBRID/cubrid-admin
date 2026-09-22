@@ -145,6 +145,7 @@ export default function EditHostModal() {
       isOpen={isEditHostModalOpen}
       onClose={handleClose}
       onSubmit={handleSave}
+      submitDisabled={loading}
       title={CM.modifyHost}
       icon="settings_input_component"
       loading={loading}

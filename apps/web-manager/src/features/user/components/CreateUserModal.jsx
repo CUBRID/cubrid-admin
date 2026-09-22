@@ -171,6 +171,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
       isOpen={isOpen}
       onClose={onClose}
       onSubmit={handleSave}
+      submitDisabled={!formData.name}
       title={isEditMode ? CM.editUser : CM.createUser}
       subtitle={dbname}
       icon={isEditMode ? 'manage_accounts' : 'person_add'}

@@ -124,6 +124,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
       icon={editMode === 'password' ? 'lock_reset' : 'account_circle'}
       maxWidth="max-w-[420px]"
       onSubmit={editMode ? handleSave : undefined}
+      submitDisabled={!canSubmitPassword || loading || globalLoading}
       footer={footer}
     >
       <div className="space-y-4 p-1">

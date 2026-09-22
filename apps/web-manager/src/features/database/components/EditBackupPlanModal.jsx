@@ -255,6 +255,7 @@ export default function EditBackupPlanModal() {
       maxWidth="700px"
       testId="edit-backup-plan"
       onSubmit={handleSave}
+      submitDisabled={!formLoaded}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="edit-backup-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
