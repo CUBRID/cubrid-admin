@@ -80,14 +80,28 @@ export default function UserProfileModal({ isOpen, onClose }) {
     setError(null);
   };
 
+  // Blocks the same three conditions handleSave itself checks on submit
+  // (empty fields, mismatch, policy) client-side, ahead of any request —
+  // handleSave's own checks stay as-is as the authoritative guard (e.g.
+  // against a stale click), this only keeps the button disabled until they
+  // would pass.
+  const canSubmitPassword =
+    !!passwords.oldPassword &&
+    !!passwords.newPassword &&
+    !!passwords.confirmPassword &&
+    passwords.newPassword === passwords.confirmPassword &&
+    isValidNewPassword(passwords.newPassword);
+
   const footer = editMode ? (
     <>
       <Button variant="ghost" onClick={handleCancel} disabled={loading || globalLoading}>
         {CM.cancel}
       </Button>
       <Button
+        data-testid="change-password-submit-btn"
         onClick={handleSave}
         loading={loading || globalLoading}
+        disabled={!canSubmitPassword}
         icon="check_circle"
         className="min-w-[120px]"
       >
@@ -163,6 +177,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
             <div className="rounded-xl border border-slate-200 dark:border-white/8 overflow-hidden">
             <div className="p-4 space-y-3">
               <Input
+                data-testid="change-password-old-input"
                 type="password"
                 label={CM.currentPasswordLabel}
                 icon="lock"
@@ -172,14 +187,34 @@ export default function UserProfileModal({ isOpen, onClose }) {
                 placeholder="••••••••"
               />
               <Input
+                data-testid="change-password-new-input"
                 type="password"
                 label={CM.newPassword}
-                icon="key"
+                icon={passwords.newPassword && isValidNewPassword(passwords.newPassword) ? 'verified_user' : 'key'}
                 value={passwords.newPassword}
                 onChange={(e) => setPasswords((prev) => ({ ...prev, newPassword: e.target.value }))}
                 disabled={loading || globalLoading}
                 placeholder="••••••••"
               />
+
+              {/* Live pass/fail hint against the actual password policy —
+                  same rule and pattern as RegisterPage's live hint. Hidden
+                  once the banner is already showing this exact message, so
+                  the same fact isn't said twice on screen. */}
+              {passwords.newPassword && error !== CM.weakNewPasswordMsg && (
+                <div className="flex items-center gap-1.5 -mt-1.5 animate-in fade-in duration-200">
+                  <Icon
+                    name={isValidNewPassword(passwords.newPassword) ? 'check_circle' : 'cancel'}
+                    size="xs"
+                    weight={300}
+                    className={isValidNewPassword(passwords.newPassword) ? 'text-emerald-500' : 'text-rose-500'}
+                  />
+                  <p className={`text-11 font-bold uppercase tracking-widest font-mono ${isValidNewPassword(passwords.newPassword) ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {isValidNewPassword(passwords.newPassword) ? CM.passwordMeetsRequirements : CM.passwordPolicyHint}
+                  </p>
+                </div>
+              )}
+
               <Input
                 type="password"
                 label={CM.confirmNewPassword}
