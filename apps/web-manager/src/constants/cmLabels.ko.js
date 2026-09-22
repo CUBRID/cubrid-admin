@@ -485,7 +485,7 @@ export const CM_KO = {
   dbStatus: 'DB 상태',
   undoChanges: '변경 취소',
   saveChanges: '변경 저장',
-  testConnectionAndSave: '연결 테스트 및 저장',
+  testConnectionAndSave: '연결 및 저장',
   reloadConfig: '설정 다시 불러오기',
   modified: '수정됨',
   sourceEditor: '소스 편집기',

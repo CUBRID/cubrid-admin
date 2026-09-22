@@ -497,7 +497,7 @@ export const CM = {
   dbStatus: 'DB STATUS',
   undoChanges: 'Undo changes',
   saveChanges: 'Save changes',
-  testConnectionAndSave: 'Test Connection & Save',
+  testConnectionAndSave: 'Connect & Save',
   reloadConfig: 'Reload config',
   modified: 'Modified',
   sourceEditor: 'Source Editor',
