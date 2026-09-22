@@ -23,7 +23,7 @@ export const CM = {
   loginDatabaseMsg: 'Log into the selected database.',
   loggingInto: (db) => `Logging into "${db}" database...`,
   connectionSuccessful: 'The connection was successful.',
-  userName: 'User name',
+  userName: 'Username',
   password: 'Password',
   databaseName: 'Database name',
   savePassword: 'Save Password',
