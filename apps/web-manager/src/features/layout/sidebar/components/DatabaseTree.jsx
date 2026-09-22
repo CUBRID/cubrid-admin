@@ -256,7 +256,7 @@ export default function DatabaseTree({
             {db.isProfileExists && (
               <Icon
                 name="key"
-                size="11px"
+                size="14px"
                 weight={400}
                 className="text-slate-400 dark:text-slate-500 shrink-0"
                 title={CM.databaseCredentialsSaved}
@@ -264,7 +264,7 @@ export default function DatabaseTree({
             )}
             <Icon
               name={isLoggedIn ? 'lock_open' : 'lock'}
-              size="11px"
+              size="14px"
               weight={isLoggedIn ? 500 : 400}
               className={`shrink-0 ${isLoggedIn ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-700'}`}
               title={isLoggedIn ? CM.databaseLoggedIn : CM.databaseNotLoggedIn}
