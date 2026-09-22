@@ -11,6 +11,7 @@ vi.mock('./databaseApi', () => ({
 import { databaseApi } from './databaseApi';
 import reducer, {
   stopDatabase, loginDatabase, logoutDatabase, resetDatabaseState, clearDatabaseLoginsForHost,
+  clearDatabaseLogin,
 } from './databaseCoreSlice';
 
 beforeEach(() => vi.resetAllMocks());
@@ -110,6 +111,25 @@ describe('loggedInDatabases is scoped per host, not by bare dbname', () => {
 
     const { loggedInDatabases } = store.getState();
     expect(loggedInDatabases).not.toContain('hostA:demodb');
+    expect(loggedInDatabases).toContain('hostB:demodb');
+  });
+
+  it('clearDatabaseLogin only clears the one (hostUid, dbname) pair it targets', async () => {
+    databaseApi.loginDatabaseWithProfile.mockResolvedValue(true);
+    const store = configureStore({ reducer });
+
+    await store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+    await store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'otherdb' }));
+    await store.dispatch(loginDatabase({ hostUid: 'hostB', dbname: 'demodb' }));
+
+    // Mirrors what the apiClient response interceptor dispatches on a
+    // MISSING_DB_CREDENTIALS failure — the server-side session this db's
+    // padlock icon implied still existed has actually expired.
+    store.dispatch(clearDatabaseLogin({ hostUid: 'hostA', dbname: 'demodb' }));
+
+    const { loggedInDatabases } = store.getState();
+    expect(loggedInDatabases).not.toContain('hostA:demodb');
+    expect(loggedInDatabases).toContain('hostA:otherdb');
     expect(loggedInDatabases).toContain('hostB:demodb');
   });
 });

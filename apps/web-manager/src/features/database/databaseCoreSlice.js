@@ -217,6 +217,18 @@ const databaseCoreSlice = createSlice({
       Object.keys(state.loggingInDatabases).forEach((key) => {
         if (key.startsWith(prefix)) delete state.loggingInDatabases[key];
       });
+    },
+    // Corrects the client's belief about a single database's login state to
+    // match the server's — used when a request comes back MISSING_DB_CREDENTIALS
+    // (the server-side dbmtuserlogin session it was relying on has expired and
+    // no saved profile exists to silently re-authenticate with), so the padlock
+    // icon doesn't keep showing "logged in" for a session that no longer is.
+    clearDatabaseLogin: (state, action) => {
+      const { hostUid, dbname } = action.payload || {};
+      if (!hostUid || !dbname) return;
+      const key = dbKey(hostUid, dbname);
+      state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
+      delete state.loggingInDatabases[key];
     }
   },
   extraReducers: (builder) => {
@@ -345,7 +357,8 @@ export const {
   setSelectedDatabaseSubItem,
   clearDatabaseError,
   resetDatabaseState,
-  clearDatabaseLoginsForHost
+  clearDatabaseLoginsForHost,
+  clearDatabaseLogin
 } = databaseCoreSlice.actions;
 
 export default databaseCoreSlice.reducer;
