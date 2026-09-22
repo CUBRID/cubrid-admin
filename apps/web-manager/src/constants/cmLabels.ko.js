@@ -1333,6 +1333,7 @@ export const CM_KO = {
   haClusterLinked: 'HA 클러스터 연결됨',
   mergeHAPeers: 'HA 클러스터 노드 병합',
   groupNameRequired: '그룹 이름을 입력하세요.',
+  groupNameInvalidStart: '그룹 이름은 문자나 숫자로 시작해야 합니다.',
   groupNamePlaceholderHint: '예: 프로덕션 클러스터',
   deleteGroupConfirmTitle: (groupName) => `그룹 "${groupName}"을(를) 삭제하시겠습니까?`,
   deleteGroupConfirmDesc: '그룹 자체가 영구적으로 삭제됩니다.',

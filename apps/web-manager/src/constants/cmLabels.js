@@ -1347,6 +1347,7 @@ export const CM = {
   haClusterLinked: 'HA Cluster Linked',
   mergeHAPeers: 'Merge HA Cluster Peers',
   groupNameRequired: 'Group name is required',
+  groupNameInvalidStart: 'Group name must start with a letter or digit.',
   groupNamePlaceholderHint: 'e.g. Production Cluster',
   deleteGroupConfirmTitle: (groupName) => `Delete group "${groupName}"?`,
   deleteGroupConfirmDesc: 'This will permanently delete the group itself.',

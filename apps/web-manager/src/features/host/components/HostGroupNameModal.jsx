@@ -52,6 +52,13 @@ export default function HostGroupNameModal() {
       setLocalError(CM.groupNameRequired);
       return;
     }
+    // Blocks names like "__ungrouped__" or "_foo" — not a real ID collision
+    // risk (groups are keyed by a generated uuid, never by this name), just
+    // to keep group names from reading like an internal/reserved token.
+    if (!/^[\p{L}\p{N}]/u.test(trimmed)) {
+      setLocalError(CM.groupNameInvalidStart);
+      return;
+    }
     setLocalError('');
     try {
       if (isRename) {
