@@ -1048,16 +1048,13 @@ export const processHaLoginSideEffects = createAsyncThunk(
       dispatch(hostSlice.actions.removeHostAwaitingHaLogin(hostUid));
     }
 
-    const host = hosts.find((h) => h.uid === hostUid);
-    if (
-      host &&
-      isHa &&
-      response.currentNodeType === 'master' &&
-      !host.alias?.toLowerCase().includes('(master)')
-    ) {
-      const newAlias = `${host.alias || host.id} (master)`;
-      await dispatch(editHost({ hostUid, payload: { ...host, alias: newAlias } })).unwrap().catch(() => {});
-    }
+    // Deliberately does NOT append "(master)" to the host's real, persisted
+    // alias anymore. It used to, via editHost — but a user-typed alias can
+    // itself contain "(master)"/"(slave)"/"(replica)" (e.g. "cglee1_(master)"),
+    // and there is no way to tell that apart from this auto-appended tag once
+    // it's baked into the same alias string. HA role display now comes
+    // entirely from live `haInfo` (see inferHaNodeType) instead of mutating
+    // stored data to carry that information.
 
     return { hostUid };
   }
