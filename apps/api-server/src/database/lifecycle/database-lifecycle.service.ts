@@ -881,52 +881,18 @@ export class DatabaseLifecycleService extends BaseService {
           ''
         );
 
-        let groups: { group: string[] } = { group: [] };
-        let authorization: string[] = [];
-
-        // Fetch current user info to preserve existing groups and authorization.
-        try {
-          const userInfoResponse = await this.databaseUserService.getUserInfo(
-            userId,
-            hostUid,
-            createDbRequest.dbname
-          );
-
-          const existingUser = (userInfoResponse.user ?? []).find(
-            (u) => String(u['@name'] ?? '').toLowerCase() === usernameToUse.toLowerCase()
-          );
-
-          if (existingUser?.groups) {
-            const raw = existingUser.groups as any;
-            if (Array.isArray(raw?.group)) {
-              groups.group = raw.group.filter((g: unknown) => typeof g === 'string');
-            }
-          }
-
-          if (existingUser?.authorization) {
-            for (const entry of existingUser.authorization as Array<Record<string, string>>) {
-              const name = entry?.['@name'];
-              if (typeof name === 'string' && name) {
-                authorization.push(name);
-              }
-            }
-          }
-        } catch (userInfoError: unknown) {
-          this.logger.warn(
-            `userinfo failed for "${usernameToUse}" on "${createDbRequest.dbname}", ` +
-            `proceeding with empty groups/authorization: ` +
-            `${userInfoError instanceof Error ? userInfoError.message : String(userInfoError)}`
-          );
-        }
-
+        // DatabaseUserService.updateUser fetches and preserves the user's
+        // real groups/authorization itself now, so these are just
+        // placeholders for a caller with nothing to preserve yet (a
+        // freshly-created database's dba user has none).
         const updateUserResult = await this.databaseUserService.updateUser(
           userId,
           hostUid,
           createDbRequest.dbname,
           usernameToUse,
           updateUser.userpass,
-          groups,
-          authorization
+          { group: [] },
+          []
         );
         response.updateUser = {
           success: true,

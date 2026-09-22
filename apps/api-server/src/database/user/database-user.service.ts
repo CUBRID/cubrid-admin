@@ -214,6 +214,18 @@ export class DatabaseUserService extends BaseService {
 
   /**
    * Update a database user.
+   *
+   * The frontend no longer exposes group/authorization editing (that UI was
+   * removed as deprecated), so it always sends `groups`/`authorization` as
+   * empty placeholders. Sending those through to CMS `updateuser` verbatim
+   * would silently strip whatever groups/authorization the user actually
+   * had — CUBRID's system-catalog SELECT grants for non-DBA/PUBLIC users
+   * flow through group membership, so this reads as an ordinary password
+   * change but wipes the user's access to db_class/db_user/etc. Every
+   * caller's `groups`/`authorization` arguments are therefore ignored in
+   * favor of the user's real, current values fetched here — mirrors the
+   * preserve step the create-database wizard's DBA-password path already
+   * does for the same reason.
    */
   @HandleCmsErrors()
   async updateUser(
@@ -227,13 +239,50 @@ export class DatabaseUserService extends BaseService {
   ): Promise<UpdateDbUserResponse> {
     await this.ensureDbLogin(userId, hostUid, dbname);
 
+    let preservedGroups = groups;
+    let preservedAuthorization = authorization;
+
+    try {
+      const userInfoResponse = await this.getUserInfo(userId, hostUid, dbname);
+      const existingUser = (userInfoResponse.user ?? []).find(
+        (u) => String((u as Record<string, unknown>)['@name'] ?? '').toLowerCase() === username.toLowerCase()
+      );
+
+      if (existingUser) {
+        const fetchedGroups: string[] = [];
+        const rawGroups = (existingUser as Record<string, unknown>).groups as any;
+        if (Array.isArray(rawGroups?.group)) {
+          fetchedGroups.push(...rawGroups.group.filter((g: unknown) => typeof g === 'string'));
+        }
+        preservedGroups = { group: fetchedGroups };
+
+        const fetchedAuthorization: string[] = [];
+        const rawAuthorization = (existingUser as Record<string, unknown>).authorization;
+        if (Array.isArray(rawAuthorization)) {
+          for (const entry of rawAuthorization as Array<Record<string, string>>) {
+            const name = entry?.['@name'];
+            if (typeof name === 'string' && name) {
+              fetchedAuthorization.push(name);
+            }
+          }
+        }
+        preservedAuthorization = fetchedAuthorization;
+      }
+    } catch (userInfoError: unknown) {
+      this.logger.warn(
+        `userinfo failed while preserving groups/authorization for "${username}" on "${dbname}", ` +
+        `proceeding with caller-supplied values: ` +
+        `${userInfoError instanceof Error ? userInfoError.message : String(userInfoError)}`
+      );
+    }
+
     const cmsRequest: UpdateUserCmsRequest = {
       task: 'updateuser',
       dbname,
       username,
       userpass,
-      groups,
-      authorization,
+      groups: preservedGroups,
+      authorization: preservedAuthorization,
     };
 
     await this.executeCmsRequest<UpdateUserCmsRequest, UpdateUserCmsResponse>(
