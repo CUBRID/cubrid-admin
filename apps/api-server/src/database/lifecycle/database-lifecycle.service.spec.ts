@@ -925,6 +925,32 @@ describe('DatabaseLifecycleService', () => {
       });
     });
 
+    it('starts the database without OPERATION_IN_PROGRESS even while this same job still holds the host lock', async () => {
+      // createDatabase() runs entirely inside its own CmsJobService job, which
+      // registers this host as "active" before the job body runs and only
+      // releases it once the job finishes. If the internal start-after-create
+      // step called the public startDatabase() (which itself calls
+      // assertNoActiveJob()), it would see that same still-running job and
+      // always fail with OPERATION_IN_PROGRESS. Simulate that by having the
+      // lock service report an active job for this host throughout.
+      cmsJobLockService.hasActiveJobForHost.mockResolvedValue({
+        jobId: 'self-job',
+        dbname: 'testdb',
+      });
+
+      const request = {
+        ...mockCreateDbRequest,
+        setAutoStart: true,
+      };
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, request);
+
+      expect(result.startDatabase).toEqual({
+        success: true,
+        data: mockStartInfoForCreate,
+      });
+    });
+
     it('should use default username "dba" when username is not provided', async () => {
       const request = {
         ...mockCreateDbRequest,

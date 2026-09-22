@@ -842,9 +842,19 @@ export class DatabaseLifecycleService extends BaseService {
 
     // 1-1. Start database when requested OR when updateUser needs DB access.
     // userinfo/updateuser CMS tasks require the database to be running.
+    //
+    // Calls startNonHaDatabase() directly instead of the public startDatabase()
+    // wrapper: this whole createDatabase() call already runs inside this job's
+    // own active-job lock (registered by CmsJobService.createJob before
+    // executeCmsForJob invokes us), so startDatabase()'s assertNoActiveJob()
+    // would see that same still-running job and always throw
+    // OPERATION_IN_PROGRESS on itself. A freshly created database is also
+    // never HA (createDatabaseInternal above rejects HA hosts outright), so
+    // the HA branch startDatabase() would otherwise check is moot here.
     if (setAutoStart || wantsPasswordChange) {
       try {
-        const startInfo = await this.startDatabase(userId, hostUid, createDbRequest.dbname);
+        await this.startNonHaDatabase(userId, hostUid, createDbRequest.dbname);
+        const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
         response.startDatabase = {
           success: true,
           data: startInfo,
