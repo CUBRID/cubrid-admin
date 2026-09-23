@@ -699,14 +699,11 @@ export class DatabaseLifecycleService extends BaseService {
       CMS_CONFNAME_CUBRID
     );
     if (isHostHaModeOnFromCubridConf(cubridConf)) {
-      throw DatabaseError.InvalidParameter(
-        'Cannot create databases on hosts configured for HA.',
-        {
-          hostUid,
-          dbname: request.dbname,
-          reason: 'HA_HOST_CREATE_DB_BLOCKED',
-        }
-      );
+      // Rather than blocking creation outright, opt this specific database
+      // out of the host's HA replication set by writing ha_mode=off under
+      // its own [@dbname] section — a one-off database on an HA host should
+      // never be picked up by HA, but the host itself is otherwise fine.
+      await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, request.dbname);
     }
 
     // Collect files to check before parsing exvol

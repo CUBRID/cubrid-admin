@@ -555,4 +555,58 @@ describe('DatabaseConfigService', () => {
       expect(result).toEqual(mockSuccessResponse.log);
     });
   });
+
+  describe('ensureDbHaModeOff', () => {
+    const confname = 'cubridconf';
+
+    function mockConfig(confdata: string[]) {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata }],
+      } as never);
+    }
+
+    it('appends a new [@dbname] section with ha_mode=off when the section does not exist at all', async () => {
+      mockConfig(['[common]', 'ha_mode=on', '[service]', 'server=other_db']);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as never);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        confname,
+        ['[common]', 'ha_mode=on', '[service]', 'server=other_db', '', `[@${mockDbname}]`, 'ha_mode=off']
+      );
+    });
+
+    it('inserts ha_mode=off right after an existing [@dbname] header with no ha_mode key yet', async () => {
+      mockConfig(['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'some_other_param=1']);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as never);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        confname,
+        ['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=off', 'some_other_param=1']
+      );
+    });
+
+    it('treats a blank line between the section header and ha_mode=off as already configured', async () => {
+      mockConfig(['[common]', 'ha_mode=on', `[@${mockDbname}]`, '', 'ha_mode=off']);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('leaves an existing ha_mode value untouched instead of overwriting it', async () => {
+      mockConfig(['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=on']);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -92,6 +92,7 @@ describe('DatabaseLifecycleService', () => {
       setAutoAddVol: jest.fn(),
       setAutoStart: jest.fn(),
       removeAutoStart: jest.fn(),
+      ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined),
     };
 
     const mockBrokerService = {
@@ -1155,6 +1156,58 @@ describe('DatabaseLifecycleService', () => {
         }),
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
+    });
+  });
+
+  describe('createDatabaseInternal on an HA-configured host', () => {
+    const mockRequest = {
+      dbname: 'testdb',
+      numpage: '1000',
+      pagesize: '16384',
+      logsize: '100',
+      logpagesize: '16384',
+      genvolpath: '/path/to/testdb',
+      logvolpath: '/path/to/testdb',
+      charset: 'ko_KR.utf8',
+      overwrite_config_file: 'YES' as const,
+    };
+
+    beforeEach(() => {
+      (fileService as any).checkfileInternal = jest.fn().mockResolvedValue({
+        existfile: undefined,
+      });
+      cmsClient.postAuthenticated.mockResolvedValue({
+        __EXEC_TIME: '0 ms',
+        note: 'none',
+        status: 'success',
+        task: 'createdb',
+      });
+    });
+
+    it('auto-configures ha_mode=off for the new db instead of blocking creation', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      await expect(
+        service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any)
+      ).resolves.toBeDefined();
+
+      expect(databaseConfigService.ensureDbHaModeOff).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        'testdb'
+      );
+    });
+
+    it('does not call ensureDbHaModeOff when the host is not HA-configured', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=off'] }],
+      } as never);
+
+      await service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
     });
   });
 
