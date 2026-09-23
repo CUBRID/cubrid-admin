@@ -4,6 +4,7 @@ import {
   findHaPeersNeedingMerge,
   extractHaHeartbeatNodes,
   isHaClusterMissingMaster,
+  getHaDbServerModes,
 } from './haPeerUtils';
 
 // hostnameMatches is internal — exercised via hostMatchesHaPeer
@@ -168,5 +169,36 @@ describe('isHaClusterMissingMaster', () => {
   it('is true when every node is slave/unknown with no master', () => {
     const heartbeat = { hanodelist: [{ node: [{ hostname: 'node1', status: 'slave' }, { hostname: 'node2', state: 'unknown' }] }] };
     expect(isHaClusterMissingMaster(heartbeat)).toBe(true);
+  });
+});
+
+describe('getHaDbServerModes', () => {
+  it('is empty for no heartbeat data', () => {
+    expect(getHaDbServerModes(null).size).toBe(0);
+    expect(getHaDbServerModes({}).size).toBe(0);
+  });
+
+  it('reads server_mode per dbname from hadbinfolist[].server[].dbmode[], lowercased', () => {
+    const heartbeat = {
+      hadbinfolist: [{
+        server: [{
+          dbmode: [
+            { dbname: 'demodb', server_mode: 'active', server_msg: 'none' },
+            { dbname: 'testdb', server_mode: 'STANDBY', server_msg: 'none' },
+          ],
+        }],
+      }],
+    };
+    const modes = getHaDbServerModes(heartbeat);
+    expect(modes.get('demodb')).toBe('active');
+    expect(modes.get('testdb')).toBe('standby');
+    expect(modes.has('otherdb')).toBe(false);
+  });
+
+  it('handles a bare (non-array) server/dbmode entry, same as the other hadbinfolist parsers', () => {
+    const heartbeat = {
+      hadbinfolist: { server: { dbmode: { dbname: 'demodb', server_mode: 'to-be-active' } } },
+    };
+    expect(getHaDbServerModes(heartbeat).get('demodb')).toBe('to-be-active');
   });
 });

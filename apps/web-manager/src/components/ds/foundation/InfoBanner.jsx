@@ -60,10 +60,10 @@ export const InfoBanner = ({
         <Icon name={activeIcon} size="md" weight={300} className={theme.iconColor} />
       </div>
       <div className="space-y-1">
-        <Typography variant="p" className="text-[13px] font-black text-slate-700 dark:text-slate-200 tracking-tight capitalize">
+        <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-200 tracking-tight capitalize">
           {title}
         </Typography>
-        <div className="text-[12px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed block">
+        <div className="text-14 text-slate-500 dark:text-slate-400 font-medium leading-relaxed block">
           {children}
         </div>
       </div>

@@ -734,9 +734,13 @@ export class DatabaseConfigService extends BaseService {
   }
 
   private formatCmsLogDateTime(date: Date): string {
+    // CMS (tsGetAutoaddvolLog in cm_job_task.cpp) filters log lines with a plain strcmp
+    // against this string, and its own log lines are written with unpadded numbers
+    // (e.g. "2026-9-22,10:4:57"). Zero-padding here would make the lexicographic
+    // comparison wrong for any single-digit month/day/hour/minute/second.
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const seconds = date.getSeconds();

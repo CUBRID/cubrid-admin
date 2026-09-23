@@ -1,7 +1,7 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDeleteHostModal, deleteHost, setSelectedHost, clearHostError } from '../hostSlice';
 import { closeHostTabs } from '../../layout/layoutSlice';
-import { resetDatabaseState } from '../../database/databaseCoreSlice';
+import { resetDatabaseState, clearDatabaseLoginsForHost } from '../../database/databaseCoreSlice';
 import { resetBrokerState } from '../../broker/brokerSlice';
 import { clearHostSummary } from '../../server/globalMonitoringSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -25,6 +25,7 @@ export default function DeleteHostModal() {
       // otherwise they're left open referencing a deleted host.
       dispatch(closeHostTabs(hostToDeleteUid));
       dispatch(clearHostSummary(hostToDeleteUid));
+      dispatch(clearDatabaseLoginsForHost(hostToDeleteUid));
       if (selectedHostUid === hostToDeleteUid) {
         dispatch(setSelectedHost(null));
         dispatch(resetDatabaseState());
@@ -86,7 +87,7 @@ export default function DeleteHostModal() {
               <Icon name="error" size="xs" weight={300} className="text-rose-500" />
             </div>
             <div className="flex-1 min-w-0 pt-0.5">
-              <Typography variant="p" className="text-rose-500 font-bold text-[11px] leading-snug">{apiError}</Typography>
+              <Typography variant="p" className="text-rose-500 font-bold text-13 leading-snug">{apiError}</Typography>
             </div>
           </div>
         )}
@@ -96,7 +97,7 @@ export default function DeleteHostModal() {
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shadow-lg shadow-rose-500/5 mb-4">
             <Icon name="warning" size="lg" weight={300} className="text-rose-500" />
           </div>
-          <Typography variant="p" className="text-[13px] text-slate-900 dark:text-white font-bold leading-relaxed">
+          <Typography variant="p" className="text-15 text-slate-900 dark:text-white font-bold leading-relaxed">
             {CM.deleteHostConfirmTitle(hostToDeleteAlias || hostToDeleteUid)}
           </Typography>
           <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium mt-1 max-w-[300px] leading-relaxed">

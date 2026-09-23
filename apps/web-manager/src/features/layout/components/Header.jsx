@@ -55,7 +55,7 @@ export default function Header({ theme, toggleTheme }) {
               onClick={toggleTheme}
               title={theme === 'light' ? CM.switchToDarkMode : CM.switchToLightMode}
             >
-              <Icon name={theme === 'light' ? 'dark_mode' : 'light_mode'} size="18px" weight={300} />
+              <Icon name={theme === 'light' ? 'dark_mode' : 'light_mode'} size="19px" weight={300} />
             </button>
 
             <div className="w-px h-5 bg-slate-200 dark:bg-white/8 mx-1" />
@@ -75,15 +75,15 @@ export default function Header({ theme, toggleTheme }) {
                   <div className="w-6 h-6 rounded-sm bg-amber-500 shadow-xs shadow-amber-500/20 flex items-center justify-center shrink-0">
                     <Icon
                       name={authError ? 'error' : 'person'}
-                      size="16px"
+                      size="17px"
                       weight={400}
                       className={authError ? 'text-white' : 'text-bk-side'}
                     />
                   </div>
-                  <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 tracking-tight flex-1 text-left px-1 truncate">
+                  <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight flex-1 text-left px-1 truncate">
                     {user?.id || CM.admin}
                   </span>
-                  <Icon name="expand_more" size="14px" className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
+                  <Icon name="expand_more" size="15px" className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
                 </>
               )}
             </button>
@@ -94,8 +94,8 @@ export default function Header({ theme, toggleTheme }) {
               onClick={handleLogout}
               title={CM.logout}
             >
-              <Icon name="logout" size="18px" weight={400} />
-              <span className="text-[13px] font-bold tracking-tight">{CM.logout}</span>
+              <Icon name="logout" size="19px" weight={400} />
+              <span className="text-15 font-bold tracking-tight">{CM.logout}</span>
             </button>
           </div>
         </div>

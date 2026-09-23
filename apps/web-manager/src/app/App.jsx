@@ -207,7 +207,7 @@ function DashboardLayout() {
         {/* Flash Overlay */}
         <div className={`fixed inset-0 bg-white/20 dark:bg-white/5 pointer-events-none z-[9999] transition-opacity duration-300 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
         
-        <SplitPane split="vertical" defaultSize={400} minSize={280} maxSize={640} className="h-full w-full">
+        <SplitPane split="vertical" defaultSize={440} minSize={280} maxSize={640} className="h-full w-full">
           <Sidebar
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => dispatch(toggleSidebar())}
@@ -258,7 +258,7 @@ function DashboardLayout() {
 
                   {/* Central badge */}
                   <div className="w-16 h-16 rounded-2xl bg-white dark:bg-white/4 border border-slate-200 dark:border-white/8 shadow-lg flex items-center justify-center">
-                    <Icon name="database" weight={300} size="28px" className="text-amber-500" />
+                    <Icon name="database" weight={300} size="29px" className="text-amber-500" />
                   </div>
 
                   {/* Satellite dot – top right */}
@@ -272,7 +272,7 @@ function DashboardLayout() {
                   <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight uppercase">
                     {CM.appName}
                   </h2>
-                  <p className="text-[12px] text-slate-400 dark:text-slate-500 max-w-[260px] leading-relaxed">
+                  <p className="text-14 text-slate-400 dark:text-slate-500 max-w-[260px] leading-relaxed">
                     {CM.selectHostHint}
                   </p>
                 </div>
@@ -286,8 +286,8 @@ function DashboardLayout() {
                     { icon: 'lock', label: CM.lockInfo },
                   ].map(f => (
                     <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/4 border border-slate-200 dark:border-white/6">
-                      <Icon name={f.icon} size="13px" weight={300} className="text-slate-400 dark:text-slate-500" />
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{f.label}</span>
+                      <Icon name={f.icon} size="14px" weight={300} className="text-slate-400 dark:text-slate-500" />
+                      <span className="text-13 text-slate-500 dark:text-slate-400 font-medium">{f.label}</span>
                     </div>
                   ))}
                 </div>
@@ -295,7 +295,7 @@ function DashboardLayout() {
                 {/* Status bar */}
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-white/6 bg-slate-50 dark:bg-white/2">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase">{CM.systemReady}</span>
+                  <span className="text-12 text-slate-400 font-mono tracking-wider uppercase">{CM.systemReady}</span>
                 </div>
 
               </div>

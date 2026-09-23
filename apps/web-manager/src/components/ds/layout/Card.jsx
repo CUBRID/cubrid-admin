@@ -42,12 +42,12 @@ export const Card = ({
         >
           <div className="flex-1">
             {title && (
-              <Typography variant="h4" className="text-[1rem] font-bold text-slate-900 dark:text-white leading-tight tracking-wide flex items-center gap-2">
+              <Typography variant="h4" className="text-18 font-bold text-slate-900 dark:text-white leading-tight tracking-wide flex items-center gap-2">
                 {title}
               </Typography>
             )}
             {renderSubtitle && !isCollapsed && (
-              <Typography variant="p" className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              <Typography variant="p" className="text-13 text-slate-500 dark:text-slate-400 mt-1">
                 {renderSubtitle}
               </Typography>
             )}

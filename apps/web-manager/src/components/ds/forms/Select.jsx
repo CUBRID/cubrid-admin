@@ -87,14 +87,14 @@ export const Select = ({
     >
       <div className="p-1 px-1.5 max-h-[190px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10 scrollbar-track-transparent flex flex-col gap-0.5">
         {options.length === 0 ? (
-          <div className="px-3 py-2 text-[10px] text-slate-400 italic">{CM.noOptionsAvailableLabel}</div>
+          <div className="px-3 py-2 text-12 text-slate-400 italic">{CM.noOptionsAvailableLabel}</div>
         ) : (
           options.map((opt) => (
             <div
               key={opt.value}
               data-testid={testId && `${testId}-option-${opt.value}`}
               onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
-              className={`flex items-center justify-between px-3 h-9 rounded-lg text-[13px] font-medium transition-all cursor-pointer group relative overflow-hidden ${opt.value === value
+              className={`flex items-center justify-between px-3 h-9 rounded-lg text-15 font-medium transition-all cursor-pointer group relative overflow-hidden ${opt.value === value
                   ? 'bg-amber-500/8 text-amber-500'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/4 hover:text-slate-900 dark:hover:text-white'
                 } ${opt.disabled ? 'opacity-30 cursor-not-allowed' : ''
@@ -120,7 +120,7 @@ export const Select = ({
           data-testid={testId}
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
-          className={`relative w-full ${icon ? 'pl-11' : 'pl-3.5'} pr-10 ${isSm ? 'h-8 text-[12px]' : 'h-10 text-[13px]'} font-medium text-left bg-slate-50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl transition-all outline-hidden
+          className={`relative w-full ${icon ? 'pl-11' : 'pl-3.5'} pr-10 ${isSm ? 'h-8 text-14' : 'h-10 text-15'} font-medium text-left bg-slate-50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl transition-all outline-hidden
             ${isOpen ? 'border-amber-500 ring-4 ring-amber-500/10' : 'hover:border-slate-300 dark:hover:border-white/20'}
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           `}
@@ -137,7 +137,7 @@ export const Select = ({
             className="absolute right-3 top-1/2 flex items-center justify-center w-5 h-5 text-slate-400 pointer-events-none transition-transform duration-200"
             style={{ transform: `translateY(-50%) ${isOpen ? 'rotate(180deg)' : ''}` }}
           >
-            <Icon name="expand_more" size="18px" />
+            <Icon name="expand_more" size="19px" />
           </div>
         </button>
         {dropdown}

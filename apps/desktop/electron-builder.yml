@@ -1,5 +1,5 @@
 appId: com.cubrid.webmanager
-productName: CUBRID Web Manager
+productName: Next CUBRID Admin
 electronVersion: 35.7.5
 asar: false
 directories:

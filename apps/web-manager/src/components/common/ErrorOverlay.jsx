@@ -25,10 +25,10 @@ const ErrorOverlay = ({ isVisible, error, title = "Operation Failed", onRetry, o
         </div>
 
         <div className="space-y-4 w-full">
-          <h4 className="text-[17px] font-black text-slate-900 dark:text-white tracking-tight">{title}</h4>
+          <h4 className="text-19 font-black text-slate-900 dark:text-white tracking-tight">{title}</h4>
           
           <div className="max-h-[160px] overflow-y-auto custom-scrollbar px-2">
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono leading-relaxed break-words bg-slate-50 dark:bg-black/20 p-3 rounded-lg border border-slate-100 dark:border-white/5">
+            <p className="text-13 text-slate-500 dark:text-slate-400 font-mono leading-relaxed break-words bg-slate-50 dark:bg-black/20 p-3 rounded-lg border border-slate-100 dark:border-white/5">
               {typeof error === 'string' ? error : 'Something went wrong. Please try again.'}
             </p>
           </div>
@@ -38,7 +38,7 @@ const ErrorOverlay = ({ isVisible, error, title = "Operation Failed", onRetry, o
             {onClose && (
                 <button 
                 onClick={onClose}
-                className="px-5 py-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors tracking-wide"
+                className="px-5 py-1.5 text-13 font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors tracking-wide"
                 >
                 Close
                 </button>
@@ -46,7 +46,7 @@ const ErrorOverlay = ({ isVisible, error, title = "Operation Failed", onRetry, o
             {onRetry && (
                 <button 
                 onClick={onRetry}
-                className="px-6 py-2 bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-medium rounded-sm shadow-lg shadow-rose-500/20 transition-all active:scale-95 tracking-wide flex items-center gap-2"
+                className="px-6 py-2 bg-rose-500 hover:bg-rose-600 text-white text-13 font-medium rounded-sm shadow-lg shadow-rose-500/20 transition-all active:scale-95 tracking-wide flex items-center gap-2"
                 >
                 <Icon name="refresh" size="sm" weight={300} />
                 Try again

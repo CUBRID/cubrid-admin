@@ -90,7 +90,7 @@ export const Table = ({
                 return (
                   <th
                     key={col.accessor || idx}
-                    className={`group relative px-3 py-2 text-[11px] font-bold uppercase tracking-widest
+                    className={`group relative px-3 py-2 text-13 font-bold uppercase tracking-widest
                       ${isSorted ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
                       ${bordered ? 'border-r border-slate-200 dark:border-white/[0.08]' : ''}
                       transition-colors whitespace-nowrap ${alignCls}
@@ -109,7 +109,7 @@ export const Table = ({
                         <span className={`ml-0.5 transition-all duration-150 ${isSorted ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`}>
                           <Icon
                             name={isSorted ? (activeSortDir === 'asc' ? 'north' : 'south') : 'unfold_more'}
-                            size="11px"
+                            size="12px"
                             weight={isSorted ? 700 : 300}
                             className={isSorted ? 'text-amber-500' : 'text-slate-400'}
                           />
@@ -129,7 +129,7 @@ export const Table = ({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-8 text-center text-[12px] text-slate-400 dark:text-slate-500 font-medium"
+                className="px-4 py-8 text-center text-14 text-slate-400 dark:text-slate-500 font-medium"
               >
                 {resolvedEmptyMessage}
               </td>
@@ -164,7 +164,7 @@ export const Table = ({
                     return (
                       <td
                         key={col.accessor || colIdx}
-                        className={`px-3 py-2 text-[12px] transition-colors leading-snug
+                        className={`px-3 py-2 text-14 transition-colors leading-snug
                           ${isFirst
                             ? 'font-semibold text-slate-800 dark:text-slate-200 border-l-2 border-l-transparent group-hover:border-l-amber-500/60'
                             : 'font-medium text-slate-600 dark:text-slate-400'}

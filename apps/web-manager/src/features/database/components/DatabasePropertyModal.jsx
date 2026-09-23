@@ -118,7 +118,7 @@ function ParamNameCell({ label, isModified }) {
   return (
     <div className="flex items-center gap-1.5">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
-      <span className={`text-[11px] font-mono truncate ${isModified ? 'text-amber-500 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
+      <span className={`text-13 font-mono truncate ${isModified ? 'text-amber-500 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
         {label}
       </span>
     </div>
@@ -158,7 +158,7 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
   const CM = useCM();
   return (
     <div className="rounded-xl border border-slate-100 dark:border-white/6 p-4">
-      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">{group.groupLabel(CM)}</p>
+      <p className="text-11 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">{group.groupLabel(CM)}</p>
       <div className="space-y-2.5">
         <div className="flex items-center gap-3">
           <Radio
@@ -166,7 +166,7 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
             value="pages"
             checked={mode === 'pages'}
             onChange={() => onModeChange('pages')}
-            label={<span className="text-[10.5px] font-mono w-[140px] shrink-0 inline-block">{group.pagesKey}</span>}
+            label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.pagesKey}</span>}
           />
           <Input
             size="sm"
@@ -184,7 +184,7 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
             value="size"
             checked={mode === 'size'}
             onChange={() => onModeChange('size')}
-            label={<span className="text-[10.5px] font-mono w-[140px] shrink-0 inline-block">{group.sizeKey}</span>}
+            label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.sizeKey}</span>}
           />
           <Input
             size="sm"
@@ -495,10 +495,10 @@ export default function DatabasePropertyModal() {
           CLIENT: 'text-violet-500 bg-violet-500/8 border-violet-500/20',
           BOTH: 'text-emerald-500 bg-emerald-500/8 border-emerald-500/20',
         };
-        return <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
+        return <span className={`text-11 font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
       },
     },
-    { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{val}</span> },
+    { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{val}</span> },
     {
       header: CM.parameterValueLabel, accessor: 'value', width: '36%', sortable: false,
       render: (_, row) => {
@@ -567,7 +567,7 @@ export default function DatabasePropertyModal() {
         {/* ─── Sidebar ─── */}
         <div className="w-[180px] bg-slate-900/60 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
           <div className="px-4 py-4 border-b border-white/5">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
+            <p className="text-11 font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
           </div>
           <div className="py-2 flex-1">
             {navItems.map(({ id, icon, label }) => (
@@ -585,19 +585,19 @@ export default function DatabasePropertyModal() {
                 )}
                 <Icon
                   name={icon}
-                  size="15px"
+                  size="16px"
                   weight={activeSidebar === id ? 500 : 300}
                   className={activeSidebar === id ? 'text-amber-500' : 'text-slate-600 group-hover:text-slate-400'}
                 />
-                <span className="text-[10.5px] font-black uppercase tracking-widest">{label}</span>
+                <span className="text-12 font-black uppercase tracking-widest">{label}</span>
               </button>
             ))}
           </div>
           {/* Bottom context info */}
           {selectedDatabase && (
             <div className="px-4 py-3 border-t border-white/5">
-              <p className="text-[8.5px] uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
-              <p className="text-[10px] font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
+              <p className="text-10 uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
+              <p className="text-12 font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
             </div>
           )}
         </div>
@@ -627,8 +627,8 @@ export default function DatabasePropertyModal() {
               <div className="h-full flex flex-col items-center justify-center gap-5">
                 <div className="w-10 h-10 border-2 border-amber-500/10 border-t-amber-500 rounded-full animate-spin" />
                 <div className="text-center">
-                  <p className="text-[9.5px] uppercase tracking-[0.2em] text-slate-400 font-black mb-1">{CM.loadingLabel}</p>
-                  <p className="text-[10.5px] text-slate-400 dark:text-slate-500 italic font-medium">{CM.queryingHostRegistry}</p>
+                  <p className="text-11 uppercase tracking-[0.2em] text-slate-400 font-black mb-1">{CM.loadingLabel}</p>
+                  <p className="text-12 text-slate-400 dark:text-slate-500 italic font-medium">{CM.queryingHostRegistry}</p>
                 </div>
               </div>
 
@@ -643,8 +643,8 @@ export default function DatabasePropertyModal() {
                 <div className="space-y-3 p-5 bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/6 rounded-xl">
                   <div className="flex items-center gap-4">
                     <div className="w-[140px] shrink-0">
-                      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.brokerIp}</p>
-                      <p className="text-[8.5px] font-mono text-slate-400 dark:text-slate-600">{CM.publicAddress}</p>
+                      <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.brokerIp}</p>
+                      <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.publicAddress}</p>
                     </div>
                     <div className="flex-1">
                       <Input
@@ -658,8 +658,8 @@ export default function DatabasePropertyModal() {
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
                     <div className="w-[140px] shrink-0">
-                      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.servicePort}</p>
-                      <p className="text-[8.5px] font-mono text-slate-400 dark:text-slate-600">{CM.activeBroker}</p>
+                      <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.servicePort}</p>
+                      <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.activeBroker}</p>
                     </div>
                     <div className="flex-1">
                       <Select
@@ -673,8 +673,8 @@ export default function DatabasePropertyModal() {
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
                     <div className="w-[140px] shrink-0">
-                      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
-                      <p className="text-[8.5px] font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
+                      <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
+                      <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
                     </div>
                     <div className="flex-1">
                       <Select

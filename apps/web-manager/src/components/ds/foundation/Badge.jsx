@@ -18,9 +18,9 @@ export const Badge = ({
   };
 
   const sizes = {
-    sm: 'text-[9px] h-4',
-    md: 'text-[10px] h-5',
-    lg: 'text-[11px] h-6',
+    sm: 'text-11 h-4',
+    md: 'text-12 h-5',
+    lg: 'text-13 h-6',
   };
 
   return (

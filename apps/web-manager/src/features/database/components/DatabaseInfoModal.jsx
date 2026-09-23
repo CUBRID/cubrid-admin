@@ -90,10 +90,10 @@ export default function DatabaseInfoModal() {
       </Typography>
     )},
     { header: CM.serverValue, accessor: 'server', className: dumpBoth ? 'w-[200px]' : 'w-[400px]', render: (val) => (
-      <Typography variant="span" className="font-mono text-[11px] text-amber-500 font-bold">{val}</Typography>
+      <Typography variant="span" className="font-mono text-13 text-amber-500 font-bold">{val}</Typography>
     )},
     ...(dumpBoth ? [{ header: CM.clientValue, accessor: 'client', className: 'w-[200px]', render: (val) => (
-      <Typography variant="span" className={`font-mono text-[11px] ${val === '-' ? 'text-slate-300 dark:text-slate-600' : 'text-slate-900 dark:text-slate-100'}`}>{val}</Typography>
+      <Typography variant="span" className={`font-mono text-13 ${val === '-' ? 'text-slate-300 dark:text-slate-600' : 'text-slate-900 dark:text-slate-100'}`}>{val}</Typography>
     )}] : [])
   ];
 
@@ -110,8 +110,8 @@ export default function DatabaseInfoModal() {
             </div>
           </div>
           <div className="text-center space-y-1.5 px-8">
-            <Typography variant="h4" className="text-[14px] font-bold text-slate-800 dark:text-white">{CM.loadingParameters}</Typography>
-            <Typography variant="p" className="text-[11px] text-slate-500 max-w-[280px] mx-auto">
+            <Typography variant="h4" className="text-16 font-bold text-slate-800 dark:text-white">{CM.loadingParameters}</Typography>
+            <Typography variant="p" className="text-13 text-slate-500 max-w-[280px] mx-auto">
               {selectedDatabase}
             </Typography>
           </div>
@@ -139,15 +139,15 @@ export default function DatabaseInfoModal() {
             <Icon name="error" size="md" weight={300} className="text-white" />
           </div>
           <div className="space-y-2 px-6">
-            <Typography variant="h4" className="text-[15px] font-bold text-slate-900 dark:text-white">{CM.failure}</Typography>
-            <Typography variant="p" className="text-[11.5px] text-slate-500">
+            <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white">{CM.failure}</Typography>
+            <Typography variant="p" className="text-13 text-slate-500">
               {CM.paramsFetchErrorMsg(selectedDatabase)}
             </Typography>
           </div>
           <div className="w-full max-w-[420px] bg-rose-500/5 border border-rose-500/15 rounded-xl px-4 py-3 text-left">
             <div className="flex items-center gap-2 mb-1.5">
               <Icon name="terminal" size="xs" weight={300} className="text-rose-400" />
-              <span className="text-[9px] font-semibold uppercase tracking-wide text-rose-400">{CM.message}</span>
+              <span className="text-11 font-semibold uppercase tracking-wide text-rose-400">{CM.message}</span>
             </div>
             <Typography variant="caption" className="text-rose-400/80 font-mono leading-relaxed break-words">
               {errorMsg}
@@ -186,12 +186,12 @@ export default function DatabaseInfoModal() {
               <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20">
                 <Icon name="bar_chart" size="sm" weight={300} />
               </div>
-              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-[11px]">
+              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-13">
                 {CM.databaseName}: <Typography variant="span" className="text-amber-500 ml-1 font-mono">{selectedDatabase}</Typography>
               </Typography>
             </div>
             <div className="flex items-center gap-2">
-              <Typography variant="span" className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter ${isActive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>
+              <Typography variant="span" className={`px-2 py-0.5 rounded-full text-11 font-black uppercase tracking-tighter ${isActive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-500'}`}>
                 {isActive ? CM.activeContext : CM.offlineStatic}
               </Typography>
             </div>
@@ -234,7 +234,7 @@ export default function DatabaseInfoModal() {
             </div>
             <div className="min-w-0 flex-1">
               <Typography variant="caption" className="font-semibold uppercase tracking-wide text-amber-600/70 dark:text-amber-400/60 mb-0.5">{CM.databaseName}</Typography>
-              <Typography variant="h4" className="text-[14px] font-black text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
+              <Typography variant="h4" className="text-16 font-black text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
             </div>
             <StatusBadge label={CM.environmentReady} variant="emerald" pulse={true} className="rounded-full" />
           </div>
@@ -242,7 +242,7 @@ export default function DatabaseInfoModal() {
 
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">{CM.analysisPipeline}</span>
+            <span className="text-12 font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">{CM.analysisPipeline}</span>
             <div className="flex-1 h-px bg-slate-100 dark:bg-white/5" />
           </div>
 
@@ -251,7 +251,7 @@ export default function DatabaseInfoModal() {
               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 border border-slate-200 dark:border-white/10 shrink-0">
                 <Icon name="info" size="md" weight={300} />
               </div>
-              <Typography variant="p" className="text-[11px] text-slate-500 dark:text-slate-400 italic font-medium leading-relaxed">
+              <Typography variant="p" className="text-13 text-slate-500 dark:text-slate-400 italic font-medium leading-relaxed">
                 {CM.extractionProfileDesc}
               </Typography>
             </div>
@@ -264,7 +264,7 @@ export default function DatabaseInfoModal() {
                 <Icon name="compare_arrows" size="sm" weight={300} />
               </div>
               <div className="flex-1">
-                <Typography variant="p" className={`font-bold transition-colors ${dumpBoth ? 'text-amber-500' : 'text-slate-900 dark:text-white'} text-[12px] tracking-tight`}>{CM.comparativeAnalysis}</Typography>
+                <Typography variant="p" className={`font-bold transition-colors ${dumpBoth ? 'text-amber-500' : 'text-slate-900 dark:text-white'} text-14 tracking-tight`}>{CM.comparativeAnalysis}</Typography>
                 <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium block mt-0.5">{CM.comparativeAnalysisDesc}</Typography>
               </div>
               <div className="shrink-0" onClick={(e) => e.stopPropagation()}>

@@ -23,9 +23,9 @@ export const theme = {
   },
 
   typography: {
-    treeLabel: "text-[13px] font-medium font-mono",
-    columnDetail: "text-[11px] text-slate-400",
-    statusLabel: "text-[11px] font-medium uppercase tracking-wide",
+    treeLabel: "text-15 font-medium font-mono",
+    columnDetail: "text-13 text-slate-400",
+    statusLabel: "text-13 font-medium uppercase tracking-wide",
   },
 
   shadows: {

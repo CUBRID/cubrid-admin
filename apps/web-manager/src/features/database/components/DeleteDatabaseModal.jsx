@@ -214,7 +214,7 @@ export default function DeleteDatabaseModal() {
                 <Icon name="database" size="sm" weight={300} className="text-rose-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <Typography variant="p" className="text-slate-800 dark:text-slate-100 font-bold text-[14px] leading-none truncate">{selectedDatabase}</Typography>
+                <Typography variant="p" className="text-slate-800 dark:text-slate-100 font-bold text-16 leading-none truncate">{selectedDatabase}</Typography>
               </div>
               <StatusBadge label={CM.destructiveAction} variant="rose" pulse={true} className="rounded-full" />
             </div>
@@ -248,15 +248,15 @@ export default function DeleteDatabaseModal() {
                   <div key={i} className="flex items-center gap-3 px-3.5 py-2.5 hover:bg-slate-50/50 dark:hover:bg-white/2 transition-colors">
                     <Icon name="hard_drive" size="sm" weight={300} className="text-slate-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-none mb-0.5">{v.name}</p>
-                      <p className="text-[9.5px] text-slate-400 font-medium truncate">{v.path}</p>
+                      <p className="text-13 font-bold text-slate-700 dark:text-slate-200 leading-none mb-0.5">{v.name}</p>
+                      <p className="text-11 text-slate-400 font-medium truncate">{v.path}</p>
                     </div>
-                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider ${getTypeStyle(v.type)}`}>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-11 font-black border uppercase tracking-wider ${getTypeStyle(v.type)}`}>
                       {v.type}
                     </span>
                     <div className="shrink-0 text-right min-w-[60px]">
-                      <p className="text-[11px] font-mono font-bold text-slate-700 dark:text-slate-200 leading-none tabular-nums">{v.sizeMB} MB</p>
-                      <p className="text-[9px] text-slate-400 font-medium tabular-nums">{CM.freeSpaceLabel(v.free)}</p>
+                      <p className="text-13 font-mono font-bold text-slate-700 dark:text-slate-200 leading-none tabular-nums">{v.sizeMB} MB</p>
+                      <p className="text-11 text-slate-400 font-medium tabular-nums">{CM.freeSpaceLabel(v.free)}</p>
                     </div>
                   </div>
                 ))}
@@ -279,7 +279,7 @@ export default function DeleteDatabaseModal() {
                 <Icon name="folder_delete" size="xs" weight={300} />
               </div>
               <div className="flex-1 min-w-0">
-                <Typography variant="p" className={`font-bold text-[11.5px] tracking-tight transition-colors ${deleteBackup ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+                <Typography variant="p" className={`font-bold text-13 tracking-tight transition-colors ${deleteBackup ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
                   {CM.purgeLinkedBackups}
                 </Typography>
                 <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium mt-0.5 leading-snug">

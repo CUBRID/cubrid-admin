@@ -29,7 +29,7 @@ export const Toggle = ({
         <div className={`block w-8 h-4.5 rounded-full transition-all ${checked ? activeColor : 'bg-slate-200 dark:bg-white/10 border border-transparent dark:border-white/10 group-hover/toggle:border-slate-300 dark:group-hover/toggle:border-white/20'}`}></div>
         <div className={`dot absolute left-0.5 top-0.5 bg-white dark:bg-slate-100 w-3.5 h-3.5 rounded-full transition-all shadow-sm ${checked ? 'transform translate-x-3.5' : ''}`}></div>
       </div>
-      {label && <Typography variant="label" className="select-none text-[12px] font-medium text-slate-700 dark:text-slate-300 tracking-tight">{label}</Typography>}
+      {label && <Typography variant="label" className="select-none text-14 font-medium text-slate-700 dark:text-slate-300 tracking-tight">{label}</Typography>}
     </label>
   );
 };

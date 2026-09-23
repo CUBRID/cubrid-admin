@@ -77,7 +77,7 @@ export default function AutoVolumeLogModal() {
       header: CM.purpose,
       accessor: 'purpose',
       render: (val) => (
-        <span className="px-1.5 py-0.5 rounded-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-[9px] font-bold text-slate-500">
+        <span className="px-1.5 py-0.5 rounded-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-11 font-bold text-slate-500">
           {val}
         </span>
       ),
@@ -93,7 +93,7 @@ export default function AutoVolumeLogModal() {
         const isStart = val?.toLowerCase().includes('start');
 
         return (
-          <div className={`flex items-center gap-2 text-[11px] font-bold ${isSuccess ? 'text-emerald-500' : isStart ? 'text-amber-500' : 'text-rose-500'}`}>
+          <div className={`flex items-center gap-2 text-13 font-bold ${isSuccess ? 'text-emerald-500' : isStart ? 'text-amber-500' : 'text-rose-500'}`}>
             <Icon name={isSuccess ? 'check_circle' : isStart ? 'play_circle' : 'report'} size="sm" weight={300} />
             <span className="tracking-tight">{val}</span>
           </div>
@@ -106,7 +106,7 @@ export default function AutoVolumeLogModal() {
     <div className="flex items-center justify-between w-full px-1">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2.5">
-          <Typography variant="caption" className="font-bold text-slate-400 dark:text-slate-500 text-[10px]">{CM.status}:</Typography>
+          <Typography variant="caption" className="font-bold text-slate-400 dark:text-slate-500 text-12">{CM.status}:</Typography>
           {logsLoading ? (
             <StatusBadge label={CM.buffering} variant="amber" pulse={true} className="rounded-full" />
           ) : (
@@ -114,7 +114,7 @@ export default function AutoVolumeLogModal() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500 font-bold">
+        <div className="flex items-center gap-2 text-12 text-slate-400 dark:text-slate-500 font-bold">
           <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-white/10" />
           {showAll ? (
             <span>{CM.showingAllRecordsCount(filteredLogs.length)}</span>
@@ -178,9 +178,9 @@ export default function AutoVolumeLogModal() {
                 disabled={currentPage === 1 || logsLoading || showAll}
                 className="p-1 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-amber-400 rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                <Icon name="chevron_left" size="18px" />
+                <Icon name="chevron_left" size="19px" />
               </button>
-              <div className={`px-3 text-[11px] font-bold text-slate-600 dark:text-slate-300 min-w-[72px] text-center font-mono ${showAll ? 'opacity-30' : ''}`}>
+              <div className={`px-3 text-13 font-bold text-slate-600 dark:text-slate-300 min-w-[72px] text-center font-mono ${showAll ? 'opacity-30' : ''}`}>
                 {currentPage} / {totalPages}
               </div>
               <button
@@ -188,13 +188,13 @@ export default function AutoVolumeLogModal() {
                 disabled={currentPage >= totalPages || logsLoading || showAll}
                 className="p-1 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-amber-400 rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                <Icon name="chevron_right" size="18px" />
+                <Icon name="chevron_right" size="19px" />
               </button>
 
               <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
               <button
                 onClick={() => setShowAll(!showAll)}
-                className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap transition-colors ${showAll
+                className={`px-2 py-1 rounded-md text-12 font-bold transition-all whitespace-nowrap transition-colors ${showAll
                     ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-white/5 hover:text-amber-600 dark:hover:text-amber-400'
                   }`}

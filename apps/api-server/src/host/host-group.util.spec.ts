@@ -1,5 +1,5 @@
 import { User } from '@type/index';
-import { moveHostToGroup, findHostRef } from './host-group.util';
+import { moveHostToGroup, findHostRef, isValidGroupNameStart } from './host-group.util';
 
 function makeUser(groups: User['host_groups']): User {
   return { host_groups: groups } as User;
@@ -94,5 +94,28 @@ describe('moveHostToGroup', () => {
     expect(user.host_groups!['group-1']).toBeDefined();
     expect(user.host_groups!['group-1'].hosts).toEqual({});
     expect(user.host_groups!['group-2'].hosts!['host-a']).toBe(hostA);
+  });
+});
+
+describe('isValidGroupNameStart', () => {
+  // Not a real ID-collision guard — a group's key is always a generated
+  // uuid, and UNGROUPED_GROUP_ID is a fixed literal in that same key
+  // namespace, never derived from `name` — so this is purely a readability
+  // rule to keep group names from looking like an internal/reserved token.
+  it('rejects names starting with an underscore', () => {
+    expect(isValidGroupNameStart('__ungrouped__')).toBe(false);
+    expect(isValidGroupNameStart('_prod')).toBe(false);
+  });
+
+  it('rejects names starting with other special characters', () => {
+    expect(isValidGroupNameStart('-prod')).toBe(false);
+    expect(isValidGroupNameStart('#prod')).toBe(false);
+    expect(isValidGroupNameStart(' prod')).toBe(false);
+  });
+
+  it('accepts names starting with a letter or digit, including non-ASCII letters', () => {
+    expect(isValidGroupNameStart('Production')).toBe(true);
+    expect(isValidGroupNameStart('1st-floor')).toBe(true);
+    expect(isValidGroupNameStart('운영 클러스터')).toBe(true);
   });
 });

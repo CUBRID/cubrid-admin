@@ -54,7 +54,7 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
         return (
           <div className="flex items-center gap-2 min-w-0">
             <Icon name="draft" size="sm" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200 truncate">{name}</span>
+            <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200 truncate">{name}</span>
           </div>
         );
       }
@@ -73,7 +73,7 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
         return <StatusBadge label={val} variant={variant} />;
       }
     },
-    { header: CM.purpose, accessor: 'purpose', render: (val) => <span className="font-mono text-[12px] text-slate-400">{val}</span> },
+    { header: CM.purpose, accessor: 'purpose', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
     {
       header: CM.spaceUsage,
       accessor: 'free',
@@ -96,14 +96,14 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
         );
       }
     },
-    { header: CM.modifiedLabel, accessor: 'date', render: (val) => <span className="font-mono text-[11px] text-slate-400">{val}</span> },
+    { header: CM.modifiedLabel, accessor: 'date', render: (val) => <span className="font-mono text-13 text-slate-400">{val}</span> },
     {
       header: CM.pathLabel,
       accessor: 'path',
       render: (val) => (
         <div className="flex items-center gap-1.5 min-w-0">
           <Icon name="folder" size="sm" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
-          <span className="font-mono text-[11px] text-slate-400 truncate" title={val}>{val}</span>
+          <span className="font-mono text-13 text-slate-400 truncate" title={val}>{val}</span>
         </div>
       )
     },

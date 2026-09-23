@@ -163,7 +163,7 @@ export default function CompactDatabaseModal() {
         </CaDialogGroup>
 
         <CaDialogGroup title={CM.compactDescriptionInformation}>
-          <Typography variant="p" className="text-[12px] leading-relaxed whitespace-pre-line text-slate-600 dark:text-slate-400">
+          <Typography variant="p" className="text-14 leading-relaxed whitespace-pre-line text-slate-600 dark:text-slate-400">
             {CM.compactDatabaseDescription}
           </Typography>
         </CaDialogGroup>

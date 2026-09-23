@@ -8,12 +8,12 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 function defaultExecutablePath() {
   if (process.platform === 'win32') {
-    return path.join(REPO_ROOT, 'dist/portable/win-unpacked/CUBRID Web Manager.exe');
+    return path.join(REPO_ROOT, 'dist/portable/win-unpacked/Next CUBRID Admin.exe');
   }
   if (process.platform === 'darwin') {
     return path.join(
       REPO_ROOT,
-      'dist/portable/mac/CUBRID Web Manager.app/Contents/MacOS/CUBRID Web Manager'
+      'dist/portable/mac/Next CUBRID Admin.app/Contents/MacOS/Next CUBRID Admin'
     );
   }
   return path.join(REPO_ROOT, 'dist/portable/linux-unpacked/cubrid-web-manager-desktop');

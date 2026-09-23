@@ -127,7 +127,7 @@ dist/executables/
 | `SSL_CERT_PATH` | 공인 인증서 경로 (없으면 자체 서명 인증서 자동 생성) | — |
 | `SSL_KEY_PATH` | 공인 인증서 키 경로 (`SSL_CERT_PATH`와 함께 설정 필요) | — |
 | `AUTH_REGISTRATION_ENABLED` | 신규 계정 가입 허용 여부 (`false`로 초기 설정 후 잠그기) | `true` |
-| `CMS_REJECT_UNAUTHORIZED` | CMS 접속 시 TLS 인증서 검증 여부 | `production`일 때 `true` |
+| `CMS_REJECT_UNAUTHORIZED` | CMS 접속 시 TLS 인증서 검증 여부 | `false` |
 | `CMS_CA_CERT_PATH` | CMS가 자체 서명 인증서를 쓸 때 신뢰할 CA 인증서 경로 | — |
 | `CMS_JOB_RETENTION_HOURS` | 완료된 백그라운드 작업(job) 기록 보관 시간 | `24` |
 | `CMS_JOB_STALE_RUNNING_HOURS` | 응답 없는 job을 정지로 간주하는 시간 | `CMS_JOB_LONG_TIMEOUT_HOURS + 1` |

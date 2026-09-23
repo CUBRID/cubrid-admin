@@ -163,7 +163,7 @@ export const fetchAutoBackupLog = createAsyncThunk(
   async ({ hostUid }, { rejectWithValue }) => {
     try {
       const response = await databaseApi.getAutoBackupLog(hostUid);
-      return response.log || [];
+      return response.error || [];
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch auto backup log');
     }

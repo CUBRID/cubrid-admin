@@ -329,7 +329,7 @@ export default function EditQueryPlanModal() {
                   <button 
                     key={day} 
                     onClick={() => toggleDetail(ix + 1)} 
-                    className={`h-10 rounded-xl border text-[11px] font-black transition-all cursor-pointer 
+                    className={`h-10 rounded-xl border text-13 font-black transition-all cursor-pointer 
                       ${isSel 
                         ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/30 text-amber-600 dark:text-amber-400' 
                         : 'bg-white dark:bg-white/2 border-slate-100 dark:border-white/5 text-slate-400 hover:border-amber-500/30'}`}
@@ -348,7 +348,7 @@ export default function EditQueryPlanModal() {
                   <button 
                     key={d} 
                     onClick={() => toggleDetail(d)} 
-                    className={`h-8 rounded-lg border text-[10px] font-black font-mono transition-all cursor-pointer 
+                    className={`h-8 rounded-lg border text-12 font-black font-mono transition-all cursor-pointer 
                       ${isSel 
                         ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/30 text-amber-600 dark:text-amber-400' 
                         : 'bg-white dark:bg-white/4 border-transparent text-slate-400 hover:border-amber-500/30'}`}

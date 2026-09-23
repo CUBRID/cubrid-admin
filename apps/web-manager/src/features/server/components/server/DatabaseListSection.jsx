@@ -4,6 +4,7 @@ import { Table } from '../../../../components/ds/layout/Table';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
+import { HA_DB_STATE_CONFIG } from '../../../host/haPeerUtils';
 import { useCM } from '../../../../constants/useCM';
 
 export default function DatabaseListSection({ dbListDisplay }) {
@@ -15,10 +16,15 @@ export default function DatabaseListSection({ dbListDisplay }) {
       render: (val, row) => (
         <div className="flex items-center gap-2">
           <Icon name="database" size="sm" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
-          <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200">{val}</span>
+          <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val}</span>
           {row.isHA && (
-            <span className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-600 dark:text-amber-400 tracking-wide uppercase leading-none">
+            <span className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-10 font-bold text-amber-600 dark:text-amber-400 tracking-wide uppercase leading-none">
               {CM.haBadge}
+            </span>
+          )}
+          {row.haState && HA_DB_STATE_CONFIG[row.haState] && (
+            <span className={`px-1 py-0.5 rounded-sm border text-10 font-bold tracking-wide uppercase leading-none ${HA_DB_STATE_CONFIG[row.haState].className}`}>
+              {CM[HA_DB_STATE_CONFIG[row.haState].cmKey]}
             </span>
           )}
         </div>
@@ -60,7 +66,7 @@ export default function DatabaseListSection({ dbListDisplay }) {
         <div className="flex items-center gap-2">
           <Icon name="database" size="sm" weight={300} className="text-amber-500" />
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{CM.databases}</span>
-          <span className="text-[10px] text-slate-400 font-normal ml-1">({dbListDisplay.length})</span>
+          <span className="text-12 text-slate-400 font-normal ml-1">({dbListDisplay.length})</span>
         </div>
       }
       bodyClassName="p-0"

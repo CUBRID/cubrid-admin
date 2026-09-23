@@ -250,6 +250,7 @@ export default function UnloadDatabaseModal() {
       maxWidth="740px"
       testId="unload-database"
       onSubmit={handleUnloadDatabase}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="unload-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>

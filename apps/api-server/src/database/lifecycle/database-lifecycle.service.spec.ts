@@ -12,6 +12,7 @@ import { DatabaseConfigService } from '../config/database-config.service';
 import { BrokerService } from '@broker';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
 import { DatabaseError } from '@error/database/database-error';
+import { ValidationError } from '@error/validation/validation-error';
 import { DatabaseErrorCode } from '@error/database/database-error-code';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
@@ -283,7 +284,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'startdb',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
     });
@@ -301,7 +303,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'ha_start',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -358,7 +361,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'stopdb',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
     });
@@ -376,7 +380,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'ha_stop',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -476,7 +481,8 @@ describe('DatabaseLifecycleService', () => {
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         `https://${mockHost.address}:${mockHost.port}/cm_api`,
-        expect.objectContaining({ task: 'ha_start' })
+        expect.objectContaining({ task: 'ha_start' }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       // Only one ha_start call for both HA databases, not one per database.
       const haStartCalls = cmsClient.postAuthenticated.mock.calls.filter(
@@ -599,12 +605,14 @@ describe('DatabaseLifecycleService', () => {
       expect(cmsClient.postAuthenticated).toHaveBeenNthCalledWith(
         1,
         expect.any(String),
-        expect.objectContaining({ task: 'ha_stop', dbname: mockDbname })
+        expect.objectContaining({ task: 'ha_stop', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(cmsClient.postAuthenticated).toHaveBeenNthCalledWith(
         2,
         expect.any(String),
-        expect.objectContaining({ task: 'ha_start', dbname: mockDbname })
+        expect.objectContaining({ task: 'ha_start', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -925,6 +933,59 @@ describe('DatabaseLifecycleService', () => {
       });
     });
 
+    it('starts the database without OPERATION_IN_PROGRESS even while this same job still holds the host lock', async () => {
+      // createDatabase() runs entirely inside its own CmsJobService job, which
+      // registers this host as "active" before the job body runs and only
+      // releases it once the job finishes. If the internal start-after-create
+      // step called the public startDatabase() (which itself calls
+      // assertNoActiveJob()), it would see that same still-running job and
+      // always fail with OPERATION_IN_PROGRESS. Simulate that by having the
+      // lock service report an active job for this host throughout.
+      cmsJobLockService.hasActiveJobForHost.mockResolvedValue({
+        jobId: 'self-job',
+        dbname: 'testdb',
+      });
+
+      const request = {
+        ...mockCreateDbRequest,
+        setAutoStart: true,
+      };
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, request);
+
+      expect(result.startDatabase).toEqual({
+        success: true,
+        data: mockStartInfoForCreate,
+      });
+    });
+
+    it('starts the database via a direct startdb call, without needing a stored login profile', async () => {
+      // A database this job just created can never have a stored db-login
+      // profile yet (nothing has logged into it before), so going through
+      // startNonHaDatabase()'s ensureDbLogin() gate would always throw
+      // MissingDBCredentials. startdb itself needs no db user credentials
+      // (see ensureDbLogin's own comment), so createDatabase() must send it
+      // directly rather than satisfying that gate indirectly. Prove it by
+      // making ensureDbLogin fail exactly as it would for a brand-new
+      // database, and confirming the start step never calls it at all.
+      databaseUserService.ensureDbLogin.mockRejectedValue(
+        ValidationError.MissingDBCredentials('testdb', ['id', 'password'])
+      );
+
+      const request = {
+        ...mockCreateDbRequest,
+        setAutoStart: true,
+      };
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, request);
+
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(result.startDatabase).toEqual({
+        success: true,
+        data: mockStartInfoForCreate,
+      });
+    });
+
     it('should use default username "dba" when username is not provided', async () => {
       const request = {
         ...mockCreateDbRequest,
@@ -1193,7 +1254,9 @@ describe('DatabaseLifecycleService', () => {
           token: mockHost.token,
           dbname: mockDbname,
           delbackup: 'y',
-        }
+          async: 'yes',
+        },
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });
@@ -1217,7 +1280,8 @@ describe('DatabaseLifecycleService', () => {
         expect.objectContaining({
           task: 'deletedb',
           delbackup: 'n',
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });

@@ -28,15 +28,15 @@ const ModalErrorView = ({ error, onRetry, retryText = "Try Again", title = "Oper
       
       {/* Content */}
       <div className="text-center max-w-md space-y-2">
-        <h4 className="text-[15px] font-bold text-slate-900 dark:text-white tracking-tight">{title}</h4>
+        <h4 className="text-17 font-bold text-slate-900 dark:text-white tracking-tight">{title}</h4>
         
         <div className="p-4 bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/10 rounded-xl">
-          <p className="text-[12px] text-rose-600 dark:text-rose-400 leading-relaxed font-medium">
+          <p className="text-14 text-rose-600 dark:text-rose-400 leading-relaxed font-medium">
             {message}
           </p>
         </div>
         
-        <p className="text-[11px] text-slate-500 dark:text-slate-500 px-6">
+        <p className="text-13 text-slate-500 dark:text-slate-500 px-6">
           Please verify your credentials and try again. If the problem persists, contact your administrator.
         </p>
       </div>
@@ -45,7 +45,7 @@ const ModalErrorView = ({ error, onRetry, retryText = "Try Again", title = "Oper
       {onRetry && (
         <button 
           onClick={onRetry}
-          className="px-10 py-2.5 bg-slate-800 dark:bg-slate-700 text-white rounded-xl text-[11px] font-bold hover:bg-slate-900 dark:hover:bg-slate-600 transition-all active:scale-95 shadow-lg shadow-slate-500/10"
+          className="px-10 py-2.5 bg-slate-800 dark:bg-slate-700 text-white rounded-xl text-13 font-bold hover:bg-slate-900 dark:hover:bg-slate-600 transition-all active:scale-95 shadow-lg shadow-slate-500/10"
         >
           {retryText}
         </button>

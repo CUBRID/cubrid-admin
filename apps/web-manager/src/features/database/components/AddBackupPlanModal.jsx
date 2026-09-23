@@ -291,14 +291,14 @@ export default function AddBackupPlanModal() {
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
                   formData.backupLevel === item.value ? 'bg-amber-500 text-slate-900 border-amber-500/50' : 'bg-slate-50 dark:bg-white/5 text-slate-400 border-transparent'
                 }`}>
-                  <Icon name={item.icon} size="14px" weight={300} />
+                  <Icon name={item.icon} size="15px" weight={300} />
                 </div>
                 <div className="text-left min-w-0">
                   <div className="flex items-baseline gap-1.5">
-                    <Typography variant="p" className={`font-black text-[11px] leading-none ${formData.backupLevel === item.value ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
+                    <Typography variant="p" className={`font-black text-13 leading-none ${formData.backupLevel === item.value ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
                       {item.title}
                     </Typography>
-                    <Typography variant="caption" className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter leading-none">
+                    <Typography variant="caption" className="text-11 text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter leading-none">
                       {CM[item.descKey]}
                     </Typography>
                   </div>
@@ -348,7 +348,7 @@ export default function AddBackupPlanModal() {
                         key={preset.id}
                         type="button"
                         onClick={() => setBulkDays(preset.id)}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-all"
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-11 font-black uppercase tracking-widest text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-all"
                       >
                          {preset.label}
                       </button>
@@ -360,7 +360,7 @@ export default function AddBackupPlanModal() {
                         key={day}
                         type="button"
                         onClick={() => toggleDay(day)}
-                        className={`h-9 rounded-xl border text-[11px] font-black transition-all flex items-center justify-center ${
+                        className={`h-9 rounded-xl border text-13 font-black transition-all flex items-center justify-center ${
                           formData.periodDetail.includes(day)
                             ? 'bg-amber-500 border-amber-500 text-slate-900 shadow-xs scale-105 z-10'
                             : 'bg-white dark:bg-white/3 border-slate-200 dark:border-white/4 text-slate-400 hover:border-amber-500/40'
@@ -383,7 +383,7 @@ export default function AddBackupPlanModal() {
                         key={day}
                         type="button"
                         onClick={() => toggleDay(dayValue)}
-                        className={`h-11 rounded-xl border text-[11px] font-black transition-all flex items-center justify-center ${
+                        className={`h-11 rounded-xl border text-13 font-black transition-all flex items-center justify-center ${
                           isActive
                             ? 'bg-amber-500 border-amber-500 text-slate-900 shadow-xs scale-105'
                             : 'bg-white dark:bg-white/3 border-slate-200 dark:border-white/4 text-slate-400 hover:border-amber-500/40'
@@ -433,10 +433,10 @@ export default function AddBackupPlanModal() {
                     ? 'bg-amber-500 text-slate-900 border-amber-500/40' 
                     : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-400 group-hover:text-slate-500'
                 }`}>
-                  <Icon name={opt.icon} size="12px" weight={300} />
+                  <Icon name={opt.icon} size="13px" weight={300} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <Typography variant="p" className={`text-[11px] font-black transition-colors leading-none whitespace-nowrap ${formData[opt.field] ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                  <Typography variant="p" className={`text-13 font-black transition-colors leading-none whitespace-nowrap ${formData[opt.field] ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
                     {opt.label}
                   </Typography>
                 </div>
@@ -475,7 +475,7 @@ export default function AddBackupPlanModal() {
                 <Icon name={mode.icon} size="md" weight={300} />
               </div>
               <div className="flex-1">
-                <Typography variant="p" className={`font-black text-[12px] leading-tight transition-colors ${formData.onlineType === mode.value ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{mode.label}</Typography>
+                <Typography variant="p" className={`font-black text-14 leading-tight transition-colors ${formData.onlineType === mode.value ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{mode.label}</Typography>
                 <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium leading-relaxed block">{mode.desc}</Typography>
               </div>
               <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${

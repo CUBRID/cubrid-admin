@@ -45,13 +45,13 @@ export default function CustomSelect({
           w-full h-8 flex items-center justify-between px-3 
           bg-slate-50 dark:bg-bk-main/40 
           border border-slate-200 dark:border-white/10
-          rounded-lg text-[11px] font-bold transition-all duration-200
+          rounded-lg text-13 font-bold transition-all duration-200
           ${isOpen ? 'border-bk-yellow/50 ring-2 ring-bk-yellow/10 ring-offset-0' : 'hover:border-white/20'}
           dark:text-slate-300
         `}
       >
         <span className="truncate">{selectedOption ? selectedOption[labelField] : 'Select...'}</span>
-        <span className={`material-symbols-outlined text-[16px] transition-transform duration-300 ${isOpen ? 'rotate-180 text-bk-yellow' : 'text-slate-500'}`}>
+        <span className={`material-symbols-outlined text-18 transition-transform duration-300 ${isOpen ? 'rotate-180 text-bk-yellow' : 'text-slate-500'}`}>
           expand_more
         </span>
       </button>
@@ -79,7 +79,7 @@ export default function CustomSelect({
                   key={idx}
                   onClick={() => handleSelect(option)}
                   className={`
-                    w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all
+                    w-full text-left px-3 py-1.5 rounded-lg text-13 font-medium transition-all
                     ${isActive 
                       ? 'bg-bk-yellow text-bk-main shadow-lg shadow-bk-yellow/10' 
                       : 'text-slate-600 dark:text-slate-400 hover:bg-white/5 hover:text-bk-yellow'}

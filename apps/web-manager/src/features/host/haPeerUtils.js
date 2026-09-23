@@ -1,11 +1,58 @@
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
 
+// CUBRID's HA_SERVER_STATE (boot.h) as reported per-db in the heartbeat's
+// dbmode.server_mode — the individual db server's own replication state,
+// distinct from the node-level master/slave/replica role. Shared styling
+// config for every place that renders this as a badge (DatabaseTree,
+// DatabaseListSection, ...).
+export const HA_DB_STATE_CONFIG = {
+  active: { cmKey: 'haDbActive', className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
+  standby: { cmKey: 'haDbStandby', className: 'bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400' },
+  'to-be-active': { cmKey: 'haDbToBeActive', className: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' },
+  'to-be-standby': { cmKey: 'haDbToBeStandby', className: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' },
+  maintenance: { cmKey: 'haDbMaintenance', className: 'bg-slate-500/10 border-slate-400/20 text-slate-500 dark:text-slate-400' },
+  dead: { cmKey: 'haDbDead', className: 'bg-rose-500/10 border-rose-500/20 text-rose-500' },
+  idle: { cmKey: 'haDbIdle', className: 'bg-slate-500/10 border-slate-400/20 text-slate-500 dark:text-slate-400' },
+};
+
 /** Node list from a `getHaHeartbeatList` response's `hanodelist[0].node`, normalized to an array. */
 export function extractHaHeartbeatNodes(haHeartbeat) {
   const rawNodeGroups = haHeartbeat?.hanodelist;
   const nodeGroups = Array.isArray(rawNodeGroups) ? rawNodeGroups : (rawNodeGroups ? [rawNodeGroups] : []);
   const rawNodes = nodeGroups[0]?.node;
   return Array.isArray(rawNodes) ? rawNodes : (rawNodes ? [rawNodes] : []);
+}
+
+/**
+ * Per-database HA replication state (CUBRID's HA_SERVER_STATE: "active",
+ * "standby", "to-be-active", "to-be-standby", "maintenance", "dead", "idle" —
+ * see boot.h's HA_SERVER_STATE_*_STR macros) for every database this
+ * heartbeat reports, read from `hadbinfolist[].server[].dbmode[].server_mode`
+ * (CMS's cmd_get_db_mode, cm_job_task.cpp). Distinct from the node-level
+ * master/slave/replica role: this is the individual db server process's own
+ * replication state on this node.
+ */
+export function getHaDbServerModes(haHeartbeat) {
+  const modes = new Map();
+  const raw = haHeartbeat?.hadbinfolist;
+  if (!raw) return modes;
+
+  const ensureArray = (val) => {
+    if (!val) return [];
+    return Array.isArray(val) ? val : [val];
+  };
+
+  ensureArray(raw).forEach((entry) => {
+    ensureArray(entry?.server).forEach((server) => {
+      ensureArray(server?.dbmode).forEach((row) => {
+        if (row?.dbname && row?.server_mode) {
+          modes.set(row.dbname, row.server_mode.trim().toLowerCase());
+        }
+      });
+    });
+  });
+
+  return modes;
 }
 
 /**

@@ -29,7 +29,7 @@ export default function TreeTabHeader({ activeTab, setActiveTab, onDbTabContextM
           <button
             key={tab.id}
             data-testid={`tree-tab-${tab.id}`}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-md text-[11px] font-bold tracking-tight transition-all duration-150 select-none relative
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-md text-13 font-bold tracking-tight transition-all duration-150 select-none relative
 
               ${isActive
                 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500'

@@ -26,11 +26,11 @@ const SliderField = memo(({ label, value, min, max, step = 1, onChange, unit = '
   return (
     <div className={`space-y-2 transition-opacity duration-300 ${disabled ? 'opacity-30 pointer-events-none' : ''}`}>
       <div className="flex items-center justify-between">
-        <Typography variant="caption" className="text-[10px] font-semibold text-slate-400">
+        <Typography variant="caption" className="text-12 font-semibold text-slate-400">
           {label}
         </Typography>
         <div className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
-          <span className="text-[11px] font-bold font-mono text-amber-600 dark:text-amber-400">{Math.max(min, value)}{unit}</span>
+          <span className="text-13 font-bold font-mono text-amber-600 dark:text-amber-400">{Math.max(min, value)}{unit}</span>
         </div>
       </div>
       <div className="relative h-4 flex items-center">
@@ -49,8 +49,8 @@ const SliderField = memo(({ label, value, min, max, step = 1, onChange, unit = '
         />
       </div>
       <div className="flex justify-between">
-        <span className="text-[9px] text-slate-300 dark:text-slate-600 font-mono">{min}{unit}</span>
-        <span className="text-[9px] text-slate-300 dark:text-slate-600 font-mono">{max}{unit}</span>
+        <span className="text-11 text-slate-300 dark:text-slate-600 font-mono">{min}{unit}</span>
+        <span className="text-11 text-slate-300 dark:text-slate-600 font-mono">{max}{unit}</span>
       </div>
     </div>
   );
@@ -73,14 +73,14 @@ const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshol
         <div className="flex items-center gap-2.5">
           <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300
             ${enabled ? 'bg-amber-500/10 border border-amber-500/20 text-amber-500' : 'bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/8 text-slate-400'}`}>
-            <Icon name={icon} size="14px" weight={300} />
+            <Icon name={icon} size="15px" weight={300} />
           </div>
           <div>
-            <Typography variant="p" className={`text-[12px] font-bold leading-tight transition-colors
+            <Typography variant="p" className={`text-14 font-bold leading-tight transition-colors
               ${enabled ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-600'}`}>
               {title}
             </Typography>
-            <Typography variant="caption" className="text-[9px] text-slate-400 font-mono block">
+            <Typography variant="caption" className="text-11 text-slate-400 font-mono block">
               {description}
             </Typography>
           </div>
@@ -100,7 +100,7 @@ const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshol
 
         <div className="grid grid-cols-2 gap-3 items-end">
           <div className="space-y-1">
-            <Typography variant="caption" className="text-[10px] font-semibold text-slate-400 block">
+            <Typography variant="caption" className="text-12 font-semibold text-slate-400 block">
               {CM.expansionSize}
             </Typography>
             <Input
@@ -109,7 +109,7 @@ const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshol
               onChange={(e) => onSizeChange(parseInt(e.target.value) || 0)}
               placeholder="0"
               size="sm"
-              suffix={<span className="text-[9px] font-bold text-slate-400">MB</span>}
+              suffix={<span className="text-11 font-bold text-slate-400">MB</span>}
             />
           </div>
             <Input
@@ -254,7 +254,7 @@ export default function SetAutomationVolumeModal() {
       onSubmit={handleSave}
       footer={
         <div className="flex items-center justify-between w-full">
-          <Typography variant="caption" className="text-[9px] text-slate-400 font-mono hidden sm:block">
+          <Typography variant="caption" className="text-11 text-slate-400 font-mono hidden sm:block">
             {CM.pageSize16kLabel}
           </Typography>
           <div className="flex gap-2">
@@ -277,15 +277,15 @@ export default function SetAutomationVolumeModal() {
         {/* Database target banner */}
         <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-linear-to-r from-amber-500/10 to-transparent border border-amber-500/15 rounded-sm">
           <div className="w-7 h-7 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-            <Icon name="database" size="14px" weight={300} className="text-amber-500" />
+            <Icon name="database" size="15px" weight={300} className="text-amber-500" />
           </div>
           <div className="min-w-0 flex-1">
-            <Typography variant="caption" className="text-[9px] font-semibold text-amber-600/70 uppercase tracking-widest block">{CM.targetDatabase}</Typography>
-            <Typography variant="p" className="text-[12px] font-bold text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
+            <Typography variant="caption" className="text-11 font-semibold text-amber-600/70 uppercase tracking-widest block">{CM.targetDatabase}</Typography>
+            <Typography variant="p" className="text-14 font-bold text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <div className={`w-1.5 h-1.5 rounded-full ${combinedEnabled ? 'bg-amber-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
-            <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+            <span className="text-11 font-semibold text-amber-600 dark:text-amber-400">
               {combinedEnabled ? CM.autoVolumeEnabled : CM.autoVolumeDisabled}
             </span>
           </div>
@@ -297,7 +297,7 @@ export default function SetAutomationVolumeModal() {
             <div className="absolute inset-0 z-20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xs flex items-center justify-center rounded-sm border border-slate-100 dark:border-white/5">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded-full border-2 border-slate-100 dark:border-white/5 border-t-amber-500 animate-spin" />
-                <Typography variant="caption" className="text-[10px] text-slate-500">{CM.loadingConfig}</Typography>
+                <Typography variant="caption" className="text-12 text-slate-500">{CM.loadingConfig}</Typography>
               </div>
             </div>
           )}
@@ -319,8 +319,8 @@ export default function SetAutomationVolumeModal() {
 
         {/* Note */}
         <div className="flex items-center gap-2 px-1">
-          <Icon name="info" size="11px" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
-          <Typography variant="caption" className="text-[9px] text-slate-400">
+          <Icon name="info" size="12px" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
+          <Typography variant="caption" className="text-11 text-slate-400">
             {CM.autoVolumeExpandDesc}
           </Typography>
         </div>

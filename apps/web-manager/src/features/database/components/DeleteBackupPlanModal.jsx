@@ -142,8 +142,8 @@ export default function DeleteBackupPlanModal() {
         </div>
 
         <div className="space-y-2">
-          <Typography variant="h4" className="text-[16px] font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteBackupPlanPrompt}</Typography>
-          <Typography variant="p" className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
+          <Typography variant="h4" className="text-18 font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteBackupPlanPrompt}</Typography>
+          <Typography variant="p" className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
             <span className="text-rose-500 font-black">"{selectedBackupId}"</span> — <span className="font-bold text-slate-900 dark:text-white">{selectedDatabase}</span>
           </Typography>
         </div>

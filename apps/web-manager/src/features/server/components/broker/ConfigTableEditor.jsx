@@ -28,13 +28,13 @@ export default function ConfigTableEditor({
 
           {/* Sticky header */}
           <div className="sticky top-0 z-20 flex w-full bg-slate-50 dark:bg-[#0D1117] border-b border-slate-200 dark:border-white/8">
-            <div className="w-80 shrink-0 px-4 py-2.5 border-r border-slate-200 dark:border-white/8 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <div className="w-80 shrink-0 px-4 py-2.5 border-r border-slate-200 dark:border-white/8 text-12 font-bold uppercase tracking-widest text-slate-400">
               {CM.propertyLabel}
             </div>
             {sections.map((sec, idx) => (
               <div key={idx} className="w-full min-w-0 px-4 py-2.5 border-r border-slate-200 dark:border-white/8 flex items-center gap-1.5">
                 <Icon name="hub" size="sm" weight={300} className="text-amber-500 dark:text-bk-yellow shrink-0" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-bk-yellow truncate">
+                <span className="text-12 font-bold uppercase tracking-widest text-amber-600 dark:text-bk-yellow truncate">
                   {sec.properties?.BROKER_NAME || CM.brokerNumberFallback(idx + 1)}
                 </span>
               </div>
@@ -57,7 +57,7 @@ export default function ConfigTableEditor({
                     {isBrokerName ? (
                       <div className="flex items-center gap-2 px-4 py-2">
                         <Icon name="label_important" size="sm" weight={300} className="text-sky-500" />
-                        <span className="text-[12px] font-bold text-sky-600 dark:text-sky-400 font-mono">{key}</span>
+                        <span className="text-14 font-bold text-sky-600 dark:text-sky-400 font-mono">{key}</span>
                       </div>
                     ) : (
                       <div className={`w-full h-full flex items-center ${isRowSelected && selectedCell.col === -1 ? 'ring-1 ring-inset ring-amber-500/60 transition-all z-10' : ''}`}
@@ -67,7 +67,7 @@ export default function ConfigTableEditor({
                           value={key}
                           onChange={(e) => handleKeyChange(key, e.target.value)}
                           className="w-full gap-0"
-                          inputClassName="border-none bg-transparent rounded-none! font-mono text-[12px]! px-4! focus:outline-none"
+                          inputClassName="border-none bg-transparent rounded-none! font-mono text-14! px-4! focus:outline-none"
                         />
                       </div>
                     )}
@@ -98,7 +98,7 @@ export default function ConfigTableEditor({
                                 handleValueChange(colIdx, key, next);
                               }}
                             />
-                            <span className={`text-[11px] font-mono font-bold ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                            <span className={`text-13 font-mono font-bold ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
                               {val}
                             </span>
                           </div>
@@ -108,7 +108,7 @@ export default function ConfigTableEditor({
                             value={val}
                             onChange={(e) => handleValueChange(colIdx, key, e.target.value)}
                             className="w-full gap-0"
-                            inputClassName={`border-none bg-transparent rounded-none! font-mono text-[12px]! px-4! focus:outline-none
+                            inputClassName={`border-none bg-transparent rounded-none! font-mono text-14! px-4! focus:outline-none
                               ${isSelected ? 'text-amber-600 dark:text-bk-yellow font-bold' : ''}`}
                           />
                         )}
@@ -123,7 +123,7 @@ export default function ConfigTableEditor({
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 px-4 py-1.5 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wider">
+      <div className="shrink-0 px-4 py-1.5 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-12 text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wider">
         <span>{CM.propertiesBrokersCountLabel(allPropertyKeys.length, sections.length)}</span>
         <StatusBadge label={CM.tableEditor} variant="emerald" className="border-none bg-transparent" />
       </div>

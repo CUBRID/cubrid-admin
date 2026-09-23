@@ -7,6 +7,17 @@ export const hostActions = {
   clearReconnectingHost: null,
 };
 
+// Plain action-type objects (not imported slice creators) to avoid a
+// circular import — most feature slices import this module, so this module
+// can't import back from databaseCoreSlice. Must stay in sync with that
+// slice's name ('databaseCore') and action name (clearDatabaseLogin).
+export const databaseActions = {
+  clearDatabaseLogin: ({ hostUid, dbname }) => ({
+    type: 'databaseCore/clearDatabaseLogin',
+    payload: { hostUid, dbname },
+  }),
+};
+
 export const registerLoginToHost = (fn) => {
   hostActions.loginToHost = fn;
 };
@@ -432,6 +443,28 @@ apiClient.interceptors.response.use(
       }
 
       await handleSystemSessionExpired();
+      return Promise.reject(error);
+    }
+
+    // ensureDbLogin (api-server) grants access via a short-lived session
+    // cache or a saved db-login profile — never both indefinitely. A login
+    // made without "Save Password" only lives in that cache, so once it
+    // expires (or the host token rotates) with no profile to fall back on,
+    // the *next* database action fails here even though nothing the user
+    // did looks like a logout. Bring the UI in line with that: this db no
+    // longer has a usable session, whatever the tree's padlock icon (driven
+    // by loggedInDatabases, set only at explicit login/logout) still shows.
+    if (statusCode === 400 && (apiData?.data?.code || apiData?.code) === 'MISSING_DB_CREDENTIALS') {
+      const hostUid = getHostUidFromUrl(requestUrl);
+      const dbname = apiData?.data?.dbname || apiData?.dbname;
+      if (hostUid && dbname) {
+        try {
+          const { store } = await import('../app/store');
+          store.dispatch(databaseActions.clearDatabaseLogin({ hostUid, dbname }));
+        } catch (e) {
+          console.error('Failed to dispatch clearDatabaseLogin:', e);
+        }
+      }
       return Promise.reject(error);
     }
 

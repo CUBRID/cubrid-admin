@@ -192,7 +192,13 @@ export class ConfigService {
       return parseBooleanEnv(raw);
     }
 
-    return this.isProduction();
+    // CMS hosts overwhelmingly run with an auto-generated self-signed cert
+    // (see the SSL_CERT_PATH/SSL_KEY_PATH row above — same default here), so
+    // defaulting to strict verification in production just meant everyone
+    // had to set this explicitly anyway. Set CMS_REJECT_UNAUTHORIZED=true
+    // (or CMS_CA_CERT_PATH, to trust a specific cert instead of disabling
+    // verification outright) if a deployment actually has a CA-signed CMS cert.
+    return false;
   }
 
   private resolveCmsForwardEnabled(args: Record<string, string>): boolean {

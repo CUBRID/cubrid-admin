@@ -42,7 +42,7 @@ export default function ImportExportHostModal() {
   const [passwordDrafts, setPasswordDrafts] = useState({});
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [fileName, setFileName] = useState('export_servers');
+  const [fileName, setFileName] = useState('export_hosts');
   const [exportFormat, setExportFormat] = useState('nativeXml');
   const [importGroupName, setImportGroupName] = useState('Imported');
   const fileInputRef = useRef(null);
@@ -160,7 +160,7 @@ export default function ImportExportHostModal() {
     setIsProcessing(true);
     try {
       if (importExportMode === 'export') {
-        const baseName = fileName || 'export_servers';
+        const baseName = fileName || 'export_hosts';
         if (exportFormat === 'caXml') {
           const hostsToExport = hosts.filter(h => selectedHosts.includes(h.uid));
           exportHostsToXml(hostsToExport, `${baseName}.xml`);
@@ -452,6 +452,7 @@ export default function ImportExportHostModal() {
   // step. The password-prompt confirmation step and the initial file-picker
   // step have no text inputs, so Enter there never reaches this handler.
   const handleFormSubmit = isPasswordStep ? handleApplyImportedPasswords : handleAction;
+  const isSubmitDisabled = isPasswordStep ? isProcessing : (selectedHosts.length === 0 || isProcessing);
 
   return (
     <Modal
@@ -463,6 +464,7 @@ export default function ImportExportHostModal() {
       maxWidth="max-w-[720px]"
       testId="import-export-host"
       onSubmit={handleFormSubmit}
+      submitDisabled={isSubmitDisabled}
       subtitle={isPasswordPromptStep
         ? CM.pendingPasswordsSubtitle(pendingPasswordHosts.length)
         : isPasswordStep
@@ -592,10 +594,10 @@ export default function ImportExportHostModal() {
         {isPasswordPromptStep ? (
           <div className="flex flex-col items-center justify-center flex-1 px-8 py-6 gap-5 text-center">
             <div className="space-y-1.5">
-              <p className="text-[14px] font-bold text-slate-800 dark:text-slate-100">
+              <p className="text-16 font-bold text-slate-800 dark:text-slate-100">
                 {CM.addPasswordsConfirmTitle}
               </p>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+              <p className="text-14 text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
                 {CM.addPasswordsConfirmDesc}
               </p>
             </div>
@@ -603,8 +605,8 @@ export default function ImportExportHostModal() {
               {pendingPasswordHosts.map((host) => (
                 <div key={host.uid} className="px-4 py-2.5 flex items-center gap-3 bg-white dark:bg-white/2">
                   <div className="min-w-0 text-left">
-                    <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 truncate">{host.alias || host.id}</p>
-                    <p className="text-[10px] text-slate-400 font-mono truncate">{host.address}:{host.port}</p>
+                    <p className="text-14 font-semibold text-slate-700 dark:text-slate-200 truncate">{host.alias || host.id}</p>
+                    <p className="text-12 text-slate-400 font-mono truncate">{host.address}:{host.port}</p>
                   </div>
                 </div>
               ))}
@@ -637,7 +639,7 @@ export default function ImportExportHostModal() {
                   handleFileChange(event);
                 }}
               />
-              <Typography variant="p" className="text-slate-500 mt-4 text-center text-[11px] max-w-[320px] mx-auto">
+              <Typography variant="p" className="text-slate-500 mt-4 text-center text-13 max-w-[320px] mx-auto">
                 {CM.importFormatHelp}
               </Typography>
             </div>
@@ -646,7 +648,7 @@ export default function ImportExportHostModal() {
             <div className="px-4 py-2 bg-slate-50/50 dark:bg-bk-main/20 flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800">
               {importExportMode === 'import' && (
                 fileHasPrefsGroups ? (
-                  <Typography variant="caption" className="text-slate-500 text-[10px]">
+                  <Typography variant="caption" className="text-slate-500 text-12">
                     {CM.importGroupsHelp}
                   </Typography>
                 ) : (
@@ -662,7 +664,7 @@ export default function ImportExportHostModal() {
                         placeholder={CM.importedPlaceholder}
                       />
                     </div>
-                    <Typography variant="caption" className="text-slate-400 text-[10px]">
+                    <Typography variant="caption" className="text-slate-400 text-12">
                       {CM.allHostsIntoGroupHelp}
                     </Typography>
                   </div>
@@ -684,7 +686,7 @@ export default function ImportExportHostModal() {
                 </div>
               )}
               {hasValidationErrors && (
-                <Typography variant="caption" className="text-amber-600 dark:text-amber-400 text-[10px]">
+                <Typography variant="caption" className="text-amber-600 dark:text-amber-400 text-12">
                   {CM.validationErrorRowsHelp}
                 </Typography>
               )}
@@ -696,7 +698,7 @@ export default function ImportExportHostModal() {
                     onChange={handleToggleAll}
                     disabled={selectable.length === 0}
                     label={CM.selectAll}
-                    className="text-[10px]! font-bold tracking-wider text-slate-500"
+                    className="text-12! font-bold tracking-wider text-slate-500"
                   />
                 </div>
                 <Badge variant="yellow" size="sm">
@@ -747,7 +749,7 @@ export default function ImportExportHostModal() {
                             )}
                           </div>
                           {host.validationError && (
-                            <Typography variant="caption" className="text-[10px] text-amber-600 dark:text-amber-400">
+                            <Typography variant="caption" className="text-12 text-amber-600 dark:text-amber-400">
                               {host.validationError}
                             </Typography>
                           )}

@@ -104,6 +104,13 @@ export default function ReconnectHostModal() {
         console.error(e);
       }
 
+      try {
+        const { clearDatabaseLoginsForHost } = await import('../../database/databaseCoreSlice');
+        dispatch(clearDatabaseLoginsForHost(reconnectHostUid));
+      } catch (e) {
+        console.error(e);
+      }
+
       if (selectedHostUid === reconnectHostUid) {
         dispatch(setSelectedHost(null));
         try {
@@ -143,6 +150,7 @@ export default function ReconnectHostModal() {
       maxWidth="max-w-[440px]"
       testId="reconnect-host"
       onSubmit={handleReconnect}
+      submitDisabled={isReconnecting}
       footer={
         <>
           <Button

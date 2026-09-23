@@ -64,7 +64,8 @@ describe('HaService', () => {
         expect.objectContaining({
           task: 'ha_reload',
           token: mockHost.token,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result.task).toBe('ha_reload');
       expect(result.status).toBe('success');

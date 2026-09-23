@@ -84,7 +84,7 @@ export class HaService extends BaseService {
       task: 'ha_start',
       ...(dbname && { dbname }),
     };
-    return this.executeCmsRequest<HaStartDatabaseCmsRequest, HaStartDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<HaStartDatabaseCmsRequest, HaStartDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest
@@ -106,7 +106,7 @@ export class HaService extends BaseService {
       task: 'ha_stop',
       ...(dbname && { dbname }),
     };
-    return this.executeCmsRequest<HaStopDatabaseCmsRequest, HaStopDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<HaStopDatabaseCmsRequest, HaStopDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest
@@ -121,7 +121,7 @@ export class HaService extends BaseService {
     const cmsRequest: HaReloadCmsRequest = {
       task: 'ha_reload',
     };
-    return this.executeCmsRequest<HaReloadCmsRequest, HaReloadCmsResponse>(
+    return this.executeAsyncCmsJobRequest<HaReloadCmsRequest, HaReloadCmsResponse>(
       userId,
       hostUid,
       cmsRequest

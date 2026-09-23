@@ -25,7 +25,7 @@ export const Radio = ({
         <div className="w-4.5 h-4.5 rounded-full border border-slate-300 dark:border-white/25 transition-all bg-white dark:bg-white/10 shadow-xs group-hover:border-amber-500/50 dark:group-hover:border-amber-500/50 peer-checked:border-amber-500 dark:peer-checked:border-amber-500"></div>
         <div className="absolute w-2 h-2 rounded-full bg-amber-500 transition-transform scale-0 peer-checked:scale-100 flex items-center justify-center shadow-xs shadow-amber-500/20"></div>
       </div>
-      {label && <Typography variant="label" className="select-none text-[12px] font-medium text-slate-700 dark:text-slate-200 tracking-normal">{label}</Typography>}
+      {label && <Typography variant="label" className="select-none text-14 font-medium text-slate-700 dark:text-slate-200 tracking-normal">{label}</Typography>}
     </label>
   );
 

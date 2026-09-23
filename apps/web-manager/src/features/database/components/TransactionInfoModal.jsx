@@ -96,7 +96,7 @@ export default function TransactionInfoModal() {
     return (
       <Modal isOpen title={CM.transactionInformation} icon="error" iconVariant="danger" onClose={handleClose} maxWidth="540px" testId="transaction-info">
         <div className="py-8 space-y-4 text-center">
-          <Typography variant="p" className="text-[13px] text-slate-600 dark:text-slate-300">
+          <Typography variant="p" className="text-15 text-slate-600 dark:text-slate-300">
             {CM.error}
           </Typography>
           <Typography variant="caption" className="text-rose-500 font-mono block break-words px-4">
@@ -139,7 +139,7 @@ export default function TransactionInfoModal() {
               <Icon name="sensors" size="sm" weight={300} />
             </div>
             <div className="min-w-0">
-              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-[11px] block leading-none">
+              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-13 block leading-none">
                 {CM.activeTransactionsOf} <span className="text-emerald-500 ml-1">{transactions.length}</span>
               </Typography>
             </div>
@@ -150,8 +150,8 @@ export default function TransactionInfoModal() {
           {transactions.length === 0 ? (
             <EmptyState icon="info" title={CM.transactionInformation} subtitle={CM.activeTransactionsOf} py="py-12" />
           ) : (
-            <table className="w-full text-left text-[12px]">
-              <thead className="bg-slate-50 dark:bg-white/5 text-[10px] uppercase text-slate-500 sticky top-0">
+            <table className="w-full text-left text-14">
+              <thead className="bg-slate-50 dark:bg-white/5 text-12 uppercase text-slate-500 sticky top-0">
                 <tr>
                   <th className="px-4 py-2">{CM.tranIndex}</th>
                   <th className="px-4 py-2">{CM.userNameCol}</th>
@@ -181,7 +181,7 @@ export default function TransactionInfoModal() {
                       <td className="px-4 py-2">
                         <span className="inline-flex items-center gap-1">
                           {isHaProcess && (
-                            <Icon name="warning" size="12px" weight={400} className="text-amber-500" title={CM.haReplicationProcessWarning} />
+                            <Icon name="warning" size="13px" weight={400} className="text-amber-500" title={CM.haReplicationProcessWarning} />
                           )}
                           {tran.program || '-'}
                         </span>

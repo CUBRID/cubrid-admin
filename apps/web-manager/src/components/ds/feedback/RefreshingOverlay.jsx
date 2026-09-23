@@ -87,14 +87,14 @@ export const RefreshingOverlay = ({
 
         {/* Text stack - Standardized hierarchy */}
         <div className="space-y-1.5 flex flex-col items-center animate-in slide-in-from-bottom-2 duration-500">
-          <h4 className="text-[11px] font-black text-slate-800 dark:text-amber-500 tracking-[0.25em] uppercase leading-none mb-0.5">
+          <h4 className="text-13 font-black text-slate-800 dark:text-amber-500 tracking-[0.25em] uppercase leading-none mb-0.5">
             {contextLabel}
           </h4>
-          <p className="text-[12.5px] text-slate-500 dark:text-slate-400 font-medium tracking-normal px-4 text-center leading-relaxed">
+          <p className="text-14 text-slate-500 dark:text-slate-400 font-medium tracking-normal px-4 text-center leading-relaxed">
             {primaryText}
           </p>
           {secondaryText && (
-             <p className="text-[11px] text-slate-400/80 dark:text-slate-500 font-medium tracking-tight px-6 text-center leading-tight">
+             <p className="text-13 text-slate-400/80 dark:text-slate-500 font-medium tracking-tight px-6 text-center leading-tight">
               {secondaryText}
             </p>
           )}
@@ -111,7 +111,7 @@ export const RefreshingOverlay = ({
         {/* Status pill */}
         <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 shadow-sm transition-all duration-300">
           <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDuration: '1s' }} />
-          <span className="text-[9.5px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          <span className="text-11 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
             {CM.requestInProgressLabel}
           </span>
         </div>

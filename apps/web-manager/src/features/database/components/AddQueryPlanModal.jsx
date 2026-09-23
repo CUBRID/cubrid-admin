@@ -235,14 +235,14 @@ export default function AddQueryPlanModal() {
               </div>
               <div className="min-w-0">
                 <Typography variant="caption" className="font-bold text-amber-600/70 mb-0.5">{CM.automatingDatabase}</Typography>
-                <Typography variant="h4" className="text-[14px] font-black text-amber-700 dark:text-amber-400 font-mono truncate">
+                <Typography variant="h4" className="text-16 font-black text-amber-700 dark:text-amber-400 font-mono truncate">
                    {selectedDatabase}
                 </Typography>
               </div>
             </div>
             <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-xs">
               <Icon name="bolt" size="sm" className="text-amber-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{CM.sqlStatementSection}</span>
+              <span className="text-12 font-bold text-slate-600 dark:text-slate-400">{CM.sqlStatementSection}</span>
             </div>
           </div>
         </div>
@@ -315,7 +315,7 @@ export default function AddQueryPlanModal() {
                   <button 
                     key={day} 
                     onClick={() => toggleDetail(ix + 1)} 
-                    className={`h-10 rounded-xl border text-[11px] font-black transition-all cursor-pointer 
+                    className={`h-10 rounded-xl border text-13 font-black transition-all cursor-pointer 
                       ${isSel 
                         ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/30 text-amber-600 dark:text-amber-400' 
                         : 'bg-white dark:bg-white/2 border-slate-100 dark:border-white/5 text-slate-400 hover:border-amber-500/30'}`}
@@ -335,7 +335,7 @@ export default function AddQueryPlanModal() {
                   <button 
                     key={d} 
                     onClick={() => toggleDetail(d)} 
-                    className={`h-8 rounded-lg border text-[10px] font-black font-mono transition-all cursor-pointer 
+                    className={`h-8 rounded-lg border text-12 font-black font-mono transition-all cursor-pointer 
                       ${isSel 
                         ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/20 text-amber-600 dark:text-amber-400' 
                         : 'bg-white dark:bg-white/4 border-transparent text-slate-400 hover:border-amber-500/30'}`}

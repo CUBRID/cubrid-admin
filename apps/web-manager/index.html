@@ -6,9 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff">
     <link rel="apple-touch-icon" href="/pwa-192x192.png">
-    <title>CUBRID Web Manager</title>
+    <title>Next CUBRID Admin</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Inter has no Korean glyphs; without this, Korean text silently falls back to
+         whatever CJK font happens to be installed on each OS, rendering inconsistently
+         across machines/screenshots. Pretendard fills that gap for KR while Inter still
+         renders all Latin text (see --font-display/--font-sans in styles/index.css). -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.css"/>
     <script>
       (function() {
         try {

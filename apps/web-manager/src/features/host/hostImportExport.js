@@ -12,7 +12,7 @@ export const DEFAULT_IMPORT_PORT = 8001;
  * Exports a list of hosts to an XML file.
  * Passwords are NOT included.
  */
-export const exportHostsToXml = (hosts, fileName = 'export_servers.xml') => {
+export const exportHostsToXml = (hosts, fileName = 'export_hosts.xml') => {
   if (!hosts || hosts.length === 0) return;
 
   const doc = document.implementation.createDocument(null, 'hosts', null);
@@ -90,7 +90,7 @@ function triggerDownload(content, mimeType, fileName) {
  * Exports hosts (with their group structure) to the native web-manager XML format.
  * Round-trips cleanly with another Web Manager instance's import. Passwords are NOT included.
  */
-export const exportHostGroupsToNativeXml = (hostGroups, selectedUids, fileName = 'export_servers.xml') => {
+export const exportHostGroupsToNativeXml = (hostGroups, selectedUids, fileName = 'export_hosts.xml') => {
   const groups = buildGroupedExportPayload(hostGroups, selectedUids);
   if (groups.length === 0) return;
 
@@ -121,7 +121,7 @@ export const exportHostGroupsToNativeXml = (hostGroups, selectedUids, fileName =
  * Exports hosts (with their group structure) to the native web-manager JSON format.
  * Round-trips cleanly with another Web Manager instance's import. Passwords are NOT included.
  */
-export const exportHostGroupsToJson = (hostGroups, selectedUids, fileName = 'export_servers.json') => {
+export const exportHostGroupsToJson = (hostGroups, selectedUids, fileName = 'export_hosts.json') => {
   const groups = buildGroupedExportPayload(hostGroups, selectedUids);
   if (groups.length === 0) return;
 

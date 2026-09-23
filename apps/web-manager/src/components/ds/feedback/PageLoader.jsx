@@ -53,10 +53,10 @@ export function PageLoader({
       </div>
 
       <div className="text-center space-y-1.5 px-8 max-w-[320px]">
-        <Typography variant="h4" className="text-[15px] font-black tracking-tight uppercase tracking-widest text-slate-800 dark:text-slate-100">
+        <Typography variant="h4" className="text-17 font-black tracking-tight uppercase tracking-widest text-slate-800 dark:text-slate-100">
           {resolvedTitle}
         </Typography>
-        <Typography variant="p" className="text-[12px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
           {resolvedSubtitle}
         </Typography>
       </div>

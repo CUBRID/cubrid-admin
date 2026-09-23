@@ -101,7 +101,7 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
 
   return (
     <div ref={containerRef} className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <button className={`w-full text-left px-3 py-2 text-[12px] font-medium tracking-wide transition-all rounded-md flex items-center justify-between group relative overflow-hidden
+      <button className={`w-full text-left px-3 py-2 text-14 font-medium tracking-wide transition-all rounded-md flex items-center justify-between group relative overflow-hidden
         ${open ? 'bg-amber-500/6 dark:bg-amber-500/10 text-amber-600 dark:text-amber-500' : 'text-slate-600 dark:text-slate-400 hover:bg-amber-500/6 dark:hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-500'}`}>
         
         {/* Decorative hover/open indicator matching TreeNode */}
@@ -176,7 +176,7 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
 
   return (
     <div className="relative font-sans" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium tracking-wide transition-all duration-200
+      <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-15 font-medium tracking-wide transition-all duration-200
         ${open ? 'text-bk-yellow bg-bk-yellow/5' : 'text-slate-600 dark:text-slate-400 hover:text-bk-yellow'}`}>
         <span>{label}</span>
         <span className={`material-symbols-outlined transition-transform duration-200 ${open ? 'rotate-180 text-bk-yellow' : 'text-slate-400'}`}
@@ -212,7 +212,7 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
  */
 export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled = false }) {
   const { closeMenu } = useContext(MenuContext);
-  const baseClasses = `flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium tracking-wide transition-all w-full text-left rounded-lg font-sans relative group overflow-hidden`;
+  const baseClasses = `flex items-center gap-2.5 px-3 py-2 text-14 font-medium tracking-wide transition-all w-full text-left rounded-lg font-sans relative group overflow-hidden`;
   
   const handleClick = (e) => {
     if (disabled) return;

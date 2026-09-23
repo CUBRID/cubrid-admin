@@ -63,11 +63,11 @@ export const Checkbox = forwardRef(({
         
         {label && (
           <div className="flex flex-col">
-            <Typography variant="span" className="select-none text-[12px] font-medium text-slate-700 dark:text-slate-200 tracking-normal">
+            <Typography variant="span" className="select-none text-14 font-medium text-slate-700 dark:text-slate-200 tracking-normal">
               {label}
             </Typography>
             {description && (
-              <Typography variant="p" className="text-[10px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+              <Typography variant="p" className="text-12 text-slate-500 mt-0.5 leading-relaxed font-medium">
                 {description}
               </Typography>
             )}
@@ -75,7 +75,7 @@ export const Checkbox = forwardRef(({
         )}
       </label>
       {error && (
-        <Typography variant="p" className="ml-6.5 mt-0.5 text-[11px] text-rose-500! dark:text-rose-400! font-semibold tracking-tight">
+        <Typography variant="p" className="ml-6.5 mt-0.5 text-13 text-rose-500! dark:text-rose-400! font-semibold tracking-tight">
           {error}
         </Typography>
       )}

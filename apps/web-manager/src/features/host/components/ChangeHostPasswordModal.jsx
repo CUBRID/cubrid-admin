@@ -61,7 +61,7 @@ export default function ChangeHostPasswordModal() {
     if (!currentHost) return;
 
     try {
-      // 1. Change the passcode on the remote host (CUBRID CMS)
+      // 1. Change the password on the remote host (CUBRID CMS)
       // Aligned with api-server SetDbmtPasswdRequest structure: targetid, newpassword
       const payload = {
         targetid: currentHost.id,
@@ -76,7 +76,7 @@ export default function ChangeHostPasswordModal() {
         address: currentHost.address,
         port: Number(currentHost.port),
         alias: currentHost.alias,
-        password: formData.password, // Update with the new passcode
+        password: formData.password, // Update with the new password
       };
       
       await dispatch(editHost({ hostUid: changePasswordHostUid, payload: localPayload })).unwrap();
@@ -101,6 +101,7 @@ export default function ChangeHostPasswordModal() {
       isOpen={isChangePasswordModalOpen}
       onClose={handleClose}
       onSubmit={!isSuccess ? handleSubmit : undefined}
+      submitDisabled={loading}
       title={isSuccess ? CM.success : CM.changeManagerPasscode}
       icon={isSuccess ? "check_circle" : "lock"}
       loading={loading}
@@ -144,7 +145,7 @@ export default function ChangeHostPasswordModal() {
         {isSuccess ? (
           <div className="py-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
              <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
-               <Icon name="check_circle" size="32px" className="text-emerald-500" />
+               <Icon name="check_circle" size="33px" className="text-emerald-500" />
              </div>
              <Typography variant="h3" className="text-lg font-bold text-slate-900 dark:text-white mb-2">{CM.passcodeUpdated}</Typography>
              <Typography variant="p" className="text-slate-500 dark:text-slate-400 max-w-[280px]">

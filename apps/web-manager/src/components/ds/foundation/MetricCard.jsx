@@ -40,15 +40,15 @@ export const MetricCard = ({
         <Icon name={icon} size="sm" weight={300} className={c.icon} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500 mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+        <div className="text-12 font-black uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500 mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
           {label}
         </div>
         <div className="flex items-baseline gap-1.5 overflow-hidden">
-          <span className={`text-[18px] font-mono font-black leading-none tracking-tight truncate ${c.val}`}>
+          <span className={`text-20 font-mono font-black leading-none tracking-tight truncate ${c.val}`}>
             {value ?? '--'}
           </span>
           {unit && (
-            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500/60 uppercase italic tracking-tighter">
+            <span className="text-12 font-black text-slate-400 dark:text-slate-500/60 uppercase italic tracking-tighter">
               {unit}
             </span>
           )}

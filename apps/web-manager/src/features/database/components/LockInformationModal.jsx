@@ -125,8 +125,8 @@ export default function LockInformationModal() {
               <EmptyState icon="info" title={CM.noSessions} subtitle={CM.noActiveTransactions} py="py-12" />
             ) : (
               <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-                <table className="w-full text-left text-[12px]">
-                  <thead className="bg-slate-50 dark:bg-white/5 text-[10px] uppercase text-slate-500">
+                <table className="w-full text-left text-14">
+                  <thead className="bg-slate-50 dark:bg-white/5 text-12 uppercase text-slate-500">
                     <tr>
                       {[CM.lockIndex, CM.pname, CM.uid, CM.host, CM.pid, CM.isolationLevel, CM.timeOut, CM.locks].map((h) => (
                         <th key={h} className="px-3 py-2 whitespace-nowrap">{h}</th>
@@ -169,8 +169,8 @@ export default function LockInformationModal() {
                 <EmptyState icon="info" title={CM.noObjectLocks} subtitle={CM.noHeldObjectLocks} py="py-10" />
               ) : (
                 <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-                  <table className="w-full text-left text-[12px]">
-                    <thead className="bg-slate-50 dark:bg-white/5 text-[10px] uppercase text-slate-500">
+                  <table className="w-full text-left text-14">
+                    <thead className="bg-slate-50 dark:bg-white/5 text-12 uppercase text-slate-500">
                       <tr>
                         {[CM.oid, CM.objectType, CM.mode, CM.numHolders, CM.numWaiters].map((h) => (
                           <th key={h} className="px-3 py-2">{h}</th>

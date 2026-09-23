@@ -47,7 +47,7 @@ export default function ConfirmModal({
 
           {/* Message */}
           <div className="mb-8 overflow-hidden">
-            <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed text-center px-2">
+            <p className="text-15 text-slate-500 dark:text-slate-400 leading-relaxed text-center px-2">
               {message}
             </p>
           </div>
@@ -59,7 +59,7 @@ export default function ConfirmModal({
                 onConfirm();
                 onClose();
               }}
-              className={`w-full py-2.5 rounded-2xl text-[13px] font-bold transition-all shadow-md active:scale-[0.98] ${
+              className={`w-full py-2.5 rounded-2xl text-15 font-bold transition-all shadow-md active:scale-[0.98] ${
                 variant === 'danger'
                   ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/10 hover:shadow-rose-500/20'
                   : 'bg-amber hover:bg-amber-400 text-bk-side shadow-amber/10 hover:shadow-amber/20'
@@ -69,7 +69,7 @@ export default function ConfirmModal({
             </button>
             <button
               onClick={onClose}
-              className="w-full py-2.5 rounded-2xl text-[13px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+              className="w-full py-2.5 rounded-2xl text-15 font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
             >
               {cancelLabel}
             </button>
@@ -80,7 +80,7 @@ export default function ConfirmModal({
         <div className="py-2.5 bg-slate-50/50 dark:bg-black/20 border-t border-slate-100 dark:border-white/5 flex justify-center">
             <div className="flex items-center gap-1.5">
                 <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
-                <span className="text-[9px] uppercase tracking-widest font-bold text-slate-400 dark:text-slate-500">Unsaved Session</span>
+                <span className="text-11 uppercase tracking-widest font-bold text-slate-400 dark:text-slate-500">Unsaved Session</span>
             </div>
         </div>
       </div>
