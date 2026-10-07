@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useSelector, shallowEqual } from 'react-redux';
 import { FormField } from './FormField';
@@ -16,9 +16,14 @@ export const DatePicker = ({
   icon = "calendar_today",
   className = "",
   disabled = false,
+  id,
   ...props
 }) => {
   const CM = useCM();
+  const generatedId = useId();
+  const controlId = id || generatedId;
+  const descriptionId = description ? `${controlId}-description` : undefined;
+  const errorId = error ? `${controlId}-error` : undefined;
   const locale = useSelector(
     (state) => state.user?.preferences?.uiLocale ?? 'en',
     shallowEqual
@@ -72,6 +77,18 @@ export const DatePicker = ({
     return () => window.removeEventListener('scroll', handleScroll, true);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
+
   const handleDateSelect = (dateStr) => {
     if (disabled) return;
     if (onChange) {
@@ -100,12 +117,15 @@ export const DatePicker = ({
   const dropdownEl = isOpen ? createPortal(
     <div
       id="datepicker-portal-root"
+      role="dialog"
+      aria-label={label || CM.selectDatePlaceholder}
       style={dropdownStyle}
       className="bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.35)] p-4 animate-in fade-in zoom-in-95 duration-200"
     >
       <div className="flex items-center justify-between mb-4 px-1">
         <button 
           type="button"
+          aria-label={CM.previousMonth}
           onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} 
           className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
         >
@@ -116,6 +136,7 @@ export const DatePicker = ({
         </Typography>
         <button 
           type="button"
+          aria-label={CM.nextMonth}
           onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))} 
           className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
         >
@@ -123,8 +144,8 @@ export const DatePicker = ({
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {['S','M','T','W','T','F','S'].map(d => (
-          <div key={d} className="h-8 mb-1 flex items-center justify-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{d}</div>
+        {['S','M','T','W','T','F','S'].map((d, index) => (
+          <div key={`${d}-${index}`} className="h-8 mb-1 flex items-center justify-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{d}</div>
         ))}
         {calendarDays.map((d, index) => {
           if (d === null) return <div key={`empty-${index}`} />;
@@ -149,13 +170,18 @@ export const DatePicker = ({
   ) : null;
 
   return (
-    <FormField label={label} description={description} error={error} required={required} className={className}>
+    <FormField label={label} description={description} error={error} required={required} className={className} htmlFor={controlId} descriptionId={descriptionId} errorId={errorId}>
       <div className="relative group" ref={containerRef}>
         <button
           ref={buttonRef}
+          id={controlId}
           type="button"
           disabled={disabled}
           onClick={() => !disabled && (isOpen ? setIsOpen(false) : openDropdown())}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
           className={`relative w-full h-10 px-4 flex items-center justify-between bg-slate-50 dark:bg-white/3 border rounded-xl transition-all font-bold text-[13px] cursor-pointer ${
             isOpen ? 'border-amber-500/60 ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
           } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}

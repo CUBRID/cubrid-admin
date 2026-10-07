@@ -58,7 +58,6 @@ import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import RegisterPage from '../features/auth/components/RegisterPage';
-import ForgotPasswordPage from '../features/auth/components/ForgotPasswordPage';
 import StatusModal from '../components/common/StatusModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import LogViewer from '../features/broker/components/LogViewer';
@@ -228,6 +227,7 @@ function DashboardLayout() {
               onCloseTab={(tab) => dispatch(closeTab(tab))}
               onCloseOthers={(tabId) => dispatch(closeOtherTabs(tabId))}
               onCloseAll={() => dispatch(closeAllTabs())}
+              onReload={() => dispatch(triggerRefreshActiveTab())}
             />
           </div>
 
@@ -528,7 +528,6 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route
         path="/*"
         element={

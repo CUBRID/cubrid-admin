@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import React, { useState } from 'react';
-import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
 import DBPerformanceSection from './dashboard/DBPerformanceSection';
 import DBVolumesSection from './dashboard/DBVolumesSection';
@@ -14,15 +14,10 @@ import { isDatabaseInHa } from '../../host/haPeerUtils';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';
-import { Modal } from '../../../components/ds/layout/Modal';
-import { ModalStatusError } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 
 const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const CM = useCM();
-  const dispatch = useDispatch();
   const { selectedHostUid, hosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   
   const hostUid = propHostUid || selectedHostUid;
@@ -38,20 +33,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   const { dashboardData, dashboardLoading } = useSelector((state) => state.databaseMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { refreshCounter, activeMainTab } = useSelector((state) => state.layout, shallowEqual);
+  const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
 
   const [logModal, setLogModal] = useState({ isOpen: false, brokerName: '', casId: '', type: 'sql' });
   
 
-
-  const { 
-    startAction, 
-    endError, 
-    resetAction,
-    isLoading: isActionLoading,
-    isError: isActionError,
-    error: actionError
-  } = useActionState();
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -59,26 +45,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent }))
   });
-
-  const handleRestartCAS = async (row) => {
-    if (window.confirm(CM.restartCasConfirm(row.id, row.broker))) {
-      startAction();
-      try {
-        // We'll need to find the correct thunk for this, usually restartCAS or similar.
-        // Assuming it's in databaseSlice
-        // await dispatch(restartCAS({ hostUid, brokerName: row.broker, casId: row.id })).unwrap();
-        
-        // Let's check if it exists or use basic start/stop if needed, but for now I'll just use resetAction to simulate silent success after dispatch
-        // dispatch(fetchDashboardData({ hostUid, dbname, isBackground: true }));
-        
-        // Placeholder for the actual dispatch
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        resetAction();
-      } catch (err) {
-        endError(err);
-      }
-    }
-  };
 
   const activeHost = hosts.find(h => h.uid === selectedHostUid);
   const dashboardKey = `${hostUid}:${dbname}`;
@@ -232,8 +198,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 relative">
-        <RefreshingOverlay show={isActionLoading} title={CM.restartingCas} subtitle={CM.resettingCasProcess} />
-        
         {isLoading && (!data.volumes || data.volumes.length === 0) ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">
@@ -251,7 +215,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
               pollingProps={pollingProps}
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}
               onViewSlowQueryLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'slow' })}
-              onRestartCAS={handleRestartCAS}
             />
             <DBLockTransactionSection locks={data.locks || []} pollingProps={pollingProps} />
             <DBJobAutomationSection pollingProps={pollingProps} />
@@ -268,17 +231,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
         type={logModal.type}
       />
 
-      {isActionError && (
-        <Modal isOpen title={CM.updateFailed} icon="error" iconVariant="danger" onClose={resetAction} maxWidth="400px">
-          <ModalStatusError 
-            title={CM.failure}
-            error={actionError}
-            onRetry={resetAction}
-            onCancel={resetAction}
-            retryText={CM.dismiss}
-          />
-        </Modal>
-      )}
     </div>
   );
 }

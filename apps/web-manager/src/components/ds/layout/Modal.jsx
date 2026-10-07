@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
 import { useCM } from '../../../constants/useCM';
@@ -26,6 +26,9 @@ export const Modal = ({
 }) => {
   const CM = useCM();
   const modalRef = useRef(null);
+  const generatedId = useId();
+  const titleId = `${generatedId}-title`;
+  const subtitleId = `${generatedId}-subtitle`;
   // Element focused before the modal opened — restored on close so keyboard
   // users land back where they were instead of on <body>.
   const previouslyFocusedRef = useRef(null);
@@ -59,13 +62,14 @@ export const Modal = ({
   // focus into the modal on open and restores it to the trigger on close.
   useEffect(() => {
     if (!isOpen) return undefined;
+    const modalNode = modalRef.current;
 
     const FOCUSABLE_SELECTOR =
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
     const getFocusable = () => {
-      if (!modalRef.current) return [];
-      return Array.from(modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR))
+      if (!modalNode) return [];
+      return Array.from(modalNode.querySelectorAll(FOCUSABLE_SELECTOR))
         .filter((el) => el.offsetParent !== null); // skip hidden elements
     };
 
@@ -75,8 +79,8 @@ export const Modal = ({
     // rendered) have mounted before we look for something to focus.
     const focusFrame = requestAnimationFrame(() => {
       const focusable = getFocusable();
-      const autoFocusEl = modalRef.current?.querySelector('[autofocus]');
-      (autoFocusEl || focusable[0] || modalRef.current)?.focus();
+      const autoFocusEl = modalNode?.querySelector('[autofocus]');
+      (autoFocusEl || focusable[0] || modalNode)?.focus();
     });
 
     const handleTab = (e) => {
@@ -91,11 +95,11 @@ export const Modal = ({
       const active = document.activeElement;
 
       if (e.shiftKey) {
-        if (active === first || !modalRef.current?.contains(active)) {
+        if (active === first || !modalNode?.contains(active)) {
           e.preventDefault();
           last.focus();
         }
-      } else if (active === last || !modalRef.current?.contains(active)) {
+      } else if (active === last || !modalNode?.contains(active)) {
         e.preventDefault();
         first.focus();
       }
@@ -108,7 +112,7 @@ export const Modal = ({
       // Only restore if focus is still inside this modal (or gone entirely)
       // — avoids yanking focus away if another modal already took over.
       const active = document.activeElement;
-      if (!active || active === document.body || modalRef.current?.contains(active)) {
+      if (!active || active === document.body || modalNode?.contains(active)) {
         previouslyFocusedRef.current?.focus?.();
       }
     };
@@ -151,6 +155,8 @@ export const Modal = ({
         style={!maxWidth.startsWith('max-w-') ? { maxWidth } : {}}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={subtitle ? subtitleId : undefined}
       >
         {/* Subtle Top Accent */}
         <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-amber-500"></div>
@@ -174,11 +180,11 @@ export const Modal = ({
             </div>
           )}
           <div className="flex-1">
-            <Typography variant="h4" className="text-[12px] font-medium text-slate-900 dark:text-white leading-none tracking-wide">
+            <Typography id={titleId} variant="h4" className="text-[14px] font-medium text-slate-900 dark:text-white leading-snug tracking-tight">
               {title}
             </Typography>
             {subtitle && (
-              <Typography variant="p" className="text-[10px] mt-1 text-slate-500 font-medium">
+              <Typography id={subtitleId} variant="p" className="text-[12px] mt-1 text-slate-500 font-medium leading-snug">
                 {subtitle}
               </Typography>
             )}

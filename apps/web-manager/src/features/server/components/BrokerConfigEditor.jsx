@@ -4,7 +4,6 @@ import { brokerApi } from '../../broker/brokerApi';
 import { showStatusModal, setTabDirty } from '../../layout/layoutSlice';
 import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
 
@@ -25,7 +24,6 @@ export default function BrokerConfigEditor({ hostUid }) {
   // Source View State
   const originalRawContentRef = useRef('');
   const [rawContent, setRawContent] = useState('');
-  const [originalRawContent, setOriginalRawContent] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
 
   const fetchConfig = useCallback(async () => {
@@ -37,7 +35,6 @@ export default function BrokerConfigEditor({ hostUid }) {
       const content = lines.join('\n');
       originalRawContentRef.current = content;
       setRawContent(content);
-      setOriginalRawContent(content);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
     } catch (err) {
@@ -79,7 +76,6 @@ export default function BrokerConfigEditor({ hostUid }) {
       await brokerApi.updateBrokerConfig(hostUid, confdata);
       
       originalRawContentRef.current = rawContent;
-      setOriginalRawContent(rawContent);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
       dispatch(showStatusModal({

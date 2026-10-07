@@ -32,7 +32,7 @@ export const EmptyState = ({
   const c = accentClass[accent] || accentClass.slate;
 
   return (
-    <div className={`flex flex-col items-center justify-center ${py} gap-5 opacity-40 animate-in fade-in zoom-in-95 duration-500`}>
+    <div className={`flex flex-col items-center justify-center ${py} gap-5 animate-in fade-in zoom-in-95 duration-500`}>
       <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center shadow-xs ${c}`}>
         <Icon name={icon} size="lg" weight={100} />
       </div>

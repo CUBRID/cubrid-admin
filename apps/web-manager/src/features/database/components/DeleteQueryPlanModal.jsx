@@ -3,7 +3,6 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDeleteQueryPlanModal, removeAutoExecQueryPlan, fetchQueryPlan } from '../databaseSlice';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
-import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
@@ -51,10 +50,6 @@ export default function DeleteQueryPlanModal() {
       setView(VIEW_SUCCESS);
       dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: selectedDatabase }));
       
-      // Auto close after brief success
-      setTimeout(() => {
-        dispatch(closeDeleteQueryPlanModal());
-      }, 1000);
     } catch (err) {
       setErrorMsg(typeof err === 'string' ? err : (err.message || CM.deleteQueryPlanRejectedMsg));
       setView(VIEW_ERROR);
@@ -89,7 +84,16 @@ export default function DeleteQueryPlanModal() {
   /* ─── SUCCESS view ─── */
   if (view === VIEW_SUCCESS) {
     return (
-      <Modal isOpen title={CM.deletionSuccess} icon="verified" iconVariant="success" onClose={handleClose} maxWidth="440px" testId="delete-query-plan">
+      <Modal
+        isOpen
+        title={CM.deletionSuccess}
+        icon="verified"
+        iconVariant="success"
+        onClose={handleClose}
+        maxWidth="440px"
+        testId="delete-query-plan"
+        footer={<Button variant="primary" onClick={handleClose}>{CM.ok}</Button>}
+      >
         <div className="flex flex-col items-center justify-center py-12 gap-7 text-center animate-in fade-in duration-200">
           <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_24px_rgba(16,185,129,0.3)]">
             <Icon name="done_all" size="lg" weight={700} className="text-white" />

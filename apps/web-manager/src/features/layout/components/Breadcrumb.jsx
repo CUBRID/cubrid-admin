@@ -13,15 +13,15 @@ export default function Breadcrumb({
   onCloseTab, 
   onCloseOthers, 
   onCloseAll, 
+  onReload,
   labels = {} 
 }) {
   const CM = useCM();
   const [contextMenu, setContextMenu] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, onConfirm: null, title: '', message: '' });
   const { dirtyTabs } = useSelector((state) => state.layout, shallowEqual);
-  const handleCloseTab = (tabId, queue = []) => {
+  const handleCloseTab = useCallback((tabId) => {
     if (dirtyTabs.includes(tabId)) {
-      onTabChange(tabId);
       setConfirmModal({
         isOpen: true,
         title: CM.unsavedChangesTitle,
@@ -29,20 +29,12 @@ export default function Breadcrumb({
         onConfirm: () => {
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           onCloseTab(tabId);
-          if (queue.length > 1) {
-            const nextQueue = queue.slice(1);
-            setTimeout(() => handleCloseTab(nextQueue[0], nextQueue), 100);
-          }
         }
       });
     } else {
       onCloseTab(tabId);
-      if (queue.length > 1) {
-        const nextQueue = queue.slice(1);
-        handleCloseTab(nextQueue[0], nextQueue);
-      }
     }
-  };
+  }, [CM, dirtyTabs, labels, onCloseTab]);
 
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
@@ -77,31 +69,53 @@ export default function Breadcrumb({
     };
   }, [activeTab, handleCloseTab]);
 
-  const others = React.useMemo(() => openTabs.filter(tid => tid !== activeTab), [openTabs, activeTab]);
-  const dirtyOthers = React.useMemo(() => others.filter(tid => dirtyTabs.includes(tid)), [others, dirtyTabs]);
-  const cleanOthers = React.useMemo(() => others.filter(tid => !dirtyTabs.includes(tid)), [others, dirtyTabs]);
-
-  const dirtyOnes = React.useMemo(() => openTabs.filter(tid => dirtyTabs.includes(tid)), [openTabs, dirtyTabs]);
-  const cleanOnes = React.useMemo(() => openTabs.filter(tid => !dirtyTabs.includes(tid)), [openTabs, dirtyTabs]);
+  useEffect(() => {
+    if (dirtyTabs.length === 0) return undefined;
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirtyTabs]);
 
   const handleCloseOthers = (tabId) => {
     const targetOthers = openTabs.filter(tid => tid !== tabId);
     const targetDirtyOthers = targetOthers.filter(tid => dirtyTabs.includes(tid));
-    const targetCleanOthers = targetOthers.filter(tid => !dirtyTabs.includes(tid));
 
-    targetCleanOthers.forEach(tid => onCloseTab(tid));
-
-    if (targetDirtyOthers.length > 0) {
-      handleCloseTab(targetDirtyOthers[0], targetDirtyOthers);
+    if (targetDirtyOthers.length === 0) {
+      onCloseOthers(tabId);
+      return;
     }
+
+    setConfirmModal({
+      isOpen: true,
+      title: CM.unsavedChangesTitle,
+      message: CM.unsavedChangesDesc(targetDirtyOthers.map(tid => labels[tid] || tid).join(', ')),
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        onCloseOthers(tabId);
+      },
+    });
   };
 
   const handleCloseAll = () => {
-    cleanOnes.forEach(tid => onCloseTab(tid));
+    const dirtyOpenTabs = openTabs.filter(tid => dirtyTabs.includes(tid));
 
-    if (dirtyOnes.length > 0) {
-      handleCloseTab(dirtyOnes[0], dirtyOnes);
+    if (dirtyOpenTabs.length === 0) {
+      onCloseAll();
+      return;
     }
+
+    setConfirmModal({
+      isOpen: true,
+      title: CM.unsavedChangesTitle,
+      message: CM.unsavedChangesDesc(dirtyOpenTabs.map(tid => labels[tid] || tid).join(', ')),
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        onCloseAll();
+      },
+    });
   };
 
   const handleContextMenu = (e, tabId) => {
@@ -125,7 +139,7 @@ export default function Breadcrumb({
 
   return (
     <div className="bg-slate-50 dark:bg-bk-main border-b border-slate-200 dark:border-white/5 font-sans relative">
-      <div className="flex overflow-x-auto scrollbar-hide h-10">
+      <div className="flex overflow-x-auto scrollbar-hide h-10" role="tablist">
         {openTabs.map((tabId) => (
           <TabItem
             key={tabId}
@@ -134,6 +148,7 @@ export default function Breadcrumb({
             isDirty={dirtyTabs.includes(tabId)}
             label={getTabLabel(tabId)}
             icon={getTabIcon(tabId)}
+            closeLabel={`${CM.closeTab}: ${getTabLabel(tabId)}`}
             onClick={() => onTabChange(tabId)}
             onClose={() => handleCloseTab(tabId)}
             onContextMenu={(e) => handleContextMenu(e, tabId)}
@@ -175,7 +190,11 @@ export default function Breadcrumb({
           <MenuItem 
             icon="refresh" 
             label={CM.reloadTab} 
-            onClick={() => setContextMenu(null)}
+            onClick={() => {
+              onTabChange(contextMenu.tabId);
+              onReload?.(contextMenu.tabId);
+              setContextMenu(null);
+            }}
           />
         </ContextMenuWrapper>
       )}

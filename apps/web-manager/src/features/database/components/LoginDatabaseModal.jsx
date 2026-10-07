@@ -38,6 +38,7 @@ export default function LoginDatabaseModal() {
   const [formData, setFormData] = useState({ dbuser: 'dba', dbpasswd: '' });
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [credentialSaveWarning, setCredentialSaveWarning] = useState('');
 
   useEffect(() => {
     if (isLoginDatabaseModalOpen) {
@@ -45,6 +46,7 @@ export default function LoginDatabaseModal() {
       setFormData({ dbuser: 'dba', dbpasswd: '' });
       setRememberMe(true);
       setShowPassword(false);
+      setCredentialSaveWarning('');
     }
   }, [isLoginDatabaseModalOpen, resetAction]);
 
@@ -60,14 +62,6 @@ export default function LoginDatabaseModal() {
 
     startAction();
     try {
-      if (rememberMe) {
-        dispatch(registerDatabase({
-          hostUid: selectedHostUid,
-          dbname: loginDatabaseName,
-          payload: { id: formData.dbuser, password: formData.dbpasswd },
-        }));
-      }
-
       await dispatch(loginDatabase({
         hostUid: selectedHostUid,
         dbname: loginDatabaseName,
@@ -77,12 +71,23 @@ export default function LoginDatabaseModal() {
         },
       })).unwrap();
 
+      if (rememberMe) {
+        try {
+          await dispatch(registerDatabase({
+            hostUid: selectedHostUid,
+            dbname: loginDatabaseName,
+            payload: { id: formData.dbuser, password: formData.dbpasswd },
+          })).unwrap();
+        } catch {
+          setCredentialSaveWarning(CM.credentialsNotSavedMessage);
+        }
+      }
+
       dispatch(fetchDatabaseUsers({ hostUid: selectedHostUid, dbname: loginDatabaseName }));
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: loginDatabaseName }));
       dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: loginDatabaseName }));
 
       endSuccess();
-      setTimeout(() => dispatch(closeLoginDatabaseModal()), 800);
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.error));
     }
@@ -103,7 +108,7 @@ export default function LoginDatabaseModal() {
       <Modal isOpen title={CM.loginDatabase} icon="lock_open" iconVariant="success" onClose={handleClose} maxWidth="440px">
         <ModalStatusSuccess
           title={CM.success}
-          message={CM.connectionSuccessful}
+          message={credentialSaveWarning || CM.connectionSuccessful}
           onConfirm={handleClose}
           confirmText={CM.ok}
         />

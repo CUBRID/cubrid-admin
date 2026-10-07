@@ -5,6 +5,7 @@ import { showStatusModal, setTabDirty } from '../../layout/layoutSlice';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
+import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
 
@@ -45,7 +46,6 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   const configReads = useRef(createSingleFlight());
   const loadVersion = useRef(0);
   const [content, setContent] = useState('');
-  const [originalContent, setOriginalContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,7 +70,6 @@ export default function CubridConfigEditor({ hostUid, confname }) {
       const joined = lines.join('\n');
       originalContentRef.current = joined;
       setContent(joined);
-      setOriginalContent(joined);
       setHasChanges(false);
       setLoaded(true);
       dispatch(setTabDirty({ tabId, isDirty: false }));
@@ -113,7 +112,6 @@ export default function CubridConfigEditor({ hostUid, confname }) {
       const payload = { confname, confdata: content.split('\n') };
       await hostApi.setHostConfig(hostUid, payload);
       originalContentRef.current = content;
-      setOriginalContent(content);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
       dispatch(showStatusModal({ type: 'success', title: CM.configSaved, message: CM.configUpdatedMsg(confname) }));
@@ -143,44 +141,39 @@ export default function CubridConfigEditor({ hostUid, confname }) {
     <div data-testid="cubrid-config-editor" className="flex-1 flex flex-col bg-slate-50 dark:bg-bk-main overflow-hidden font-sans transition-colors">
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
-      <div className="shrink-0 px-4 py-2.5 bg-white dark:bg-bk-side border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 z-10">
-
-        {/* Left: identity */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
-            <Icon name="settings_applications" size="sm" weight={300} className="text-amber-600 dark:text-bk-yellow" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 leading-tight truncate">{CM.configEditorColonLabel(confname)}</h2>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">{hostDisplayName}</p>
-          </div>
-        </div>
-
-        {/* Right: actions */}
-        <div className="flex items-center gap-1.5 shrink-0">
+      <PageToolbar
+        icon="settings_applications"
+        title={CM.configEditorColonLabel(confname)}
+        subtitle={hostDisplayName}
+        actions={(
+          <>
           {/* Undo */}
           <button
+            type="button"
             data-testid="cubrid-config-undo-btn"
             onClick={handleUndo}
             disabled={!hasChanges || loading || saving}
             title={CM.undoAllChanges}
-            className="w-8 h-8 flex items-center justify-center rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 transition-colors"
+            aria-label={CM.undoAllChanges}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-bk-yellow hover:border-amber-500/50 dark:hover:border-bk-yellow/50 hover:bg-white dark:hover:bg-white/5 shadow-xs active:scale-[0.98] disabled:opacity-30 transition-all shrink-0"
           >
-            <Icon name="undo" size="sm" weight={300} />
+            <Icon name="undo" size="18px" weight={300} />
           </button>
 
           {/* Refresh */}
           <button
+            type="button"
             data-testid="cubrid-config-refresh-btn"
             onClick={fetchConfig}
             disabled={loading || saving}
             title={CM.reloadConfig}
-            className="w-8 h-8 flex items-center justify-center rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-amber-600 dark:hover:text-bk-yellow disabled:opacity-30 transition-colors"
+            aria-label={CM.reloadConfig}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-bk-yellow hover:border-amber-500/50 dark:hover:border-bk-yellow/50 hover:bg-white dark:hover:bg-white/5 shadow-xs active:scale-[0.98] disabled:opacity-30 transition-all shrink-0"
           >
-            <Icon name="refresh" size="sm" weight={300} className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="18px" weight={300} className={loading ? 'animate-spin' : ''} />
           </button>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-slate-200 dark:bg-white/10 mx-0.5" />
 
           {/* Modified badge */}
           {hasChanges && (
@@ -189,17 +182,19 @@ export default function CubridConfigEditor({ hostUid, confname }) {
 
           {/* Save */}
           <button
+            type="button"
             data-testid="cubrid-config-save-btn"
             onClick={handleSave}
             disabled={!hasChanges || saving || loading || !loaded}
             title={CM.saveChanges}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold text-white dark:text-slate-900 bg-slate-800 dark:bg-bk-yellow hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className="page-toolbar-primary-action h-8 flex items-center gap-1.5 px-4 rounded-lg text-[11px] font-bold text-white dark:text-slate-900 bg-slate-800 dark:bg-bk-yellow hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {saving ? <Spinner size="xs" className="text-white dark:text-slate-900" /> : <Icon name="save" size="sm" />}
-            {CM.saveChanges}
+            <span className="page-toolbar-primary-label">{CM.saveChanges}</span>
           </button>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden relative bg-slate-100 dark:bg-black/20">
@@ -247,7 +242,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
               onChange={handleSourceChange}
               onScroll={syncScroll}
               spellCheck="false"
-              className="absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-bk-yellow outline-none resize-none whitespace-pre-wrap break-all overflow-auto"
+              className="absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-bk-yellow focus-visible:outline-2 focus-visible:outline-amber-500/70 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
               placeholder={CM.configPlaceholder}
             />
           </div>

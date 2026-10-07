@@ -84,7 +84,7 @@ export default function ConfigSourceEditor({ rawContent, handleSourceChange }) {
           onChange={handleSourceChange}
           onScroll={syncScroll}
           spellCheck="false"
-          className="absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-bk-yellow outline-none resize-none whitespace-pre-wrap break-all overflow-auto"
+          className="absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-bk-yellow focus-visible:outline-2 focus-visible:outline-amber-500/70 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
           placeholder={CM.brokerConfigPlaceholder}
         />
       </div>
