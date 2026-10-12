@@ -1,7 +1,7 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
-import { fetchDetailedBrokerStatus } from '../brokerSlice';
+import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
 import { createRateTracker } from '../rateTracker';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -22,7 +22,17 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     hostUid,
     tabId: `broker_status:${hostUid}:${brokerName}`,
     pollingIntervalSeconds: preferences.brokerStatusInterval,
-    onFetch: (silent) => (dispatch) => dispatch(fetchDetailedBrokerStatus({ hostUid, brokerName, isBackground: silent }))
+    // "Basic Information" below always comes from the broker LIST fetch
+    // (see basicInfo), which the global dashboard interval skips while this
+    // tab is focused (MonitoringProvider's host:/db:-only tab gate). Fetch
+    // it here too, or Basic Information stays frozen at whatever it was
+    // when this tab became active, even after a manual refresh.
+    onFetch: (silent) => async (dispatch) => {
+      await Promise.all([
+        dispatch(fetchDetailedBrokerStatus({ hostUid, brokerName, isBackground: silent })),
+        dispatch(fetchBrokerList({ hostUid, isBackground: silent })),
+      ]);
+    }
   });
 
   const asInfo = status.data?.asinfo || [];
@@ -71,15 +81,19 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     );
   }
 
+  // getbrokerstatus's response (ts2_get_broker_status in CMS) only ever
+  // carries bname/time/asinfo/jobinfo — there's no "binfo" in any CMS task,
+  // so basic broker info always comes from the broker list instead (kept
+  // fresh by this tab's own onFetch above).
   const brokerFromList = brokers?.find((b) => b.name === brokerName) || {};
   const basicInfo = {
-    pid: status.data?.binfo?.[0]?.pid ?? brokerFromList.pid,
-    port: status.data?.binfo?.[0]?.port ?? brokerFromList.port,
-    job_queue: status.data?.binfo?.[0]?.job_queue ?? brokerFromList.jq,
-    auto_add_as: status.data?.binfo?.[0]?.auto_add_as ?? brokerFromList.auto,
-    sql_log_mode: status.data?.binfo?.[0]?.sql_log_mode ?? brokerFromList.sqll,
-    long_transaction_time: status.data?.binfo?.[0]?.long_transaction_time ?? brokerFromList.long_tran_time,
-    long_query_time: status.data?.binfo?.[0]?.long_query_time ?? brokerFromList.long_query_time,
+    pid: brokerFromList.pid,
+    port: brokerFromList.port,
+    job_queue: brokerFromList.jq,
+    auto_add_as: brokerFromList.auto,
+    sql_log_mode: brokerFromList.sqll,
+    long_transaction_time: brokerFromList.long_tran_time,
+    long_query_time: brokerFromList.long_query_time,
   };
 
   /* Table Columns Definitions */
