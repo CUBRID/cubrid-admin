@@ -12,8 +12,9 @@
     <!-- Inter has no Korean glyphs; without this, Korean text silently falls back to
          whatever CJK font happens to be installed on each OS, rendering inconsistently
          across machines/screenshots. Pretendard fills that gap for KR while Inter still
-         renders all Latin text (see --font-display/--font-sans in styles/index.css). -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.css"/>
+         renders all Latin text (see --font-display/--font-sans in styles/index.css).
+         Bundled locally as a build asset (src/styles/fonts.css) instead of linked from
+         jsDelivr here, so it's still available offline/behind a blocked CDN. -->
     <script>
       (function() {
         try {
