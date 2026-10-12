@@ -151,8 +151,13 @@ const isLogVolume = (row) => {
   return t.includes('LOG') || t.includes('ACTIVE') || t.includes('ARCHIVE');
 };
 
-const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
+const VolumeCategorization = memo(({ hostUid, dbname, dbinfo, pagesize, logpagesize }) => {
   const CM = useCM();
+  // dbinfo's used/free/total_size are page counts (CMS runs spacedb with
+  // --size-unit=PAGE), not bytes — convert per row before formatting as a
+  // size, using the log page size for log-type rows since CUBRID databases
+  // can have a different page size for data vs. the log.
+  const bytesPerPage = (row) => cleanInt(isLogVolume(row) ? logpagesize : pagesize) || cleanInt(pagesize);
   const dispatch = useDispatch();
 
   // CMS's dbinfo summary rows use single-word "type" (PERMANENT/TEMPORARY)
@@ -213,9 +218,9 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
             )
           },
           { header: CM.qtyLabel, accessor: 'volume_count', className: 'text-center', width: '60px' },
-          { header: CM.usedLabel, accessor: 'used_size', render: (val) => <span className="font-mono text-[11px]">{formatSize(val)}</span> },
-          { header: CM.freeLabel, accessor: 'free_size', render: (val) => <span className="font-mono text-[11px] text-slate-400">{formatSize(val)}</span> },
-          { header: CM.totalLabel, accessor: 'total_size', render: (val) => <span className="font-mono text-[11px] font-bold">{formatSize(val)}</span> },
+          { header: CM.usedLabel, accessor: 'used_size', render: (val, row) => <span className="font-mono text-[11px]">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
+          { header: CM.freeLabel, accessor: 'free_size', render: (val, row) => <span className="font-mono text-[11px] text-slate-400">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
+          { header: CM.totalLabel, accessor: 'total_size', render: (val, row) => <span className="font-mono text-[11px] font-bold">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
           {
             header: CM.usageLabel,
             accessor: 'pct',
@@ -464,10 +469,17 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
 
   const totals = useMemo(() => {
     if (!data?.dbinfo) return null;
+    // dbinfo's sizes are page counts, not bytes (see VolumeCategorization's
+    // comment) — convert each row with its own page size before summing,
+    // since a data row and a log row can have different page sizes.
     let total = 0, free = 0;
-    data.dbinfo.forEach(i => { total += cleanInt(i.total_size); free += cleanInt(i.free_size); });
+    data.dbinfo.forEach(i => {
+      const bytesPerPage = cleanInt(isLogVolume(i) ? data.logpagesize : data.pagesize) || cleanInt(data.pagesize);
+      total += cleanInt(i.total_size) * bytesPerPage;
+      free += cleanInt(i.free_size) * bytesPerPage;
+    });
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
-  }, [data?.dbinfo]);
+  }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
 
   if (loading && !data) {
     return (
@@ -497,10 +509,12 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
 
         <SummaryCards dbname={dbname} data={data} totals={totals} />
         
-        <VolumeCategorization 
-          hostUid={hostUid} 
-          dbname={dbname} 
-          dbinfo={data?.dbinfo} 
+        <VolumeCategorization
+          hostUid={hostUid}
+          dbname={dbname}
+          dbinfo={data?.dbinfo}
+          pagesize={data?.pagesize}
+          logpagesize={data?.logpagesize}
         />
         
         <VolumeTopology 

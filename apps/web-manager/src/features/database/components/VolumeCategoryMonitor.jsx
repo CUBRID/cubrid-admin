@@ -241,7 +241,10 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
     }
   }, [dbSpace, category]);
 
-  const pageSize = parseInt(dbSpace?.pagesize || 4096);
+  // Active/Archive log volumes use the database's log page size, not its
+  // (potentially different) data page size.
+  const isLogCategory = category === 'Active' || category === 'Archive';
+  const pageSize = parseInt((isLogCategory ? dbSpace?.logpagesize : dbSpace?.pagesize) || dbSpace?.pagesize || 4096);
 
   const summary = useMemo(() => {
     let total = 0, used = 0;
