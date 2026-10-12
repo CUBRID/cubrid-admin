@@ -563,8 +563,20 @@ export class DatabaseLifecycleService extends BaseService {
       failed.push({ name: 'brokers', error: err instanceof Error ? err.message : String(err) });
     }
 
-    const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
-    const dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
+    // Brokers may already be stopped above regardless of what happens next —
+    // an uncaught throw here would both lose that broker failure (we'd never
+    // reach `return { failed }`) and skip stopping the databases entirely,
+    // leaving the host in an undocumented partial-stop state. Without a
+    // dbname list there is nothing to pass to stopAllDatabases, so surface
+    // this as its own failure entry instead of continuing.
+    let dbnames: string[];
+    try {
+      const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
+      dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
+    } catch (err: unknown) {
+      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+      return { failed };
+    }
 
     const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
     failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));

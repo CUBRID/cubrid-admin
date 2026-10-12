@@ -557,6 +557,43 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('stopWholeService', () => {
+    it('still stops databases and reports the broker failure when stopping brokers fails', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockRejectedValue(new Error('broker stop: fail'));
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'db1' }] },
+      } as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', task: 'stopdb' } as any);
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual(expect.arrayContaining([
+        { name: 'brokers', error: 'broker stop: fail' },
+      ]));
+      const stopdbCalls = cmsClient.postAuthenticated.mock.calls.filter(
+        ([, body]) => body.task === 'stopdb'
+      );
+      expect(stopdbCalls).toHaveLength(1);
+    });
+
+    it('reports a startInfo failure as its own entry and skips database stop, instead of throwing', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
+      jest.spyOn(databaseInfoService, 'startInfo').mockRejectedValue(new Error('status unavailable'));
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result).toEqual({ failed: [{ name: 'databases', error: 'status unavailable' }] });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'stopdb' }),
+        expect.anything()
+      );
+    });
+  });
+
   describe('restartDatabase', () => {
     const mockBaseResponse = {
       __EXEC_TIME: '10 ms',
