@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseVolumes } from '../../database/databaseSlice';
+import { dbKey } from '../../database/dbKey';
 import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -82,27 +83,36 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   // Fetched into local state (not the shared `state.databaseMonitoring.volumes`
   // slice) so multiple simultaneously-open dashboard tabs don't clobber each other.
   const [volumes, setVolumes] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // A database can stay active (running) after logout — logout only drops
+  // the session, not the engine process — so filtering on "active" alone
+  // keeps showing (and re-fetching) a logged-out database's storage volumes.
+  const loggedInActiveDatabases = React.useMemo(
+    () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db))),
+    [activeDatabases, loggedInDatabases, hostUid]
+  );
+
   const fetchVolumes = useCallback(async () => {
-    if (!hostUid || !authorizedHosts.includes(hostUid) || activeDatabases.length === 0) {
-      // Stopping the last active database shrinks activeDatabases to empty —
-      // without this, the last fetch's result just lingers in local state
-      // showing a now-stopped database's stale volume info as if current.
+    if (!hostUid || !authorizedHosts.includes(hostUid) || loggedInActiveDatabases.length === 0) {
+      // Stopping the last active database, or logging out of all of them,
+      // shrinks this to empty — without this, the last fetch's result just
+      // lingers in local state showing stale volume info as if current.
       setVolumes([]);
       return;
     }
     setLoading(true);
     try {
-      const result = await dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases })).unwrap();
+      const result = await dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases })).unwrap();
       setVolumes(result);
     } finally {
       setLoading(false);
     }
-  }, [hostUid, authorizedHosts, activeDatabases, dispatch]);
+  }, [hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
   useEffect(() => { fetchVolumes(); }, [fetchVolumes]);
 
@@ -158,7 +168,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
         data={volumeData}
         loading={loading}
         className="text-[12px]"
-        emptyMessage={activeDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
+        emptyMessage={loggedInActiveDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
       />
     </Card>
   );
