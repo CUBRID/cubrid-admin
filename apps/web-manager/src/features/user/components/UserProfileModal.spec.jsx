@@ -96,6 +96,31 @@ it('enables the submit button once old/new/confirm are consistent and the policy
   expect(authApi.updatePassword).toHaveBeenCalledWith('CurrentPass1', 'valid1234');
 });
 
+it('shows the current-password-incorrect message for the real nested server error shape', async () => {
+  await openChangePasswordMode();
+  const submitBtn = el('change-password-submit-btn');
+
+  await act(async () => {
+    setValue(el('change-password-old-input'), 'WrongOldPass1');
+    setValue(el('change-password-new-input'), 'valid1234');
+    setValue(container.querySelectorAll('input[type="password"]')[2], 'valid1234');
+  });
+
+  // The global exception filter nests Problem Details under `data`
+  // (StandardResponse = { data, status, note }) — apiClient's response
+  // interceptor only promotes a message onto err.response.data, never the
+  // code, so the real failure shape has `code` one level deeper than a
+  // flat err.response.data.code read would expect.
+  authApi.updatePassword.mockRejectedValue({
+    response: { data: { data: { code: 'OLD_PASSWORD_MISMATCH' }, status: 400, note: 'Old password is incorrect' } },
+  });
+
+  await act(async () => submitBtn.click());
+
+  expect(container.textContent).toContain('The current password is incorrect.');
+  expect(container.textContent).not.toContain('An unexpected error occurred');
+});
+
 it('shows a live pass/fail hint that flips from red to green as the new password starts meeting the policy', async () => {
   await openChangePasswordMode();
   const newInput = el('change-password-new-input');

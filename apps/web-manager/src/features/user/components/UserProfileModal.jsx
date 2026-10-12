@@ -62,7 +62,11 @@ export default function UserProfileModal({ isOpen, onClose }) {
       setEditMode(null);
       setLoading(false);
     } catch (err) {
-      const code = err.response?.data?.code;
+      // The global exception filter nests Problem Details under `data`
+      // (StandardResponse = { data, status, note }), so the error code
+      // lands at err.response.data.data.code, not err.response.data.code —
+      // apiClient's response interceptor only promotes a message, not code.
+      const code = err.response?.data?.data?.code;
       if (code === 'OLD_PASSWORD_MISMATCH') {
         setError(CM.currentPasswordIncorrectMsg);
       } else if (code === 'BAD_NEW_PASSWORD') {
