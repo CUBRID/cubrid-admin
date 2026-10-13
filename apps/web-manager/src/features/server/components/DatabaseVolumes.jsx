@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { dbKey } from '../../database/dbKey';
@@ -97,7 +97,16 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
     [activeDatabases, loggedInDatabases, hostUid]
   );
 
+  // Guards against a stale response repopulating the table: if the user logs
+  // out of (or stops) the last active database while a fetch for it is still
+  // in flight, the effect below re-runs and clears `volumes` immediately, but
+  // the earlier in-flight request can still resolve afterwards. Without this,
+  // its `setVolumes(result)` would overwrite the cleared state with the
+  // now-logged-out database's stale volume info.
+  const requestIdRef = useRef(0);
+
   const fetchVolumes = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     if (!hostUid || !authorizedHosts.includes(hostUid) || loggedInActiveDatabases.length === 0) {
       // Stopping the last active database, or logging out of all of them,
       // shrinks this to empty — without this, the last fetch's result just
@@ -108,9 +117,9 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
     setLoading(true);
     try {
       const result = await dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases })).unwrap();
-      setVolumes(result);
+      if (requestIdRef.current === requestId) setVolumes(result);
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === requestId) setLoading(false);
     }
   }, [hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
