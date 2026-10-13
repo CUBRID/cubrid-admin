@@ -249,7 +249,7 @@ const initialState = {
   dbLogsByDbName: {}, // { dbname: [logs] }
   dbLogsLoading: false,
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
-  latestBrokerListRequestId: null,
+  latestBrokerListRequestIdByHost: {}, // { hostUid: requestId }
   propertyModal: {
     isOpen: false,
     brokerName: null,
@@ -296,18 +296,28 @@ const brokerSlice = createSlice({
     builder
       .addCase(fetchBrokerList.pending, (state, action) => {
         // Per-broker status calls inside this thunk mean a host with many
-        // brokers can take a while — track the latest requestId so a slower
-        // earlier fetch (e.g. a previous host's, still in flight when the
-        // user switches focus again) can't resolve after this one and
-        // clobber its fresher data.
-        state.latestBrokerListRequestId = action.meta.requestId;
+        // brokers can take a while — track the latest requestId PER HOST so
+        // a slower earlier fetch for that same host (e.g. still in flight
+        // when the user switches focus away and back) can't resolve after a
+        // newer one and clobber its fresher data.
+        //
+        // Scoped by hostUid, not a single shared id: a bare shared id meant
+        // any fetch for ANY host — e.g. a different, still-mounted tab's
+        // poll for a completely unrelated host — would mark this host's own
+        // in-flight fetch as "stale" the moment it fired, discarding this
+        // host's response when it later resolved. Under sustained polling
+        // from multiple hosts/tabs, that could discard every response for a
+        // given host indefinitely, not just an actually-superseded one.
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        state.latestBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
         if (!action.meta.arg?.isBackground) {
           state.loading = true;
         }
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
-        if (action.meta.requestId !== state.latestBrokerListRequestId) return;
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
         state.loading = false;
         const newBrokers = action.payload;
         if (JSON.stringify(state.brokers) !== JSON.stringify(newBrokers)) {
@@ -317,7 +327,8 @@ const brokerSlice = createSlice({
         if (!exists) state.selectedBroker = null;
       })
       .addCase(fetchBrokerList.rejected, (state, action) => {
-        if (action.meta.requestId !== state.latestBrokerListRequestId) return;
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
         state.loading = false;
         state.error = action.payload;
         state.brokers = [];

@@ -174,7 +174,7 @@ const initialState = {
   loading: false,
   actionLoading: false,
   error: null,
-  latestStartInfoRequestId: null,
+  latestStartInfoRequestIdByHost: {}, // { hostUid: requestId }
 };
 
 const databaseCoreSlice = createSlice({
@@ -234,21 +234,31 @@ const databaseCoreSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchDatabaseStartInfo.pending, (state, action) => {
-        // A slower earlier request (e.g. a previous host's start-info, still
-        // in flight when the user switches focus again) can otherwise
-        // resolve after this one and clobber its fresher data — track the
-        // latest requestId and have fulfilled/rejected ignore anything else.
-        state.latestStartInfoRequestId = action.meta.requestId;
+        // Track the latest requestId PER HOST so a slower earlier request
+        // for that same host (still in flight when the user switches focus
+        // away and back) can't resolve after a newer one and clobber its
+        // fresher data.
+        //
+        // Scoped by hostUid, not a single shared id: a bare shared id meant
+        // any request for ANY host would mark this host's own in-flight
+        // request as "stale" the instant it fired, discarding this host's
+        // response once it resolved — under sustained polling across
+        // multiple hosts, that could discard every response for a given
+        // host indefinitely, not just an actually-superseded one.
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        state.latestStartInfoRequestIdByHost[hostUid] = action.meta.requestId;
         if (!action.meta.arg?.isBackground) state.loading = true;
         state.error = null;
       })
       .addCase(fetchDatabaseStartInfo.fulfilled, (state, action) => {
-        if (action.meta.requestId !== state.latestStartInfoRequestId) return;
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
         state.loading = false;
         parseDbResponse(state, action.payload);
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
-        if (action.meta.requestId !== state.latestStartInfoRequestId) return;
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
         state.loading = false;
         state.error = action.payload;
         state.databases = [];

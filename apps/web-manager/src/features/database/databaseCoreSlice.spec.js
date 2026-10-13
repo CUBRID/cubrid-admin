@@ -11,8 +11,14 @@ vi.mock('./databaseApi', () => ({
 import { databaseApi } from './databaseApi';
 import reducer, {
   stopDatabase, loginDatabase, logoutDatabase, resetDatabaseState, clearDatabaseLoginsForHost,
-  clearDatabaseLogin,
+  clearDatabaseLogin, fetchDatabaseStartInfo,
 } from './databaseCoreSlice';
+
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+};
 
 beforeEach(() => vi.resetAllMocks());
 const stop = () => configureStore({ reducer }).dispatch(stopDatabase({ hostUid: 'host', dbname: 'db1' }));
@@ -131,5 +137,49 @@ describe('loggedInDatabases is scoped per host, not by bare dbname', () => {
     expect(loggedInDatabases).not.toContain('hostA:demodb');
     expect(loggedInDatabases).toContain('hostA:otherdb');
     expect(loggedInDatabases).toContain('hostB:demodb');
+  });
+});
+
+describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () => {
+  // The guard discards a response whose requestId no longer matches the
+  // latest one dispatched — but scoped per hostUid. A single shared id
+  // would mean a request for ANY host marks every other host's in-flight
+  // request as superseded the instant it's dispatched, so a slower host's
+  // own, perfectly current response gets discarded as if stale forever.
+  it('does not let a request for one host discard another host\'s in-flight response', async () => {
+    const hostA = deferred();
+    const hostB = deferred();
+    databaseApi.getStartInfo.mockImplementation((hostUid) => (hostUid === 'hostA' ? hostA.promise : hostB.promise));
+    const store = configureStore({ reducer });
+
+    const dispatchA = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    // hostB's request starts while hostA's is still in flight — with a
+    // single shared requestId, this would mark hostA's own request stale.
+    store.dispatch(fetchDatabaseStartInfo('hostB'));
+
+    hostA.resolve({ dblist: { dbs: [{ dbname: 'demodb' }] } });
+    await dispatchA;
+
+    const { databases } = store.getState();
+    expect(databases).toEqual([{ dbname: 'demodb' }]);
+  });
+
+  it('still discards a genuinely superseded response for the SAME host', async () => {
+    const first = deferred();
+    const second = deferred();
+    let call = 0;
+    databaseApi.getStartInfo.mockImplementation(() => (++call === 1 ? first.promise : second.promise));
+    const store = configureStore({ reducer });
+
+    const dispatchFirst = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    const dispatchSecond = store.dispatch(fetchDatabaseStartInfo('hostA'));
+
+    second.resolve({ dblist: { dbs: [{ dbname: 'newer' }] } });
+    await dispatchSecond;
+    first.resolve({ dblist: { dbs: [{ dbname: 'stale' }] } });
+    await dispatchFirst;
+
+    const { databases } = store.getState();
+    expect(databases).toEqual([{ dbname: 'newer' }]);
   });
 });
