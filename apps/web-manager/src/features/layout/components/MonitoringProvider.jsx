@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
@@ -13,7 +13,10 @@ export default function MonitoringProvider({ children }) {
   // A database stays active (running) after logout — logout only drops the
   // session — so polling volumes for every active db keeps re-fetching (and
   // the storage volume table kept showing) one the user already logged out of.
-  const loggedInActiveDatabases = activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(selectedHostUid, db)));
+  const loggedInActiveDatabases = useMemo(
+    () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(selectedHostUid, db))),
+    [activeDatabases, loggedInDatabases, selectedHostUid]
+  );
   
   const dashboardTimer = useRef(null);
   const brokerTimer = useRef(null);
