@@ -1159,7 +1159,7 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
-  describe('createDatabaseInternal on an HA-configured host', () => {
+  describe('createDatabaseInternal no longer owns HA mode config', () => {
     const mockRequest = {
       dbname: 'testdb',
       numpage: '1000',
@@ -1184,20 +1184,50 @@ describe('DatabaseLifecycleService', () => {
       });
     });
 
-    it('auto-configures ha_mode=off for the new db instead of blocking creation', async () => {
+    it('never calls ensureDbHaModeOff itself, even on an HA-configured host (moved to createDatabase orchestration)', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
       } as never);
 
       await expect(
         service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any)
-      ).resolves.toBeDefined();
+      ).resolves.toEqual({ success: true });
+
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createDatabase HA mode config (ensureDbHaModeOff)', () => {
+    const mockRequest = {
+      dbname: 'testdb',
+      numpage: '1000',
+      pagesize: '16384',
+      logsize: '100',
+      logpagesize: '16384',
+      genvolpath: '/path/to/testdb',
+      logvolpath: '/path/to/testdb',
+      charset: 'ko_KR.utf8',
+      overwrite_config_file: 'YES' as const,
+    };
+
+    beforeEach(() => {
+      jest.spyOn(service, 'createDatabaseInternal').mockResolvedValue({ success: true });
+    });
+
+    it('auto-configures ha_mode=off for the new db after createdb succeeds', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
 
       expect(databaseConfigService.ensureDbHaModeOff).toHaveBeenCalledWith(
         mockUserId,
         mockHostUid,
         'testdb'
       );
+      expect(result.createDatabase).toEqual({ success: true, data: { success: true } });
+      expect(result.haModeConfig).toEqual({ success: true });
     });
 
     it('does not call ensureDbHaModeOff when the host is not HA-configured', async () => {
@@ -1205,50 +1235,68 @@ describe('DatabaseLifecycleService', () => {
         conflist: [{ confdata: ['[common]', 'ha_mode=off'] }],
       } as never);
 
-      await service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any);
+      const result = await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
 
       expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+      expect(result.haModeConfig).toBeUndefined();
     });
 
-    it('calls ensureDbHaModeOff only after createdb succeeds, not before', async () => {
+    it('calls ensureDbHaModeOff only after createDatabaseInternal (createdb) resolves, not before', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
       } as never);
 
       const callOrder: string[] = [];
-      cmsClient.postAuthenticated.mockImplementation(async () => {
+      (service.createDatabaseInternal as jest.Mock).mockImplementation(async () => {
         callOrder.push('createdb');
-        return { __EXEC_TIME: '0 ms', note: 'none', status: 'success', task: 'createdb' };
+        return { success: true };
       });
       databaseConfigService.ensureDbHaModeOff.mockImplementation(async () => {
         callOrder.push('ensureDbHaModeOff');
       });
 
-      await service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any);
+      await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
 
       expect(callOrder).toEqual(['createdb', 'ensureDbHaModeOff']);
     });
 
-    it('does not call ensureDbHaModeOff (and leaves no ha_mode=off written) when createdb fails for a name that already exists', async () => {
+    it('does not call ensureDbHaModeOff when createdb fails for a name that already exists (createDatabase rejects before reaching the HA step)', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
       } as never);
 
       // CMS rejects createdb (e.g. dbname already exists) instead of succeeding.
-      cmsClient.postAuthenticated.mockResolvedValue({
-        __EXEC_TIME: '0 ms',
-        note: 'createdb failed: database already exists',
-        status: 'fail',
-        task: 'createdb',
-      });
+      const createError = DatabaseError.Unknown();
+      jest.spyOn(service, 'createDatabaseInternal').mockRejectedValue(createError);
 
       await expect(
-        service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any)
-      ).rejects.toThrow();
+        service.createDatabase(mockUserId, mockHostUid, mockRequest as any)
+      ).rejects.toThrow(createError);
 
       // The create failed, so the per-database HA override must never have
       // been written — no stray ha_mode=off left on an untouched database.
       expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+    });
+
+    // Regression test for RND-2855 follow-up P1: a failure in ensureDbHaModeOff
+    // happens strictly AFTER createdb has already succeeded (createDatabaseInternal
+    // already returned). It must not be mistaken for a createdb failure — the
+    // database genuinely exists, so createDatabase.success must stay true, and
+    // the HA-step failure is recorded on its own independent response field.
+    it('records haModeConfig failure but still reports createDatabase success when ensureDbHaModeOff fails after createdb succeeds', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+      const haError = new Error('cms config write failed');
+      databaseConfigService.ensureDbHaModeOff.mockRejectedValue(haError);
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(result.createDatabase).toEqual({ success: true, data: { success: true } });
+      expect(result.haModeConfig).toEqual({
+        success: false,
+        error: expect.objectContaining({ message: 'cms config write failed' }),
+      });
     });
   });
 

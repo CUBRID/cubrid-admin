@@ -694,19 +694,6 @@ export class DatabaseLifecycleService extends BaseService {
   ): Promise<CreateDatabaseClientResponse> {
     const host = await this.hostService.findHostInternal(userId, hostUid);
 
-    const cubridConf = await this.cmsConfigService.getAllSystemParam(
-      userId,
-      hostUid,
-      CMS_CONFNAME_CUBRID
-    );
-    // Only decide HA-ness here — the actual config write (ensureDbHaModeOff)
-    // must wait until AFTER `createdb` has actually succeeded (see below).
-    // Running it up front would persist `ha_mode=off` under `[@dbname]` even
-    // when `createdb` later rejects the request (e.g. the name already
-    // exists), stamping an HA override onto a database this call never
-    // created and never rolling it back.
-    const hostIsHaConfigured = isHostHaModeOnFromCubridConf(cubridConf);
-
     // Collect files to check before parsing exvol
     const filesToCheck: string[] = [];
 
@@ -791,20 +778,12 @@ export class DatabaseLifecycleService extends BaseService {
       { onUuid }
     )));
 
-    if (hostIsHaConfigured) {
-      // `createdb` succeeded — now it's safe to opt this specific database
-      // out of the host's HA replication set by writing ha_mode=off under
-      // its own [@dbname] section — a one-off database on an HA host should
-      // never be picked up by HA, but the host itself is otherwise fine.
-      await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, request.dbname);
-    }
-
     return { success: true };
   }
 
   /**
    * Create a new database with optional configuration.
-   * Executes database creation, user update, auto-add volume, and auto-start in sequence.
+   * Executes database creation, HA mode config, user update, auto-add volume, and auto-start in sequence.
    * Returns results from all executed operations with success/error status.
    * Operations continue even if previous ones fail, allowing partial success.
    *
@@ -839,6 +818,52 @@ export class DatabaseLifecycleService extends BaseService {
       success: true,
       data: createDatabaseResult,
     };
+
+    // 1-0. Opt this database out of the host's HA replication set, if the
+    // host is HA-configured. This only runs here, AFTER createDatabaseInternal
+    // has already returned successfully above — confirming `createdb` itself
+    // genuinely succeeded — so it never races ahead of database creation and
+    // never applies to a dbname that createdb just rejected (e.g. already
+    // exists). Unlike createDatabase above, a failure here is an independent,
+    // recoverable step: the database was already created either way, so we
+    // record success/failure on its own response field instead of failing
+    // the whole operation (same "continue even if previous steps fail"
+    // pattern as startDatabase/updateUser/setAutoAddVol/setAutoStart below).
+    //
+    // Known residual limitation: if this step fails, no [@dbname] ha_mode=off
+    // marker gets written, so deleteDatabase's HA gate will still treat this
+    // database as HA-blocked until the marker is added (e.g. via a retry of
+    // this step through a config endpoint) — the same pre-existing gap that
+    // existed before this database could even be deleted automatically.
+    const cubridConf = await this.cmsConfigService.getAllSystemParam(
+      userId,
+      hostUid,
+      CMS_CONFNAME_CUBRID
+    );
+    const hostIsHaConfigured = isHostHaModeOnFromCubridConf(cubridConf);
+
+    if (hostIsHaConfigured) {
+      try {
+        await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, createDbRequest.dbname);
+        response.haModeConfig = {
+          success: true,
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        const errorCode = (error as any)?.code || (error instanceof Error ? error.name : 'UNKNOWN');
+        const errorDetails = (error as any)?.details;
+        this.logger.error(`Failed to configure ha_mode=off for new database: ${errorMessage}`, errorStack);
+        response.haModeConfig = {
+          success: false,
+          error: {
+            message: errorMessage || 'Failed to configure ha_mode=off for new database',
+            code: errorCode,
+            details: errorDetails,
+          },
+        };
+      }
+    }
 
     // A freshly created database's dba user already has a blank password, so
     // an empty `userpass` is a no-op update — treating it as "requested"
