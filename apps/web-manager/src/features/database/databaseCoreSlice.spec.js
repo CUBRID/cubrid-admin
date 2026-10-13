@@ -244,4 +244,25 @@ describe('database lists are stored per host, not in one shared array', () => {
 
     expect(store.getState().selectedDatabase).toBe('hostB-db');
   });
+
+  it("a response in flight when its host is deleted/disconnected does not resurrect that host's evicted slot", async () => {
+    const hostA = deferred();
+    databaseApi.getStartInfo.mockImplementation(() => hostA.promise);
+    const store = configureStore({ reducer });
+
+    const dispatchA = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    // Host A is deleted/disconnected while its own fetch is still in
+    // flight — nothing else for host A will ever supersede this request,
+    // so the per-host dedup alone wouldn't catch it as stale.
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    expect(store.getState().databasesByHost.hostA).toBeUndefined();
+
+    hostA.resolve({ dblist: { dbs: [{ dbname: 'hostA-db' }] }, activelist: { active: ['hostA-db'] } });
+    await dispatchA;
+
+    // The deleted host's slots must stay gone — nothing will ever clean
+    // them up again once the host itself is gone.
+    expect(store.getState().databasesByHost.hostA).toBeUndefined();
+    expect(store.getState().activeDatabasesByHost.hostA).toBeUndefined();
+  });
 });

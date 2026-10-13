@@ -569,6 +569,15 @@ const brokerSlice = createSlice({
           delete state.cmsLogsByHost[hostUid];
           delete state.brokerConfig[hostUid];
           delete state.brokersByHost[hostUid];
+          // A fetchBrokerList already in flight for this host when it was
+          // deleted/disconnected is still "the latest for its own host" per
+          // the per-host dedup above — nothing else for this host will ever
+          // supersede it now that the host is gone — so it would pass that
+          // check and resurrect this host's just-evicted slot once it
+          // resolves, with nothing left to ever clean it up again. Clearing
+          // the id here makes that stale response get dropped like any
+          // other no-longer-latest one.
+          delete state.latestBrokerListRequestIdByHost[hostUid];
         }
       );
   },

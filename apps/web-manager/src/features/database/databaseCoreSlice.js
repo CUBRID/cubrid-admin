@@ -415,6 +415,15 @@ const databaseCoreSlice = createSlice({
           delete state.databasesByHost[hostUid];
           delete state.activeDatabasesByHost[hostUid];
           delete state.haDbNamesByHost[hostUid];
+          // A fetchDatabaseStartInfo already in flight for this host when it
+          // was deleted/disconnected is still "the latest for its own host"
+          // per the per-host dedup above — nothing else for this host will
+          // ever supersede it now that the host is gone — so it would pass
+          // that check and resurrect this host's just-evicted slot once it
+          // resolves, with nothing left to ever clean it up again. Clearing
+          // the id here makes that stale response get dropped like any
+          // other no-longer-latest one.
+          delete state.latestStartInfoRequestIdByHost[hostUid];
         }
       );
   }

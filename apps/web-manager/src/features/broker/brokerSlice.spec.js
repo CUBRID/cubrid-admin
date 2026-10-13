@@ -102,4 +102,24 @@ describe('broker lists are stored per host, not in one shared array', () => {
       expect.arrayContaining([expect.objectContaining({ name: 'hostB-broker' })])
     );
   });
+
+  it("a response in flight when its host is deleted/disconnected does not resurrect that host's evicted slot", async () => {
+    const hostA = deferred();
+    brokerApi.getBrokerList.mockImplementation(() => hostA.promise);
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    const dispatchA = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+    // Host A is deleted/disconnected while its own fetch is still in
+    // flight — nothing else for host A will ever supersede this request,
+    // so the per-host dedup alone wouldn't catch it as stale.
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
+
+    hostA.resolve({ result: [{ name: 'hostA-broker', pid: '1' }] });
+    await dispatchA;
+
+    // The deleted host's slot must stay gone — nothing will ever clean it
+    // up again once the host itself is gone.
+    expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
+  });
 });
