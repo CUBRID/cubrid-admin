@@ -592,6 +592,22 @@ describe('DatabaseLifecycleService', () => {
         expect.anything()
       );
     });
+
+    it('reports a stopAllDatabases failure as its own entry instead of throwing, keeping any broker failure', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockRejectedValue(new Error('broker stop: fail'));
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'db1' }] },
+      } as any);
+      jest.spyOn(service, 'stopAllDatabases').mockRejectedValue(new Error('ha db list unavailable'));
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual(expect.arrayContaining([
+        { name: 'brokers', error: 'broker stop: fail' },
+        { name: 'databases', error: 'ha db list unavailable' },
+      ]));
+    });
   });
 
   describe('restartDatabase', () => {

@@ -578,8 +578,17 @@ export class DatabaseLifecycleService extends BaseService {
       return { failed };
     }
 
-    const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
-    failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+    // stopAllDatabases itself can throw uncaught (its own assertNoActiveJob
+    // re-check, or a getHaDbNames CMS query failure) before it ever produces
+    // a per-dbname { failed } list — same reasoning as the startInfo guard
+    // above, so it gets the same treatment instead of losing the brokers
+    // failure already collected.
+    try {
+      const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
+      failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+    } catch (err: unknown) {
+      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+    }
 
     return { failed };
   }
