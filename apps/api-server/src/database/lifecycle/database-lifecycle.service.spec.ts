@@ -977,6 +977,15 @@ describe('DatabaseLifecycleService', () => {
         success: true,
         data: mockStartInfoForCreate,
       });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          task: 'startdb',
+          dbname: request.dbname,
+          async: 'yes',
+        }),
+        expect.anything()
+      );
     });
 
     it('should use default username "dba" when username is not provided', async () => {
