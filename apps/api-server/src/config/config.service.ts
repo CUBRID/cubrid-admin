@@ -51,10 +51,10 @@ export class ConfigService {
     ).toLowerCase();
     console.log('[ConfigService] Environment:', this.environment);
 
+    this.cmsCaCert = this.resolveCmsCaCert(args);
     this.cmsRejectUnauthorized = this.resolveCmsRejectUnauthorized(args);
     this.cmsForwardEnabled = this.resolveCmsForwardEnabled(args);
     this.authRegistrationEnabled = this.resolveAuthRegistrationEnabled(args);
-    this.cmsCaCert = this.resolveCmsCaCert(args);
 
     this.resolveLogSettings(args);
 
@@ -192,13 +192,17 @@ export class ConfigService {
       return parseBooleanEnv(raw);
     }
 
-    // CMS hosts overwhelmingly run with an auto-generated self-signed cert
-    // (see the SSL_CERT_PATH/SSL_KEY_PATH row above — same default here), so
-    // defaulting to strict verification in production just meant everyone
-    // had to set this explicitly anyway. Set CMS_REJECT_UNAUTHORIZED=true
-    // (or CMS_CA_CERT_PATH, to trust a specific cert instead of disabling
-    // verification outright) if a deployment actually has a CA-signed CMS cert.
-    return false;
+    // A configured CA means the operator explicitly wants CMS's cert verified
+    // against it — getHttpsAgent() passes this as `ca` either way, so leaving
+    // rejectUnauthorized off here would accept ANY cert regardless, silently
+    // defeating that CA. Only default to off (trust-whatever-CMS-presents)
+    // when no CA was configured at all, which is the common case: CMS hosts
+    // overwhelmingly run with an auto-generated self-signed cert (see the
+    // SSL_CERT_PATH/SSL_KEY_PATH row above — same default here), so defaulting
+    // to strict verification without a CA just meant everyone had to set this
+    // explicitly anyway. An operator who wants ca-less self-signed CMS certs
+    // accepted in production can still set CMS_REJECT_UNAUTHORIZED=false.
+    return this.cmsCaCert !== undefined;
   }
 
   private resolveCmsForwardEnabled(args: Record<string, string>): boolean {
