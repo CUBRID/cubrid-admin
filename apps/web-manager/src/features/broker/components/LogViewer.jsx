@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchLogContent } from '../brokerSlice';
+import { extractSQL, extractTopSQL } from '../logParsingUtils';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
 
@@ -99,58 +100,8 @@ const SQLHighlight = ({ sql }) => {
 };
 
 // ─── SQL parsing helpers ──────────────────────────────────────────────────────
-const QM = ' ?.?.? ';
-const QM_RE = / \?\.?\?\.?\? /;
-const SQL_RE = /(?:execute_all\s+|execute\s+|srv_prepare:\s*|srv_execute:\s*)(?:srv_h_id\s+\d+\s+)?(?:0:\s*)?(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|REPLACE|DESCRIBE|COMMIT|ROLLBACK|PREPARE)(.*?)(?=\n\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\n$|$)/gis;
-const BIND_RE = /bind\s+\d+\s+:\s+(INT|DATETIME|TIME|DATE|BIGINT|DOUBLE|FLOAT|SHORT|VARCHAR\s\(\d+\)|NULL)\s*(.*)/gi;
-
-function extractSQL(ls) {
-  const text = ls.join('\n');
-  const stmts = [];
-  let m;
-  const r1 = new RegExp(SQL_RE);
-  while ((m = r1.exec(text)) !== null)
-    stmts.push((m[1] + m[2]).trim().replace(/<end>$/, '').replace(/\s{2,}/g, ' ').replace(/\?/g, QM));
-
-  const params = [];
-  const r2 = new RegExp(BIND_RE);
-  let p;
-  while ((p = r2.exec(text)) !== null)
-    params.push({ t: p[1].toUpperCase(), v: p[2].trim().replace(/<end>$/, '') });
-
-  let pi = 0;
-  return stmts.map(s => {
-    while (s.includes(QM) && pi < params.length) {
-      const { t, v } = params[pi++];
-      s = s.replace(QM_RE, /^(INT|BIGINT|DOUBLE|FLOAT|SHORT)/.test(t) ? (v || '0') : t === 'NULL' ? 'NULL' : `'${v}'`);
-    }
-    return s.replace(new RegExp(QM.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '?').trim();
-  });
-}
-
-function extractTopSQL(ls) {
-  const text = ls.join('\n');
-  const sqls = extractSQL(ls);
-  const stats = {};
-  const r = new RegExp(SQL_RE);
-  let m, i = 0;
-  while ((m = r.exec(text)) !== null && i < sqls.length) {
-    const s = sqls[i++]; if (!s) continue;
-    if (!stats[s]) stats[s] = { c: 0, e: 0, t: [] };
-    stats[s].c++;
-    const ahead = text.substring(m.index + m[0].length, m.index + m[0].length + 500);
-    const tm = ahead.match(/\*\*\* elapsed time (\d+\.\d+)/);
-    if (tm) stats[s].t.push(parseFloat(tm[1]));
-    if (ahead.includes('*** error')) stats[s].e++;
-  }
-  return Object.entries(stats).map(([sql, s], idx) => ({
-    id: `Q${idx + 1}`, sql,
-    max: (s.t.length ? Math.max(...s.t) : 0).toFixed(3),
-    min: (s.t.length ? Math.min(...s.t) : 0).toFixed(3),
-    avg: (s.t.length ? s.t.reduce((a, b) => a + b, 0) / s.t.length : 0).toFixed(3),
-    c: s.c, e: s.e,
-  })).sort((a, b) => b.c - a.c);
-}
+// Moved to logParsingUtils.js (kept dependency-free so it's directly unit
+// testable without dragging in this component's Redux/API import chain).
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 function LogViewer({ hostUid, path }) {
@@ -409,6 +360,7 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
             <div className="flex items-center gap-4 px-4 py-2 bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 sticky top-0">
               <div className="w-10 shrink-0">{CM.idLabel}</div>
               <div className="w-20 shrink-0 text-right">{CM.maxSeconds}</div>
+              <div className="w-20 shrink-0 text-right">{CM.minSeconds}</div>
               <div className="w-20 shrink-0 text-right text-sky-500">{CM.avgSeconds}</div>
               <div className="w-20 shrink-0 text-right text-emerald-500">{CM.countLabel}</div>
               <div className="w-16 shrink-0 text-right text-rose-500">{CM.errorsLabel}</div>
@@ -423,6 +375,7 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
               >
                 <div className="w-10 shrink-0 font-bold text-amber-500">{d.id}</div>
                 <div className="w-20 shrink-0 text-right text-slate-500 dark:text-slate-400">{d.max}</div>
+                <div className="w-20 shrink-0 text-right text-slate-500 dark:text-slate-400">{d.min}</div>
                 <div className="w-20 shrink-0 text-right text-sky-600 dark:text-sky-400 font-semibold">{d.avg}</div>
                 <div className="w-20 shrink-0 text-right text-emerald-600 dark:text-emerald-400 font-bold">{d.c}</div>
                 <div className="w-16 shrink-0 text-right font-semibold text-rose-500">{d.e || '—'}</div>

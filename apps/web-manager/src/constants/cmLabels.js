@@ -1828,6 +1828,7 @@ export const CM = {
   noContentAvailable: 'No content available.',
   noSqlStatementsFound: 'No SQL statements found in this page.',
   maxSeconds: 'Max (s)',
+  minSeconds: 'Min (s)',
   avgSeconds: 'Avg (s)',
   countLabel: 'Count',
   errorsLabel: 'Errors',
