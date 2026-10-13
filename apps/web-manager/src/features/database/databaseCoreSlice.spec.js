@@ -272,19 +272,41 @@ describe('database lists are stored per host, not in one shared array', () => {
     const store = configureStore({ reducer });
 
     const dispatchA = store.dispatch(fetchDatabaseStartInfo('hostA'));
-    expect(store.getState().loading).toBe(true);
+    expect(store.getState().loadingByHost.hostA).toBe(true);
 
     // Host A is deleted/disconnected while its fetch is still in flight.
     // Its eventual response will be discarded (evicted requestId never
     // matches again), but that discard path returns before ever reaching
-    // `state.loading = false` — nothing else is fetching, so nothing would
-    // otherwise clear it.
+    // the loadingByHost write — nothing else is fetching FOR HOST A, so
+    // nothing would otherwise clear it.
     store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
-    expect(store.getState().loading).toBe(false);
+    expect(store.getState().loadingByHost.hostA).toBeUndefined();
 
     hostA.resolve({ dblist: { dbs: [{ dbname: 'hostA-db' }] } });
     await dispatchA;
 
-    expect(store.getState().loading).toBe(false);
+    expect(store.getState().loadingByHost.hostA).toBeUndefined();
+  });
+
+  it("closing one host's tabs does not clear a different host's own in-flight loading", async () => {
+    const hostA = deferred();
+    const hostB = deferred();
+    databaseApi.getStartInfo.mockImplementation((hostUid) => (hostUid === 'hostA' ? hostA.promise : hostB.promise));
+    const store = configureStore({ reducer });
+
+    store.dispatch(fetchDatabaseStartInfo('hostA'));
+    const dispatchB = store.dispatch(fetchDatabaseStartInfo('hostB'));
+    expect(store.getState().loadingByHost.hostB).toBe(true);
+
+    // Host A is deleted/disconnected while host B's own, unrelated fetch is
+    // still genuinely in flight — this must not touch host B's loading
+    // flag (a single shared flag would have, since both would have set the
+    // same one).
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    expect(store.getState().loadingByHost.hostB).toBe(true);
+
+    hostB.resolve({ dblist: { dbs: [{ dbname: 'hostB-db' }] } });
+    await dispatchB;
+    expect(store.getState().loadingByHost.hostB).toBe(false);
   });
 });

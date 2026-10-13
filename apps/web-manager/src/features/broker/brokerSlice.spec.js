@@ -129,19 +129,41 @@ describe('broker lists are stored per host, not in one shared array', () => {
     const store = configureStore({ reducer: { broker: reducer } });
 
     const dispatchA = store.dispatch(fetchBrokerList('hostA'));
-    expect(store.getState().broker.loading).toBe(true);
+    expect(store.getState().broker.loadingByHost.hostA).toBe(true);
 
     // Host A is deleted/disconnected while its fetch is still in flight.
     // Its eventual response will be discarded (evicted requestId never
     // matches again), but that discard path returns before ever reaching
-    // `state.loading = false` — nothing else is fetching, so nothing would
-    // otherwise clear it.
+    // the loadingByHost write — nothing else is fetching FOR HOST A, so
+    // nothing would otherwise clear it.
     store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
-    expect(store.getState().broker.loading).toBe(false);
+    expect(store.getState().broker.loadingByHost.hostA).toBeUndefined();
 
     hostA.resolve({ result: [{ name: 'hostA-broker', pid: '1' }] });
     await dispatchA;
 
-    expect(store.getState().broker.loading).toBe(false);
+    expect(store.getState().broker.loadingByHost.hostA).toBeUndefined();
+  });
+
+  it("closing one host's tabs does not clear a different host's own in-flight loading", async () => {
+    const hostA = deferred();
+    const hostB = deferred();
+    brokerApi.getBrokerList.mockImplementation((hostUid) => (hostUid === 'hostA' ? hostA.promise : hostB.promise));
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    store.dispatch(fetchBrokerList('hostA'));
+    const dispatchB = store.dispatch(fetchBrokerList('hostB'));
+    expect(store.getState().broker.loadingByHost.hostB).toBe(true);
+
+    // Host A is deleted/disconnected while host B's own, unrelated fetch is
+    // still genuinely in flight — this must not touch host B's loading
+    // flag (a single shared flag would have, since both would have set the
+    // same one).
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    expect(store.getState().broker.loadingByHost.hostB).toBe(true);
+
+    hostB.resolve({ result: [{ name: 'hostB-broker', pid: '2' }] });
+    await dispatchB;
+    expect(store.getState().broker.loadingByHost.hostB).toBe(false);
   });
 });

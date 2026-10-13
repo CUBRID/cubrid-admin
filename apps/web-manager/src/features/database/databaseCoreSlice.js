@@ -191,7 +191,12 @@ const initialState = {
   selectedDatabaseSubItem: null,
   loggedInDatabases: [],
   loggingInDatabases: {},
-  loading: false,
+  loadingByHost: {}, // { hostUid: boolean } — fetchDatabaseStartInfo's own
+  // loading, kept per host like databasesByHost itself: a single shared
+  // flag meant closing one host's tabs while fetchDatabaseStartInfo was
+  // still in flight for it could only clear loading by zeroing it
+  // globally, which also hid a DIFFERENT, still-legitimately-loading
+  // host's own spinner.
   actionLoading: false,
   error: null,
   latestStartInfoRequestIdByHost: {}, // { hostUid: requestId }
@@ -281,19 +286,19 @@ const databaseCoreSlice = createSlice({
         // host indefinitely, not just an actually-superseded one.
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         state.latestStartInfoRequestIdByHost[hostUid] = action.meta.requestId;
-        if (!action.meta.arg?.isBackground) state.loading = true;
+        if (!action.meta.arg?.isBackground) state.loadingByHost[hostUid] = true;
         state.error = null;
       })
       .addCase(fetchDatabaseStartInfo.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
-        state.loading = false;
+        state.loadingByHost[hostUid] = false;
         parseDbResponse(state, action.payload, hostUid);
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
-        state.loading = false;
+        state.loadingByHost[hostUid] = false;
         state.error = action.payload;
         state.databasesByHost[hostUid] = [];
         state.activeDatabasesByHost[hostUid] = [];
@@ -424,15 +429,17 @@ const databaseCoreSlice = createSlice({
           // the id here makes that stale response get dropped like any
           // other no-longer-latest one.
           //
-          // That discard path returns before reaching `state.loading =
-          // false`, so if this host's now-orphaned request was the one that
-          // set loading, nothing would ever clear it — every other fetch
-          // sees a mismatched id and bails out just as early. loading is a
-          // single flag shared across hosts, not per-host, so reset it here
-          // rather than leave a stuck spinner with no fetch left that could
-          // ever turn it back off.
+          // That discard path returns before reaching the loadingByHost
+          // write, so if this host's now-orphaned request was the one that
+          // set it, nothing else would ever clear it — every other fetch is
+          // for a DIFFERENT host and only ever touches its own slot. Clear
+          // this host's own loading slot directly instead of leaving a
+          // stuck spinner with no fetch left that could ever turn it off —
+          // and ONLY this host's slot, not a single shared flag, or closing
+          // host A here would also hide host B's own, still-legitimate
+          // in-flight loading indicator.
           delete state.latestStartInfoRequestIdByHost[hostUid];
-          state.loading = false;
+          delete state.loadingByHost[hostUid];
         }
       );
   }

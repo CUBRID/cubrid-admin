@@ -35,7 +35,7 @@ import { useCM } from '../../../../constants/useCM';
 // the user has since switched away from) from ever being read here.
 const selectDatabases = (hostUid) => (state) => state.database.databasesByHost[hostUid] || [];
 const selectActiveDatabases = (hostUid) => (state) => state.database.activeDatabasesByHost[hostUid] || [];
-const selectLoading = (state) => state.database.loading;
+const selectLoading = (hostUid) => (state) => state.database.loadingByHost[hostUid] || false;
 const selectSelection = (state) => ({
   selectedDatabase: state.database.selectedDatabase,
   selectedDatabaseSubItem: state.database.selectedDatabaseSubItem
@@ -123,7 +123,7 @@ export default function DatabaseTree({
 
   const databases = useSelector(selectDatabases(selectedHostUid), shallowEqual);
   const activeDatabases = useSelector(selectActiveDatabases(selectedHostUid), shallowEqual);
-  const loading = useSelector(selectLoading);
+  const loading = useSelector(selectLoading(selectedHostUid));
   const { selectedDatabase, selectedDatabaseSubItem } = useSelector(selectSelection, shallowEqual);
   const { 
     loggedInDatabases, 

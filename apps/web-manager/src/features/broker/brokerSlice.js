@@ -246,7 +246,11 @@ const initialState = {
   logsByBroker: {}, // { brokerName: [logs] }
   viewingLogs: {}, // { path: { data: {}, loading: false, error: null } }
   adminLogsByHost: {}, // { hostUid: [logs] }
-  loading: false,
+  loadingByHost: {}, // { hostUid: boolean } — fetchBrokerList's own loading, kept
+  // per host like brokersByHost itself: a single shared flag meant closing
+  // one host's tabs while fetchBrokerList was still in flight for it could
+  // only clear loading by zeroing it globally, which also hid a DIFFERENT,
+  // still-legitimately-loading host's own spinner.
   actionLoading: false,
   lastActionTarget: null, // Track broker name
   lastActionType: null,   // Track 'start' or 'stop'
@@ -331,14 +335,14 @@ const brokerSlice = createSlice({
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         state.latestBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
         if (!action.meta.arg?.isBackground) {
-          state.loading = true;
+          state.loadingByHost[hostUid] = true;
         }
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
-        state.loading = false;
+        state.loadingByHost[hostUid] = false;
         const newBrokers = action.payload;
         if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
           state.brokersByHost[hostUid] = newBrokers;
@@ -357,7 +361,7 @@ const brokerSlice = createSlice({
       .addCase(fetchBrokerList.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
-        state.loading = false;
+        state.loadingByHost[hostUid] = false;
         state.error = action.payload;
         state.brokersByHost[hostUid] = [];
       })
@@ -578,15 +582,17 @@ const brokerSlice = createSlice({
           // the id here makes that stale response get dropped like any
           // other no-longer-latest one.
           //
-          // That discard path returns before reaching `state.loading =
-          // false`, so if this host's now-orphaned request was the one that
-          // set loading, nothing would ever clear it — every other fetch
-          // sees a mismatched id and bails out just as early. loading is a
-          // single flag shared across hosts, not per-host, so reset it here
-          // rather than leave a stuck spinner with no fetch left that could
-          // ever turn it back off.
+          // That discard path returns before reaching the loadingByHost
+          // write, so if this host's now-orphaned request was the one that
+          // set it, nothing else would ever clear it — every other fetch is
+          // for a DIFFERENT host and only ever touches its own slot. Clear
+          // this host's own loading slot directly instead of leaving a
+          // stuck spinner with no fetch left that could ever turn it off —
+          // and ONLY this host's slot, not a single shared flag, or closing
+          // host A here would also hide host B's own, still-legitimate
+          // in-flight loading indicator.
           delete state.latestBrokerListRequestIdByHost[hostUid];
-          state.loading = false;
+          delete state.loadingByHost[hostUid];
         }
       );
   },
