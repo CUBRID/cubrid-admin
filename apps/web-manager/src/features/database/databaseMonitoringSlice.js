@@ -15,7 +15,7 @@ export const fetchDatabaseVolumes = createAsyncThunk(
     let activeDatabases = arg?.activeDatabases;
     
     if (!activeDatabases) {
-      activeDatabases = getState().database.activeDatabases;
+      activeDatabases = getState().database.activeDatabasesByHost[hostUid];
     }
 
     if (!activeDatabases || activeDatabases.length === 0) return [];

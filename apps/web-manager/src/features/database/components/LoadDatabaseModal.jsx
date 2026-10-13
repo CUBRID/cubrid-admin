@@ -28,8 +28,9 @@ export default function LoadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isLoadDatabaseModalOpen: isLoadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const isActive = !!selectedDatabase && activeDatabases?.includes(selectedDatabase);
   // Load only ever targets an offline database, so this can't be satisfied by

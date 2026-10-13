@@ -43,8 +43,9 @@ export default function RenameDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isRenameDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const {

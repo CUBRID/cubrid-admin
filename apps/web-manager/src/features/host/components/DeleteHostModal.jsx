@@ -28,8 +28,8 @@ export default function DeleteHostModal() {
       dispatch(clearDatabaseLoginsForHost(hostToDeleteUid));
       if (selectedHostUid === hostToDeleteUid) {
         dispatch(setSelectedHost(null));
-        dispatch(resetDatabaseState());
-        dispatch(resetBrokerState());
+        dispatch(resetDatabaseState(hostToDeleteUid));
+        dispatch(resetBrokerState(hostToDeleteUid));
       }
     } catch {
       // Delete failed: modal stays open, error shown via state.host.error

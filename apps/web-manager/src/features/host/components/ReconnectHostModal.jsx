@@ -115,13 +115,13 @@ export default function ReconnectHostModal() {
         dispatch(setSelectedHost(null));
         try {
           const { resetDatabaseState } = await import('../../database/databaseCoreSlice');
-          dispatch(resetDatabaseState());
+          dispatch(resetDatabaseState(reconnectHostUid));
         } catch (e) {
           console.error(e);
         }
         try {
           const { resetBrokerState } = await import('../../broker/brokerSlice');
-          dispatch(resetBrokerState());
+          dispatch(resetBrokerState(reconnectHostUid));
         } catch (e) {
           console.error(e);
         }

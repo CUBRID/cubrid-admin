@@ -124,13 +124,14 @@ export default function RestoreDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isRestoreDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases } = useSelector((state) => state.database, shallowEqual);
-  const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
+  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const {
     databaseBackups,
     databaseBackupsLoading,
   } = useSelector((state) => state.databaseOperation);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
+  const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const {
     state,

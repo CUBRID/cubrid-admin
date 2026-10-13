@@ -23,9 +23,10 @@ export default function DatabaseInfoModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isDatabaseInfoModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { databaseInfoData } = useSelector((state) => state.databaseConfiguration, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const [view, setView] = useState(VIEW_FORM);
   const [dumpBoth, setDumpBoth] = useState(false);

@@ -19,8 +19,9 @@ export default function TransactionInfoModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isTransactionInfoModalOpen, transactionKillSignal } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
 

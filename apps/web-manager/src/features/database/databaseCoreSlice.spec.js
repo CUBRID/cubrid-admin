@@ -11,7 +11,7 @@ vi.mock('./databaseApi', () => ({
 import { databaseApi } from './databaseApi';
 import reducer, {
   stopDatabase, loginDatabase, logoutDatabase, resetDatabaseState, clearDatabaseLoginsForHost,
-  clearDatabaseLogin, fetchDatabaseStartInfo,
+  clearDatabaseLogin, fetchDatabaseStartInfo, setSelectedDatabase,
 } from './databaseCoreSlice';
 
 const deferred = () => {
@@ -160,8 +160,8 @@ describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () =>
     hostA.resolve({ dblist: { dbs: [{ dbname: 'demodb' }] } });
     await dispatchA;
 
-    const { databases } = store.getState();
-    expect(databases).toEqual([{ dbname: 'demodb' }]);
+    const { databasesByHost } = store.getState();
+    expect(databasesByHost.hostA).toEqual([{ dbname: 'demodb' }]);
   });
 
   it('still discards a genuinely superseded response for the SAME host', async () => {
@@ -179,7 +179,69 @@ describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () =>
     first.resolve({ dblist: { dbs: [{ dbname: 'stale' }] } });
     await dispatchFirst;
 
-    const { databases } = store.getState();
-    expect(databases).toEqual([{ dbname: 'newer' }]);
+    const { databasesByHost } = store.getState();
+    expect(databasesByHost.hostA).toEqual([{ dbname: 'newer' }]);
+  });
+});
+
+describe('database lists are stored per host, not in one shared array', () => {
+  // Per-host dedup alone isn't enough: even a response that correctly
+  // passes the per-host staleness guard (nothing else for THAT host
+  // superseded it) can still be "late" relative to the user's own
+  // navigation — they switched away to a different host's tab before it
+  // resolved. If all hosts wrote into one shared `databases`/
+  // `activeDatabases` array, that host's perfectly-valid-for-itself
+  // response would still overwrite whatever the UI is currently showing
+  // for the NEW, currently-viewed host. Storing each host's lists in their
+  // own slot makes that physically impossible instead of relying on timing.
+  it("a host's slow response that resolves after the user has moved on to a different host does not affect that other host's stored lists", async () => {
+    const hostA = deferred();
+    databaseApi.getStartInfo.mockImplementation((hostUid) => (hostUid === 'hostA'
+      ? hostA.promise
+      : Promise.resolve({ dblist: { dbs: [{ dbname: 'hostB-db' }] }, activelist: { active: ['hostB-db'] } })));
+    const store = configureStore({ reducer });
+
+    // hostA's request is dispatched and still in flight...
+    const dispatchA = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    // ...the user switches to hostB (no further hostA dispatch happens —
+    // hostA's in-flight request is simply never superseded by anything).
+    await store.dispatch(fetchDatabaseStartInfo('hostB'));
+
+    expect(store.getState().databasesByHost.hostB).toEqual([{ dbname: 'hostB-db' }]);
+    expect(store.getState().activeDatabasesByHost.hostB).toEqual(['hostB-db']);
+
+    // hostA's slow response finally arrives, well after the switch.
+    hostA.resolve({ dblist: { dbs: [{ dbname: 'hostA-db' }] }, activelist: { active: ['hostA-db'] } });
+    await dispatchA;
+
+    // It's stored in hostA's own slot...
+    expect(store.getState().databasesByHost.hostA).toEqual([{ dbname: 'hostA-db' }]);
+    // ...and hostB's displayed lists are completely unaffected by it.
+    expect(store.getState().databasesByHost.hostB).toEqual([{ dbname: 'hostB-db' }]);
+    expect(store.getState().activeDatabasesByHost.hostB).toEqual(['hostB-db']);
+  });
+
+  it("a late response for a host the user left does not null out a database the user has since selected on the new host", async () => {
+    const hostA = deferred();
+    databaseApi.getStartInfo.mockImplementation((hostUid) => (hostUid === 'hostA'
+      ? hostA.promise
+      : Promise.resolve({ dblist: { dbs: [{ dbname: 'hostB-db' }] } })));
+    const store = configureStore({ reducer });
+
+    const dispatchA = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    store.dispatch({ type: 'host/setSelectedHost', payload: 'hostA' });
+    await store.dispatch(fetchDatabaseStartInfo('hostB'));
+    store.dispatch({ type: 'host/setSelectedHost', payload: 'hostB' });
+
+    // User selects a database that only exists on hostB.
+    store.dispatch(setSelectedDatabase('hostB-db'));
+    expect(store.getState().selectedDatabase).toBe('hostB-db');
+
+    // hostA's slow response — which doesn't contain "hostB-db" — finally
+    // resolves. It must not clear the selection the user just made on hostB.
+    hostA.resolve({ dblist: { dbs: [{ dbname: 'hostA-db' }] } });
+    await dispatchA;
+
+    expect(store.getState().selectedDatabase).toBe('hostB-db');
   });
 });

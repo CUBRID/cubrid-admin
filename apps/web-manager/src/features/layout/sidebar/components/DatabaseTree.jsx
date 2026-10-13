@@ -28,9 +28,13 @@ import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../../constants/useCM';
 
-// Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes
-const selectDatabases = (state) => state.database.databases || [];
-const selectActiveDatabases = (state) => state.database.activeDatabases || [];
+// Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes.
+// databases/activeDatabases are keyed by hostUid — this tree is remounted
+// per selectedHostUid (see Sidebar.jsx's `key={selectedHostUid}`), so a
+// factory bound to that host keeps a stale fetch for a DIFFERENT host (one
+// the user has since switched away from) from ever being read here.
+const selectDatabases = (hostUid) => (state) => state.database.databasesByHost[hostUid] || [];
+const selectActiveDatabases = (hostUid) => (state) => state.database.activeDatabasesByHost[hostUid] || [];
 const selectLoading = (state) => state.database.loading;
 const selectSelection = (state) => ({
   selectedDatabase: state.database.selectedDatabase,
@@ -117,8 +121,8 @@ export default function DatabaseTree({
 
   const haDbServerModes = useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
 
-  const databases = useSelector(selectDatabases, shallowEqual);
-  const activeDatabases = useSelector(selectActiveDatabases, shallowEqual);
+  const databases = useSelector(selectDatabases(selectedHostUid), shallowEqual);
+  const activeDatabases = useSelector(selectActiveDatabases(selectedHostUid), shallowEqual);
   const loading = useSelector(selectLoading);
   const { selectedDatabase, selectedDatabaseSubItem } = useSelector(selectSelection, shallowEqual);
   const { 

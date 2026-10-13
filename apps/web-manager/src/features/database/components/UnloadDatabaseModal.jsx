@@ -46,8 +46,10 @@ export default function UnloadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isUnloadDatabaseModalOpen: isUnloadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const currentDb = databases.find((db) => db.dbname === selectedDatabase);
 

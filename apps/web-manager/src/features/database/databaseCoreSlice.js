@@ -110,18 +110,24 @@ export const deleteDatabaseProfile = createAsyncThunk(
   }
 );
 
-// Helper to parse the shared response format
-const parseDbResponse = (state, payload) => {
+// Helper to parse the shared response format. hostUid identifies which
+// host's per-host slot this response belongs to — every list this writes
+// lives in a {hostUid: [...]} map (see initialState) rather than a single
+// shared array, so a response for a host the user has since switched away
+// from can never overwrite the data the UI is now using to render a
+// DIFFERENT, currently-selected host's tree/dashboard.
+const parseDbResponse = (state, payload, hostUid) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
   const activeFound = payload.activelist?.active;
 
+  const prevActive = state.activeDatabasesByHost[hostUid];
   let newActive;
   if (payload.activelist !== undefined) {
     const rawActive = Array.isArray(activeFound) ? activeFound : activeFound ? [activeFound] : [];
     newActive = rawActive.map(d => (typeof d === 'string' ? d : d?.dbname)).filter(Boolean);
-    if (JSON.stringify(state.activeDatabases) !== JSON.stringify(newActive)) {
-      state.activeDatabases = newActive;
+    if (JSON.stringify(prevActive) !== JSON.stringify(newActive)) {
+      state.activeDatabasesByHost[hostUid] = newActive;
     }
   }
 
@@ -133,18 +139,24 @@ const parseDbResponse = (state, payload) => {
     // "registered" the way dblist expects. Without this, such a database is
     // simply missing from the tree entirely instead of just showing as on.
     const knownNames = new Set(rawList.map((db) => db.dbname));
-    const activeNames = newActive ?? state.activeDatabases ?? [];
+    const activeNames = newActive ?? state.activeDatabasesByHost[hostUid] ?? [];
     const missingActiveNames = activeNames.filter((name) => !knownNames.has(name));
     const mergedList = missingActiveNames.length > 0
       ? [...rawList, ...missingActiveNames.map((dbname) => ({ dbname, isProfileExists: false }))]
       : rawList;
-    if (JSON.stringify(state.databases) !== JSON.stringify(mergedList)) {
-      state.databases = mergedList;
+    if (JSON.stringify(state.databasesByHost[hostUid]) !== JSON.stringify(mergedList)) {
+      state.databasesByHost[hostUid] = mergedList;
     }
   }
 
-  if (dbsFound) {
-    const exists = state.databases.find(db => db.dbname === state.selectedDatabase);
+  // Only the currently active host's own response may affect the globally
+  // shared selectedDatabase. Without this gate, a response for a host the
+  // user has since switched away from (still "latest for that host" —
+  // nothing else for it superseded this request) could find its own list
+  // doesn't contain whatever database is selected in the NEW host and
+  // wrongly null out that unrelated, still-valid selection.
+  if (dbsFound && hostUid === state.activeHostUid) {
+    const exists = (state.databasesByHost[hostUid] || []).find(db => db.dbname === state.selectedDatabase);
     if (!exists) {
       state.selectedDatabase = null;
       state.selectedDatabaseSubItem = null;
@@ -157,16 +169,24 @@ const parseDbResponse = (state, payload) => {
   // StartInfoClientResponse).
   if (payload.haDbNames !== undefined) {
     const newHaDbNames = Array.isArray(payload.haDbNames) ? payload.haDbNames : [];
-    if (JSON.stringify(state.haDbNames) !== JSON.stringify(newHaDbNames)) {
-      state.haDbNames = newHaDbNames;
+    if (JSON.stringify(state.haDbNamesByHost[hostUid]) !== JSON.stringify(newHaDbNames)) {
+      state.haDbNamesByHost[hostUid] = newHaDbNames;
     }
   }
 };
 
 const initialState = {
-  databases: [],
-  activeDatabases: [],
-  haDbNames: [],
+  // Keyed by hostUid — see parseDbResponse's comment: a single shared array
+  // let a slow, still in-flight fetch for a host the user has since
+  // switched away from resolve after the switch and overwrite the array the
+  // UI is now using to render a DIFFERENT, currently-selected host's tree.
+  databasesByHost: {}, // { hostUid: dbs[] }
+  activeDatabasesByHost: {}, // { hostUid: dbname[] }
+  haDbNamesByHost: {}, // { hostUid: dbname[] }
+  // Mirrors state.host.selectedHostUid (via the addMatcher below) so a late
+  // response for a host the user is no longer viewing can tell it isn't the
+  // active one and skip touching the globally-shared selectedDatabase.
+  activeHostUid: null,
   selectedDatabase: null,
   selectedDatabaseSubItem: null,
   loggedInDatabases: [],
@@ -193,18 +213,32 @@ const databaseCoreSlice = createSlice({
     clearDatabaseError: (state) => {
       state.error = null;
     },
-    resetDatabaseState: (state) => {
-      // Deliberately does NOT touch loggedInDatabases/loggingInDatabases —
-      // those are composite-keyed (hostUid:dbname) and shared across every
-      // host's tree, not just the one being reset here. This reducer fires
-      // on every plain host-focus switch (see useHostActivation.js), so
-      // clearing them here used to wipe every OTHER host's login state too
-      // each time the user simply clicked between hosts. Use
-      // clearDatabaseLoginsForHost to actually invalidate one host's logins
-      // (host deleted, host session revoked).
-      state.databases = [];
-      state.activeDatabases = [];
-      state.haDbNames = [];
+    // Dispatched whenever focus leaves a host (plain focus switch, delete,
+    // disconnect/revoke) — hostUid is the host being LEFT, if known. Only
+    // that host's cached lists are evicted; other hosts' cached data (and
+    // their own in-flight fetches) are untouched. selectedDatabase and
+    // friends are always cleared since they always belonged to whichever
+    // host this reducer is firing for.
+    //
+    // Deliberately does NOT touch loggedInDatabases/loggingInDatabases —
+    // those are composite-keyed (hostUid:dbname) and shared across every
+    // host's tree, not just the one being reset here. This reducer fires
+    // on every plain host-focus switch (see useHostActivation.js), so
+    // clearing them here used to wipe every OTHER host's login state too
+    // each time the user simply clicked between hosts. Use
+    // clearDatabaseLoginsForHost to actually invalidate one host's logins
+    // (host deleted, host session revoked).
+    resetDatabaseState: (state, action) => {
+      const hostUid = action.payload;
+      if (hostUid) {
+        delete state.databasesByHost[hostUid];
+        delete state.activeDatabasesByHost[hostUid];
+        delete state.haDbNamesByHost[hostUid];
+      } else {
+        state.databasesByHost = {};
+        state.activeDatabasesByHost = {};
+        state.haDbNamesByHost = {};
+      }
       state.selectedDatabase = null;
       state.selectedDatabaseSubItem = null;
       state.error = null;
@@ -254,15 +288,15 @@ const databaseCoreSlice = createSlice({
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
         state.loading = false;
-        parseDbResponse(state, action.payload);
+        parseDbResponse(state, action.payload, hostUid);
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
         state.loading = false;
         state.error = action.payload;
-        state.databases = [];
-        state.activeDatabases = [];
+        state.databasesByHost[hostUid] = [];
+        state.activeDatabasesByHost[hostUid] = [];
       })
       .addCase(startDatabase.pending, (state) => {
         state.actionLoading = true;
@@ -270,7 +304,7 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(startDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
-        parseDbResponse(state, action.payload);
+        parseDbResponse(state, action.payload, action.meta.arg?.hostUid);
       })
       .addCase(startDatabase.rejected, (state, action) => {
         state.actionLoading = false;
@@ -282,7 +316,7 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(stopDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
-        parseDbResponse(state, action.payload);
+        parseDbResponse(state, action.payload, action.meta.arg?.hostUid);
       })
       .addCase(stopDatabase.rejected, (state, action) => {
         state.actionLoading = false;
@@ -332,7 +366,7 @@ const databaseCoreSlice = createSlice({
       .addCase(registerDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
         if (action.payload.response) {
-          parseDbResponse(state, action.payload.response);
+          parseDbResponse(state, action.payload.response, action.meta.arg?.hostUid);
         }
       })
       .addCase(registerDatabase.rejected, (state, action) => {
@@ -352,13 +386,37 @@ const databaseCoreSlice = createSlice({
         const key = dbKey(hostUid, action.payload.dbname);
         state.loggedInDatabases = state.loggedInDatabases.filter((d) => d !== key);
         if (action.payload.response) {
-          parseDbResponse(state, action.payload.response);
+          parseDbResponse(state, action.payload.response, hostUid);
         }
       })
       .addCase(deleteDatabaseProfile.rejected, (state, action) => {
         state.actionLoading = false;
         state.error = action.payload;
-      });
+      })
+      // Mirrors hostSlice's selectedHostUid so fetchDatabaseStartInfo's
+      // fulfilled handler (via parseDbResponse) can tell whether a given
+      // response belongs to the host the user is currently viewing (see the
+      // comment there).
+      .addMatcher(
+        (action) => action.type === 'host/setSelectedHost',
+        (state, action) => {
+          state.activeHostUid = action.payload;
+        }
+      )
+      // Dispatched unconditionally on delete/disconnect, regardless of
+      // whether this host was the currently selected one — unlike
+      // resetDatabaseState, which only fires for the currently-selected
+      // host — so this is also where a NON-selected host's cached database
+      // lists must be evicted, or they'd sit in these maps forever.
+      .addMatcher(
+        (action) => action.type === 'layout/closeHostTabs',
+        (state, action) => {
+          const hostUid = action.payload;
+          delete state.databasesByHost[hostUid];
+          delete state.activeDatabasesByHost[hostUid];
+          delete state.haDbNamesByHost[hostUid];
+        }
+      );
   }
 });
 

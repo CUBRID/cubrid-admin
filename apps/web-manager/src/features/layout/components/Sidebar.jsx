@@ -167,8 +167,17 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const requestActionConfirm = (config) => setPendingActionConfirm(config);
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
-  const { databases, activeDatabases, loggedInDatabases, haDbNames } = useSelector((state) => state.database, shallowEqual);
-  const { brokers, logsLoading, adminLogsLoading, cmsLogsLoading, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const { databasesByHost, activeDatabasesByHost, loggedInDatabases, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { brokersByHost, logsLoading, adminLogsLoading, cmsLogsLoading, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  // Sidebar's BrokerTree/DatabaseTree are keyed by selectedHostUid (fully
+  // remounted on host switch) and every list here is scoped to whichever
+  // host is currently selected — read straight out of the per-host maps so
+  // a still in-flight response for a host the user has since switched away
+  // from can never be mistaken for this host's own data.
+  const databases = databasesByHost[selectedHostUid] || [];
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
+  const haDbNames = haDbNamesByHost[selectedHostUid] || [];
+  const brokers = brokersByHost[selectedHostUid] || [];
   const isRefreshingLogs = logsLoading || adminLogsLoading || cmsLogsLoading || dbLogsLoading;
   // Some Manage Database operations are unsafe (or outright break HA
   // pairing) when run against a database that's a live HA member — block
@@ -355,8 +364,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
         dispatch(clearDatabaseLoginsForHost(hostUid));
         if (selectedHostUid === hostUid) {
           dispatch(setSelectedHost(null));
-          dispatch(resetDatabaseState());
-          dispatch(resetBrokerState());
+          dispatch(resetDatabaseState(hostUid));
+          dispatch(resetBrokerState(hostUid));
         }
         successCount += 1;
       } catch {
@@ -963,8 +972,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     dispatch(closeHostTabs(hostUid));
                     if (selectedHostUid === hostUid) {
                       dispatch(setSelectedHost(null));
-                      dispatch(resetDatabaseState());
-                      dispatch(resetBrokerState());
+                      dispatch(resetDatabaseState(hostUid));
+                      dispatch(resetBrokerState(hostUid));
                     }
                     dispatch(clearHostSummary(hostUid));
                   },

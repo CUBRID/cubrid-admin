@@ -7,7 +7,12 @@ export default function MonitoringProvider({ children }) {
   const dispatch = useDispatch();
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
-  const { activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  // activeDatabasesByHost is keyed by hostUid — this provider only ever
+  // polls the currently selected host, so read straight out of its slot
+  // rather than a flat shared array a different, still in-flight host's
+  // response could clobber.
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
   const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
   
   const dashboardTimer = useRef(null);
