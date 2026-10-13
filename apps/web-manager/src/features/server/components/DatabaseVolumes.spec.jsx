@@ -102,3 +102,29 @@ it('ignores a stale volumes response that resolves after logging out of the last
 
   expect(volumeCard().textContent).not.toContain('demodb');
 });
+
+it('stops the loading spinner when logging out clears the table while a fetch is still in flight', async () => {
+  const request = deferred();
+  mockFetchReturning(request.promise);
+
+  const store = makeStore();
+  await render(store);
+  expect(volumeCard().querySelector('.animate-spin')).toBeTruthy();
+
+  // Log out before the in-flight request resolves — the early-return branch
+  // that clears `volumes` must also clear `loading`, since the stale
+  // in-flight request's own `finally` is guarded against running at this
+  // point (see requestIdRef) and so can never clear it itself.
+  await act(async () => {
+    store.dispatch({
+      type: 'SET_STATE',
+      payload: { ...baseState, database: { loggedInDatabases: [] } },
+    });
+  });
+
+  expect(volumeCard().querySelector('.animate-spin')).toBeFalsy();
+
+  // Resolving the stale request afterwards must not bring the spinner back.
+  await act(async () => request.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+  expect(volumeCard().querySelector('.animate-spin')).toBeFalsy();
+});

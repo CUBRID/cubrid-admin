@@ -112,6 +112,12 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       // shrinks this to empty — without this, the last fetch's result just
       // lingers in local state showing stale volume info as if current.
       setVolumes([]);
+      // An earlier in-flight fetch's own `finally` won't run this (its
+      // requestId no longer matches, by design — see requestIdRef above),
+      // so without this, logging out while a fetch is in flight leaves
+      // `loading` stuck true forever instead of showing the empty-state
+      // message.
+      setLoading(false);
       return;
     }
     setLoading(true);
