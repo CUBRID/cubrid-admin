@@ -14,7 +14,11 @@ import { useCM } from '../../../constants/useCM';
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { brokers, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
+  const { brokersByHost, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
+  // brokersByHost is keyed by hostUid — this tab is rendered for this one
+  // specific hostUid, so read straight out of its slot rather than a flat
+  // shared array a different, still in-flight host's response could clobber.
+  const brokers = brokersByHost[hostUid] || [];
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };
 

@@ -10,8 +10,10 @@ import { useCM } from '../../../../constants/useCM';
 export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootContextMenu, onBrokerErrorLogContextMenu, onAdminLogContextMenu, onManagerLogContextMenu, onServerLogRootContextMenu }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { databases } = useSelector((state) => state.database, shallowEqual);
-  const { brokers, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const { databasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const databases = databasesByHost[hostUid] || [];
+  const { brokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const brokers = brokersByHost[hostUid] || [];
 
   return (
     <div className="space-y-0.5 px-2 py-2">

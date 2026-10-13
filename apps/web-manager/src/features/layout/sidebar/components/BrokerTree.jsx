@@ -10,7 +10,13 @@ import { useCM } from '../../../../constants/useCM';
 export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { brokers, loading, logsByBroker, selectedBroker, selectedBrokerSubItem, logsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const { brokersByHost, loading, logsByBroker, selectedBroker, selectedBrokerSubItem, logsLoading } = useSelector((state) => state.broker, shallowEqual);
+  // brokersByHost is keyed by hostUid — this component is remounted per
+  // hostUid (see Sidebar.jsx's `key={selectedHostUid}`), so reading straight
+  // out of its own slot keeps a still in-flight response for a DIFFERENT
+  // host (one the user has since switched away from) from ever showing up
+  // here.
+  const brokers = brokersByHost[hostUid] || [];
 
   if (loading && (!brokers || brokers.length === 0)) {
     return (

@@ -38,7 +38,7 @@ describe('fetchBrokerList stale-response guard is scoped per host', () => {
     hostA.resolve({ result: [{ name: 'broker1', pid: '123' }] });
     await dispatchA;
 
-    expect(store.getState().broker.brokers).toEqual(
+    expect(store.getState().broker.brokersByHost.hostA).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'broker1', pid: '123' })])
     );
   });
@@ -58,8 +58,48 @@ describe('fetchBrokerList stale-response guard is scoped per host', () => {
     first.resolve({ result: [{ name: 'stale', pid: '1' }] });
     await dispatchFirst;
 
-    const { brokers } = store.getState().broker;
+    const brokers = store.getState().broker.brokersByHost.hostA;
     expect(brokers).toHaveLength(1);
     expect(brokers[0]).toEqual(expect.objectContaining({ name: 'newer', pid: '2' }));
+  });
+});
+
+describe('broker lists are stored per host, not in one shared array', () => {
+  // Per-host dedup alone isn't enough: even a response that correctly
+  // passes the per-host staleness guard (nothing else for THAT host
+  // superseded it) can still be "late" relative to the user's own
+  // navigation — they switched away to a different host's tab before it
+  // resolved. If all hosts wrote into one shared `brokers` array, that
+  // host's perfectly-valid-for-itself response would still overwrite
+  // whatever the UI is currently showing for the NEW, currently-viewed
+  // host. Storing each host's list in its own slot makes that physically
+  // impossible instead of relying on timing.
+  it("a host's slow response that resolves after the user has moved on to a different host does not affect that other host's stored list", async () => {
+    const hostA = deferred();
+    brokerApi.getBrokerList.mockImplementation((hostUid) => (hostUid === 'hostA' ? hostA.promise : Promise.resolve({ result: [{ name: 'hostB-broker', pid: '9' }] })));
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    // hostA's request is dispatched and still in flight...
+    const dispatchA = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+    // ...the user switches to hostB (no further hostA dispatch happens —
+    // hostA's in-flight request is simply never superseded by anything).
+    await store.dispatch(fetchBrokerList({ hostUid: 'hostB', skipStatusEnrichment: true }));
+
+    expect(store.getState().broker.brokersByHost.hostB).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'hostB-broker' })])
+    );
+
+    // hostA's slow response finally arrives, well after the switch.
+    hostA.resolve({ result: [{ name: 'hostA-broker', pid: '1' }] });
+    await dispatchA;
+
+    // It's stored in hostA's own slot...
+    expect(store.getState().broker.brokersByHost.hostA).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'hostA-broker' })])
+    );
+    // ...and hostB's displayed list is completely unaffected by it.
+    expect(store.getState().broker.brokersByHost.hostB).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'hostB-broker' })])
+    );
   });
 });
