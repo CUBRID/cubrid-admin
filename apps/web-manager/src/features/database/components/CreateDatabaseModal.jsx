@@ -346,6 +346,12 @@ export default function CreateDatabaseModal() {
         result?.updateUser?.success === false && { label: CM.wizardSetDbaPass, message: result.updateUser.error?.message },
         result?.setAutoAddVol?.success === false && { label: CM.wizardAutoVol, message: result.setAutoAddVol.error?.message },
         result?.setAutoStart?.success === false && { label: CM.autoStart, message: result.setAutoStart.error?.message },
+        // On an HA-configured host, a failure here means the new database
+        // never got its ha_mode=off marker — it silently stays subject to
+        // the host's HA replication, and can't be deleted through this API
+        // until that marker is added (deleteDatabase's HA gate checks for
+        // it). Surfacing nothing here would make that look like full success.
+        result?.haModeConfig?.success === false && { label: CM.wizardHaModeConfig, message: result.haModeConfig.error?.message },
       ].filter(Boolean);
       setCreationWarning(
         failedSteps.length > 0

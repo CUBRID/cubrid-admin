@@ -144,6 +144,7 @@ export const CM_KO = {
   wizardAdditionalVol: '추가 볼륨 정보',
   wizardAutoVol: '볼륨 자동 확장',
   wizardSetDbaPass: 'DBA 비밀번호 설정',
+  wizardHaModeConfig: 'HA 복제 제외 설정',
   wizardDbInfo: '데이터베이스 정보',
   wizardDbInfoList: '새 데이터베이스 생성에 필요한 단계를 완료했습니다. 아래 설정에 따라 생성됩니다.',
   pageSize: '페이지 크기 (byte)',
