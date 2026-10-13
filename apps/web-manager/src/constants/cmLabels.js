@@ -1078,7 +1078,7 @@ export const CM = {
   summaryLabel: 'Summary',
   pagesCountLabel: (n) => `${n} pages`,
   storageVolumes: 'Storage Volumes',
-  storageVolumesRequireOnlineDbMsg: 'Storage volume info is only shown for databases that are currently running on this host.',
+  storageVolumesRequireOnlineDbMsg: 'Storage volume info is only shown for databases on this host that are running and that you are logged in to.',
   volumeLabel: 'Volume',
   purpose: 'Purpose',
   spaceUsage: 'Space Usage',
