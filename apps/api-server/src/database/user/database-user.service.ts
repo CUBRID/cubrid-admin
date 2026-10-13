@@ -14,6 +14,7 @@ import { Injectable } from '@nestjs/common';
 import { UserRepositoryService } from '@repository';
 import { DBAuthResolver } from '@util';
 import { ValidationError } from '@error/validation/validation-error';
+import { DatabaseError } from '@error/database/database-error';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { BaseCmsResponse } from '@type';
 import {
@@ -226,6 +227,12 @@ export class DatabaseUserService extends BaseService {
    * favor of the user's real, current values fetched here — mirrors the
    * preserve step the create-database wizard's DBA-password path already
    * does for the same reason.
+   *
+   * If the user's real current groups/authorization cannot be confirmed —
+   * the userinfo lookup itself throws, or it succeeds but this username
+   * isn't in the returned list — the password change is aborted outright
+   * rather than falling back to the caller-supplied (empty placeholder)
+   * values, which would silently wipe the user's real access.
    */
   @HandleCmsErrors()
   async updateUser(
@@ -234,47 +241,59 @@ export class DatabaseUserService extends BaseService {
     dbname: string,
     username: string,
     userpass: string,
-    groups: { group: string[] },
-    authorization: string[]
+    _groups: { group: string[] },
+    _authorization: string[]
   ): Promise<UpdateDbUserResponse> {
     await this.ensureDbLogin(userId, hostUid, dbname);
 
-    let preservedGroups = groups;
-    let preservedAuthorization = authorization;
-
+    let userInfoResponse: { dbname: string; user: Array<Record<string, unknown>> };
     try {
-      const userInfoResponse = await this.getUserInfo(userId, hostUid, dbname);
-      const existingUser = (userInfoResponse.user ?? []).find(
-        (u) => String((u as Record<string, unknown>)['@name'] ?? '').toLowerCase() === username.toLowerCase()
-      );
-
-      if (existingUser) {
-        const fetchedGroups: string[] = [];
-        const rawGroups = (existingUser as Record<string, unknown>).groups as any;
-        if (Array.isArray(rawGroups?.group)) {
-          fetchedGroups.push(...rawGroups.group.filter((g: unknown) => typeof g === 'string'));
-        }
-        preservedGroups = { group: fetchedGroups };
-
-        const fetchedAuthorization: string[] = [];
-        const rawAuthorization = (existingUser as Record<string, unknown>).authorization;
-        if (Array.isArray(rawAuthorization)) {
-          for (const entry of rawAuthorization as Array<Record<string, string>>) {
-            const name = entry?.['@name'];
-            if (typeof name === 'string' && name) {
-              fetchedAuthorization.push(name);
-            }
-          }
-        }
-        preservedAuthorization = fetchedAuthorization;
-      }
+      userInfoResponse = await this.getUserInfo(userId, hostUid, dbname);
     } catch (userInfoError: unknown) {
       this.logger.warn(
         `userinfo failed while preserving groups/authorization for "${username}" on "${dbname}", ` +
-        `proceeding with caller-supplied values: ` +
+        `aborting password change rather than risk wiping real access: ` +
         `${userInfoError instanceof Error ? userInfoError.message : String(userInfoError)}`
       );
+      throw userInfoError;
     }
+
+    const existingUser = (userInfoResponse.user ?? []).find(
+      (u) => String((u as Record<string, unknown>)['@name'] ?? '').toLowerCase() === username.toLowerCase()
+    );
+
+    if (!existingUser) {
+      this.logger.warn(
+        `User "${username}" not found in userinfo response for "${dbname}" while preserving ` +
+        `groups/authorization; aborting password change rather than risk wiping real access.`
+      );
+      throw DatabaseError.GetUserInfoFailed({
+        dbname,
+        username,
+        message:
+          `Cannot change password for "${username}": could not confirm their current ` +
+          `groups/authorization on "${dbname}" (user not found in userinfo response).`,
+      });
+    }
+
+    const fetchedGroups: string[] = [];
+    const rawGroups = (existingUser as Record<string, unknown>).groups as any;
+    if (Array.isArray(rawGroups?.group)) {
+      fetchedGroups.push(...rawGroups.group.filter((g: unknown) => typeof g === 'string'));
+    }
+    const preservedGroups = { group: fetchedGroups };
+
+    const fetchedAuthorization: string[] = [];
+    const rawAuthorization = (existingUser as Record<string, unknown>).authorization;
+    if (Array.isArray(rawAuthorization)) {
+      for (const entry of rawAuthorization as Array<Record<string, string>>) {
+        const name = entry?.['@name'];
+        if (typeof name === 'string' && name) {
+          fetchedAuthorization.push(name);
+        }
+      }
+    }
+    const preservedAuthorization = fetchedAuthorization;
 
     const cmsRequest: UpdateUserCmsRequest = {
       task: 'updateuser',

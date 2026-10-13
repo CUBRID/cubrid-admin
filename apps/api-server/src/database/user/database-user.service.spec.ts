@@ -248,17 +248,47 @@ describe('DatabaseUserService', () => {
   describe('updateUser', () => {
     const updateParams = {
       userpass: '1111',
-      groups: { group: ['public'] as string[] },
+      // The Edit User UI no longer exposes group/authorization editing, so
+      // the real caller (and these tests) always sends empty placeholders —
+      // updateUser must ignore these in favor of the user's real, current
+      // values fetched via userinfo.
+      groups: { group: [] as string[] },
       authorization: [] as string[],
     };
 
-    it('should send updateuser task and return empty object', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue({
-        __EXEC_TIME: '148 ms',
-        note: 'none',
-        status: 'success',
-        task: 'updateuser',
-      });
+    const dbmtLoginSuccess = {
+      __EXEC_TIME: '10 ms',
+      note: 'none',
+      status: 'success',
+      task: 'dbmtuserlogin',
+    };
+
+    const updateUserSuccess = {
+      __EXEC_TIME: '148 ms',
+      note: 'none',
+      status: 'success',
+      task: 'updateuser',
+    };
+
+    it('preserves the user\'s real groups/authorization instead of the caller\'s empty placeholders', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce(dbmtLoginSuccess) // ensureDbLogin (dbmtuserlogin)
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '20 ms',
+          dbname: 'demodb',
+          note: 'none',
+          status: 'success',
+          task: 'userinfo',
+          user: [
+            {
+              '@id': '163810704',
+              '@name': 'yifan',
+              groups: { group: ['public', 'editors'] },
+              authorization: [{ '@name': 'db_class' }, { '@name': 'db_user' }],
+            },
+          ],
+        }) // getUserInfo (userinfo) — target user present with real, non-empty values
+        .mockResolvedValueOnce(updateUserSuccess); // the actual updateuser call
 
       const result = await service.updateUser(
         mockUserId,
@@ -277,8 +307,8 @@ describe('DatabaseUserService', () => {
           dbname: 'demodb',
           username: 'yifan',
           userpass: '1111',
-          groups: { group: ['public'] },
-          authorization: [],
+          groups: { group: ['public', 'editors'] },
+          authorization: ['db_class', 'db_user'],
         })
       );
       expect(result).toEqual({ success: true });
@@ -303,6 +333,64 @@ describe('DatabaseUserService', () => {
           updateParams.authorization
         )
       ).rejects.toThrow(CmsError);
+    });
+
+    it('aborts the password change (without calling updateuser) when the userinfo lookup throws', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce(dbmtLoginSuccess) // ensureDbLogin succeeds
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '0 ms',
+          note: 'failed',
+          status: 'fail',
+          task: 'userinfo',
+        }); // userinfo lookup fails
+
+      await expect(
+        service.updateUser(
+          mockUserId,
+          mockHostUid,
+          'demodb',
+          'yifan',
+          updateParams.userpass,
+          updateParams.groups,
+          updateParams.authorization
+        )
+      ).rejects.toThrow(CmsError);
+
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'updateuser' })
+      );
+    });
+
+    it('aborts the password change (without calling updateuser) when the user is absent from the userinfo response', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce(dbmtLoginSuccess) // ensureDbLogin succeeds
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '20 ms',
+          dbname: 'demodb',
+          note: 'none',
+          status: 'success',
+          task: 'userinfo',
+          user: [{ '@id': '1', '@name': 'someone-else' }],
+        }); // userinfo succeeds, but "yifan" isn't in the list
+
+      await expect(
+        service.updateUser(
+          mockUserId,
+          mockHostUid,
+          'demodb',
+          'yifan',
+          updateParams.userpass,
+          updateParams.groups,
+          updateParams.authorization
+        )
+      ).rejects.toThrow(DatabaseError);
+
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'updateuser' })
+      );
     });
   });
 
