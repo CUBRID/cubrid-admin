@@ -767,6 +767,7 @@ export default function ImportExportHostModal() {
                     }] : []),
                   ]}
                   data={importList}
+                  showEmptyStateAsRow
                   onRowClick={(host) => {
                     if (host.isSelectable) handleToggleHost(host.rowId);
                   }}

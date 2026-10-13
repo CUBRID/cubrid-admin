@@ -14,17 +14,17 @@ function renderHighlighted(content) {
   return content.split('\n').map((line, i) => {
     const t = line.trim();
     if (t.startsWith('#'))
-      return <span key={i} className="text-slate-400 dark:text-slate-500 italic">{line}{'\n'}</span>;
+      return <span key={i} className="text-slate-400 dark:text-editor-comment">{line}{'\n'}</span>;
     if (t.startsWith('[') && t.endsWith(']'))
-      return <span key={i} className="text-amber-600 dark:text-bk-yellow font-bold">{line}{'\n'}</span>;
+      return <span key={i} className="text-amber-600 dark:text-editor-section font-semibold">{line}{'\n'}</span>;
     const eq = line.indexOf('=');
     if (eq > 0) {
       const k = line.substring(0, eq);
       const v = line.substring(eq);
       return (
         <span key={i}>
-          <span className="text-sky-600 dark:text-sky-400">{k}</span>
-          <span className="text-slate-500 dark:text-slate-400">{v}</span>
+          <span className="text-sky-600 dark:text-editor-key">{k}</span>
+          <span className="text-slate-500 dark:text-editor-value">{v}</span>
           {'\n'}
         </span>
       );
@@ -212,12 +212,12 @@ export default function CubridConfigEditor({ hostUid, confname }) {
           </div>
 
           {/* Editor Container */}
-          <div className="flex-1 relative overflow-hidden bg-white dark:bg-[#0D1117]">
+          <div className="config-source-editor flex-1 relative overflow-hidden bg-white dark:bg-editor-bg">
             {/* Line Numbers */}
-            <div className="absolute left-0 top-0 bottom-0 w-12 bg-slate-50 dark:bg-white/3 border-r border-slate-100 dark:border-white/5 overflow-hidden pointer-events-none z-10">
+            <div className="absolute left-0 top-0 bottom-0 w-12 bg-slate-50 dark:bg-editor-gutter border-r border-slate-100 dark:border-editor-border overflow-hidden pointer-events-none z-10">
               <div className="p-0 pt-6 flex flex-col items-end pr-3">
                 {content.split('\n').map((_, i) => (
-                  <span key={i} className="text-[12px] font-mono text-slate-300 dark:text-slate-700 leading-relaxed select-none h-[25.2px]">
+                  <span key={i} className="text-[12px] font-mono text-slate-300 dark:text-editor-line leading-relaxed select-none h-[25.2px]">
                     {i + 1}
                   </span>
                 ))}
@@ -227,7 +227,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
             {/* Highlight layer */}
             <pre
               ref={preRef}
-              className="absolute inset-0 left-12 p-6 font-mono text-[12.5px] leading-relaxed text-slate-800 dark:text-slate-300 pointer-events-none whitespace-pre-wrap break-all overflow-hidden"
+              className="absolute inset-0 left-12 p-6 font-mono text-[12.5px] leading-relaxed text-slate-800 dark:text-editor-text pointer-events-none whitespace-pre-wrap break-all overflow-hidden"
               aria-hidden="true"
             >
               {renderHighlighted(content)}
@@ -242,7 +242,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
               onChange={handleSourceChange}
               onScroll={syncScroll}
               spellCheck="false"
-              className="absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-bk-yellow focus-visible:outline-2 focus-visible:outline-amber-500/70 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
+              className="config-source-input absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-editor-section focus-visible:outline-2 focus-visible:outline-amber-500/70 dark:focus-visible:outline-editor-key/60 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
               placeholder={CM.configPlaceholder}
             />
           </div>

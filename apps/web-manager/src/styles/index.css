@@ -5,6 +5,7 @@
 @theme {
   --color-primary: #f59e0b;
   --color-bk-main: #121212;
+  --color-bk-card: #191919;
   --color-bk-side: #1e1e1e;
   --color-bk-raised: #252525;
   --color-bk-control: #292929;
@@ -20,6 +21,15 @@
   --color-accent-purple: #8b5cf6;
   --color-background-light: #f6f6f8;
   --color-background-dark: #121212;
+  --color-editor-bg: #17191e;
+  --color-editor-gutter: #1d2026;
+  --color-editor-border: #2b3038;
+  --color-editor-text: #c5cbd4;
+  --color-editor-comment: #788290;
+  --color-editor-section: #d5a447;
+  --color-editor-key: #73afc2;
+  --color-editor-value: #a3acb8;
+  --color-editor-line: #626c79;
 
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -138,6 +148,11 @@
   .dark [class~="disabled:opacity-50"]:disabled {
     opacity: 0.65 !important;
   }
+}
+
+.dark .config-source-input::selection {
+  background-color: rgb(115 175 194 / 0.25);
+  color: transparent;
 }
 
 @utility cursor-col-resize {

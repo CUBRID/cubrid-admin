@@ -230,10 +230,10 @@ export default function AutoBackupLogModal() {
             loading={logsLoading}
             emptyMessage={CM.noBackupLogsFoundMsg}
             className="h-full"
+            showEmptyStateAsRow
           />
         </div>
       </div>
     </Modal>
   );
 }
-

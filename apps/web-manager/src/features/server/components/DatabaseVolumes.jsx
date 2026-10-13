@@ -4,7 +4,6 @@ import { fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
-import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
 
@@ -86,6 +85,15 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
   // slice) so multiple simultaneously-open dashboard tabs don't clobber each other.
   const [volumes, setVolumes] = useState([]);
   const [loading, setLoading] = useState(false);
+  // An empty response is still a completed initial load. Keep that distinction
+  // so background polls do not alternate the empty state with table skeletons.
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
+  useEffect(() => {
+    setVolumes([]);
+    setLoading(false);
+    setHasLoadedOnce(false);
+  }, [hostUid]);
 
   const fetchVolumes = useCallback(async () => {
     if (!hostUid || !authorizedHosts.includes(hostUid) || activeDatabases.length === 0) {
@@ -93,6 +101,8 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       // without this, the last fetch's result just lingers in local state
       // showing a now-stopped database's stale volume info as if current.
       setVolumes([]);
+      setLoading(false);
+      setHasLoadedOnce(true);
       return;
     }
     setLoading(true);
@@ -101,6 +111,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       setVolumes(result);
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [hostUid, authorizedHosts, activeDatabases, dispatch]);
 
@@ -147,7 +158,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
         <div className="flex items-center gap-2">
           <Icon name="storage" size="sm" weight={300} className="text-amber-500" />
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{CM.storageVolumes}</span>
-          {loading && <Spinner size="xs" className="ml-1" />}
+          {loading && !hasLoadedOnce && <Spinner size="xs" className="ml-1" />}
         </div>
       }
       bodyClassName="p-0"
@@ -156,7 +167,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       <Table
         columns={columns}
         data={volumeData}
-        loading={loading}
+        loading={loading && !hasLoadedOnce}
         className="text-[12px]"
         emptyMessage={activeDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
       />

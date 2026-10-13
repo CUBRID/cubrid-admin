@@ -10,6 +10,7 @@ import { showStatusModal } from '../../layout/layoutSlice';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
+import { EmptyState } from '../../../components/ds/layout/EmptyState';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
@@ -227,15 +228,11 @@ export default function CMSUserManagementModal() {
             </Typography>
           </div>
         ) : userlist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 opacity-20">
-            <Icon name="person_off" size="xl" className="mb-3" />
-            <Typography variant="p" className="font-black uppercase tracking-widest text-[11px]">
-              {CM.noUsersFound}
-            </Typography>
-            <Typography variant="caption" className="mt-1">
-              {CM.managementRegistryEmpty}
-            </Typography>
-          </div>
+          <EmptyState
+            icon="person_off"
+            title={CM.noUsersFound}
+            description={CM.managementRegistryEmpty}
+          />
         ) : (
           <>
             {/* Admin accounts */}

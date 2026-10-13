@@ -28,17 +28,17 @@ const formatMB = (pages, pageSize) => ((parseInt(pages) * pageSize) / (1024 * 10
 
 // ── Sub-components (Memoized) ──
 
-const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh, dashboardInterval, isLoading, lastRefreshed, dbname }) => {
+const CategoryHeader = memo(({ meta, onRefresh, dashboardInterval, isLoading, lastRefreshed, dbname }) => {
   const CM = useCM();
   return (
-  <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
+  <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
     <div className="flex items-center gap-3">
-      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
+      <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
         <Icon name={meta.icon} size="sm" weight={300} className="text-amber-500" />
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
+          <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
             {CM.volumeCategoryMonitor}
           </Typography>
           <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
@@ -49,9 +49,9 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
           </div>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <Typography variant="label" className="text-[9px] text-slate-400 font-mono tracking-tight">{dbname}</Typography>
-          <span className="text-slate-300 dark:text-slate-700">·</span>
-          <Typography variant="label" className={`text-[9px] font-bold uppercase tracking-widest ${meta.color}`}>
+          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight leading-none">{dbname}</Typography>
+          <span className="text-slate-300 dark:text-slate-700 leading-none">·</span>
+          <Typography variant="label" className={`text-[10px] font-bold uppercase tracking-widest leading-none ${meta.color}`}>
             {meta.label}
           </Typography>
         </div>
@@ -59,18 +59,6 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
     </div>
 
     <div className="flex items-center gap-1.5">
-      <div className="hidden lg:flex items-center gap-6 mr-4 opacity-80">
-        <div className="text-right">
-          <Typography variant="label" className="text-[8px] text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.capacity}</Typography>
-          <Typography variant="p" className="text-[12px] font-black text-slate-700 dark:text-slate-200 font-mono leading-none">{formatPagesToSize(summary.total, pageSize)}</Typography>
-        </div>
-        <div className="w-px h-6 bg-slate-200 dark:bg-white/6" />
-        <div className="text-right">
-          <Typography variant="label" className="text-[8px] text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.usageLabel}</Typography>
-          <Typography variant="p" className={`text-[12px] font-black font-mono leading-none ${usageSeverity}`}>{summary.pct.toFixed(1)}%</Typography>
-        </div>
-      </div>
-
       <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
         {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
       </Typography>
@@ -258,9 +246,6 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-none animate-in fade-in duration-300">
       <CategoryHeader
         meta={meta}
-        summary={summary}
-        usageSeverity={usageSeverity}
-        pageSize={pageSize}
         isLoading={isLoading || isRefreshing}
         onRefresh={handleRefresh}
         dashboardInterval={preferences?.dashboardInterval || 0}

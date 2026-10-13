@@ -178,6 +178,7 @@ export default function TransactionInfoModal() {
             getRowAriaLabel={(tran) => `${CM.tranIndex} ${tran.tranindex}`}
             stickyHeader
             selectable
+            showEmptyStateAsRow
           />
         </div>
       </div>

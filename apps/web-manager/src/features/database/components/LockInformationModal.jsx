@@ -10,7 +10,6 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { MetricCard } from '../../../components/ds/foundation/MetricCard';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { ProgressBar } from '../../../components/ds/foundation/ProgressBar';
-import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
 
@@ -138,13 +137,9 @@ export default function LockInformationModal() {
 
         <div className="min-h-[300px]">
           {activeTab === 'sessions' && (
-            transactions.length === 0 ? (
-              <EmptyState icon="info" title={CM.noSessions} subtitle={CM.noActiveTransactions} py="py-12" />
-            ) : (
-              <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-                <Table columns={sessionColumns} data={transactions} stickyHeader selectable />
-              </div>
-            )
+            <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
+              <Table columns={sessionColumns} data={transactions} emptyMessage={CM.noActiveTransactions} stickyHeader selectable showEmptyStateAsRow />
+            </div>
           )}
 
           {activeTab === 'objects' && (
@@ -154,13 +149,9 @@ export default function LockInformationModal() {
                 <MetricCard icon="view_list" label={CM.maxLockedObjNum} value={lot.numallocated ?? 0} unit="" accent="sky" isLoading={loading} />
                 <MetricCard icon="memory" label={CM.size} value={lot.sizelock ?? '-'} unit="bytes" accent="violet" isLoading={loading} />
               </div>
-              {objectRows.length === 0 ? (
-                <EmptyState icon="info" title={CM.noObjectLocks} subtitle={CM.noHeldObjectLocks} py="py-10" />
-              ) : (
-                <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-                  <Table columns={objectColumns} data={objectRows} stickyHeader selectable />
-                </div>
-              )}
+              <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
+                <Table columns={objectColumns} data={objectRows} emptyMessage={CM.noHeldObjectLocks} stickyHeader selectable showEmptyStateAsRow />
+              </div>
             </div>
           )}
 

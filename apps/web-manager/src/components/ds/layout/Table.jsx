@@ -21,6 +21,7 @@ export const Table = ({
   isRowSelected,
   getRowAriaLabel,
   stickyHeader = false,
+  emptyState = null,
 }) => {
   const CM = useCM();
   const resolvedEmptyMessage = emptyMessage ?? CM.noDataAvailableMsg;
@@ -75,7 +76,7 @@ export const Table = ({
   }
 
   if (!loading && data.length === 0 && !showEmptyStateAsRow) {
-    return <EmptyState title={resolvedEmptyMessage} icon="table_chart" />;
+    return emptyState ?? <EmptyState title={resolvedEmptyMessage} icon="table_chart" />;
   }
 
   return (

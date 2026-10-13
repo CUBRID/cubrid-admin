@@ -98,7 +98,7 @@ export default function VolumeInfoMonitor({ tabId }) {
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-none animate-in fade-in duration-300">
 
       {/* ── Header ── */}
-      <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="hard_drive" size="sm" weight={300} className="text-amber-500" />
@@ -145,7 +145,7 @@ export default function VolumeInfoMonitor({ tabId }) {
       </header>
 
       {/* ── Body ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
         <section className="border border-slate-200 dark:border-white/6 bg-white dark:bg-white/2 rounded-sm p-4 space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">

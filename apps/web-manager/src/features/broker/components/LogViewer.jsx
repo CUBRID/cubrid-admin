@@ -488,7 +488,7 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
               <div className="flex-1">{CM.sqlPattern}</div>
             </div>
             {top.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 italic text-sm">{CM.noQueriesToAnalyze}</div>
+              <div className="py-8 text-center text-slate-400 text-sm">{CM.noQueriesToAnalyze}</div>
             ) : top.map((d, i) => (
               <div
                 key={i}

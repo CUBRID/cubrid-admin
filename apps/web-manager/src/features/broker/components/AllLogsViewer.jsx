@@ -380,7 +380,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       )}
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
         {logsLoading && !targetLogs.length ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3" role="status" aria-live="polite">
             <Spinner size="lg" />
@@ -388,7 +388,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
           </div>
         ) : targetLogs.length === 0 ? (
           <EmptyState
-            className="h-full bg-white dark:bg-bk-side border border-dashed border-slate-200 dark:border-slate-800 rounded-xl mx-auto max-w-md mt-10"
+            className="min-h-[180px] border border-dashed border-slate-200/80 dark:border-white/8 rounded-xl bg-slate-50/40 dark:bg-black/10 mx-auto max-w-md mt-6"
             icon="block"
             title={CM.noLogFilesFound}
             description={CM.noLogFilesFoundMsg}

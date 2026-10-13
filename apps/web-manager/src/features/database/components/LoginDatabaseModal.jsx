@@ -14,7 +14,6 @@ import { useCM } from '../../../constants/useCM';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -27,18 +26,15 @@ export default function LoginDatabaseModal() {
   const {
     error,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError,
   } = useActionState();
 
   const [formData, setFormData] = useState({ dbuser: 'dba', dbpasswd: '' });
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [credentialSaveWarning, setCredentialSaveWarning] = useState('');
 
   useEffect(() => {
     if (isLoginDatabaseModalOpen) {
@@ -46,7 +42,6 @@ export default function LoginDatabaseModal() {
       setFormData({ dbuser: 'dba', dbpasswd: '' });
       setRememberMe(true);
       setShowPassword(false);
-      setCredentialSaveWarning('');
     }
   }, [isLoginDatabaseModalOpen, resetAction]);
 
@@ -71,6 +66,7 @@ export default function LoginDatabaseModal() {
         },
       })).unwrap();
 
+      let credentialSaveError = null;
       if (rememberMe) {
         try {
           await dispatch(registerDatabase({
@@ -79,7 +75,7 @@ export default function LoginDatabaseModal() {
             payload: { id: formData.dbuser, password: formData.dbpasswd },
           })).unwrap();
         } catch {
-          setCredentialSaveWarning(CM.credentialsNotSavedMessage);
+          credentialSaveError = CM.credentialsNotSavedMessage;
         }
       }
 
@@ -87,7 +83,15 @@ export default function LoginDatabaseModal() {
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: loginDatabaseName }));
       dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: loginDatabaseName }));
 
-      endSuccess();
+      if (credentialSaveError) {
+        endError(credentialSaveError);
+        return;
+      }
+
+      // Successful login is already visible in the tree through the unlocked
+      // database icon. Close immediately instead of repeating that success in
+      // a second confirmation screen.
+      dispatch(closeLoginDatabaseModal());
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.error));
     }
@@ -99,19 +103,6 @@ export default function LoginDatabaseModal() {
     return (
       <Modal isOpen title={CM.loginDatabase} icon="lock" onClose={handleClose} maxWidth="440px" showCloseButton={false}>
         <ModalStatusLoading title={CM.loginDatabase} subtitle={CM.loggingInto(loginDatabaseName)} />
-      </Modal>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.loginDatabase} icon="lock_open" iconVariant="success" onClose={handleClose} maxWidth="440px">
-        <ModalStatusSuccess
-          title={CM.success}
-          message={credentialSaveWarning || CM.connectionSuccessful}
-          onConfirm={handleClose}
-          confirmText={CM.ok}
-        />
       </Modal>
     );
   }
@@ -152,7 +143,6 @@ export default function LoginDatabaseModal() {
           label={CM.databaseName}
           value={loginDatabaseName}
           disabled
-          size="sm"
         />
         <Input
           label={CM.userName}

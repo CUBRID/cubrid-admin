@@ -541,12 +541,12 @@ export default function CopyDatabaseModal() {
           }`}>
             {volInfoLoading ? (
               <div className="p-4 text-center text-slate-400 text-[12px]">{CM.loadingLabel}</div>
-            ) : volumes.length === 0 ? (
-              <div className="p-4 text-center text-slate-400 text-[12px]">{CM.noVolumesDetected}</div>
             ) : (
               <Table
                 columns={volumeColumns}
                 data={volumeRows}
+                emptyMessage={CM.noVolumesDetected}
+                showEmptyStateAsRow
                 bordered
                 stickyHeader
                 selectable
