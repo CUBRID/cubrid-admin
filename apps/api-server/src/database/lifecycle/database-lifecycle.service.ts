@@ -44,6 +44,7 @@ import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-
 import {
   convertExvolArrayToCmsFormat,
   isHostHaModeOnFromCubridConf,
+  getPerDbHaModeOffDbNames,
   getSectionParams,
   parseConfigParamsBySection,
 } from '@util';
@@ -698,13 +699,13 @@ export class DatabaseLifecycleService extends BaseService {
       hostUid,
       CMS_CONFNAME_CUBRID
     );
-    if (isHostHaModeOnFromCubridConf(cubridConf)) {
-      // Rather than blocking creation outright, opt this specific database
-      // out of the host's HA replication set by writing ha_mode=off under
-      // its own [@dbname] section — a one-off database on an HA host should
-      // never be picked up by HA, but the host itself is otherwise fine.
-      await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, request.dbname);
-    }
+    // Only decide HA-ness here — the actual config write (ensureDbHaModeOff)
+    // must wait until AFTER `createdb` has actually succeeded (see below).
+    // Running it up front would persist `ha_mode=off` under `[@dbname]` even
+    // when `createdb` later rejects the request (e.g. the name already
+    // exists), stamping an HA override onto a database this call never
+    // created and never rolling it back.
+    const hostIsHaConfigured = isHostHaModeOnFromCubridConf(cubridConf);
 
     // Collect files to check before parsing exvol
     const filesToCheck: string[] = [];
@@ -789,6 +790,14 @@ export class DatabaseLifecycleService extends BaseService {
       cmsRequest,
       { onUuid }
     )));
+
+    if (hostIsHaConfigured) {
+      // `createdb` succeeded — now it's safe to opt this specific database
+      // out of the host's HA replication set by writing ha_mode=off under
+      // its own [@dbname] section — a one-off database on an HA host should
+      // never be picked up by HA, but the host itself is otherwise fine.
+      await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, request.dbname);
+    }
 
     return { success: true };
   }
@@ -1047,7 +1056,15 @@ export class DatabaseLifecycleService extends BaseService {
       hostUid,
       CMS_CONFNAME_CUBRID
     );
-    if (isHostHaModeOnFromCubridConf(cubridConf)) {
+    // A database with its own [@dbname] ha_mode=off override (e.g. one this
+    // service created via createDatabaseInternal's ensureDbHaModeOff) was
+    // deliberately excluded from this host's HA replication set, so it's
+    // safe to delete even though the host itself is HA-configured — only
+    // databases still participating in HA need to stay blocked.
+    if (
+      isHostHaModeOnFromCubridConf(cubridConf) &&
+      !getPerDbHaModeOffDbNames(cubridConf).has(dbname)
+    ) {
       throw DatabaseError.InvalidParameter(
         'Cannot delete databases on hosts configured for HA.',
         {

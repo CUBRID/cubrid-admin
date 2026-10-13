@@ -1209,6 +1209,47 @@ describe('DatabaseLifecycleService', () => {
 
       expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
     });
+
+    it('calls ensureDbHaModeOff only after createdb succeeds, not before', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      const callOrder: string[] = [];
+      cmsClient.postAuthenticated.mockImplementation(async () => {
+        callOrder.push('createdb');
+        return { __EXEC_TIME: '0 ms', note: 'none', status: 'success', task: 'createdb' };
+      });
+      databaseConfigService.ensureDbHaModeOff.mockImplementation(async () => {
+        callOrder.push('ensureDbHaModeOff');
+      });
+
+      await service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(callOrder).toEqual(['createdb', 'ensureDbHaModeOff']);
+    });
+
+    it('does not call ensureDbHaModeOff (and leaves no ha_mode=off written) when createdb fails for a name that already exists', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      // CMS rejects createdb (e.g. dbname already exists) instead of succeeding.
+      cmsClient.postAuthenticated.mockResolvedValue({
+        __EXEC_TIME: '0 ms',
+        note: 'createdb failed: database already exists',
+        status: 'fail',
+        task: 'createdb',
+      });
+
+      await expect(
+        service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any)
+      ).rejects.toThrow();
+
+      // The create failed, so the per-database HA override must never have
+      // been written — no stray ha_mode=off left on an untouched database.
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteDatabase', () => {
@@ -1291,6 +1332,43 @@ describe('DatabaseLifecycleService', () => {
     it('should throw DatabaseError when host is HA (deletedb blocked)', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=ON'] }],
+      } as any);
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      await expect(
+        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
+      ).rejects.toThrow(DatabaseError);
+
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('allows deletion on an HA host when this database has its own [@dbname] ha_mode=off override', async () => {
+      // This is exactly the state createDatabaseInternal's ensureDbHaModeOff
+      // leaves behind for a one-off, non-replicated database created on an
+      // HA host — it must remain deletable even though the host is HA.
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=off'] }],
+      } as any);
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      const result = await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'deletedb', dbname: mockDbname })
+      );
+      expect(result).toEqual(mockStartInfoAfterDelete);
+    });
+
+    it('still blocks deletion on an HA host for a different database without the per-db override', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on', '[@some_other_db]', 'ha_mode=off'] }],
       } as any);
       const request: DeleteDatabaseRequest = {
         delbackup: 'y',

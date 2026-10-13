@@ -608,5 +608,71 @@ describe('DatabaseConfigService', () => {
 
       expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
     });
+
+    it('serializes concurrent calls for the same host so neither write clobbers the other', async () => {
+      // Simulates two different databases created concurrently on the same
+      // HA host: both would read the same conflist and, without a host-level
+      // lock, each write back a full file — the second write would clobber
+      // the first write's [@dbname] addition. `storedConfdata` here plays
+      // the role of the real cubridconf file CMS holds, updated by whichever
+      // setSystemParam call runs.
+      //
+      // The first call's WRITE is held open behind `firstWriteGate` until
+      // the test explicitly releases it, after the second call has had a
+      // chance to read+write on its own. Without host-level serialization,
+      // call2 reads the pre-call1-write conflist and writes its own addition
+      // immediately, which call1's later (delayed) write then clobbers —
+      // losing call2's section. With serialization, call2's read/write
+      // cannot even start until call1 (holding the lock) has fully finished,
+      // so call2 reads call1's already-written conflist and both additions
+      // survive.
+      let storedConfdata = ['[common]', 'ha_mode=on'];
+      let writeCount = 0;
+      let releaseFirstWrite!: () => void;
+      const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+      });
+
+      cmsConfigService.getAllSystemParam.mockImplementation(async () => {
+        return { conflist: [{ confdata: [...storedConfdata] }] } as never;
+      });
+      cmsConfigService.setSystemParam.mockImplementation(async (_u, _h, _c, updatedConfdata) => {
+        writeCount += 1;
+        if (writeCount === 1) {
+          await firstWriteGate;
+        }
+        storedConfdata = updatedConfdata as string[];
+        return { success: true } as never;
+      });
+
+      const call1 = service.ensureDbHaModeOff(mockUserId, mockHostUid, 'db1');
+      // Give call1 a chance to read and reach (and block on) its gated write.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      const call2 = service.ensureDbHaModeOff(mockUserId, mockHostUid, 'db2');
+      // Give call2 a chance to read+write on its own, if nothing serializes it.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      releaseFirstWrite();
+
+      await Promise.all([call1, call2]);
+
+      expect(storedConfdata).toEqual(expect.arrayContaining(['[@db1]', '[@db2]']));
+      expect(storedConfdata.filter((line) => line === 'ha_mode=off')).toHaveLength(2);
+    });
+
+    it('does not serialize calls for different hosts', async () => {
+      mockConfig(['[common]', 'ha_mode=on']);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as never);
+
+      await Promise.all([
+        service.ensureDbHaModeOff(mockUserId, 'host-uid-1', 'db1'),
+        service.ensureDbHaModeOff(mockUserId, 'host-uid-2', 'db2'),
+      ]);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledTimes(2);
+    });
   });
 });

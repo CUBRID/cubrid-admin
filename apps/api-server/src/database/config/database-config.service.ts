@@ -325,6 +325,17 @@ export class DatabaseConfigService extends BaseService {
    */
   @HandleCmsErrors()
   async ensureDbHaModeOff(userId: string, hostUid: string, dbname: string): Promise<void> {
+    // Two databases created concurrently on the SAME host would otherwise
+    // both read the same cubridconf conflist and each write back a full
+    // file — the second write clobbers the first write's `ha_mode=off`
+    // addition for the other database, since neither read reflects the
+    // other's write. Serialize the whole read-modify-write per host (not
+    // per dbname, unlike withQueryPlanMutex above) so concurrent callers on
+    // the same host queue instead of racing.
+    return this.withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
+  }
+
+  private async ensureDbHaModeOffUnlocked(userId: string, hostUid: string, dbname: string): Promise<void> {
     const confname = CMS_CONFNAME_CUBRID;
 
     const currentConfig = await this.cmsConfigService.getAllSystemParam(userId, hostUid, confname);
@@ -782,6 +793,27 @@ export class DatabaseConfigService extends BaseService {
       resolve();
       if (this.queryPlanMutex.get(key) === next) {
         this.queryPlanMutex.delete(key);
+      }
+    }
+  }
+
+  // Serializes concurrent cubridconf read-modify-write operations per hostUid
+  // (not per dbname — unlike queryPlanMutex, two different databases on the
+  // same host still share one physical conflist and must not interleave).
+  private readonly hostConfigMutex = new Map<string, Promise<void>>();
+
+  private async withHostConfigMutex<T>(hostUid: string, fn: () => Promise<T>): Promise<T> {
+    const pending = this.hostConfigMutex.get(hostUid) ?? Promise.resolve();
+    let resolve!: () => void;
+    const next = new Promise<void>((r) => (resolve = r));
+    this.hostConfigMutex.set(hostUid, next);
+    try {
+      await pending;
+      return await fn();
+    } finally {
+      resolve();
+      if (this.hostConfigMutex.get(hostUid) === next) {
+        this.hostConfigMutex.delete(hostUid);
       }
     }
   }
