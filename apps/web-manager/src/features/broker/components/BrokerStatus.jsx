@@ -21,20 +21,39 @@ const EMPTY_LIST = [];
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { brokers, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
+  const { detailedStatus } = useSelector((state) => state.broker, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };
 
-  // The broker-list fetch below (unlike fetchDetailedBrokerStatus) clears
-  // state.broker.brokers to [] on failure (see fetchBrokerList.rejected),
-  // and this component has no error channel of its own for that fetch —
-  // status.error is tied to fetchDetailedBrokerStatus only. Track the list
-  // fetch's own health locally and keep the last broker entry we saw, so a
-  // transient list-fetch failure shows a small stale-data notice instead of
-  // Basic Information silently collapsing to "—"/"0"/"OFF" (which reads as
+  // Basic Information below is read from lastKnownBrokerFromList, fed only
+  // by THIS component's own fetchBrokerList dispatches — deliberately not
+  // from the shared state.broker.brokers selector. That slice holds a single
+  // un-scoped array for whichever host's list was fetched most recently
+  // (fetchBrokerList.fulfilled does a flat `state.brokers = newBrokers`), so
+  // two hosts with an identically-named broker could have this tab pick up
+  // the WRONG host's entry whenever some other tab's list fetch for a
+  // different host resolves later than this one's. Same reason
+  // DatabaseVolumes.jsx fetches into local state instead of a shared slice
+  // ("so multiple simultaneously-open dashboard tabs don't clobber each
+  // other") — same fix here, scoped to this component's own request.
+  //
+  // Plain React state, not a ref: a ref mutation alone doesn't guarantee a
+  // re-render, and piggybacking on setBrokerListStale's re-render wouldn't
+  // work either — React bails out of re-rendering when a useState setter is
+  // called with the same value as before (e.g. two back-to-back successful
+  // polls both call setBrokerListStale(false)), which would leave freshly
+  // fetched data sitting in a ref without ever reaching the screen.
+  //
+  // Also serves as the stale-data fallback: fetchBrokerList.rejected clears
+  // state.broker.brokers to [] on failure (shared behavior other callers
+  // may rely on, not changed here), and this component has no error channel
+  // of its own for that fetch — status.error is tied to
+  // fetchDetailedBrokerStatus only. Keeping the last value we actually saw
+  // lets Basic Information keep showing it, with a small stale-data notice,
+  // instead of silently collapsing to "—"/"0"/"OFF" (which reads as
   // genuinely idle rather than as a failed refresh).
   const [brokerListStale, setBrokerListStale] = useState(false);
-  const lastKnownBrokerFromListRef = useRef(null);
+  const [lastKnownBrokerFromList, setLastKnownBrokerFromList] = useState(null);
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -55,7 +74,13 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
         dispatch(fetchDetailedBrokerStatus({ hostUid, brokerName, isBackground: silent })),
         dispatch(fetchBrokerList({ hostUid, isBackground: silent, skipStatusEnrichment: true })).unwrap(),
       ]);
-      setBrokerListStale(listOutcome.status === 'rejected');
+      if (listOutcome.status === 'fulfilled') {
+        const match = listOutcome.value?.find((b) => b.name === brokerName);
+        if (match) setLastKnownBrokerFromList(match);
+        setBrokerListStale(false);
+      } else {
+        setBrokerListStale(true);
+      }
     }
   });
 
@@ -108,19 +133,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // getbrokerstatus's response (ts2_get_broker_status in CMS) only ever
   // carries bname/time/asinfo/jobinfo — there's no "binfo" in any CMS task,
   // so basic broker info always comes from the broker list instead (kept
-  // fresh by this tab's own onFetch above).
-  //
-  // On a failed list fetch, fetchBrokerList.rejected clears state.brokers
-  // to [] (shared behavior other callers may rely on — not changed here).
-  // Fall back to the last entry we actually saw for this broker so Basic
-  // Information keeps showing real values instead of blanking out.
-  const currentBrokerFromList = brokers?.find((b) => b.name === brokerName);
-  if (currentBrokerFromList) {
-    lastKnownBrokerFromListRef.current = currentBrokerFromList;
-  }
-  const brokerFromList = currentBrokerFromList
-    || (brokerListStale ? lastKnownBrokerFromListRef.current : null)
-    || {};
+  // fresh by this tab's own onFetch above, which populates
+  // lastKnownBrokerFromList directly from its own request's result).
+  const brokerFromList = lastKnownBrokerFromList || {};
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,

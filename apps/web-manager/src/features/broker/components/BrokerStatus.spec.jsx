@@ -16,7 +16,7 @@ vi.mock('../brokerApi', () => ({
 vi.mock('../../user/components/MonitoringSettingsPopover', () => ({ default: () => null }));
 
 import { brokerApi } from '../brokerApi';
-import brokerReducer from '../brokerSlice';
+import brokerReducer, { fetchBrokerList } from '../brokerSlice';
 import BrokerStatus from './BrokerStatus';
 import { CM } from '../../../constants/cmLabels';
 
@@ -141,5 +141,29 @@ describe('BrokerStatus basic information refresh', () => {
     // The detailed-status fetch itself still succeeded, so the big danger
     // banner (tied to that other fetch) must not show.
     expect(container.textContent).not.toContain(CM.failedToLoadStatus);
+  });
+
+  it('does not pick up a same-named broker from a different host sharing state.broker.brokers', async () => {
+    brokerApi.getBrokerList.mockImplementation((hostUid) => Promise.resolve({
+      result: [rawBroker(hostUid === HOST_UID ? { pid: '123', port: '30000' } : { pid: '999', port: '40000' })],
+    }));
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+
+    await render();
+    await flush();
+    expect(container.textContent).toContain('123');
+    expect(container.textContent).toContain('30000');
+
+    // Simulate another, still-mounted tab refreshing the SAME-NAMED broker
+    // on a DIFFERENT host. fetchBrokerList.fulfilled replaces the whole
+    // shared state.broker.brokers array, so if this component read from
+    // that selector directly (instead of its own request-scoped result) it
+    // would now show host2's pid/port under host1's broker.
+    await act(async () => { await store.dispatch(fetchBrokerList('host2')); });
+
+    expect(container.textContent).toContain('123');
+    expect(container.textContent).toContain('30000');
+    expect(container.textContent).not.toContain('999');
+    expect(container.textContent).not.toContain('40000');
   });
 });
