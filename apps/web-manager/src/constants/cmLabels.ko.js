@@ -514,6 +514,8 @@ export const CM_KO = {
   synchronizing: '로딩 중…',
   failedToLoadStatus: '상태를 불러오지 못했습니다',
   refreshBrokerStatus: '브로커 상태 새로 고침',
+  staleDataBadge: '최신 아님',
+  basicInfoStaleMsg: '브로커 목록을 불러오지 못했습니다 — 기본 정보는 마지막으로 확인된 값입니다',
   downloadExcel: 'Excel로 다운로드',
   copyToClipboard: '클립보드에 복사',
   copyStatement: '문장 복사',

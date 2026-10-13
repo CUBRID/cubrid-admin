@@ -11,12 +11,30 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
 
+// Stable fallback reference — `status.data?.asinfo || []` would otherwise
+// hand the asInfo-rate-tracking effect below a brand-new array on every
+// render for as long as no status has loaded yet, which never lets that
+// effect's dependency settle (it keeps seeing a "changed" array) and spins
+// the component in a render/effect loop until real data arrives.
+const EMPTY_LIST = [];
+
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { brokers, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };
+
+  // The broker-list fetch below (unlike fetchDetailedBrokerStatus) clears
+  // state.broker.brokers to [] on failure (see fetchBrokerList.rejected),
+  // and this component has no error channel of its own for that fetch —
+  // status.error is tied to fetchDetailedBrokerStatus only. Track the list
+  // fetch's own health locally and keep the last broker entry we saw, so a
+  // transient list-fetch failure shows a small stale-data notice instead of
+  // Basic Information silently collapsing to "—"/"0"/"OFF" (which reads as
+  // genuinely idle rather than as a failed refresh).
+  const [brokerListStale, setBrokerListStale] = useState(false);
+  const lastKnownBrokerFromListRef = useRef(null);
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -27,16 +45,22 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     // tab is focused (MonitoringProvider's host:/db:-only tab gate). Fetch
     // it here too, or Basic Information stays frozen at whatever it was
     // when this tab became active, even after a manual refresh.
+    //
+    // Only the plain list fields are needed here (not qps/tps), so skip the
+    // per-broker status enrichment fetchBrokerList otherwise does for every
+    // broker on this host — this tab doesn't use that data, and polling it
+    // on every tick would multiply this tab's request count by N brokers.
     onFetch: (silent) => async (dispatch) => {
-      await Promise.all([
+      const [, listOutcome] = await Promise.allSettled([
         dispatch(fetchDetailedBrokerStatus({ hostUid, brokerName, isBackground: silent })),
-        dispatch(fetchBrokerList({ hostUid, isBackground: silent })),
+        dispatch(fetchBrokerList({ hostUid, isBackground: silent, skipStatusEnrichment: true })).unwrap(),
       ]);
+      setBrokerListStale(listOutcome.status === 'rejected');
     }
   });
 
-  const asInfo = status.data?.asinfo || [];
-  const jobInfo = status.data?.jobinfo || [];
+  const asInfo = status.data?.asinfo || EMPTY_LIST;
+  const jobInfo = status.data?.jobinfo || EMPTY_LIST;
 
   // as_num_query/as_num_tran are per-AS lifetime totals, not a rate — derive
   // a real per-second value from the delta between consecutive polls, merged
@@ -85,7 +109,18 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // carries bname/time/asinfo/jobinfo — there's no "binfo" in any CMS task,
   // so basic broker info always comes from the broker list instead (kept
   // fresh by this tab's own onFetch above).
-  const brokerFromList = brokers?.find((b) => b.name === brokerName) || {};
+  //
+  // On a failed list fetch, fetchBrokerList.rejected clears state.brokers
+  // to [] (shared behavior other callers may rely on — not changed here).
+  // Fall back to the last entry we actually saw for this broker so Basic
+  // Information keeps showing real values instead of blanking out.
+  const currentBrokerFromList = brokers?.find((b) => b.name === brokerName);
+  if (currentBrokerFromList) {
+    lastKnownBrokerFromListRef.current = currentBrokerFromList;
+  }
+  const brokerFromList = currentBrokerFromList
+    || (brokerListStale ? lastKnownBrokerFromListRef.current : null)
+    || {};
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,
@@ -137,6 +172,20 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-in fade-in transition duration-300">
       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
       {CM.queuedCount(jobInfo.length)}
+    </span>
+  );
+
+  // Shown on the Basic Information card when the broker-list refresh (not
+  // the detailed-status one, which has its own big danger banner above)
+  // failed — distinct from that banner since the values below aren't wrong,
+  // just possibly outdated.
+  const basicInfoStaleBadge = (
+    <span
+      title={CM.basicInfoStaleMsg}
+      className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-in fade-in transition duration-300"
+    >
+      <Icon name="warning" size="12px" />
+      {CM.staleDataBadge}
     </span>
   );
 
@@ -198,6 +247,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               <span className="text-[12px] font-bold">{CM.basicInformation}</span>
             </div>
           }
+          rightContent={() => brokerListStale && basicInfoStaleBadge}
           bodyClassName="p-0"
           collapsible
         >
