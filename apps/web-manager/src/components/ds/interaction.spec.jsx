@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DatePicker } from './forms/DatePicker';
+import { MultiSelect } from './forms/MultiSelect';
 import { Select } from './forms/Select';
 import { Modal } from './layout/Modal';
 import TabItem from '../../features/layout/components/TabItem';
@@ -122,4 +123,24 @@ it('does not activate a tab when a child button handles the key', async () => {
   });
 
   expect(activate).not.toHaveBeenCalled();
+});
+
+it('does not let a MultiSelect remove button key open the list', async () => {
+  await render(
+    <MultiSelect
+      label="Databases"
+      value={['first']}
+      onChange={vi.fn()}
+      options={[{ value: 'first', label: 'First' }]}
+    />,
+  );
+  const combobox = container.querySelector('[role="combobox"]');
+  const removeButton = combobox.querySelector('button');
+  await act(async () => {
+    removeButton.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter', bubbles: true, cancelable: true,
+    }));
+  });
+
+  expect(combobox.getAttribute('aria-expanded')).toBe('false');
 });

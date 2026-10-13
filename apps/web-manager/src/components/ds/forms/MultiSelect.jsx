@@ -52,6 +52,9 @@ export const MultiSelect = ({
   const selectedOptions = options.filter(opt => value.includes(opt.value));
 
   const handleKeyDown = (event) => {
+    // Nested remove buttons own their keyboard events. Handling their bubbled
+    // Enter/Space here would reopen the list or toggle an unrelated option.
+    if (event.target !== event.currentTarget) return;
     if (disabled) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
