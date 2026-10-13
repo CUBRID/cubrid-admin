@@ -202,9 +202,14 @@ export function CmsJobProvider({ children }) {
   const dismissJob = useCallback((jobId) => {
     dismissedJobIdsRef.current.add(jobId);
     dismissedJobIdsRef.current = persistDismissedJobIds(dismissedJobIdsRef.current);
-    setJobs((prev) =>
-      prev.map((j) => (j.jobId === jobId ? { ...j, dismissed: true } : j))
-    );
+    setJobs((prev) => prev.flatMap((job) => {
+      if (job.jobId !== jobId) return [job];
+      // Finished jobs no longer need to occupy the bounded live-tracking list.
+      // Keep only the persisted dismissal id so a recent-history restore does
+      // not bring the item back after a reload.
+      if (isTerminalCmsJobStatus(job.jobStatus)) return [];
+      return [{ ...job, dismissed: true }];
+    }));
   }, []);
 
   const clearCompleted = useCallback(() => {
@@ -215,9 +220,9 @@ export function CmsJobProvider({ children }) {
         }
       }
       dismissedJobIdsRef.current = persistDismissedJobIds(dismissedJobIdsRef.current);
-      return prev.map((job) =>
-        isTerminalCmsJobStatus(job.jobStatus) ? { ...job, dismissed: true } : job
-      );
+      // Removing terminal rows prevents dismissed history from consuming the
+      // MAX_TRACKED allowance and displacing a still-running older job.
+      return prev.filter((job) => !isTerminalCmsJobStatus(job.jobStatus));
     });
   }, []);
 
@@ -234,16 +239,14 @@ export function CmsJobProvider({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        // Restore only work that is still in flight. Completed/failed history
-        // belongs to the server audit store, not the live UI tray; loading
-        // /jobs/recent here made old tasks reappear after dismissal.
-        const recent = await databaseJobApi.listActive();
+        // Restore recent history so users can see work that finished while the
+        // browser was closed. Explicitly dismissed ids remain hidden.
+        const recent = await databaseJobApi.listRecent();
         if (cancelled) return;
         for (const job of recent) {
+          if (dismissedJobIdsRef.current.has(job.jobId)) continue;
           const normalized = normalizeTrackedJob(job);
           upsertJob(job.jobId, normalized);
-          // The active endpoint should only return non-terminal jobs; keep the
-          // guard for compatibility with older API versions.
           if (!isTerminalCmsJobStatus(normalized.jobStatus)) {
             startTracking(job.jobId, {
               notify: true,

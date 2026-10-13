@@ -31,6 +31,9 @@ export const Select = ({
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef(null);
   const [dropdownStyle, setDropdownStyle] = useState({});
+  const activeOptionId = isOpen && activeIndex >= 0
+    ? `${selectId}-option-${activeIndex}`
+    : undefined;
 
   const selectedOption = useMemo(
     () => options.find((opt) => opt.value === value),
@@ -66,6 +69,14 @@ export const Select = ({
       window.removeEventListener('resize', updateDropdownPosition);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!activeOptionId) return undefined;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(activeOptionId)?.scrollIntoView?.({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeOptionId]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -135,6 +146,7 @@ export const Select = ({
           options.map((opt, index) => (
             <div
               key={opt.value}
+              id={`${selectId}-option-${index}`}
               data-testid={testId && `${testId}-option-${opt.value}`}
               onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
               onMouseEnter={() => setActiveIndex(index)}
@@ -179,6 +191,7 @@ export const Select = ({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-controls={listboxId}
+          aria-activedescendant={activeOptionId}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
           className={`relative w-full ${icon ? 'pl-11' : 'pl-3.5'} pr-10 ${isSm ? 'h-8 text-[12px]' : 'h-10 text-[13px]'} font-medium text-left bg-slate-50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl transition-all outline-hidden

@@ -1,7 +1,20 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useCallback, useEffect, useId, useRef } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
 import { useCM } from '../../../constants/useCM';
+
+let openModalCount = 0;
+
+function getTopModalLayer() {
+  const layers = Array.from(document.querySelectorAll('[data-modal-layer="true"]'));
+  return layers.reduce((top, layer) => {
+    if (!top) return layer;
+    const topZ = Number.parseInt(window.getComputedStyle(top).zIndex, 10) || 0;
+    const layerZ = Number.parseInt(window.getComputedStyle(layer).zIndex, 10) || 0;
+    // For equal stacking levels, the later DOM node is painted on top.
+    return layerZ >= topZ ? layer : top;
+  }, null);
+}
 
 export const Modal = ({
   isOpen,
@@ -26,25 +39,28 @@ export const Modal = ({
 }) => {
   const CM = useCM();
   const modalRef = useRef(null);
+  const layerRef = useRef(null);
   const generatedId = useId();
   const titleId = `${generatedId}-title`;
   const subtitleId = `${generatedId}-subtitle`;
   // Element focused before the modal opened — restored on close so keyboard
   // users land back where they were instead of on <body>.
   const previouslyFocusedRef = useRef(null);
+  const isTopModal = useCallback(() => layerRef.current === getTopModalLayer(), []);
 
   useEffect(() => {
     if (!showCloseButton) return undefined;
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) onClose();
+      if (e.key === 'Escape' && isOpen && !e.defaultPrevented && isTopModal()) onClose();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose, showCloseButton]);
+  }, [isOpen, isTopModal, onClose, showCloseButton]);
 
   useEffect(() => {
     if (!onSubmit || !isOpen) return undefined;
     const handleEnter = (e) => {
+      if (!isTopModal()) return;
       if (e.key !== 'Enter') return;
       const tag = e.target?.tagName;
       if (tag !== 'INPUT') return;
@@ -55,7 +71,7 @@ export const Modal = ({
     };
     document.addEventListener('keydown', handleEnter);
     return () => document.removeEventListener('keydown', handleEnter);
-  }, [isOpen, onSubmit]);
+  }, [isOpen, isTopModal, onSubmit]);
 
   // Focus trap: Tab/Shift+Tab cycle only through the modal's own focusable
   // elements instead of escaping to whatever's behind it. Also moves initial
@@ -78,13 +94,14 @@ export const Modal = ({
     // Defer to the next frame so the modal's children (often conditionally
     // rendered) have mounted before we look for something to focus.
     const focusFrame = requestAnimationFrame(() => {
+      if (!isTopModal()) return;
       const focusable = getFocusable();
       const autoFocusEl = modalNode?.querySelector('[autofocus]');
       (autoFocusEl || focusable[0] || modalNode)?.focus();
     });
 
     const handleTab = (e) => {
-      if (e.key !== 'Tab') return;
+      if (e.key !== 'Tab' || !isTopModal()) return;
       const focusable = getFocusable();
       if (focusable.length === 0) {
         e.preventDefault();
@@ -116,16 +133,15 @@ export const Modal = ({
         previouslyFocusedRef.current?.focus?.();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, isTopModal]);
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (!isOpen) return undefined;
+    openModalCount += 1;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      openModalCount = Math.max(0, openModalCount - 1);
+      if (openModalCount === 0) document.body.style.overflow = '';
     };
   }, [isOpen]);
 
@@ -139,7 +155,11 @@ export const Modal = ({
   };
 
   return (
-    <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}>
+    <div
+      ref={layerRef}
+      data-modal-layer="true"
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-bk-main/40 backdrop-blur-xs transition-opacity"

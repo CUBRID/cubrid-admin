@@ -39,12 +39,14 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   const tabId = `edit_config:${hostUid}:${confname}`;
   const dispatch = useDispatch();
   const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
 
   const originalContentRef = useRef('');
   const configReads = useRef(createSingleFlight());
   const loadVersion = useRef(0);
+  const lastRefreshCounterRef = useRef(refreshCounter);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -91,6 +93,12 @@ export default function CubridConfigEditor({ hostUid, confname }) {
     fetchConfig();
     return () => { ++loadVersion.current; };
   }, [fetchConfig]);
+
+  useEffect(() => {
+    if (refreshCounter <= lastRefreshCounterRef.current) return;
+    lastRefreshCounterRef.current = refreshCounter;
+    if (refreshTabId === tabId) fetchConfig();
+  }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
   const handleSourceChange = (e) => {
     const val = e.target.value;

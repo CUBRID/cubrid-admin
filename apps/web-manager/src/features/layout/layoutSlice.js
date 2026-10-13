@@ -22,6 +22,7 @@ const initialState = {
     detail: null, // raw CMS/server error text, shown behind a "Show details" toggle
   },
   refreshCounter: 0,
+  refreshTabId: null,
 };
 
 const layoutSlice = createSlice({
@@ -128,8 +129,9 @@ const layoutSlice = createSlice({
     closeStatusModal: (state) => {
       state.statusModal.isOpen = false;
     },
-    triggerRefreshActiveTab: (state) => {
+    triggerRefreshActiveTab: (state, action) => {
       state.refreshCounter += 1;
+      state.refreshTabId = action.payload || state.activeMainTab;
     },
   },
 });

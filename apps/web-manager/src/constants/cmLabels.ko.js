@@ -1928,6 +1928,7 @@ export const CM_KO = {
   // Breadcrumb
   unsavedChangesTitle: '저장하지 않은 변경 사항',
   unsavedChangesDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 닫으면 변경 사항이 사라집니다.`,
+  unsavedReloadDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 다시 불러오면 변경 사항이 사라집니다.`,
 
   // Footer
   unknownFallback: '알 수 없음',

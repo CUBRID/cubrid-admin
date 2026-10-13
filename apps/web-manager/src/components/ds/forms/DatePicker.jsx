@@ -81,12 +81,16 @@ export const DatePicker = ({
     if (!isOpen) return undefined;
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setIsOpen(false);
         buttonRef.current?.focus();
       }
     };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    // Capture at window level so the open picker consumes Escape before its
+    // parent modal sees the same key and closes the entire form.
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
   }, [isOpen]);
 
   const handleDateSelect = (dateStr) => {

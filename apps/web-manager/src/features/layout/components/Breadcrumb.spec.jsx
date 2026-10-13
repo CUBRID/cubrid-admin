@@ -81,13 +81,13 @@ it('keeps every tab unchanged until a dirty bulk close is confirmed', async () =
   expect(handlers.onCloseOthers).toHaveBeenCalledWith('keep');
 });
 
-it('activates and reloads only the tab selected from the context menu', async () => {
+it('requests reload for only the tab selected from the context menu', async () => {
   const handlers = callbacks();
   await renderBreadcrumb(handlers, []);
   await openTabMenu('dirty');
   await clickButtonWithText('Reload');
 
-  expect(handlers.onTabChange).toHaveBeenCalledWith('dirty');
+  expect(handlers.onTabChange).not.toHaveBeenCalled();
   expect(handlers.onReload).toHaveBeenCalledWith('dirty');
   expect(handlers.onCloseTab).not.toHaveBeenCalled();
 });

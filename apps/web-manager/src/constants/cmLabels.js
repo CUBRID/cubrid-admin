@@ -1941,6 +1941,7 @@ export const CM = {
   // Breadcrumb
   unsavedChangesTitle: 'Unsaved Changes',
   unsavedChangesDesc: (name) => `You have unsaved changes in "${name}". If you close it, your changes will be lost.`,
+  unsavedReloadDesc: (name) => `You have unsaved changes in "${name}". Reloading will discard them.`,
 
   // Footer
   unknownFallback: 'unknown',

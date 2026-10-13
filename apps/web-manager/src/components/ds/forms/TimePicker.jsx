@@ -60,12 +60,14 @@ export const TimePicker = ({
     if (!isOpen) return undefined;
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setIsOpen(false);
         buttonRef.current?.querySelector('input')?.focus();
       }
     };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
   }, [isOpen]);
 
   const handleTimeSelect = (type, val) => {

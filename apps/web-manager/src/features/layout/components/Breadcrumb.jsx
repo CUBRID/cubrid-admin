@@ -191,7 +191,6 @@ export default function Breadcrumb({
             icon="refresh" 
             label={CM.reloadTab} 
             onClick={() => {
-              onTabChange(contextMenu.tabId);
               onReload?.(contextMenu.tabId);
               setContextMenu(null);
             }}
