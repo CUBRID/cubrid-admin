@@ -122,4 +122,26 @@ describe('broker lists are stored per host, not in one shared array', () => {
     // up again once the host itself is gone.
     expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
   });
+
+  it('clears loading when its host is deleted/disconnected mid-fetch, instead of leaving it stuck', async () => {
+    const hostA = deferred();
+    brokerApi.getBrokerList.mockImplementation(() => hostA.promise);
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    const dispatchA = store.dispatch(fetchBrokerList('hostA'));
+    expect(store.getState().broker.loading).toBe(true);
+
+    // Host A is deleted/disconnected while its fetch is still in flight.
+    // Its eventual response will be discarded (evicted requestId never
+    // matches again), but that discard path returns before ever reaching
+    // `state.loading = false` — nothing else is fetching, so nothing would
+    // otherwise clear it.
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    expect(store.getState().broker.loading).toBe(false);
+
+    hostA.resolve({ result: [{ name: 'hostA-broker', pid: '1' }] });
+    await dispatchA;
+
+    expect(store.getState().broker.loading).toBe(false);
+  });
 });

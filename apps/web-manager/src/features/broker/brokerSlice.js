@@ -577,7 +577,16 @@ const brokerSlice = createSlice({
           // resolves, with nothing left to ever clean it up again. Clearing
           // the id here makes that stale response get dropped like any
           // other no-longer-latest one.
+          //
+          // That discard path returns before reaching `state.loading =
+          // false`, so if this host's now-orphaned request was the one that
+          // set loading, nothing would ever clear it — every other fetch
+          // sees a mismatched id and bails out just as early. loading is a
+          // single flag shared across hosts, not per-host, so reset it here
+          // rather than leave a stuck spinner with no fetch left that could
+          // ever turn it back off.
           delete state.latestBrokerListRequestIdByHost[hostUid];
+          state.loading = false;
         }
       );
   },
