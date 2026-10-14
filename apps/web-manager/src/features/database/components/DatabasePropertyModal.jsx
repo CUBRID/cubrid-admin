@@ -386,10 +386,6 @@ export default function DatabasePropertyModal() {
     setParams({});
   };
 
-  const handleReset = () => {
-    setParams({});
-  };
-
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
   // server should fail over via HA, not blindly self-restart in place), so
@@ -542,23 +538,9 @@ export default function DatabasePropertyModal() {
       maxWidth="960px"
       testId="database-property"
       footer={
-        <div className="flex justify-between items-center w-full">
-          <div>
-            {Object.keys(params).length > 0 && (
-              <Button
-                variant="ghost"
-                icon="restart_alt"
-                onClick={handleReset}
-                className="text-amber-500 hover:bg-amber-500/5"
-              >
-                {CM.resetToOriginalBtn}
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2.5">
-            <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-            <Button data-testid="database-property-apply-btn" variant="primary" onClick={handleApply} icon="save" className="min-w-[140px]">{CM.applyChanges}</Button>
-          </div>
+        <div className="flex justify-end gap-2.5 items-center w-full">
+          <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
+          <Button data-testid="database-property-apply-btn" variant="primary" onClick={handleApply} icon="save" className="min-w-[140px]">{CM.applyChanges}</Button>
         </div>
       }
     >
