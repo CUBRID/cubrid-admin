@@ -26,6 +26,13 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import {
+  MAX_GENERAL_VOLUME_SIZE_MB,
+  MIN_GENERAL_VOLUME_SIZE_MB,
+  isPositiveVolumeSize,
+  isValidGeneralVolumeSize,
+  volumeSizeMbToPages,
+} from '../databaseVolumeValidation';
 
 const PAGE_SIZES = [4096, 8192, 16384, 32768];
 const BASE_LOCALE_VALUES = ['en_US.iso88591', 'en_US.utf8', 'ko_KR.euckr', 'ko_KR.utf8'];
@@ -264,13 +271,17 @@ export default function CreateDatabaseModal() {
   };
 
   const isFormValid = () => {
+    if (!isValidGeneralVolumeSize(formData.genericVolSize)) return false;
     if (step === 1) return formData.dbName && formData.genericVolPath && formData.logVolPath;
     if (step === 4) return formData.dbaPassword === formData.confirmPassword && (formData.dbaPassword === '' || formData.dbaPassword.length >= 8);
     return true;
   };
 
   const handleFinish = async () => {
-    if (!selectedHostUid) return;
+    if (!selectedHostUid || !isValidGeneralVolumeSize(formData.genericVolSize)) {
+      setStep(1);
+      return;
+    }
 
     const invocation = { dismissed: false };
     currentCreateInvocationRef.current = invocation;
@@ -292,14 +303,13 @@ export default function CreateDatabaseModal() {
       const payload = {
         dbname: formData.dbName,
         pagesize: formData.pageSize,
-        db_volume_size: formData.genericVolSize,
         genvolpath: formData.genericVolPath,
         logpagesize: formData.logPageSize,
         logsize: formData.logVolSize,
         logvolpath: formData.logVolPath,
         setAutoStart: formData.autoStart,
         overwrite_config_file: 'YES',
-        numpage: Math.floor((formData.genericVolSize * 1024 * 1024) / formData.pageSize),
+        numpage: volumeSizeMbToPages(formData.genericVolSize, formData.pageSize),
         exvol: exvol,
         charset: formData.locale === 'user_defined' ? formData.userDefinedLocale : formData.locale,
         setAutoAddVol: {
@@ -381,6 +391,13 @@ export default function CreateDatabaseModal() {
   };
 
   const totalStorage = formData.genericVolSize + formData.logVolSize + formData.volumes.reduce((a, v) => a + v.size, 0);
+  const generalVolumeSizeError = !isPositiveVolumeSize(formData.genericVolSize)
+    ? CM.volumeSizePositiveError
+    : formData.genericVolSize < MIN_GENERAL_VOLUME_SIZE_MB
+      ? CM.generalVolumeSizeMinError
+      : formData.genericVolSize > MAX_GENERAL_VOLUME_SIZE_MB
+        ? CM.generalVolumeSizeMaxError
+        : undefined;
 
 
   /* ─── LOADING view ─── */
@@ -484,7 +501,7 @@ export default function CreateDatabaseModal() {
                 {CM.next}
               </Button>
             ) : (
-              <Button data-testid="create-database-finish-btn" variant="primary" onClick={handleFinish} icon="done_all" className="min-w-[140px]">
+              <Button data-testid="create-database-finish-btn" variant="primary" onClick={handleFinish} disabled={!isFormValid()} icon="done_all" className="min-w-[140px]">
                 {CM.finish}
               </Button>
             )}
@@ -600,7 +617,16 @@ export default function CreateDatabaseModal() {
                     <span className="text-[9px] font-black uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-sm border border-amber-500/20">{CM.systemBadge}</span>
                   </div>
                   <Input data-testid="create-database-generic-path-input" label={CM.genericVolPath} value={formData.genericVolPath} onChange={(e) => handleInputChange('genericVolPath', e.target.value)} />
-                  <Input data-testid="create-database-generic-size-input" label={CM.volumeSize} type="number" value={formData.genericVolSize} onChange={(e) => handleInputChange('genericVolSize', Number(e.target.value))} />
+                  <Input
+                    data-testid="create-database-generic-size-input"
+                    label={CM.volumeSize}
+                    type="number"
+                    min={MIN_GENERAL_VOLUME_SIZE_MB}
+                    max={MAX_GENERAL_VOLUME_SIZE_MB}
+                    value={formData.genericVolSize}
+                    onChange={(e) => handleInputChange('genericVolSize', Number(e.target.value))}
+                    error={generalVolumeSizeError}
+                  />
                 </div>
 
                 <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl">
