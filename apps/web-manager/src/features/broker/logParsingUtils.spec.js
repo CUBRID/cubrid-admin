@@ -45,6 +45,48 @@ describe('extractTopSQL', () => {
     expect(row.min).toBe('0.004');
   });
 
+  it('still finds a failure whose result line is pushed past a 500-char lookahead by long bind values', () => {
+    const longValue = 'x'.repeat(100);
+    const lines = [
+      '26-10-08 15:05:00.000 (6) prepare 9 INSERT INTO s1 values(?, ?, ?, ?, ?, ?)',
+      '26-10-08 15:05:00.001 (6) prepare srv_h_id 3 (PC)',
+      // Six long bind lines (~120 bytes each, ~720 total) push the eventual
+      // execute-result line well past a fixed 500-char lookahead window.
+      `26-10-08 15:05:00.002 (6) bind 1 : VARCHAR (100) ${longValue}`,
+      `26-10-08 15:05:00.002 (6) bind 2 : VARCHAR (100) ${longValue}`,
+      `26-10-08 15:05:00.002 (6) bind 3 : VARCHAR (100) ${longValue}`,
+      `26-10-08 15:05:00.002 (6) bind 4 : VARCHAR (100) ${longValue}`,
+      `26-10-08 15:05:00.002 (6) bind 5 : VARCHAR (100) ${longValue}`,
+      `26-10-08 15:05:00.002 (6) bind 6 : VARCHAR (100) ${longValue}`,
+      '26-10-08 15:05:00.010 (6) execute_all srv_h_id 3 INSERT INTO s1 values(?, ?, ?, ?, ?, ?)',
+      '26-10-08 15:05:00.012 (6) execute_all error:-670 tuple 0 time 0.002, EID = 3',
+    ];
+
+    const [row] = extractTopSQL(lines);
+
+    expect(row).toBeDefined();
+    expect(row.c).toBe(1);
+    expect(row.e).toBe(1);
+    expect(row.max).toBe('0.002');
+    expect(row.min).toBe('0.002');
+  });
+
+  it('reports "-" instead of "0.000" when no execution result line can be found at all', () => {
+    const lines = [
+      '26-10-08 15:06:00.000 (6) execute_all srv_h_id 4 INSERT INTO s1 values(1)',
+      // Log truncated before the result line ever arrives.
+    ];
+
+    const [row] = extractTopSQL(lines);
+
+    expect(row).toBeDefined();
+    expect(row.c).toBe(1);
+    expect(row.e).toBe(0);
+    expect(row.max).toBe('-');
+    expect(row.min).toBe('-');
+    expect(row.avg).toBe('-');
+  });
+
   it('computes min separately from max across repeated executions of the same query', () => {
     const lines = [
       '26-10-08 15:04:00.000 (6) execute_all srv_h_id 1 INSERT INTO s1 values(1)',

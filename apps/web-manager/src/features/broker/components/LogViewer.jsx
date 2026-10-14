@@ -156,7 +156,7 @@ function LogViewer({ hostUid, path }) {
 <Styles><Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/></Style><Style ss:ID="s"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:FontName="Consolas" ss:Size="10"/></Style></Styles>
 <Worksheet ss:Name="TopSQL"><Table><Column ss:Width="40"/><Column ss:Width="60"/><Column ss:Width="60"/><Column ss:Width="60"/><Column ss:Width="50"/><Column ss:Width="50"/><Column ss:Width="500"/>
 <Row ss:Height="20">${['ID','MAX','MIN','AVG','Count','Error','SQL'].map(h => `<Cell ss:StyleID="h"><Data ss:Type="String">${h}</Data></Cell>`).join('')}</Row>
-${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}</Data></Cell><Cell><Data ss:Type="Number">${d.max}</Data></Cell><Cell><Data ss:Type="Number">${d.min}</Data></Cell><Cell><Data ss:Type="Number">${d.avg}</Data></Cell><Cell><Data ss:Type="Number">${d.c}</Data></Cell><Cell><Data ss:Type="Number">${d.e}</Data></Cell><Cell ss:StyleID="s"><Data ss:Type="String">${esc(d.sql)}</Data></Cell></Row>`).join('')}
+${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="String">-</Data></Cell>` : `<Cell><Data ss:Type="Number">${v}</Data></Cell>`; return `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}</Data></Cell>${numCell(d.max)}${numCell(d.min)}${numCell(d.avg)}<Cell><Data ss:Type="Number">${d.c}</Data></Cell><Cell><Data ss:Type="Number">${d.e}</Data></Cell><Cell ss:StyleID="s"><Data ss:Type="String">${esc(d.sql)}</Data></Cell></Row>`; }).join('')}
 </Table></Worksheet></Workbook>`;
     const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
     const a = Object.assign(document.createElement('a'), {
