@@ -14,7 +14,11 @@ import { useCM } from '../../../constants/useCM';
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { brokers, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
+  const { brokersByHost, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
+  // brokersByHost is keyed by hostUid — this tab is rendered for this one
+  // specific hostUid, so read straight out of its slot rather than a flat
+  // shared array a different, still in-flight host's response could clobber.
+  const brokers = brokersByHost[hostUid] || [];
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };
 
@@ -52,7 +56,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
       <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-bk-main h-full">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
-          <span className="text-[12px] text-slate-400 font-medium">{CM.loadingBrokerStatus}</span>
+          <span className="text-14 text-slate-400 font-medium">{CM.loadingBrokerStatus}</span>
         </div>
       </div>
     );
@@ -106,7 +110,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
       }
     },
     { header: CM.database, accessor: 'as_dbname', render: (v) => <span className="text-amber-600/80 dark:text-amber-500/70 font-mono">{v || '—'}</span> },
-    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-[11px]">{v || '—'}</span> },
+    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
     { header: CM.clientIp, accessor: 'as_client_ip', render: (v) => <span className="font-mono">{v || '—'}</span> },
   ];
 
@@ -119,14 +123,14 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   ];
 
   const asActiveBadge = (
-    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full animate-in fade-in transition duration-300">
+    <span className="inline-flex items-center gap-1.5 text-12 font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full animate-in fade-in transition duration-300">
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
       {CM.activeCount(asInfo.length)}
     </span>
   );
 
   const jobQueuedBadge = (
-    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-in fade-in transition duration-300">
+    <span className="inline-flex items-center gap-1.5 text-12 font-bold text-amber-600 dark:text-amber-400 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-in fade-in transition duration-300">
       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
       {CM.queuedCount(jobInfo.length)}
     </span>
@@ -136,30 +140,30 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-bk-main overflow-hidden">
 
       {/* ── Top bar ── */}
-      <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-bk-side/40">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-bk-side/40">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="hub" size="sm" weight={300} className="text-amber-500" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{brokerName}</span>
+              <span className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{brokerName}</span>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.brokerStatusInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences.brokerStatusInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences.brokerStatusInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences.brokerStatusInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences.brokerStatusInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60" />
-              <span className="text-[10px] text-slate-400 font-mono tracking-tight leading-none">{CM.brokerStatus}</span>
+              <span className="text-12 text-slate-400 font-mono tracking-tight leading-none">{CM.brokerStatus}</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+          <span className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </span>
 
@@ -172,7 +176,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5 shadow-xs'}`}
             title={CM.refreshBrokerStatus}
           >
-            <Icon name="refresh" size="18px" className={(status.loading || isManualRefreshing) ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="19px" className={(status.loading || isManualRefreshing) ? 'animate-spin' : ''} />
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -180,14 +184,14 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
         {/* ── Basic Info ── */}
         <Card
           title={
             <div className="flex items-center gap-2">
               <Icon name="info" size="sm" weight={300} className="text-amber-500" />
-              <span className="text-[12px] font-bold">{CM.basicInformation}</span>
+              <span className="text-14 font-bold">{CM.basicInformation}</span>
             </div>
           }
           bodyClassName="p-0"
@@ -217,11 +221,11 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
                   `}
                 >
                   <div className={`absolute top-0 left-4 right-4 h-[2px] rounded-b-full opacity-30 ${accentBar || 'bg-slate-300 dark:bg-slate-700'}`} />
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.12em] leading-none">
+                  <span className="text-11 font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.12em] leading-none">
                     {m.label}
                   </span>
                   {m.badge ? (
-                    <span className={`inline-flex items-center gap-1.5 self-start px-2 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide border
+                    <span className={`inline-flex items-center gap-1.5 self-start px-2 py-1 rounded-md text-13 font-bold uppercase tracking-wide border
                       ${isActive
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
                         : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-white/4 dark:text-slate-400 dark:border-white/[0.07]'}`}
@@ -230,7 +234,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
                       {m.value}
                     </span>
                   ) : (
-                    <span className={`font-mono text-[15px] font-bold leading-none
+                    <span className={`font-mono text-17 font-bold leading-none
                       ${m.accent === 'emerald' ? 'text-emerald-500 dark:text-emerald-400'
                       : m.accent === 'amber'   ? 'text-amber-500 dark:text-amber-400'
                       : 'text-slate-800 dark:text-slate-200'}`}
@@ -249,7 +253,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
           title={
             <div className="flex items-center gap-2">
               <Icon name="dns" size="sm" weight={300} className="text-amber-500" />
-              <span className="text-[12px] font-bold">{CM.applicationServers}</span>
+              <span className="text-14 font-bold">{CM.applicationServers}</span>
             </div>
           }
           rightContent={(isCollapsed) => isCollapsed && asActiveBadge}
@@ -270,7 +274,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
           title={
             <div className="flex items-center gap-2">
               <Icon name="queue" size="sm" weight={300} className="text-amber-500" />
-              <span className="text-[12px] font-bold">{CM.jobQueue}</span>
+              <span className="text-14 font-bold">{CM.jobQueue}</span>
             </div>
           }
           rightContent={(isCollapsed) => isCollapsed && jobInfo.length > 0 && jobQueuedBadge}
@@ -283,7 +287,6 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             sortable
             zebra
             emptyMessage={CM.jobQueueEmptyMsg}
-            showEmptyStateAsRow
           />
         </Card>
       </div>

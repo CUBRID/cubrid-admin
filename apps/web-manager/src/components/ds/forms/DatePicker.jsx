@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useSelector, shallowEqual } from 'react-redux';
 import { FormField } from './FormField';
@@ -16,9 +16,14 @@ export const DatePicker = ({
   icon = "calendar_today",
   className = "",
   disabled = false,
+  id,
   ...props
 }) => {
   const CM = useCM();
+  const generatedId = useId();
+  const controlId = id || generatedId;
+  const descriptionId = description ? `${controlId}-description` : undefined;
+  const errorId = error ? `${controlId}-error` : undefined;
   const locale = useSelector(
     (state) => state.user?.preferences?.uiLocale ?? 'en',
     shallowEqual
@@ -72,6 +77,22 @@ export const DatePicker = ({
     return () => window.removeEventListener('scroll', handleScroll, true);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setIsOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    // Capture at window level so the open picker consumes Escape before its
+    // parent modal sees the same key and closes the entire form.
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
+  }, [isOpen]);
+
   const handleDateSelect = (dateStr) => {
     if (disabled) return;
     if (onChange) {
@@ -100,22 +121,26 @@ export const DatePicker = ({
   const dropdownEl = isOpen ? createPortal(
     <div
       id="datepicker-portal-root"
+      role="dialog"
+      aria-label={label || CM.selectDatePlaceholder}
       style={dropdownStyle}
       className="bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.35)] p-4 animate-in fade-in zoom-in-95 duration-200"
     >
       <div className="flex items-center justify-between mb-4 px-1">
         <button 
           type="button"
+          aria-label={CM.previousMonth}
           onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} 
           className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
         >
           <Icon name="chevron_left" size="sm" />
         </button>
-        <Typography variant="span" className="text-[12px] font-black tracking-tight text-slate-900 dark:text-white">
+        <Typography variant="span" className="text-14 font-black tracking-tight text-slate-900 dark:text-white">
           {viewDate.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', { month: 'long', year: 'numeric' })}
         </Typography>
         <button 
           type="button"
+          aria-label={CM.nextMonth}
           onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))} 
           className="w-8 h-8 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
         >
@@ -123,8 +148,8 @@ export const DatePicker = ({
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {['S','M','T','W','T','F','S'].map(d => (
-          <div key={d} className="h-8 mb-1 flex items-center justify-center text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{d}</div>
+        {['S','M','T','W','T','F','S'].map((d, index) => (
+          <div key={`${d}-${index}`} className="h-8 mb-1 flex items-center justify-center text-12 font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{d}</div>
         ))}
         {calendarDays.map((d, index) => {
           if (d === null) return <div key={`empty-${index}`} />;
@@ -137,7 +162,7 @@ export const DatePicker = ({
               key={ds} 
               type="button"
               onClick={() => handleDateSelect(ds)} 
-              className={`h-9 rounded-xl text-[11px] font-black transition-all cursor-pointer border ${isSelected ? 'bg-amber-500/15 dark:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30' : 'bg-transparent border-transparent hover:bg-amber-500/10 text-slate-600 dark:text-slate-300 font-bold'}`}
+              className={`h-9 rounded-xl text-13 font-black transition-all cursor-pointer border ${isSelected ? 'bg-amber-500/15 dark:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30' : 'bg-transparent border-transparent hover:bg-amber-500/10 text-slate-600 dark:text-slate-300 font-bold'}`}
             >
               {d}
             </button>
@@ -149,14 +174,19 @@ export const DatePicker = ({
   ) : null;
 
   return (
-    <FormField label={label} description={description} error={error} required={required} className={className}>
+    <FormField label={label} description={description} error={error} required={required} className={className} htmlFor={controlId} descriptionId={descriptionId} errorId={errorId}>
       <div className="relative group" ref={containerRef}>
         <button
           ref={buttonRef}
+          id={controlId}
           type="button"
           disabled={disabled}
           onClick={() => !disabled && (isOpen ? setIsOpen(false) : openDropdown())}
-          className={`relative w-full h-10 px-4 flex items-center justify-between bg-slate-50 dark:bg-white/3 border rounded-xl transition-all font-bold text-[13px] cursor-pointer ${
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
+          className={`relative w-full h-10 px-4 flex items-center justify-between bg-slate-50 dark:bg-white/3 border rounded-xl transition-all font-bold text-15 cursor-pointer ${
             isOpen ? 'border-amber-500/60 ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20'
           } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         >

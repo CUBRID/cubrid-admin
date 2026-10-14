@@ -21,14 +21,30 @@ const config = text => ({ conflist: [{ confdata: text.split('\n') }] });
 let container;
 let root;
 let store;
+let state;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  const state = { host: { hosts: [] }, user: { preferences: { uiLocale: 'en' } } };
-  store = configureStore({ reducer: () => state });
+  state = {
+    host: { hosts: [] },
+    layout: { refreshCounter: 0, refreshTabId: null },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  store = configureStore({
+    reducer: (current = state, action) => {
+      if (action.type !== 'test/refresh') return current;
+      return {
+        ...current,
+        layout: {
+          refreshCounter: current.layout.refreshCounter + 1,
+          refreshTabId: action.payload,
+        },
+      };
+    },
+  });
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -80,4 +96,17 @@ it('ignores an old host response after the editor target changes', async () => {
   expect(element('textarea').value).toBe('server=newhost');
   await act(async () => old.resolve(config('server=oldhost')));
   expect(element('textarea').value).toBe('server=newhost');
+});
+
+it('reloads when the global refresh targets this config tab', async () => {
+  hostApi.getHostConfig.mockResolvedValue(config('server=demodb'));
+  await render();
+  expect(hostApi.getHostConfig).toHaveBeenCalledTimes(1);
+
+  await act(async () => store.dispatch({
+    type: 'test/refresh',
+    payload: 'edit_config:host:cubridconf',
+  }));
+
+  expect(hostApi.getHostConfig).toHaveBeenCalledTimes(2);
 });

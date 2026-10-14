@@ -72,7 +72,7 @@ export const LogViewer = ({
           <div className="space-y-1">
             {lines.map((line, idx) => (
               <div key={idx} className="flex items-start gap-4 hover:bg-slate-50 dark:hover:bg-slate-900 p-1.5 rounded-sm transition-colors group">
-                <span className="text-slate-400 dark:text-slate-500 whitespace-nowrap pt-0.5 text-[11px]">{line.timestamp}</span>
+                <span className="text-slate-400 dark:text-slate-500 whitespace-nowrap pt-0.5 text-13">{line.timestamp}</span>
                 <Badge variant={getBadgeVariant(line.level)} size="sm" className="w-16 justify-center tracking-wider uppercase shrink-0">
                   {line.level}
                 </Badge>

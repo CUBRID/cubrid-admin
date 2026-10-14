@@ -1,11 +1,17 @@
 @import 'tailwindcss';
+@import './fonts.css';
 
 @custom-variant dark (&:is(.dark *));
 
 @theme {
   --color-primary: #f59e0b;
   --color-bk-main: #121212;
+  --color-bk-card: #191919;
   --color-bk-side: #1e1e1e;
+  --color-bk-raised: #252525;
+  --color-bk-control: #292929;
+  --color-bk-hover: #303030;
+  --color-bk-border: #3a3a3a;
   --color-amber: #f59e0b;
   --color-bk-yellow: #f59e0b;
   --color-accent-red: #f43f5e;
@@ -16,10 +22,71 @@
   --color-accent-purple: #8b5cf6;
   --color-background-light: #f6f6f8;
   --color-background-dark: #121212;
+  --color-editor-bg: #17191e;
+  --color-editor-gutter: #1d2026;
+  --color-editor-border: #2b3038;
+  --color-editor-text: #c5cbd4;
+  --color-editor-comment: #788290;
+  --color-editor-section: #d5a447;
+  --color-editor-key: #73afc2;
+  --color-editor-value: #a3acb8;
+  --color-editor-line: #626c79;
 
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /*
+   * Single source of truth for every font size in the app. Previously ~140
+   * files hardcoded their own arbitrary text-[Npx] values (18 distinct raw
+   * sizes from 7px to 18px) instead of sharing a scale. This scale replaced
+   * those with 12 shared steps, initially the raw sizes shifted up by ~2px
+   * (half-steps merged into their neighbor), then nudged up another 1px —
+   * so a UI-wide "make the text bigger" request is now one edit here
+   * instead of a per-component one. The names (text-13, text-xs, ...) are
+   * scale-step labels, not a promise that text-13 renders at exactly 13px —
+   * that's what lets them keep growing here without ever renaming classes
+   * across the app again.
+   */
+  --text-9: 10px;
+  --text-10: 11px;
+  --text-11: 12px;
+  --text-12: 13px;
+  --text-13: 14px;
+  --text-14: 15px;
+  --text-15: 16px;
+  --text-16: 17px;
+  --text-17: 18px;
+  --text-18: 19px;
+  --text-19: 20px;
+  --text-20: 21px;
+
+  /* Same bump applied to Tailwind's own named scale, so components that
+     already used text-xs/sm/base/... grow along with everything else. */
+  --text-xs: 15px;
+  --text-sm: 17px;
+  --text-base: 19px;
+  --text-lg: 21px;
+  --text-xl: 23px;
+  --text-2xl: 27px;
+  --text-3xl: 33px;
+  --text-4xl: 39px;
+
+  /*
+   * font-bold/font-black/font-semibold are used ~280/~163/~128 times across
+   * the app (vs. 7 font-normal, 5 font-light) — the design already leaned
+   * heavy before the size bump above, and larger text makes that same
+   * weight look noticeably thicker (stroke width scales with font size).
+   * Stepping the heaviest few weights down one notch keeps the intended
+   * hierarchy (black > bold > semibold > medium) without going as far as
+   * a full normal/light pass, which would undersell text meant to stand
+   * out. Values are non-round on purpose, to land between two adjacent
+   * default steps without colliding into one.
+   */
+  --font-weight-black: 800;
+  --font-weight-extrabold: 750;
+  --font-weight-bold: 650;
+  --font-weight-semibold: 560;
 
   --radius-none: 0;
   --radius-sm: 0.25rem;
@@ -48,6 +115,97 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+}
+
+@layer utilities {
+  /* Keep functional labels readable without changing compact component spacing. */
+  .text-\[8px\],
+  .text-\[9px\],
+  .text-\[10px\] {
+    font-size: 0.6875rem !important;
+  }
+
+  /* Dark-mode contrast ladder: canvas → surface → raised → control → hover. */
+  .dark [class~="dark:bg-slate-900"] {
+    background-color: var(--color-bk-side) !important;
+  }
+
+  .dark [class~="dark:bg-slate-900/50"],
+  .dark [class~="dark:bg-slate-800/50"] {
+    background-color: var(--color-bk-raised) !important;
+  }
+
+  .dark [class~="dark:bg-slate-800"] {
+    background-color: var(--color-bk-control) !important;
+  }
+
+  .dark [class~="dark:bg-white/1"],
+  .dark [class~="dark:bg-white/[0.01]"],
+  .dark [class~="dark:bg-white/[0.012]"] {
+    background-color: rgb(255 255 255 / 0.04) !important;
+  }
+
+  .dark [class~="dark:bg-white/2"],
+  .dark [class~="dark:bg-white/[0.02]"] {
+    background-color: rgb(255 255 255 / 0.05) !important;
+  }
+
+  .dark [class~="dark:bg-white/3"],
+  .dark [class~="dark:bg-white/[0.03]"] {
+    background-color: rgb(255 255 255 / 0.06) !important;
+  }
+
+  .dark [class~="dark:bg-white/4"],
+  .dark [class~="dark:bg-white/[0.04]"] {
+    background-color: rgb(255 255 255 / 0.07) !important;
+  }
+
+  .dark [class~="dark:bg-white/5"] {
+    background-color: rgb(255 255 255 / 0.08) !important;
+  }
+
+  .dark [class~="dark:border-white/4"],
+  .dark [class~="dark:border-white/5"],
+  .dark [class~="dark:border-white/[0.04]"],
+  .dark [class~="dark:border-white/[0.05]"] {
+    border-color: rgb(255 255 255 / 0.08) !important;
+  }
+
+  .dark [class~="dark:border-white/6"],
+  .dark [class~="dark:border-white/[0.06]"] {
+    border-color: rgb(255 255 255 / 0.09) !important;
+  }
+
+  .dark [class~="dark:border-white/8"],
+  .dark [class~="dark:border-white/[0.08]"] {
+    border-color: rgb(255 255 255 / 0.10) !important;
+  }
+
+  .dark [class~="dark:text-slate-500"] {
+    color: #94a3b8 !important;
+  }
+
+  .dark [class~="dark:text-slate-600"],
+  .dark [class~="dark:text-slate-700"] {
+    color: #7f8ea3 !important;
+  }
+
+  .dark [class~="disabled:opacity-30"]:disabled {
+    opacity: 0.5 !important;
+  }
+
+  .dark [class~="disabled:opacity-40"]:disabled {
+    opacity: 0.58 !important;
+  }
+
+  .dark [class~="disabled:opacity-50"]:disabled {
+    opacity: 0.65 !important;
+  }
+}
+
+.dark .config-source-input::selection {
+  background-color: rgb(115 175 194 / 0.25);
+  color: transparent;
 }
 
 @utility cursor-col-resize {
@@ -83,7 +241,8 @@
     color: #e2e8f0;
   }
   *:focus-visible {
-    outline: none;
+    outline: 2px solid rgba(245, 158, 11, 0.8);
+    outline-offset: 2px;
   }
 
   /* Autocomplete Background Override */
@@ -130,6 +289,17 @@
   [aria-disabled="true"],
   .cursor-not-allowed {
     cursor: not-allowed !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -182,7 +352,7 @@
 
 #sidebar.collapsed h2, 
 #sidebar.collapsed .text-sm, 
-#sidebar.collapsed .text-\[10px\], 
+#sidebar.collapsed .text-12,
 #sidebar.collapsed .text-xs, 
 #sidebar.collapsed summary .text-sm,
 #sidebar.collapsed summary .material-symbols-outlined:first-child,
@@ -224,6 +394,129 @@
 
 #v-resizer:hover, #v-resizer.resizing { background-color: #ffc107; }
 
+.sidebar-responsive-container {
+  container-type: inline-size;
+}
+
+.server-toolbar-overflow-action {
+  display: none;
+}
+
+.page-toolbar-container {
+  container-type: inline-size;
+}
+
+.log-toolbar-overflow-action {
+  display: none;
+}
+
+.all-logs-toolbar-overflow-action {
+  display: none;
+}
+
+.config-property-column {
+  width: clamp(11rem, 28vw, 20rem);
+}
+
+@container (max-width: 900px) {
+  .page-toolbar-shell {
+    flex-wrap: wrap;
+  }
+
+  .page-toolbar-identity {
+    flex: 1 1 12rem;
+  }
+
+  .page-toolbar-center {
+    order: 3;
+    flex: 1 0 100%;
+    display: flex;
+    justify-content: center;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgb(226 232 240);
+  }
+
+  .dark .page-toolbar-center {
+    border-top-color: rgb(255 255 255 / 0.08);
+  }
+}
+
+@container (max-width: 700px) {
+  .log-toolbar-wide-only,
+  .all-logs-toolbar-wide-only {
+    display: none;
+  }
+
+  .log-toolbar-overflow-action,
+  .all-logs-toolbar-overflow-action {
+    display: flex;
+  }
+}
+
+@container (max-width: 460px) {
+  .page-toolbar-shell {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .page-toolbar-identity {
+    flex-basis: 8rem;
+  }
+
+  .page-toolbar-primary-label {
+    display: none;
+  }
+
+  .page-toolbar-primary-action {
+    width: 2rem;
+    padding-left: 0;
+    padding-right: 0;
+    justify-content: center;
+  }
+
+  .responsive-action-label {
+    display: none;
+  }
+}
+
+@container (max-width: 480px) {
+  .server-list-header {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .server-list-header-actions {
+    gap: 0.25rem;
+  }
+
+  .server-toolbar-action {
+    width: 1.75rem;
+    min-width: 1.75rem;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .server-toolbar-label {
+    display: none;
+  }
+}
+
+@container (max-width: 330px) {
+  .server-list-header-title {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+
+  .server-toolbar-secondary-action,
+  .server-toolbar-login-action {
+    display: none;
+  }
+
+  .server-toolbar-overflow-action {
+    display: flex;
+  }
+}
+
 @keyframes reloading {
   0% { transform: translateX(-100%); }
   50% { transform: translateX(100%); }
@@ -253,4 +546,3 @@
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
-

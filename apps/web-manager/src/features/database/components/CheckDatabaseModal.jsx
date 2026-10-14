@@ -124,16 +124,16 @@ export default function CheckDatabaseModal() {
             <Icon name="database" size="sm" weight={300} className="text-amber-500" />
           </div>
           <div className="min-w-0">
-            <Typography variant="caption" className="text-slate-400 text-[10px] uppercase font-semibold">
+            <Typography variant="caption" className="text-slate-400 text-12 uppercase font-semibold">
               {CM.databaseName}
             </Typography>
-            <Typography variant="p" className="font-bold text-[13px] text-slate-900 dark:text-white font-mono truncate">
+            <Typography variant="p" className="font-bold text-15 text-slate-900 dark:text-white font-mono truncate">
               {selectedDatabase}
             </Typography>
           </div>
         </div>
 
-        <Typography variant="p" className="text-[12px] text-slate-600 dark:text-slate-400 leading-relaxed">
+        <Typography variant="p" className="text-14 text-slate-600 dark:text-slate-400 leading-relaxed">
           {CM.checkDatabaseDesc}
         </Typography>
 
@@ -146,7 +146,7 @@ export default function CheckDatabaseModal() {
           onClick={() => setRepair(!repair)}
         >
           <Icon name="build" size="sm" weight={300} className={repair ? 'text-amber-500' : 'text-slate-400'} />
-          <Typography variant="p" className={`flex-1 text-[12px] font-medium ${repair ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}`}>
+          <Typography variant="p" className={`flex-1 text-14 font-medium ${repair ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}`}>
             {CM.repairWhenInconsistency}
           </Typography>
           <div onClick={(e) => e.stopPropagation()}>
