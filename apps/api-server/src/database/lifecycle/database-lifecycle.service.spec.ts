@@ -283,7 +283,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'startdb',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
     });
@@ -301,7 +302,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'ha_start',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -358,7 +360,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'stopdb',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
     });
@@ -376,7 +379,8 @@ describe('DatabaseLifecycleService', () => {
           task: 'ha_stop',
           token: mockHost.token,
           dbname: mockDbname,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -476,7 +480,8 @@ describe('DatabaseLifecycleService', () => {
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         `https://${mockHost.address}:${mockHost.port}/cm_api`,
-        expect.objectContaining({ task: 'ha_start' })
+        expect.objectContaining({ task: 'ha_start' }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       // Only one ha_start call for both HA databases, not one per database.
       const haStartCalls = cmsClient.postAuthenticated.mock.calls.filter(
@@ -552,6 +557,59 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('stopWholeService', () => {
+    it('still stops databases and reports the broker failure when stopping brokers fails', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockRejectedValue(new Error('broker stop: fail'));
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'db1' }] },
+      } as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', task: 'stopdb' } as any);
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual(expect.arrayContaining([
+        { name: 'brokers', error: 'broker stop: fail' },
+      ]));
+      const stopdbCalls = cmsClient.postAuthenticated.mock.calls.filter(
+        ([, body]) => body.task === 'stopdb'
+      );
+      expect(stopdbCalls).toHaveLength(1);
+    });
+
+    it('reports a startInfo failure as its own entry and skips database stop, instead of throwing', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
+      jest.spyOn(databaseInfoService, 'startInfo').mockRejectedValue(new Error('status unavailable'));
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result).toEqual({ failed: [{ name: 'databases', error: 'status unavailable' }] });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'stopdb' }),
+        expect.anything()
+      );
+    });
+
+    it('reports a stopAllDatabases failure as its own entry instead of throwing, keeping any broker failure', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockRejectedValue(new Error('broker stop: fail'));
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'db1' }] },
+      } as any);
+      jest.spyOn(service, 'stopAllDatabases').mockRejectedValue(new Error('ha db list unavailable'));
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual(expect.arrayContaining([
+        { name: 'brokers', error: 'broker stop: fail' },
+        { name: 'databases', error: 'ha db list unavailable' },
+      ]));
+    });
+  });
+
   describe('restartDatabase', () => {
     const mockBaseResponse = {
       __EXEC_TIME: '10 ms',
@@ -599,12 +657,14 @@ describe('DatabaseLifecycleService', () => {
       expect(cmsClient.postAuthenticated).toHaveBeenNthCalledWith(
         1,
         expect.any(String),
-        expect.objectContaining({ task: 'ha_stop', dbname: mockDbname })
+        expect.objectContaining({ task: 'ha_stop', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(cmsClient.postAuthenticated).toHaveBeenNthCalledWith(
         2,
         expect.any(String),
-        expect.objectContaining({ task: 'ha_start', dbname: mockDbname })
+        expect.objectContaining({ task: 'ha_start', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
 
@@ -1214,7 +1274,9 @@ describe('DatabaseLifecycleService', () => {
           token: mockHost.token,
           dbname: mockDbname,
           delbackup: 'y',
-        }
+          async: 'yes',
+        },
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });
@@ -1238,7 +1300,8 @@ describe('DatabaseLifecycleService', () => {
         expect.objectContaining({
           task: 'deletedb',
           delbackup: 'n',
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });

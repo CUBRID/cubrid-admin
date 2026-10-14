@@ -318,12 +318,12 @@ export default function EditQueryPlanModal() {
               {CM.weekdaysShort.map((day, ix) => {
                 const isSel = formData.periodDetail.includes(ix + 1);
                 return (
-                  <button 
-                    key={day} 
+                  <button
+                    key={day}
                     type="button"
                     onClick={() => toggleDetail(ix + 1)}
                     aria-pressed={isSel}
-                    className={`h-9 rounded-lg border text-[11px] font-medium transition-colors cursor-pointer
+                    className={`h-9 rounded-lg border text-13 font-medium transition-colors cursor-pointer
                       ${isSel
                         ? 'bg-amber-500 border-amber-500 text-slate-900'
                         : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}
@@ -339,12 +339,12 @@ export default function EditQueryPlanModal() {
               {Array.from({ length: 31 }, (_, i) => i + 1).map(d => {
                 const isSel = formData.periodDetail.includes(d);
                 return (
-                  <button 
-                    key={d} 
+                  <button
+                    key={d}
                     type="button"
                     onClick={() => toggleDetail(d)}
                     aria-pressed={isSel}
-                    className={`h-8 rounded-lg border text-[11px] font-medium transition-colors cursor-pointer
+                    className={`h-8 rounded-lg border text-12 font-medium transition-colors cursor-pointer
                       ${isSel
                         ? 'bg-amber-500 border-amber-500 text-slate-900'
                         : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}

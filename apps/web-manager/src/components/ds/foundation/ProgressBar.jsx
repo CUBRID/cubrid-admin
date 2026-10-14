@@ -46,12 +46,12 @@ export const ProgressBar = ({
       {(label || showValue) && (
         <div className="flex items-center justify-between px-0.5">
           {label && (
-            <Typography variant="label" className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            <Typography variant="label" className="text-12 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
               {label}
             </Typography>
           )}
           {showValue && (
-            <Typography variant="caption" className="text-[10px] font-mono font-black text-slate-700 dark:text-slate-200">
+            <Typography variant="caption" className="text-12 font-mono font-black text-slate-700 dark:text-slate-200">
               {valueLabel ?? `${percentage}%`}
             </Typography>
           )}

@@ -105,17 +105,17 @@ export default function VolumeInfoMonitor({ tabId }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.volumeInfo}</Typography>
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.volumeInfo}</Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60" />
-              <Typography variant="label" className="text-[10px] text-slate-400 font-mono leading-none truncate max-w-sm">
+              <Typography variant="label" className="text-12 text-slate-400 font-mono leading-none truncate max-w-sm">
                 {volume.location}
               </Typography>
             </div>
@@ -123,7 +123,7 @@ export default function VolumeInfoMonitor({ tabId }) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
           </Typography>
 
@@ -136,7 +136,7 @@ export default function VolumeInfoMonitor({ tabId }) {
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5'}`}
             title={CM.refreshVolumeData}
           >
-            <Icon name="refresh" size="18px" className={(isLoading || isRefreshing) ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="19px" className={(isLoading || isRefreshing) ? 'animate-spin' : ''} />
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -151,37 +151,37 @@ export default function VolumeInfoMonitor({ tabId }) {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <Icon name="bar_chart" size="sm" weight={300} className="text-amber-500" />
-                <Typography variant="p" className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">
+                <Typography variant="p" className="text-14 font-semibold text-slate-800 dark:text-slate-100">
                   {CM.volumeUsage}
                 </Typography>
               </div>
-              <Typography variant="label" className="mt-1 block text-[10px] text-slate-400 font-mono truncate" title={volumeName}>
+              <Typography variant="label" className="mt-1 block text-12 text-slate-400 font-mono truncate" title={volumeName}>
                 {volumeName}
               </Typography>
             </div>
 
             <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[360px]">
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
-                <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.usedLabel}</Typography>
-                <Typography variant="p" className="text-[13px] font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{formatMegabytes(usedM)}</Typography>
+                <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.usedLabel}</Typography>
+                <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{formatMegabytes(usedM)}</Typography>
               </div>
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
-                <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.freeLabel}</Typography>
-                <Typography variant="p" className="text-[13px] font-black text-emerald-500 font-mono leading-tight">{formatMegabytes(freeM)}</Typography>
+                <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.freeLabel}</Typography>
+                <Typography variant="p" className="text-15 font-black text-emerald-500 font-mono leading-tight">{formatMegabytes(freeM)}</Typography>
               </div>
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
-                <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.totalLabel}</Typography>
-                <Typography variant="p" className="text-[13px] font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{formatMegabytes(totalM)}</Typography>
+                <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.totalLabel}</Typography>
+                <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{formatMegabytes(totalM)}</Typography>
               </div>
             </div>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+              <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">
                 {CM.allocationLabel}
               </Typography>
-              <Typography variant="label" className={`text-[10px] font-black font-mono ${severity}`}>
+              <Typography variant="label" className={`text-12 font-black font-mono ${severity}`}>
                 {CM.percentUsed.replace('{0}', usedPct.toFixed(2))}
               </Typography>
             </div>
@@ -199,16 +199,16 @@ export default function VolumeInfoMonitor({ tabId }) {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 text-12 text-slate-500 dark:text-slate-400">
                   <span className={`w-2 h-2 rounded-full ${barColor}`} />
                   {CM.usedLabel} {formatMegabytes(usedM)}
                 </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 text-12 text-slate-500 dark:text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-white/20" />
                   {CM.freeLabel} {formatMegabytes(freeM)}
                 </span>
               </div>
-              <Typography variant="label" className="text-[10px] text-slate-400 font-mono">
+              <Typography variant="label" className="text-12 text-slate-400 font-mono">
                 {formatNumber(usedPages)} / {formatNumber(totalPages)} {CM.pagesLabel}
               </Typography>
             </div>
@@ -217,21 +217,21 @@ export default function VolumeInfoMonitor({ tabId }) {
 
         <section className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4">
           <div className="border border-slate-200 dark:border-white/6 bg-white dark:bg-white/2 rounded-sm p-4">
-            <Typography variant="label" className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-2">
+            <Typography variant="label" className="text-11 font-bold text-slate-400 uppercase tracking-widest block mb-2">
               {CM.type}
             </Typography>
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                 <Icon name="category" size="sm" weight={300} className="text-amber-500" />
               </div>
-              <Typography variant="p" className="text-[13px] font-black text-slate-700 dark:text-slate-100 font-mono truncate" title={volume.type}>
+              <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-100 font-mono truncate" title={volume.type}>
                 {volume.type || '-'}
               </Typography>
             </div>
           </div>
 
           <div className="border border-slate-200 dark:border-white/6 bg-white dark:bg-white/2 rounded-sm p-4">
-            <Typography variant="label" className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-2">
+            <Typography variant="label" className="text-11 font-bold text-slate-400 uppercase tracking-widest block mb-2">
               {CM.properties}
             </Typography>
             <div className="divide-y divide-slate-100 dark:divide-white/6">
@@ -239,11 +239,11 @@ export default function VolumeInfoMonitor({ tabId }) {
                 <div key={row.label} className="grid grid-cols-1 sm:grid-cols-[180px_minmax(0,1fr)] gap-1 sm:gap-4 py-2.5 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-1.5 text-slate-400 min-w-0">
                     <Icon name={row.icon} size="xs" weight={300} className="shrink-0" />
-                    <Typography variant="label" className="text-[9px] uppercase tracking-wider font-semibold truncate">
+                    <Typography variant="label" className="text-11 uppercase tracking-wider font-semibold truncate">
                       {row.label}
                     </Typography>
                   </div>
-                  <Typography variant="p" className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 font-mono break-all" title={row.value}>
+                  <Typography variant="p" className="text-14 font-semibold text-slate-700 dark:text-slate-200 font-mono break-all" title={row.value}>
                     {row.value}
                   </Typography>
                 </div>

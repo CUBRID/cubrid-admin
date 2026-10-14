@@ -45,7 +45,7 @@ export default function TabItem({
       <div className="relative flex items-center justify-center shrink-0">
         <Icon 
            name={icon || 'description'} 
-           size="16px" 
+           size="17px" 
            className={isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-600'} 
            weight={isActive ? 400 : 300}
         />
@@ -57,7 +57,7 @@ export default function TabItem({
       {/* Label */}
       <Typography 
         variant="caption" 
-        className={`truncate flex-1 text-[12px] font-semibold tracking-tight leading-none ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'}`}
+        className={`truncate flex-1 text-14 font-semibold tracking-tight leading-none ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'}`}
       >
         {label}
       </Typography>

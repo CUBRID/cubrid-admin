@@ -49,7 +49,7 @@ export const BrokerChart = ({
                       className="w-full bg-amber-500/80 hover:bg-amber-600 rounded-t-sm transition-all"
                       style={{ height: `${heightPct}%` }}
                     />
-                    <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[10px] py-1 px-2 rounded-sm pointer-events-none transition-opacity whitespace-nowrap z-10">
+                    <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-12 py-1 px-2 rounded-sm pointer-events-none transition-opacity whitespace-nowrap z-10">
                       <div>{CM.timeColonLabel}{point.timestamp}</div>
                       <div>{CM.qps}: {point.qps}</div>
                       <div>{CM.connColonLabel}{point.activeConnections}</div>
@@ -59,8 +59,8 @@ export const BrokerChart = ({
               })}
             </div>
             
-            <div className="absolute -left-8 top-0 text-[10px] text-slate-400">{CM.maxLabel}</div>
-            <div className="absolute -left-8 bottom-0 text-[10px] text-slate-400">0</div>
+            <div className="absolute -left-8 top-0 text-12 text-slate-400">{CM.maxLabel}</div>
+            <div className="absolute -left-8 bottom-0 text-12 text-slate-400">0</div>
           </div>
         )}
       </div>

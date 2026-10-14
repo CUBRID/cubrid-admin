@@ -46,9 +46,21 @@ import {
   isHostHaModeOnFromCubridConf,
   getSectionParams,
   parseConfigParamsBySection,
+  mapWithConcurrency,
 } from '@util';
 import { BrokerService } from '@broker';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
+
+/**
+ * startdb/stopdb now go through executeAsyncCmsJobRequest, so each one
+ * consumes one of CMS's async-job slots for the duration of the call. That
+ * cap is small (CMS enforces a single-digit global limit per host, shared
+ * across every task and user), so a host with many non-HA databases must
+ * not fire startAllDatabases/stopAllDatabases's per-db calls all at once —
+ * see mapWithConcurrency below. Kept well under the cap to leave headroom
+ * for whatever else is concurrently using async jobs on the same host.
+ */
+const NON_HA_BULK_ACTION_CONCURRENCY = 4;
 
 /**
  * Service for managing database lifecycle operations.
@@ -119,7 +131,7 @@ export class DatabaseLifecycleService extends BaseService {
     // one call site covers the individual and bulk paths together.
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
-    return this.executeCmsRequest<StartDatabaseCmsRequest & { task: 'startdb' }, BaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<StartDatabaseCmsRequest & { task: 'startdb' }, BaseCmsResponse>(
       userId,
       hostUid,
       { task: 'startdb', dbname }
@@ -138,7 +150,7 @@ export class DatabaseLifecycleService extends BaseService {
     // stopDatabase, restartDatabase, and stopAllDatabases together.
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
-    return this.executeCmsRequest<StopDatabaseCmsRequest & { task: 'stopdb' }, BaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<StopDatabaseCmsRequest & { task: 'stopdb' }, BaseCmsResponse>(
       userId,
       hostUid,
       { task: 'stopdb', dbname }
@@ -372,8 +384,10 @@ export class DatabaseLifecycleService extends BaseService {
       }
     }
 
-    const results = await Promise.allSettled(
-      nonHaTargets.map((dbname) => this.startNonHaDatabase(userId, hostUid, dbname))
+    const results = await mapWithConcurrency(
+      nonHaTargets,
+      NON_HA_BULK_ACTION_CONCURRENCY,
+      (dbname) => this.startNonHaDatabase(userId, hostUid, dbname)
     );
     results.forEach((result, index) => {
       const dbname = nonHaTargets[index];
@@ -443,8 +457,10 @@ export class DatabaseLifecycleService extends BaseService {
       }
     }
 
-    const results = await Promise.allSettled(
-      nonHaTargets.map((dbname) => this.stopNonHaDatabase(userId, hostUid, dbname))
+    const results = await mapWithConcurrency(
+      nonHaTargets,
+      NON_HA_BULK_ACTION_CONCURRENCY,
+      (dbname) => this.stopNonHaDatabase(userId, hostUid, dbname)
     );
     results.forEach((result, index) => {
       const dbname = nonHaTargets[index];
@@ -518,14 +534,16 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Stop the whole service on a host in one call: databases, then brokers —
-   * matching `cubrid service stop`. Every currently-active database (from
-   * start-info's `dblist`) is stopped, with HA-configured databases always
-   * included via stopAllDatabases's bulk `ha_stop` regardless of this list.
+   * Stop the whole service on a host in one call: brokers, then databases —
+   * deliberately the reverse of `cubrid service stop` (which stops the
+   * server before the broker; verified in util_service.c's STOP case).
+   * Every currently-active database (from start-info's `dblist`) is
+   * stopped, with HA-configured databases always included via
+   * stopAllDatabases's bulk `ha_stop` regardless of this list.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
-   * @returns Failures across databases and brokers; never throws for partial
+   * @returns Failures across brokers and databases; never throws for partial
    *   failures
    */
   @HandleCmsErrors()
@@ -534,22 +552,43 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string
   ): Promise<{ failed: Array<{ name: string; error: string }> }> {
     // See startWholeService's matching comment — checked once, up front, so
-    // a job-in-progress block can't happen only after databases already
+    // a job-in-progress block can't happen only after brokers already
     // stopped.
     await this.assertNoActiveJob(userId, hostUid);
 
     const failed: Array<{ name: string; error: string }> = [];
 
-    const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
-    const dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
-
-    const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
-    failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
-
     try {
       await this.brokerService.stopAllBrokers(userId, hostUid);
     } catch (err: unknown) {
       failed.push({ name: 'brokers', error: err instanceof Error ? err.message : String(err) });
+    }
+
+    // Brokers may already be stopped above regardless of what happens next —
+    // an uncaught throw here would both lose that broker failure (we'd never
+    // reach `return { failed }`) and skip stopping the databases entirely,
+    // leaving the host in an undocumented partial-stop state. Without a
+    // dbname list there is nothing to pass to stopAllDatabases, so surface
+    // this as its own failure entry instead of continuing.
+    let dbnames: string[];
+    try {
+      const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
+      dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
+    } catch (err: unknown) {
+      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+      return { failed };
+    }
+
+    // stopAllDatabases itself can throw uncaught (its own assertNoActiveJob
+    // re-check, or a getHaDbNames CMS query failure) before it ever produces
+    // a per-dbname { failed } list — same reasoning as the startInfo guard
+    // above, so it gets the same treatment instead of losing the brokers
+    // failure already collected.
+    try {
+      const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
+      failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+    } catch (err: unknown) {
+      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
     }
 
     return { failed };
@@ -1073,7 +1112,7 @@ export class DatabaseLifecycleService extends BaseService {
 
     this.logger.debug(`Deleting database: ${dbname} on host: ${hostUid}`);
 
-    await this.executeCmsRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
+    await this.executeAsyncCmsJobRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest

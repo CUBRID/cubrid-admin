@@ -15,16 +15,21 @@ import {
 import { fetchDatabaseUsers } from '../../../user/userSlice';
 import { openTab } from '../../layoutSlice';
 import { dbKey } from '../../../database/dbKey';
+import { getHaDbServerModes, HA_DB_STATE_CONFIG } from '../../../host/haPeerUtils';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { useCM } from '../../../../constants/useCM';
 
-// Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes
-const selectDatabases = (state) => state.database.databases || [];
-const selectActiveDatabases = (state) => state.database.activeDatabases || [];
-const selectLoading = (state) => state.database.loading;
+// Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes.
+// databases/activeDatabases are keyed by hostUid — this tree is remounted
+// per selectedHostUid (see Sidebar.jsx's `key={selectedHostUid}`), so a
+// factory bound to that host keeps a stale fetch for a DIFFERENT host (one
+// the user has since switched away from) from ever being read here.
+const selectDatabases = (hostUid) => (state) => state.database.databasesByHost[hostUid] || [];
+const selectActiveDatabases = (hostUid) => (state) => state.database.activeDatabasesByHost[hostUid] || [];
+const selectLoading = (hostUid) => (state) => state.database.loadingByHost[hostUid] || false;
 const selectSelection = (state) => ({
   selectedDatabase: state.database.selectedDatabase,
   selectedDatabaseSubItem: state.database.selectedDatabaseSubItem
@@ -107,10 +112,12 @@ export default function DatabaseTree({
 
     return names;
   }, [haHeartbeat]);
-  
-  const databases = useSelector(selectDatabases, shallowEqual);
-  const activeDatabases = useSelector(selectActiveDatabases, shallowEqual);
-  const loading = useSelector(selectLoading);
+
+  const haDbServerModes = useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
+
+  const databases = useSelector(selectDatabases(selectedHostUid), shallowEqual);
+  const activeDatabases = useSelector(selectActiveDatabases(selectedHostUid), shallowEqual);
+  const loading = useSelector(selectLoading(selectedHostUid));
   const { selectedDatabase, selectedDatabaseSubItem } = useSelector(selectSelection, shallowEqual);
   const { 
     loggedInDatabases, 
@@ -214,7 +221,7 @@ export default function DatabaseTree({
         <div className="w-10 h-10 rounded-xl bg-slate-100/70 dark:bg-white/3 flex items-center justify-center mb-1">
           <Icon name="database" size="sm" className="text-slate-400 dark:text-slate-500" weight={300} />
         </div>
-        <Typography variant="caption" className="text-slate-500 font-medium text-[11px]">
+        <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-12">
           No databases found
         </Typography>
       </div>
@@ -230,18 +237,24 @@ export default function DatabaseTree({
         const isDbSelected = db.dbname === selectedDatabase && !selectedDatabaseSubItem;
 
         const isDbInHa = isHostHA && haDbs.has(db.dbname);
+        const haDbState = isDbInHa ? HA_DB_STATE_CONFIG[haDbServerModes.get(db.dbname)] : null;
         const label = (
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="truncate">{db.dbname}</span>
             {isDbInHa && (
-              <span className="px-0.5 py-[0.5px] text-[7px] font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
+              <span className="px-0.5 py-[0.5px] text-9 font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
                 HA
+              </span>
+            )}
+            {haDbState && (
+              <span className={`px-0.5 py-[0.5px] text-9 font-black leading-none border rounded-sm scale-90 shrink-0 uppercase ${haDbState.className}`}>
+                {CM[haDbState.cmKey]}
               </span>
             )}
             {db.isProfileExists && (
               <Icon
                 name="key"
-                size="10px"
+                size="14px"
                 weight={400}
                 className="text-slate-400 dark:text-slate-500 shrink-0"
                 title={CM.databaseCredentialsSaved}
@@ -249,7 +262,7 @@ export default function DatabaseTree({
             )}
             <Icon
               name={isLoggedIn ? 'lock_open' : 'lock'}
-              size="10px"
+              size="14px"
               weight={isLoggedIn ? 500 : 400}
               className={`shrink-0 ${isLoggedIn ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-700'}`}
               title={isLoggedIn ? CM.databaseLoggedIn : CM.databaseNotLoggedIn}
@@ -363,7 +376,7 @@ const UsersFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
       {!isLoading && users?.length === 0 ? (
         <div className="px-10 py-3 opacity-60 flex items-center gap-2">
            <Icon name="block" size="xs" weight={300} />
-           <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-[8px]">{CM.emptyListLabel}</Typography>
+           <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
         </div>
       ) : (
         (users || []).map(u => {

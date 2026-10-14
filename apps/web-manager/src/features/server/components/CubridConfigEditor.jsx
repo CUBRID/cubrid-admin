@@ -195,7 +195,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
             onClick={handleSave}
             disabled={!hasChanges || saving || loading || !loaded}
             title={CM.saveChanges}
-            className="page-toolbar-primary-action h-8 flex items-center gap-1.5 px-4 rounded-lg text-[11px] font-bold text-white dark:text-slate-900 bg-slate-800 dark:bg-bk-yellow hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className="page-toolbar-primary-action h-8 flex items-center gap-1.5 px-4 rounded-lg text-13 font-bold text-white dark:text-slate-900 bg-slate-800 dark:bg-bk-yellow hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {saving ? <Spinner size="xs" className="text-white dark:text-slate-900" /> : <Icon name="save" size="sm" />}
             <span className="page-toolbar-primary-label">{CM.saveChanges}</span>
@@ -212,9 +212,9 @@ export default function CubridConfigEditor({ hostUid, confname }) {
           <div className="shrink-0 flex items-center justify-between px-4 py-2 bg-white dark:bg-bk-side border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 text-slate-400">
               <Icon name="description" size="sm" weight={300} />
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">{confname}</span>
+              <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 font-mono">{confname}</span>
             </div>
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 font-mono uppercase tracking-widest">
+            <span className="text-12 font-medium text-slate-400 dark:text-slate-500 font-mono uppercase tracking-widest">
               {lineCount} lines
             </span>
           </div>
@@ -225,7 +225,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
             <div className="absolute left-0 top-0 bottom-0 w-12 bg-slate-50 dark:bg-editor-gutter border-r border-slate-100 dark:border-editor-border overflow-hidden pointer-events-none z-10">
               <div className="p-0 pt-6 flex flex-col items-end pr-3">
                 {content.split('\n').map((_, i) => (
-                  <span key={i} className="text-[12px] font-mono text-slate-300 dark:text-editor-line leading-relaxed select-none h-[25.2px]">
+                  <span key={i} className="text-14 font-mono text-slate-300 dark:text-editor-line leading-relaxed select-none h-[25.2px]">
                     {i + 1}
                   </span>
                 ))}
@@ -235,7 +235,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
             {/* Highlight layer */}
             <pre
               ref={preRef}
-              className="absolute inset-0 left-12 p-6 font-mono text-[12.5px] leading-relaxed text-slate-800 dark:text-editor-text pointer-events-none whitespace-pre-wrap break-all overflow-hidden"
+              className="absolute inset-0 left-12 p-6 font-mono text-14 leading-relaxed text-slate-800 dark:text-editor-text pointer-events-none whitespace-pre-wrap break-all overflow-hidden"
               aria-hidden="true"
             >
               {renderHighlighted(content)}
@@ -250,13 +250,13 @@ export default function CubridConfigEditor({ hostUid, confname }) {
               onChange={handleSourceChange}
               onScroll={syncScroll}
               spellCheck="false"
-              className="config-source-input absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-[12.5px] leading-relaxed text-transparent caret-slate-800 dark:caret-editor-section focus-visible:outline-2 focus-visible:outline-amber-500/70 dark:focus-visible:outline-editor-key/60 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
+              className="config-source-input absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-14 leading-relaxed text-transparent caret-slate-800 dark:caret-editor-section focus-visible:outline-2 focus-visible:outline-amber-500/70 dark:focus-visible:outline-editor-key/60 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
               placeholder={CM.configPlaceholder}
             />
           </div>
 
           {/* Source Footer */}
-          <div className="shrink-0 px-4 py-2 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wider">
+          <div className="shrink-0 px-4 py-2 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-12 text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wider">
             <span>UTF-8 | LF</span>
             <StatusBadge label={CM.sourceEditor} variant="sky" className="border-none bg-transparent" />
           </div>
@@ -265,7 +265,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
         {loading && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-white/80 dark:bg-bk-side/80 backdrop-blur-xs">
             <Spinner size="lg" />
-            <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 animate-pulse">{CM.loadingConfiguration}</span>
+            <span className="text-12 uppercase font-bold tracking-widest text-slate-400 animate-pulse">{CM.loadingConfiguration}</span>
           </div>
         )}
       </div>
