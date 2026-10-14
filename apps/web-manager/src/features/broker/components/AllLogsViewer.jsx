@@ -4,6 +4,10 @@ import { fetchBrokerLogs, fetchDatabaseLogs, fetchLogContent } from '../brokerSl
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
+import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
+import { EmptyState } from '../../../components/ds/layout/EmptyState';
+import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
+import { MenuDivider, MenuItem } from '../../../components/common/DropdownMenu';
 import { useCM } from '../../../constants/useCM';
 
 // ─── Constants & Helpers (Reused from LogViewer.jsx) ─────────────────────────
@@ -27,7 +31,7 @@ const HighlightedLine = ({ line }) => {
     keyword:   'text-sky-500 dark:text-sky-400',
     number:    'text-orange-500',
   };
-  let hits = [];
+  const hits = [];
   PATTERNS.forEach(({ type, re }) => {
     const r = new RegExp(re);
     let m;
@@ -78,6 +82,16 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
       <div
         className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-white/2 cursor-pointer select-none border-b border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-white/4 transition-colors"
         onClick={onToggleExpanded}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleExpanded();
+          }
+        }}
       >
         <div className="flex items-center gap-3 min-w-0">
           <Icon 
@@ -86,13 +100,13 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
             className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} 
           />
           <div className={`w-7 h-7 rounded flex items-center justify-center shrink-0 ${bgAccent}`}>
-            <Icon name="description" size="16px" className={textAccent} />
+            <Icon name="description" size="17px" className={textAccent} />
           </div>
-          <span className="text-[13px] font-semibold font-mono text-slate-800 dark:text-slate-200 truncate">
+          <span className="text-15 font-semibold font-mono text-slate-800 dark:text-slate-200 truncate">
             {fileName}
           </span>
           {totalLines > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium rounded">
+            <span className="text-12 px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium rounded">
               {totalLines} lines
             </span>
           )}
@@ -100,26 +114,28 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
         <div className="flex items-center gap-2 shrink-0">
           {loading && <Spinner size="xs" />}
           <button
+            type="button"
             onClick={handleRefresh}
             disabled={loading}
+            aria-label={`${CM.refreshLog}: ${fileName}`}
             className={`p-1.5 rounded-md text-slate-400 hover:${textAccent} hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all disabled:opacity-50`}
             title={CM.refreshLog}
           >
-            <Icon name="refresh" size="16px" className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="17px" className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
       {/* Card Content */}
       {isExpanded && (
-        <div className="bg-white dark:bg-bk-side max-h-[400px] overflow-auto font-mono text-[12px]">
+        <div className="bg-white dark:bg-bk-side max-h-[400px] overflow-auto font-mono text-14">
           {loading && !lines.length ? (
             <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
               <Spinner size="sm" />
               <span className="text-sm">{CM.loadingLogLines}</span>
             </div>
           ) : lines.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 opacity-40">
+            <div className="flex flex-col items-center justify-center py-8 opacity-70">
               <Icon name="block" size="md" weight={300} />
               <span className="italic mt-1">{CM.noContentAvailableShort}</span>
             </div>
@@ -130,7 +146,7 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
                   key={i}
                   className="flex gap-4 px-4 py-0.5 hover:bg-slate-50 dark:hover:bg-white/5 group transition-colors border-b border-slate-100/50 dark:border-white/2"
                 >
-                  <span className={`w-10 shrink-0 text-right text-[11px] text-slate-300 dark:text-slate-600 group-hover:${textAccent} select-none font-semibold pt-0.5`}>
+                  <span className={`w-10 shrink-0 text-right text-13 text-slate-300 dark:text-slate-600 group-hover:${textAccent} select-none font-semibold pt-0.5`}>
                     {i + 1}
                   </span>
                   <div className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-all leading-relaxed">
@@ -150,6 +166,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [expandedLogs, setExpandedLogs] = useState({});
+  const [toolbarMenu, setToolbarMenu] = useState(null);
   const hasInitialized = useRef(false);
   const isDb = type === 'database';
 
@@ -205,6 +222,17 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       hasInitialized.current = true;
     }
   }, [targetLogs]);
+
+  useEffect(() => {
+    if (!toolbarMenu) return undefined;
+    const closeMenu = (event) => {
+      if (!event.target.closest('.context-menu-container, .all-logs-toolbar-menu-trigger')) {
+        setToolbarMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', closeMenu, true);
+    return () => document.removeEventListener('mousedown', closeMenu, true);
+  }, [toolbarMenu]);
 
   const handleToggleExpanded = (path) => {
     setExpandedLogs(prev => ({
@@ -273,78 +301,98 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
 
   return (
     <div data-testid="all-logs-viewer" className="flex-1 flex flex-col bg-slate-50 dark:bg-bk-main overflow-hidden">
-      {/* Top Toolbar */}
-      <div className="shrink-0 px-5 py-3 bg-white dark:bg-bk-side border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 shadow-xs z-10">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-9 h-9 rounded-xl ${config.bgAccent} flex items-center justify-center shrink-0`}>
-            <Icon name={config.icon} size="sm" className={config.iconAccent} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-tight truncate leading-tight">
-              {config.title}
-            </h2>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium mt-0.5">
-              {config.subtitle}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
+      <PageToolbar
+        icon={config.icon}
+        title={config.title}
+        subtitle={config.subtitle}
+        iconClassName={config.iconAccent}
+        iconContainerClassName={config.bgAccent}
+        actions={(
+          <>
+          <div className="all-logs-toolbar-wide-only flex border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
             <button
+              type="button"
               data-testid="all-logs-expand-all-btn"
               onClick={handleExpandAll}
-              className="px-3 py-1.5 text-[11px] font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-white/10 transition-colors"
+              className="px-3 py-1.5 text-13 font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-white/10 transition-colors"
             >
               {CM.expandAllBtn}
             </button>
             <button
+              type="button"
               data-testid="all-logs-collapse-all-btn"
               onClick={handleCollapseAll}
-              className="px-3 py-1.5 text-[11px] font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 transition-colors"
+              className="px-3 py-1.5 text-13 font-bold bg-white dark:bg-white/2 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 transition-colors"
             >
               {CM.collapseAllBtn}
             </button>
           </div>
 
           <button
+            type="button"
             data-testid="all-logs-refresh-all-btn"
             onClick={handleRefreshAll}
             disabled={logsLoading}
-            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-[11px] font-bold shadow-xs ${config.borderAccent}`}
+            title={CM.refreshAllBtn}
+            aria-label={CM.refreshAllBtn}
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-13 font-bold shadow-xs ${config.borderAccent}`}
           >
-            <Icon name="refresh" size="16px" className={logsLoading ? 'animate-spin' : ''} />
-            {CM.refreshAllBtn}
+            <Icon name="refresh" size="17px" className={logsLoading ? 'animate-spin' : ''} />
+            <span className="responsive-action-label">{CM.refreshAllBtn}</span>
           </button>
 
           <button
+            type="button"
             data-testid="all-logs-download-all-btn"
             onClick={handleDownloadAll}
             disabled={targetLogs.length === 0}
-            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-[11px] font-bold shadow-xs ml-1 ${config.borderAccent}`}
+            className={`all-logs-toolbar-wide-only flex items-center gap-1.5 h-8 px-3 rounded-lg border bg-transparent transition-all active:scale-[0.98] text-13 font-bold shadow-xs ml-1 ${config.borderAccent}`}
             title={CM.downloadAllLogs}
           >
-            <Icon name="download" size="16px" />
+            <Icon name="download" size="17px" />
             {CM.downloadAllBtn}
           </button>
-        </div>
-      </div>
+
+          <button
+            type="button"
+            className="all-logs-toolbar-menu-trigger all-logs-toolbar-overflow-action w-8 h-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400"
+            title={CM.moreActions}
+            aria-label={CM.moreActions}
+            aria-expanded={Boolean(toolbarMenu)}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setToolbarMenu(toolbarMenu ? null : { x: rect.right, y: rect.bottom + 4 });
+            }}
+          >
+            <Icon name="more_horiz" size="18px" />
+          </button>
+        </>
+        )}
+      />
+
+      {toolbarMenu && (
+        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} width="w-48" onClose={() => setToolbarMenu(null)}>
+          <MenuItem icon="unfold_more" label={CM.expandAllBtn} onClick={() => { handleExpandAll(); setToolbarMenu(null); }} />
+          <MenuItem icon="unfold_less" label={CM.collapseAllBtn} onClick={() => { handleCollapseAll(); setToolbarMenu(null); }} />
+          <MenuDivider />
+          <MenuItem icon="download" label={CM.downloadAllBtn} disabled={targetLogs.length === 0} onClick={() => { handleDownloadAll(); setToolbarMenu(null); }} />
+        </ContextMenuWrapper>
+      )}
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
         {logsLoading && !targetLogs.length ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
+          <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3" role="status" aria-live="polite">
             <Spinner size="lg" />
             <p className="text-slate-500 dark:text-slate-400 text-sm">{CM.scanningForLogFiles}</p>
           </div>
         ) : targetLogs.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center py-12 bg-white dark:bg-bk-side border border-dashed border-slate-200 dark:border-slate-800 rounded-xl mx-auto max-w-md mt-10">
-            <div className="w-16 h-16 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
-              <Icon name="block" size="md" weight={300} className="text-slate-400 dark:text-slate-500" />
-            </div>
-            <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">{CM.noLogFilesFound}</h3>
-            <p className="text-xs text-slate-400 mt-1 px-6">{CM.noLogFilesFoundMsg}</p>
-          </div>
+          <EmptyState
+            className="min-h-[180px] border border-dashed border-slate-200/80 dark:border-white/8 rounded-xl bg-slate-50/40 dark:bg-black/10 mx-auto max-w-md mt-6"
+            icon="block"
+            title={CM.noLogFilesFound}
+            description={CM.noLogFilesFoundMsg}
+          />
         ) : (
           <div className="max-w-6xl mx-auto flex flex-col gap-4">
             {targetLogs.map((log) => (
@@ -362,7 +410,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       </div>
       
       {/* Footer */}
-      <div className="shrink-0 px-5 py-2.5 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase tracking-wider">
+      <div className="shrink-0 px-5 py-2.5 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-12 text-slate-500 dark:text-slate-400 font-mono uppercase tracking-wider">
         <div className="flex items-center gap-4 font-medium">
           <span>{CM.totalFilesLabel(targetLogs.length)}</span>
           <span>{CM.hostColonLabel(hostUid)}</span>

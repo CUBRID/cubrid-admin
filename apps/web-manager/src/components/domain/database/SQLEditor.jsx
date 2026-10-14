@@ -33,7 +33,7 @@ export const SQLEditor = ({
     <div className={`flex flex-col border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900 ${height}`}>
       <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">{language}</span>
+          <span className="text-13 font-mono text-slate-500 uppercase tracking-wider">{language}</span>
         </div>
         <div className="flex items-center gap-2">
           {onFormat && (

@@ -11,20 +11,24 @@ export const Table = ({
   onRowContextMenu,
   emptyMessage = null,
   headersVisible = true,
-  sortable = true,
+  sortable = false,
   loading = false,
   zebra = false,
   bordered = false,
   className = '',
   showEmptyStateAsRow = false,
   selectable = false,
+  isRowSelected,
+  getRowAriaLabel,
+  stickyHeader = false,
+  emptyState = null,
 }) => {
   const CM = useCM();
   const resolvedEmptyMessage = emptyMessage ?? CM.noDataAvailableMsg;
   const [sortConfig, setSortConfig] = useState(null);
 
   const handleSort = (accessor) => {
-    if (!sortable) return;
+    if (!accessor) return;
     let direction = 'asc';
     if (sortConfig && sortConfig.key === accessor && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -72,7 +76,7 @@ export const Table = ({
   }
 
   if (!loading && data.length === 0 && !showEmptyStateAsRow) {
-    return <EmptyState title={resolvedEmptyMessage} icon="table_chart" />;
+    return emptyState ?? <EmptyState title={resolvedEmptyMessage} icon="table_chart" />;
   }
 
   return (
@@ -81,22 +85,33 @@ export const Table = ({
 
         {/* ── Header ── */}
         {headersVisible && (
-          <thead>
+          <thead className={stickyHeader ? 'sticky top-0 z-10' : undefined}>
             <tr className="bg-slate-100 dark:bg-white/3 border-b border-slate-200 dark:border-white/[0.07]">
             {columns.map((col, idx) => {
+                const canSort = col.sortable ?? sortable;
+                const isInteractive = canSort || Boolean(col.onHeaderClick);
                 const isSorted = (col.sortDirection != null) || (sortConfig && col.accessor && sortConfig.key === col.accessor);
                 const activeSortDir = col.sortDirection ?? (isSorted ? sortConfig?.direction : null);
                 const alignCls = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : '';
                 return (
                   <th
                     key={col.accessor || idx}
-                    className={`group relative px-3 py-2 text-[11px] font-bold uppercase tracking-widest
+                    className={`group relative px-3 py-2 text-13 font-bold uppercase tracking-widest
                       ${isSorted ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
                       ${bordered ? 'border-r border-slate-200 dark:border-white/[0.08]' : ''}
                       transition-colors whitespace-nowrap ${alignCls}
-                      ${col.className || ''} ${(sortable || col.sortable || col.onHeaderClick) ? 'cursor-pointer select-none' : ''}`}
+                      ${col.className || ''} ${isInteractive ? 'cursor-pointer select-none' : ''}`}
                     style={{ width: col.width }}
-                    onClick={() => col.onHeaderClick ? col.onHeaderClick() : handleSort(col.accessor)}
+                    aria-sort={isSorted ? (activeSortDir === 'asc' ? 'ascending' : 'descending') : (canSort ? 'none' : undefined)}
+                    tabIndex={isInteractive ? 0 : undefined}
+                    onClick={isInteractive ? () => col.onHeaderClick ? col.onHeaderClick() : handleSort(col.accessor) : undefined}
+                    onKeyDown={isInteractive ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        if (col.onHeaderClick) col.onHeaderClick();
+                        else handleSort(col.accessor);
+                      }
+                    } : undefined}
                   >
                     {/* Left accent bar for active sort column */}
                     {isSorted && (
@@ -105,11 +120,11 @@ export const Table = ({
 
                     <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}>
                       <span className="truncate">{col.header}</span>
-                      {(sortable || col.sortable || col.onHeaderClick) && (
+                      {isInteractive && (
                         <span className={`ml-0.5 transition-all duration-150 ${isSorted ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`}>
                           <Icon
                             name={isSorted ? (activeSortDir === 'asc' ? 'north' : 'south') : 'unfold_more'}
-                            size="11px"
+                            size="12px"
                             weight={isSorted ? 700 : 300}
                             className={isSorted ? 'text-amber-500' : 'text-slate-400'}
                           />
@@ -129,7 +144,7 @@ export const Table = ({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-8 text-center text-[12px] text-slate-400 dark:text-slate-500 font-medium"
+                className="px-4 py-8 text-center text-14 text-slate-400 dark:text-slate-500 font-medium"
               >
                 {resolvedEmptyMessage}
               </td>
@@ -137,6 +152,7 @@ export const Table = ({
           ) : (
             sortedData.map((row, rowIdx) => {
               const isEven = rowIdx % 2 === 0;
+              const rowSelected = isRowSelected ? Boolean(isRowSelected(row)) : false;
               const rowKey =
                 row.rowKey ??
                 (row._type === 'host' ? row.uid : null) ??
@@ -148,9 +164,19 @@ export const Table = ({
                   key={rowKey}
                   className={`group transition-colors duration-100
                     ${zebra && isEven ? 'bg-slate-50/60 dark:bg-white/[0.012]' : ''}
+                    ${rowSelected ? 'bg-amber-500/10 dark:bg-amber-500/10' : ''}
                     hover:bg-amber-500/4 dark:hover:bg-amber-500/5
                     ${onRowClick ? 'cursor-pointer' : ''}`}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  aria-label={getRowAriaLabel?.(row)}
+                  aria-selected={isRowSelected ? rowSelected : undefined}
                   onClick={() => onRowClick && onRowClick(row)}
+                  onKeyDown={(event) => {
+                    if (onRowClick && (event.key === 'Enter' || event.key === ' ')) {
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  }}
                   onContextMenu={(e) => {
                     if (!onRowContextMenu) return;
                     e.preventDefault();
@@ -164,7 +190,7 @@ export const Table = ({
                     return (
                       <td
                         key={col.accessor || colIdx}
-                        className={`px-3 py-2 text-[12px] transition-colors leading-snug
+                        className={`px-3 py-2 text-14 transition-colors leading-snug
                           ${isFirst
                             ? 'font-semibold text-slate-800 dark:text-slate-200 border-l-2 border-l-transparent group-hover:border-l-amber-500/60'
                             : 'font-medium text-slate-600 dark:text-slate-400'}

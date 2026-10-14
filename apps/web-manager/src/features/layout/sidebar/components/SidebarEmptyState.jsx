@@ -26,7 +26,7 @@ export default function SidebarEmptyState() {
 
           {/* Central icon box */}
           <div className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/8 flex items-center justify-center shadow-xs">
-            <Icon name="dns" weight={300} size="22px" className="text-slate-400 dark:text-slate-500" />
+            <Icon name="dns" weight={300} size="23px" className="text-slate-400 dark:text-slate-500" />
           </div>
 
           {/* Satellite dots */}
@@ -39,20 +39,20 @@ export default function SidebarEmptyState() {
         {/* Text content */}
         <div className="space-y-1.5 max-w-[240px]">
 
-          <Typography variant="h6" className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-[0.2em] leading-none whitespace-nowrap">
+          <Typography variant="h6" className="text-13 font-black text-slate-800 dark:text-slate-200 uppercase tracking-[0.2em] leading-none whitespace-nowrap">
             {CM.noHostSelectedTitle}
           </Typography>
 
 
-          <Typography variant="p" className="text-[11px] leading-relaxed text-slate-400 dark:text-slate-600 font-medium">
+          <Typography variant="p" className="text-13 leading-relaxed text-slate-400 dark:text-slate-600 font-medium">
             {CM.selectServerFromList}
           </Typography>
         </div>
 
         {/* Hint badge */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/4 border border-slate-200 dark:border-white/6">
-          <Icon name="arrow_upward" size="12px" weight={400} className="text-slate-400" />
-          <Typography variant="span" className="text-[10px] text-slate-400 font-semibold tracking-wide">
+          <Icon name="arrow_upward" size="13px" weight={400} className="text-slate-400" />
+          <Typography variant="span" className="text-12 text-slate-400 font-semibold tracking-wide">
             {CM.serverListAbove}
           </Typography>
         </div>

@@ -1,7 +1,6 @@
 import React, { useRef } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
-import { Button } from '../foundation/Button';
 import { useCM } from '../../../constants/useCM';
 
 export const FileUpload = ({
@@ -43,8 +42,18 @@ export const FileUpload = ({
     <div 
       className={`relative w-full border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-amber-500 dark:hover:border-amber-500 transition-colors rounded-lg bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center p-6 text-center cursor-pointer ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
       onClick={handleClick}
+      onKeyDown={(event) => {
+        if ((event.key === 'Enter' || event.key === ' ') && !disabled) {
+          event.preventDefault();
+          handleClick();
+        }
+      }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-label={resolvedLabel}
+      aria-disabled={disabled}
     >
       <input
         type="file"
@@ -53,6 +62,7 @@ export const FileUpload = ({
         accept={accept}
         className="hidden"
         disabled={disabled}
+        tabIndex={-1}
       />
       <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3 text-amber-600 dark:text-amber-500">
         <Icon name="cloud_upload" size="xl"  weight={300} />

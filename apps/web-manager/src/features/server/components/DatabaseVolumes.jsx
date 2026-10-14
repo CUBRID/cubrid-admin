@@ -4,7 +4,6 @@ import { fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
-import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
 
@@ -66,7 +65,7 @@ const BarCell = ({ val }) => {
   return (
     <div className="flex flex-col gap-1 min-w-[160px]">
       <div className="flex items-center justify-between pr-2">
-        <span className="text-[12px] font-mono font-semibold text-slate-600 dark:text-slate-300">{val.display}</span>
+        <span className="text-14 font-mono font-semibold text-slate-600 dark:text-slate-300">{val.display}</span>
       </div>
       <div className="w-full h-1 bg-slate-100 dark:bg-white/6 overflow-hidden rounded-full">
         <div 
@@ -86,6 +85,15 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
   // slice) so multiple simultaneously-open dashboard tabs don't clobber each other.
   const [volumes, setVolumes] = useState([]);
   const [loading, setLoading] = useState(false);
+  // An empty response is still a completed initial load. Keep that distinction
+  // so background polls do not alternate the empty state with table skeletons.
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
+  useEffect(() => {
+    setVolumes([]);
+    setLoading(false);
+    setHasLoadedOnce(false);
+  }, [hostUid]);
 
   const fetchVolumes = useCallback(async () => {
     if (!hostUid || !authorizedHosts.includes(hostUid) || activeDatabases.length === 0) {
@@ -93,6 +101,8 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       // without this, the last fetch's result just lingers in local state
       // showing a now-stopped database's stale volume info as if current.
       setVolumes([]);
+      setLoading(false);
+      setHasLoadedOnce(true);
       return;
     }
     setLoading(true);
@@ -101,6 +111,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       setVolumes(result);
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [hostUid, authorizedHosts, activeDatabases, dispatch]);
 
@@ -131,13 +142,13 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
     {
       header: CM.database,
       accessor: 'db',
-      render: (val) => <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200">{val}</span>
+      render: (val) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val}</span>
     },
     { header: CM.permanent,   accessor: 'permanent',   sortAccessor: '_permanentPct',   render: (val) => <BarCell val={val} /> },
     { header: CM.temporary,   accessor: 'temporary',   sortAccessor: '_temporaryPct',   render: (val) => <BarCell val={val} /> },
-    { header: CM.activeLog,   accessor: 'activeLog',   sortAccessor: '_activeLogRaw',   render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
-    { header: CM.archiveLog,  accessor: 'archiveLog',  sortAccessor: '_archiveLogRaw',  render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
-    { header: CM.freeStorage, accessor: 'storageFree', sortAccessor: '_storageFreeRaw', render: (val) => <span className="font-mono text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{val}</span> },
+    { header: CM.activeLog,   accessor: 'activeLog',   sortAccessor: '_activeLogRaw',   render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    { header: CM.archiveLog,  accessor: 'archiveLog',  sortAccessor: '_archiveLogRaw',  render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    { header: CM.freeStorage, accessor: 'storageFree', sortAccessor: '_storageFreeRaw', render: (val) => <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-semibold">{val}</span> },
   ], [CM]);
 
   return (
@@ -147,7 +158,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
         <div className="flex items-center gap-2">
           <Icon name="storage" size="sm" weight={300} className="text-amber-500" />
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{CM.storageVolumes}</span>
-          {loading && <Spinner size="xs" className="ml-1" />}
+          {loading && !hasLoadedOnce && <Spinner size="xs" className="ml-1" />}
         </div>
       }
       bodyClassName="p-0"
@@ -156,8 +167,8 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       <Table
         columns={columns}
         data={volumeData}
-        loading={loading}
-        className="text-[12px]"
+        loading={loading && !hasLoadedOnce}
+        className="text-14"
         emptyMessage={activeDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
       />
     </Card>

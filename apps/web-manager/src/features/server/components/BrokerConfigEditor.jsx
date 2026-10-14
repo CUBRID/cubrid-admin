@@ -4,7 +4,6 @@ import { brokerApi } from '../../broker/brokerApi';
 import { showStatusModal, setTabDirty } from '../../layout/layoutSlice';
 import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
 
@@ -16,6 +15,7 @@ export default function BrokerConfigEditor({ hostUid }) {
   const tabId = `broker_config:${hostUid}`;
   const dispatch = useDispatch();
   const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
 
@@ -24,8 +24,8 @@ export default function BrokerConfigEditor({ hostUid }) {
   
   // Source View State
   const originalRawContentRef = useRef('');
+  const lastRefreshCounterRef = useRef(refreshCounter);
   const [rawContent, setRawContent] = useState('');
-  const [originalRawContent, setOriginalRawContent] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
 
   const fetchConfig = useCallback(async () => {
@@ -37,7 +37,6 @@ export default function BrokerConfigEditor({ hostUid }) {
       const content = lines.join('\n');
       originalRawContentRef.current = content;
       setRawContent(content);
-      setOriginalRawContent(content);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
     } catch (err) {
@@ -57,6 +56,12 @@ export default function BrokerConfigEditor({ hostUid }) {
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  useEffect(() => {
+    if (refreshCounter <= lastRefreshCounterRef.current) return;
+    lastRefreshCounterRef.current = refreshCounter;
+    if (refreshTabId === tabId) fetchConfig();
+  }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
   const handleSourceChange = (e) => {
     setRawContent(e.target.value);
@@ -79,7 +84,6 @@ export default function BrokerConfigEditor({ hostUid }) {
       await brokerApi.updateBrokerConfig(hostUid, confdata);
       
       originalRawContentRef.current = rawContent;
-      setOriginalRawContent(rawContent);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
       dispatch(showStatusModal({

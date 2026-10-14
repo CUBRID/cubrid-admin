@@ -8,7 +8,6 @@ import {
   findHaPeersNeedingMerge,
   findRegisteredHaPeersInSameGroup,
   findUndiscoveredHaPeers,
-  isHaPostLoginModalOpen,
 } from './haPeerUtils';
 
 export { isHaPostLoginModalOpen, clearHaClusterLinkSessionNotices } from './haPeerUtils';
@@ -720,8 +719,6 @@ const hostSlice = createSlice({
         purgeHostClientState(state, hostUid);
         syncHostSelection(state);
         syncHaInfoStorage(state);
-        state.isDeleteHostModalOpen = false;
-        state.hostToDeleteUid = null;
       })
       .addCase(deleteHost.rejected, (state, action) => {
         state.loading = false;
@@ -839,7 +836,7 @@ const hostSlice = createSlice({
       })
       .addCase(deleteHostGroup.fulfilled, (state, action) => {
         state.loading = false;
-        const { groupId, hostGroups, removedHostUids = [] } = action.payload;
+        const { hostGroups, removedHostUids = [] } = action.payload;
         applyHostGroupsResponse(state, hostGroups);
         const removedSet = new Set(removedHostUids);
         if (removedSet.has(state.selectedHostUid)) {
@@ -848,9 +845,6 @@ const hostSlice = createSlice({
         syncHostSelection(state);
         removedHostUids.forEach((uid) => purgeHostClientState(state, uid));
         syncHaInfoStorage(state);
-        state.isDeleteGroupModalOpen = false;
-        state.groupToEditId = null;
-        state.groupToEditName = null;
       })
       .addCase(deleteHostGroup.rejected, (state, action) => {
         state.loading = false;
@@ -985,7 +979,7 @@ export const processHaLoginSideEffects = createAsyncThunk(
     let showedHaModal = false;
 
     if (isHa) {
-      await dispatch(markGroupHa({ hostUid })).unwrap().catch(() => {});
+      await dispatch(markGroupHa({ hostUid })).unwrap().catch(() => undefined);
     }
 
     if (isHa && response.haNodes?.length > 0) {
@@ -1098,7 +1092,7 @@ export const loginHostsBatch = createAsyncThunk(
     }
 
     for (const uid of succeededUids) {
-      await dispatch(processHaLoginSideEffects(uid)).unwrap().catch(() => {});
+      await dispatch(processHaLoginSideEffects(uid)).unwrap().catch(() => undefined);
     }
 
     return { successCount, failed, attempted: pending.length };
