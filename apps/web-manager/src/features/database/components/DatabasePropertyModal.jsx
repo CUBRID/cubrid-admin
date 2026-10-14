@@ -17,9 +17,9 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
+import { useToast } from '../../../infrastructure/hooks/useToast';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -222,14 +222,13 @@ export default function DatabasePropertyModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
+  const toast = useToast();
   const {
     error: actionError,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError
   } = useActionState();
 
@@ -368,8 +367,17 @@ export default function DatabasePropertyModal() {
         }
         if (!found) updatedSection.push(`${key}=${value}`);
       });
-      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: [...otherBefore, ...updatedSection, ...otherAfter] });
-      endSuccess(CM.configurationAppliedMsg(selectedDatabase));
+      const nextLines = [...otherBefore, ...updatedSection, ...otherAfter];
+      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: nextLines });
+      // Stay on the form view showing the values that were just applied,
+      // instead of closing the modal — the user asked to keep editing
+      // without having to reopen it. `saveParams` (not `params`) reflects
+      // the buffer-mode reconciliation above, so it's also the correct new
+      // baseline for a subsequent "Reset to original".
+      setRawLines(nextLines);
+      setParams(saveParams);
+      resetAction();
+      toast.success(CM.configurationAppliedMsg(selectedDatabase));
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.configPatchRejectedMsg));
     }
@@ -429,18 +437,6 @@ export default function DatabasePropertyModal() {
       <ModalStatusLoading
         title={CM.updatingConfigTitle}
         subtitle={CM.updatingConfigSubtitle}
-      />
-    </Modal>
-  );
-
-  /* ─── SUCCESS VIEW ─── */
-  if (isSuccess) return (
-    <Modal isOpen title={CM.updateSuccessful} icon="check_circle" iconVariant="success" onClose={handleClose} maxWidth="900px">
-      <ModalStatusSuccess
-        title={CM.configurationReIndexed}
-        message={CM.configurationAppliedMsg(selectedDatabase)}
-        onConfirm={handleClose}
-        confirmText={CM.confirmReturn}
       />
     </Modal>
   );
