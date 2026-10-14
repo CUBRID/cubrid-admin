@@ -29,6 +29,7 @@ import {
 import { useCM } from '../../../constants/useCM';
 import {
   MAX_GENERAL_VOLUME_SIZE_MB,
+  MIN_GENERAL_VOLUME_SIZE_MB,
   isPositiveVolumeSize,
   isValidGeneralVolumeSize,
   volumeSizeMbToPages,
@@ -400,9 +401,11 @@ export default function CreateDatabaseModal() {
   const totalStorage = formData.genericVolSize + formData.logVolSize + formData.volumes.reduce((a, v) => a + v.size, 0);
   const generalVolumeSizeError = !isPositiveVolumeSize(formData.genericVolSize)
     ? CM.volumeSizePositiveError
-    : formData.genericVolSize > MAX_GENERAL_VOLUME_SIZE_MB
-      ? CM.generalVolumeSizeMaxError
-      : undefined;
+    : formData.genericVolSize < MIN_GENERAL_VOLUME_SIZE_MB
+      ? CM.generalVolumeSizeMinError
+      : formData.genericVolSize > MAX_GENERAL_VOLUME_SIZE_MB
+        ? CM.generalVolumeSizeMaxError
+        : undefined;
 
 
   /* ─── LOADING view ─── */
@@ -629,7 +632,7 @@ export default function CreateDatabaseModal() {
                     data-testid="create-database-generic-size-input"
                     label={CM.volumeSize}
                     type="number"
-                    min={1}
+                    min={MIN_GENERAL_VOLUME_SIZE_MB}
                     max={MAX_GENERAL_VOLUME_SIZE_MB}
                     value={formData.genericVolSize}
                     onChange={(e) => handleInputChange('genericVolSize', Number(e.target.value))}

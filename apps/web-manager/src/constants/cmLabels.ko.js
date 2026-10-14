@@ -152,6 +152,7 @@ export const CM_KO = {
   userDefined: '사용자 정의',
   volumeSize: '볼륨 크기 (Mbyte)',
   volumeSizePositiveError: 'Volume size must be greater than 0 MB.',
+  generalVolumeSizeMinError: 'General volume size must be at least 1 MB.',
   generalVolumeSizeMaxError: 'General volume size must be 20 GB (20,480 MB) or less.',
   genericVolInfo: '일반 볼륨 정보',
   genericVolPath: '일반 볼륨 경로',

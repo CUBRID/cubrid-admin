@@ -156,6 +156,7 @@ export const CM = {
   userDefined: 'User Defined',
   volumeSize: 'Volume size (Mbyte)',
   volumeSizePositiveError: 'Volume size must be greater than 0 MB.',
+  generalVolumeSizeMinError: 'General volume size must be at least 1 MB.',
   generalVolumeSizeMaxError: 'General volume size must be 20 GB (20,480 MB) or less.',
   genericVolInfo: 'Generic Volume Information',
   genericVolPath: 'Generic volume path',
