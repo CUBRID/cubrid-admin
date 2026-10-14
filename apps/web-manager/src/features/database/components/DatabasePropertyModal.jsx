@@ -360,8 +360,16 @@ export default function DatabasePropertyModal() {
         } catch (err) {
           console.error('Failed to fetch config:', err);
           // Allow a retry on the next tab switch instead of permanently
-          // marking this (host, database) as "fetched".
-          fetchedConfigKeyRef.current = null;
+          // marking this (host, database) as "fetched" — but only if this
+          // request is still the current one. A stale request for an
+          // earlier (host, database) can still be in flight and reject
+          // after a newer request for a different target already
+          // succeeded; clearing the ref unconditionally here would wipe
+          // out that newer success and trigger a pointless re-fetch (and
+          // possible edit-clobbering) on the next tab switch.
+          if (fetchedConfigKeyRef.current === configKey) {
+            fetchedConfigKeyRef.current = null;
+          }
         }
         finally { setFetching(false); }
       };
