@@ -37,8 +37,9 @@ export default function LockInformationModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isLockInformationModalOpen: isLockInfoModalOpen } = useSelector((s) => s.databaseUI);
-  const { selectedDatabase, activeDatabases } = useSelector((s) => s.database);
+  const { selectedDatabase, activeDatabasesByHost } = useSelector((s) => s.database);
   const { selectedHostUid } = useSelector((s) => s.host);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
 

@@ -82,24 +82,24 @@ export function orderedGroupEntries(hostGroups) {
 
 const HA_ROLE_SORT_ORDER = { master: 0, slave: 1, replica: 2 };
 
-/** Strip a legacy (master)/(slave)/(replica) suffix off a host alias for display. */
+/**
+ * Strip a (master)/(slave)/(replica) tag from the END of a host alias, for
+ * display only. This used to undo a real mutation (processHaLoginSideEffects
+ * persisted this tag onto the host's actual alias) — that mutation is gone,
+ * so this now only cleans up aliases that were already tagged by the old
+ * code before this fix shipped. Anchored to the end of the string so it
+ * can't also eat a user-typed "(master)" that appears anywhere but there.
+ */
 export function stripHaRoleTagFromAlias(alias) {
   return (alias || '')
-    .replace(/\s*\(master\)/i, '')
-    .replace(/\s*\(slave\)/i, '')
-    .replace(/\s*\(replica\)/i, '')
+    .replace(/\s*\((master|slave|replica)\)$/i, '')
     .trim();
 }
 
-/** HA role from Redux haInfo or alias suffix (master)/(slave)/(replica). */
+/** HA role from live Redux haInfo — never inferred from the alias text. */
 export function inferHaNodeType(host, haInfoEntry) {
   const fromStore = haInfoEntry?.isHA ? haInfoEntry.currentNodeType : null;
   if (fromStore && HA_ROLE_SORT_ORDER[fromStore] !== undefined) return fromStore;
-
-  const alias = (host?.alias || '').toLowerCase();
-  if (alias.includes('(master)')) return 'master';
-  if (alias.includes('(slave)')) return 'slave';
-  if (alias.includes('(replica)')) return 'replica';
   return null;
 }
 

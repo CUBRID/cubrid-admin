@@ -118,9 +118,9 @@ export default function DropUserModal() {
         </p>
         <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 inline-flex items-center gap-2 mb-4">
            <Icon name="database" size="xs" className="text-slate-400" />
-           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{dropUserData.dbname}</span>
+           <span className="text-13 font-bold text-slate-500 uppercase tracking-widest">{dropUserData.dbname}</span>
         </div>
-        <p className="text-[11px] text-rose-500 font-bold uppercase tracking-widest bg-rose-500/5 px-4 py-2 rounded-xl border border-rose-500/10">
+        <p className="text-13 text-rose-500 font-bold uppercase tracking-widest bg-rose-500/5 px-4 py-2 rounded-xl border border-rose-500/10">
           {CM.dropUserWarning}
         </p>
       </div>

@@ -189,6 +189,7 @@ export default function AddVolumeModal() {
       maxWidth="560px"
       testId="add-volume"
       onSubmit={handleAdd}
+      submitDisabled={!path || !sizeMB || fetchingStatus}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="add-volume-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -210,9 +211,9 @@ export default function AddVolumeModal() {
         <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/4 px-4 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <Icon name="database" size="16px" weight={300} className="text-amber-500 shrink-0" />
-            <Typography variant="p" className="text-[12px] font-medium text-slate-700 dark:text-slate-200 font-mono truncate">{selectedDatabase}</Typography>
+            <Typography variant="p" className="text-14 font-medium text-slate-700 dark:text-slate-200 font-mono truncate">{selectedDatabase}</Typography>
           </div>
-          <Typography variant="p" className="text-[12px] font-medium text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
+          <Typography variant="p" className="text-14 font-medium text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
             {fetchingStatus ? CM.calculating : `${CM.availableSpace}: ${volStatus.freespace || '—'}`}
           </Typography>
         </div>
@@ -241,7 +242,7 @@ export default function AddVolumeModal() {
                   >
                     <Icon name={opt.icon} size="14px" weight={300} className={isActive ? 'text-amber-500' : 'text-slate-400'} />
                   </div>
-                  <Typography variant="p" className="flex-1 text-[12px] font-medium text-slate-700 dark:text-slate-200">
+                  <Typography variant="p" className="flex-1 text-14 font-medium text-slate-700 dark:text-slate-200">
                     {CM[opt.labelKey]}
                   </Typography>
                   <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isActive ? 'border-amber-500/40' : 'border-slate-300 dark:border-white/20'}`}>
@@ -263,7 +264,7 @@ export default function AddVolumeModal() {
                 key={preset.mb}
                 type="button"
                 onClick={() => setSizeMB(preset.mb)}
-                className={`px-3 py-1.5 rounded-lg border text-[11px] font-medium transition-colors
+                className={`px-3 py-1.5 rounded-lg border text-13 font-medium transition-colors
                   ${sizeMB === preset.mb
                     ? 'bg-amber-500/10 border-amber-500/40 text-amber-500 shadow-xs'
                     : 'bg-white dark:bg-white/2 border-slate-100 dark:border-white/5 text-slate-400 hover:border-amber-500/30 hover:text-amber-500'
@@ -285,7 +286,7 @@ export default function AddVolumeModal() {
                 <button
                   type="button"
                   onClick={() => setSizeUnit((u) => (u === 'MB' ? 'GB' : 'MB'))}
-                  className="text-[10px] font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
+                  className="text-12 font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                   title={CM.switchUnit}
                 >
                   {sizeUnit}
@@ -298,8 +299,8 @@ export default function AddVolumeModal() {
                 aria-labelledby="add-volume-page-count-label"
                 className="h-10 px-4 flex items-center justify-between bg-slate-50/50 dark:bg-white/2 border border-slate-100 dark:border-white/5 rounded-xl"
               >
-                <span className="text-[13px] font-medium font-mono text-slate-700 dark:text-slate-200 tabular-nums">{numberOfPages.toLocaleString()}</span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500">{CM.pagesLabel}</span>
+                <span className="text-15 font-medium font-mono text-slate-700 dark:text-slate-200 tabular-nums">{numberOfPages.toLocaleString()}</span>
+                <span className="text-12 text-slate-400 dark:text-slate-500">{CM.pagesLabel}</span>
               </output>
             </FormField>
           </div>

@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+// Avoids apiClient.js's top-level `localStorage.getItem('token')` read, which
+// this test's minimal jsdom setup doesn't need to exercise.
+vi.mock('../../api/apiClient', () => ({ default: {
+  defaults: { headers: { common: {} } },
+  get: vi.fn(),
+  post: vi.fn(),
+} }));
 import { enqueueUniqueJobResult } from './CmsJobContext';
 
 describe('enqueueUniqueJobResult', () => {

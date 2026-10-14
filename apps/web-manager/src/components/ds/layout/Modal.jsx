@@ -36,6 +36,13 @@ export const Modal = ({
       (mirrors clicking the form's primary button). Skipped for textareas
       (Enter should insert a newline there) and non-text form controls. */
   onSubmit,
+  /** Mirrors the primary submit button's own `disabled` — Enter is a second,
+      independent path to onSubmit that a disabled button does NOT block on
+      its own (disabling a <button> only stops its own click/keyboard
+      activation, not a keydown listener elsewhere in the modal). Without
+      this, pressing Enter while a required field is empty silently no-ops
+      instead of doing nothing the way the visibly-disabled button does. */
+  submitDisabled = false,
 }) => {
   const CM = useCM();
   const modalRef = useRef(null);
@@ -66,12 +73,13 @@ export const Modal = ({
       if (tag !== 'INPUT') return;
       const type = (e.target.type || 'text').toLowerCase();
       if (['button', 'submit', 'checkbox', 'radio', 'file'].includes(type)) return;
+      if (submitDisabled) return;
       e.preventDefault();
       onSubmit();
     };
     document.addEventListener('keydown', handleEnter);
     return () => document.removeEventListener('keydown', handleEnter);
-  }, [isOpen, isTopModal, onSubmit]);
+  }, [isOpen, isTopModal, onSubmit, submitDisabled]);
 
   // Focus trap: Tab/Shift+Tab cycle only through the modal's own focusable
   // elements instead of escaping to whatever's behind it. Also moves initial
@@ -200,11 +208,11 @@ export const Modal = ({
             </div>
           )}
           <div className="flex-1">
-            <Typography id={titleId} variant="h4" className="text-[14px] font-medium text-slate-900 dark:text-white leading-snug tracking-tight">
+            <Typography id={titleId} variant="h4" className="text-14 font-medium text-slate-900 dark:text-white leading-snug tracking-tight">
               {title}
             </Typography>
             {subtitle && (
-              <Typography id={subtitleId} variant="p" className="text-[12px] mt-1 text-slate-500 font-medium leading-snug">
+              <Typography id={subtitleId} variant="p" className="text-12 mt-1 text-slate-500 font-medium leading-snug">
                 {subtitle}
               </Typography>
             )}

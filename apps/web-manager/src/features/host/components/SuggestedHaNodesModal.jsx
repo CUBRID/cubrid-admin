@@ -126,7 +126,7 @@ export default function SuggestedHaNodesModal() {
       <div className="space-y-6 p-1">
         <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl flex gap-3">
           <Icon name="info" className="text-amber-500 shrink-0" size="sm" />
-          <p className="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed">
+          <p className="text-13 text-slate-600 dark:text-slate-400 leading-relaxed">
             This server is part of an HA cluster. Select a peer node to configure and add it to your server list.
           </p>
         </div>
@@ -135,7 +135,7 @@ export default function SuggestedHaNodesModal() {
           createdGroupName ? (
             <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex gap-3">
               <Icon name="check_circle" className="text-emerald-500 shrink-0" size="sm" />
-              <p className="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed">
+              <p className="text-13 text-slate-600 dark:text-slate-400 leading-relaxed">
                 {CM.haGroupCreatedNotice(createdGroupName)}
               </p>
             </div>
@@ -144,8 +144,8 @@ export default function SuggestedHaNodesModal() {
               <div className="flex gap-3">
                 <Icon name="folder_open" className="text-slate-400 shrink-0" size="sm" />
                 <div className="min-w-0">
-                  <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">{CM.haNoGroupPromptTitle}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">{CM.haNoGroupPromptDesc}</p>
+                  <p className="text-14 font-bold text-slate-800 dark:text-slate-200">{CM.haNoGroupPromptTitle}</p>
+                  <p className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">{CM.haNoGroupPromptDesc}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -190,14 +190,14 @@ export default function SuggestedHaNodesModal() {
                   ${selectedIndex === i ? 'bg-amber-500/20 text-amber-600' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
                   <Icon 
                     name={node.state === 'master' ? 'star' : node.state === 'replica' ? 'copy_all' : 'settings_backup_restore'} 
-                    size="16px" 
+                    size="17px" 
                   />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200 truncate">
+                  <p className="text-14 font-bold text-slate-800 dark:text-slate-200 truncate">
                     {node.hostname || node.ip}
                   </p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                  <p className="text-12 text-slate-400 dark:text-slate-500 truncate">
                     {node.ip && node.hostname ? `${node.ip} · ` : ''}{HA_ROLE_LABEL[node.state] || node.state}
                   </p>
                 </div>

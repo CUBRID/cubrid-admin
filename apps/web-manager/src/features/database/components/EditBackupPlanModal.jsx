@@ -258,6 +258,7 @@ export default function EditBackupPlanModal() {
       maxWidth="700px"
       testId="edit-backup-plan"
       onSubmit={handleSave}
+      submitDisabled={!formLoaded}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="edit-backup-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -289,10 +290,10 @@ export default function EditBackupPlanModal() {
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                   formData.backupLevel === item.value ? 'bg-amber-500 text-slate-900' : 'bg-white dark:bg-white/8 text-slate-400'
                 }`}>
-                  <Icon name={item.icon} size="14px" weight={300} />
+                  <Icon name={item.icon} size="15px" weight={300} />
                 </div>
                 <div className="text-left min-w-0">
-                  <Typography variant="p" className="font-medium text-[12px] leading-tight text-slate-700 dark:text-slate-200">{item.title}</Typography>
+                  <Typography variant="p" className="font-medium text-11 leading-tight text-slate-700 dark:text-slate-200">{item.title}</Typography>
                   <Typography variant="caption" className="block truncate leading-tight">{CM[item.descKey]}</Typography>
                 </div>
               </button>
@@ -332,7 +333,7 @@ export default function EditBackupPlanModal() {
                       key={id}
                       type="button"
                       onClick={() => setBulkDays(id)}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-12 font-medium text-slate-500 dark:text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-colors"
                     >
                       {label}
                     </button>
@@ -347,7 +348,7 @@ export default function EditBackupPlanModal() {
                         type="button"
                         onClick={() => toggleDay(day)}
                         aria-pressed={isActive}
-                        className={`h-8 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center ${
+                        className={`h-8 rounded-lg border text-13 font-medium transition-colors flex items-center justify-center ${
                           isActive
                             ? 'bg-amber-500 border-amber-500 text-slate-900'
                             : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'
@@ -407,10 +408,28 @@ export default function EditBackupPlanModal() {
               { label: CM.checkConsistencyLabel, field: 'checkConsistency', icon: 'verified' },
               { label: CM.compressBackupLabel, field: 'useCompression', icon: 'compress' },
             ].map(opt => (
-              <div key={opt.field} className="flex items-center gap-3 min-h-10">
-                <Icon name={opt.icon} size="16px" weight={300} className={formData[opt.field] ? 'text-amber-500' : 'text-slate-400'} />
-                <Typography variant="p" className="flex-1 min-w-0 text-[12px] font-medium text-slate-700 dark:text-slate-200 leading-tight">{opt.label}</Typography>
-                <div className="shrink-0">
+              <div
+                key={opt.field}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer group ${
+                  formData[opt.field]
+                    ? 'bg-amber-500/5 border-amber-500/30'
+                    : 'bg-white dark:bg-white/1 border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/12'
+                }`}
+                onClick={() => handleInputChange(opt.field, !formData[opt.field])}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 border ${
+                  formData[opt.field]
+                    ? 'bg-amber-500 text-slate-900 border-amber-500/40'
+                    : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-400 group-hover:text-slate-500'
+                }`}>
+                  <Icon name={opt.icon} size="13px" weight={300} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Typography variant="p" className={`text-13 font-black transition-colors leading-none whitespace-nowrap ${formData[opt.field] ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {opt.label}
+                  </Typography>
+                </div>
+                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                   <Toggle checked={formData[opt.field]} onChange={(val) => handleInputChange(opt.field, val)} size="sm" variant="primary" />
                 </div>
               </div>
@@ -419,8 +438,8 @@ export default function EditBackupPlanModal() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2" role="radiogroup" aria-label={CM.type}>
             {[
-              { value: 'online', label: CM.onlineMode, icon: 'bolt' },
-              { value: 'offline', label: CM.offlineMode, icon: 'power_settings_new' }
+              { value: 'online', label: CM.onlineMode, desc: CM.onlineModeDesc, icon: 'bolt' },
+              { value: 'offline', label: CM.offlineMode, desc: CM.offlineModeDesc, icon: 'power_settings_new' }
             ].map(mode => (
               <button
                 type="button"
@@ -435,8 +454,11 @@ export default function EditBackupPlanModal() {
                 }`}
               >
                 <Icon name={mode.icon} size="18px" weight={300} className={formData.onlineType === mode.value ? 'text-amber-500' : 'text-slate-400'} />
-                <Typography variant="p" className="flex-1 font-medium text-[12px] leading-tight text-slate-700 dark:text-slate-200">{mode.label}</Typography>
-                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                <div className="flex-1 min-w-0">
+                  <Typography variant="p" className="font-medium text-14 leading-tight text-slate-700 dark:text-slate-200">{mode.label}</Typography>
+                  <Typography variant="caption" className="block truncate leading-tight">{mode.desc}</Typography>
+                </div>
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                   formData.onlineType === mode.value ? 'border-amber-500' : 'border-slate-300 dark:border-white/20'
                 }`}>
                   {formData.onlineType === mode.value && <div className="w-2 h-2 rounded-full bg-amber-500" />}

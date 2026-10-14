@@ -33,7 +33,7 @@ export const StatusBadge = ({
   return (
     <div className={`px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 shrink-0 w-fit transition-all select-none ${currentTheme} ${className}`}>
       {icon ? (
-        <Icon name={icon} size="12px" weight={400} className="shrink-0" />
+        <Icon name={icon} size="13px" weight={400} className="shrink-0" />
       ) : (
         <span className={`w-1.5 h-1.5 rounded-full bg-${dotColor} shrink-0 relative flex`}>
           {pulse && (
@@ -41,7 +41,7 @@ export const StatusBadge = ({
           )}
         </span>
       )}
-      <span className="text-[9px] font-black uppercase tracking-widest leading-none">
+      <span className="text-11 font-black uppercase tracking-widest leading-none">
         {label}
       </span>
     </div>

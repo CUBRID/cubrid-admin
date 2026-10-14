@@ -19,8 +19,9 @@ export default function TransactionInfoModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isTransactionInfoModalOpen, transactionKillSignal } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
 
@@ -118,7 +119,7 @@ export default function TransactionInfoModal() {
     return (
       <Modal isOpen title={CM.transactionInformation} icon="error" iconVariant="danger" onClose={handleClose} maxWidth="540px" testId="transaction-info">
         <div className="py-8 space-y-4 text-center">
-          <Typography variant="p" className="text-[13px] text-slate-600 dark:text-slate-300">
+          <Typography variant="p" className="text-15 text-slate-600 dark:text-slate-300">
             {CM.error}
           </Typography>
           <Typography variant="caption" className="text-rose-500 font-mono block break-words px-4">
@@ -161,7 +162,7 @@ export default function TransactionInfoModal() {
               <Icon name="sensors" size="sm" weight={300} />
             </div>
             <div className="min-w-0">
-              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-[11px] block leading-none">
+              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-13 block leading-none">
                 {CM.activeTransactionsOf} <span className="text-emerald-500 ml-1">{transactions.length}</span>
               </Typography>
             </div>
