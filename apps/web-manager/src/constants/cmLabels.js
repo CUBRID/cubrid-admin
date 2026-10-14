@@ -1840,8 +1840,9 @@ export const CM = {
   showingRangeOfTotal: (start, end, total) => `Showing ${start}–${end} of ${total}`,
   recordsCountLabel: (count) => `${count} Records`,
 
-  // LogViewer (Broker Log Viewer)
-  brokerLogViewer: 'Broker Log Viewer',
+  // LogViewer subtitle — shared across broker, manager, and per-database
+  // server log tabs (all opened through the same "log:" tab/component)
+  logViewerSubtitle: 'Log Viewer',
   noContentAvailable: 'No content available.',
   noSqlStatementsFound: 'No SQL statements found in this page.',
   maxSeconds: 'Max (s)',

@@ -260,7 +260,7 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
         icon="description"
         title={fileName}
         titleMonospace
-        subtitle={CM.brokerLogViewer}
+        subtitle={CM.logViewerSubtitle}
         center={modeSwitcher}
         actions={(
           <>
