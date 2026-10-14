@@ -10,9 +10,10 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
+import { DatePicker } from '../../../components/ds/forms/DatePicker';
+import { TimePicker } from '../../../components/ds/forms/TimePicker';
 import { Toggle } from '../../../components/ds/forms/Toggle';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { 
@@ -21,17 +22,20 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 
-// view states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
-
 const LEVEL_PRESETS_DEF = [
   { value: '0', title: 'Full (L0)', descKey: 'levelFullShortDesc', icon: 'auto_awesome_motion' },
   { value: '1', title: 'Inc. (L1)', descKey: 'levelIncrL0ShortDesc', icon: 'trending_up' },
   { value: '2', title: 'Inc. (L2)', descKey: 'levelIncrL1ShortDesc', icon: 'call_split' }
 ];
+
+const FormSection = ({ title, children }) => (
+  <section className="space-y-3">
+    <Typography variant="h6" className="text-[13px] font-medium text-slate-800 dark:text-slate-100">
+      {title}
+    </Typography>
+    {children}
+  </section>
+);
 
 export default function AddBackupPlanModal() {
   const CM = useCM();
@@ -43,7 +47,6 @@ export default function AddBackupPlanModal() {
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
-    state, 
     error: actionError, 
     startAction, 
     endSuccess, 
@@ -100,7 +103,7 @@ export default function AddBackupPlanModal() {
               setFormData(prev => prev.backupPath ? prev : { ...prev, backupPath: deriveBackupDir(info.dbdir) });
             }
           })
-          .catch(() => {});
+          .catch(() => undefined);
       }
     }
   }, [isAddBackupPlanModalOpen, selectedDatabase, currentDb, selectedHostUid, databaseBackupInfo, dispatch, resetAction]);
@@ -268,57 +271,50 @@ export default function AddBackupPlanModal() {
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="add-backup-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-          <Button data-testid="add-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="play_circle" className="min-w-[140px]">{CM.save}</Button>
+          <Button data-testid="add-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="backup_table" className="min-w-[140px]">{CM.createBackupPlan}</Button>
         </div>
       }
     >
-      <div className="space-y-10 pb-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="space-y-7 animate-in fade-in duration-200">
         
-        {/* Level Presets */}
-        <div className="space-y-4">
-           <SectionHeader title={CM.type} icon="architecture" />
-          <div className="grid grid-cols-3 gap-3">
+        <FormSection title={CM.destination}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label={CM.planIdLabel} value={formData.backupId} onChange={(e) => handleInputChange('backupId', e.target.value)} error={errors.backupId} placeholder={CM.backupPlanIdPlaceholder} icon="badge" required />
+            <Input label={CM.path} value={formData.backupPath} onChange={(e) => handleInputChange('backupPath', e.target.value)} error={errors.backupPath} placeholder={CM.backupDirPlaceholder} icon="folder_zip" className="font-mono!" required />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label={CM.type}>
             {LEVEL_PRESETS_DEF.map(item => (
               <button
+                type="button"
                 key={item.value}
                 onClick={() => handleInputChange('backupLevel', item.value)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-200 ${
+                role="radio"
+                aria-checked={formData.backupLevel === item.value}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-colors ${
                   formData.backupLevel === item.value
-                    ? 'bg-amber-500/10 border-amber-500/40 shadow-xs'
-                    : 'bg-white dark:bg-white/1 border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/10'
+                    ? 'bg-amber-500/8 border-amber-500/50'
+                    : 'bg-slate-50 dark:bg-white/4 border-slate-200 dark:border-white/10 hover:border-amber-500/40'
                 }`}
               >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
-                  formData.backupLevel === item.value ? 'bg-amber-500 text-slate-900 border-amber-500/50' : 'bg-slate-50 dark:bg-white/5 text-slate-400 border-transparent'
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                  formData.backupLevel === item.value ? 'bg-amber-500 text-slate-900' : 'bg-white dark:bg-white/8 text-slate-400'
                 }`}>
                   <Icon name={item.icon} size="14px" weight={300} />
                 </div>
                 <div className="text-left min-w-0">
-                  <div className="flex items-baseline gap-1.5">
-                    <Typography variant="p" className={`font-black text-[11px] leading-none ${formData.backupLevel === item.value ? 'text-amber-500' : 'text-slate-700 dark:text-white'}`}>
-                      {item.title}
-                    </Typography>
-                    <Typography variant="caption" className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter leading-none">
-                      {CM[item.descKey]}
-                    </Typography>
-                  </div>
+                  <Typography variant="p" className="font-medium text-[12px] leading-tight text-slate-700 dark:text-slate-200">{item.title}</Typography>
+                  <Typography variant="caption" className="block truncate leading-tight">{CM[item.descKey]}</Typography>
                 </div>
               </button>
             ))}
           </div>
-        </div>
+        </FormSection>
 
-        {/* Identity & Path */}
-        <div className="grid grid-cols-2 gap-4">
-          <Input label={CM.planIdLabel} value={formData.backupId} onChange={(e) => handleInputChange('backupId', e.target.value)} error={errors.backupId} placeholder={CM.backupPlanIdPlaceholder} icon="badge" size="sm" required />
-          <Input label={CM.path} value={formData.backupPath} onChange={(e) => handleInputChange('backupPath', e.target.value)} error={errors.backupPath} placeholder={CM.backupDirPlaceholder} icon="folder_zip" size="sm" className="font-mono!" required />
-        </div>
+        <div className="h-px bg-slate-200 dark:bg-white/10" />
 
-        {/* Recurrence */}
-        <div className="space-y-4">
-           <SectionHeader title={CM.executionSchedule} icon="schedule" />
-          <div className="p-5 bg-slate-50/50 dark:bg-white/1 border border-slate-100 dark:border-white/4 rounded-2xl space-y-6 shadow-xs">
-            <div className="grid grid-cols-2 gap-4">
+        <FormSection title={CM.executionSchedule}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Select
                 label={CM.rotationLabel}
                 value={formData.periodType}
@@ -329,14 +325,13 @@ export default function AddBackupPlanModal() {
                   { value: 'Daily', label: CM.daily },
                   { value: 'Specific days', label: CM.specificDays }
                 ]}
-                size="sm"
               />
-              <Input label={CM.targetTime} type="time" value={formData.backupTime} onChange={(e) => handleInputChange('backupTime', e.target.value)} icon="nest_clock_farsight_analog" size="sm" />
+              <TimePicker label={CM.targetTime} value={formData.backupTime} onChange={(e) => handleInputChange('backupTime', e.target.value)} icon="nest_clock_farsight_analog" />
             </div>
 
-            <div className="animate-in fade-in duration-300">
+            <div className="animate-in fade-in duration-200">
               {formData.periodType === 'Monthly' && (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
                     {[
                       { id: 'all', label: CM.everyDayPreset, icon: 'select_all' },
@@ -348,22 +343,23 @@ export default function AddBackupPlanModal() {
                         key={preset.id}
                         type="button"
                         onClick={() => setBulkDays(preset.id)}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-all"
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-colors"
                       >
                          {preset.label}
                       </button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-7 gap-1.5 p-3.5 bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-2xl">
+                  <div className="grid grid-cols-7 gap-1.5 p-3 bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/10 rounded-xl">
                     {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
                       <button
                         key={day}
                         type="button"
                         onClick={() => toggleDay(day)}
-                        className={`h-9 rounded-xl border text-[11px] font-black transition-all flex items-center justify-center ${
+                        aria-pressed={formData.periodDetail.includes(day)}
+                        className={`h-8 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center ${
                           formData.periodDetail.includes(day)
-                            ? 'bg-amber-500 border-amber-500 text-slate-900 shadow-xs scale-105 z-10'
-                            : 'bg-white dark:bg-white/3 border-slate-200 dark:border-white/4 text-slate-400 hover:border-amber-500/40'
+                            ? 'bg-amber-500 border-amber-500 text-slate-900'
+                            : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'
                         }`}
                       >
                         {day}
@@ -374,7 +370,7 @@ export default function AddBackupPlanModal() {
               )}
 
               {formData.periodType === 'Weekly' && (
-                <div className="grid grid-cols-7 gap-2 p-3.5 bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-2xl">
+                <div className="grid grid-cols-7 gap-2 p-3 bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/10 rounded-xl">
                   {CM.weekdaysShort.map((day, index) => {
                     const dayValue = index + 1;
                     const isActive = formData.periodDetail.includes(dayValue);
@@ -383,10 +379,11 @@ export default function AddBackupPlanModal() {
                         key={day}
                         type="button"
                         onClick={() => toggleDay(dayValue)}
-                        className={`h-11 rounded-xl border text-[11px] font-black transition-all flex items-center justify-center ${
+                        aria-pressed={isActive}
+                        className={`h-9 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center ${
                           isActive
-                            ? 'bg-amber-500 border-amber-500 text-slate-900 shadow-xs scale-105'
-                            : 'bg-white dark:bg-white/3 border-slate-200 dark:border-white/4 text-slate-400 hover:border-amber-500/40'
+                            ? 'bg-amber-500 border-amber-500 text-slate-900'
+                            : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'
                         }`}
                       >
                         {day}
@@ -403,89 +400,72 @@ export default function AddBackupPlanModal() {
               )}
 
               {formData.periodType === 'Specific days' && (
-                <Input type="date" label={CM.date} value={formData.periodDetail} onChange={(e) => handleInputChange('periodDetail', e.target.value)} icon="event" size="sm" />
+                <DatePicker label={CM.date} value={formData.periodDetail} onChange={(e) => handleInputChange('periodDetail', e.target.value)} icon="event" />
               )}
             </div>
-          </div>
-        </div>
+        </FormSection>
 
-        {/* Operational Options */}
-        <div className="space-y-4">
-           <SectionHeader title={CM.optimizationSectionTitle} icon="settings_input_component" />
-          <div className="grid grid-cols-2 gap-3">
+        <div className="h-px bg-slate-200 dark:bg-white/10" />
+
+        <FormSection title={CM.optimizationSectionTitle}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3">
             {[
-              { label: CM.deleteArchiveLogsLabel, field: 'deleteArchive', icon: 'auto_delete', desc: CM.deleteArchiveLogsDesc },
-              { label: CM.updateStatisticsLabel, field: 'updateStatistics', icon: 'query_stats', desc: CM.updateStatisticsDesc },
-              { label: CM.checkConsistencyLabel, field: 'checkConsistency', icon: 'verified', desc: CM.checkConsistencyDesc },
-              { label: CM.compressBackupLabel, field: 'useCompression', icon: 'compress', desc: CM.compressBackupDesc },
+              { label: CM.deleteArchiveLogsLabel, field: 'deleteArchive', icon: 'auto_delete' },
+              { label: CM.updateStatisticsLabel, field: 'updateStatistics', icon: 'query_stats' },
+              { label: CM.checkConsistencyLabel, field: 'checkConsistency', icon: 'verified' },
+              { label: CM.compressBackupLabel, field: 'useCompression', icon: 'compress' },
             ].map(opt => (
-              <div 
-                key={opt.field} 
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer group ${
-                  formData[opt.field] 
-                    ? 'bg-amber-500/5 border-amber-500/30' 
-                    : 'bg-white dark:bg-white/1 border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/12'
-                }`}
-                onClick={() => handleInputChange(opt.field, !formData[opt.field])}
-              >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 border ${
-                  formData[opt.field] 
-                    ? 'bg-amber-500 text-slate-900 border-amber-500/40' 
-                    : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-400 group-hover:text-slate-500'
-                }`}>
-                  <Icon name={opt.icon} size="12px" weight={300} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <Typography variant="p" className={`text-[11px] font-black transition-colors leading-none whitespace-nowrap ${formData[opt.field] ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {opt.label}
-                  </Typography>
-                </div>
-                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              <div key={opt.field} className="flex items-center gap-3 min-h-10">
+                <Icon name={opt.icon} size="16px" weight={300} className={formData[opt.field] ? 'text-amber-500' : 'text-slate-400'} />
+                <Typography variant="p" className="flex-1 min-w-0 text-[12px] font-medium text-slate-700 dark:text-slate-200 leading-tight">{opt.label}</Typography>
+                <div className="shrink-0">
                   <Toggle checked={formData[opt.field]} onChange={(val) => handleInputChange(opt.field, val)} size="sm" variant="primary" />
                 </div>
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Resources */}
-        <div className="grid grid-cols-2 gap-6">
-          <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" size="sm" />
-          <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" size="sm" />
-        </div>
-
-        {/* Mode Selector */}
-        <div className="space-y-3 px-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2" role="radiogroup" aria-label={CM.type}>
           {[
-            { value: 'online', label: CM.onlineMode, desc: CM.onlineModeDesc, icon: 'bolt' },
-            { value: 'offline', label: CM.offlineMode, desc: CM.offlineModeDesc, icon: 'power_settings_new' }
+            { value: 'online', label: CM.onlineMode, icon: 'bolt' },
+            { value: 'offline', label: CM.offlineMode, icon: 'power_settings_new' }
           ].map(mode => (
             <button
+              type="button"
               key={mode.value}
               onClick={() => handleInputChange('onlineType', mode.value)}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left shadow-xs ${
+              role="radio"
+              aria-checked={formData.onlineType === mode.value}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left ${
                 formData.onlineType === mode.value 
-                  ? 'bg-amber-500/5 border-amber-500/40' 
-                  : 'bg-white dark:bg-white/1 border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/12'
+                  ? 'bg-amber-500/8 border-amber-500/50'
+                  : 'bg-slate-50 dark:bg-white/4 border-slate-200 dark:border-white/10 hover:border-amber-500/40'
               }`}
             >
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all shrink-0 ${
-                formData.onlineType === mode.value ? 'bg-amber-500 text-slate-900 border-amber-500/40' : 'bg-slate-50 dark:bg-white/5 text-slate-400 border-transparent'
+              <Icon name={mode.icon} size="18px" weight={300} className={formData.onlineType === mode.value ? 'text-amber-500' : 'text-slate-400'} />
+              <Typography variant="p" className="flex-1 font-medium text-[12px] leading-tight text-slate-700 dark:text-slate-200">{mode.label}</Typography>
+              <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                formData.onlineType === mode.value ? 'border-amber-500' : 'border-slate-300 dark:border-white/20'
               }`}>
-                <Icon name={mode.icon} size="md" weight={300} />
-              </div>
-              <div className="flex-1">
-                <Typography variant="p" className={`font-black text-[12px] leading-tight transition-colors ${formData.onlineType === mode.value ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{mode.label}</Typography>
-                <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium leading-relaxed block">{mode.desc}</Typography>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                formData.onlineType === mode.value ? 'border-amber-500 shadow-[0_0_8px_rgba(255,193,7,0.3)]' : 'border-slate-300 dark:border-white/10'
-              }`}>
-                {formData.onlineType === mode.value && <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs" />}
+                {formData.onlineType === mode.value && <div className="w-2 h-2 rounded-full bg-amber-500" />}
               </div>
             </button>
           ))}
-        </div>
+          </div>
+        </FormSection>
+
+        <details className="group rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/4">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[12px] font-medium text-slate-700 dark:text-slate-200 hover:text-amber-600 dark:hover:text-amber-400">
+            <span className="flex items-center gap-2">
+              <Icon name="tune" size="16px" weight={300} />
+              {CM.advancedParamsTab}
+            </span>
+            <Icon name="expand_more" size="18px" className="transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 dark:border-white/10 px-4 py-4">
+            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" />
+            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" />
+          </div>
+        </details>
 
       </div>
     </Modal>

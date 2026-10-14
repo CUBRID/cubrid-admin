@@ -130,7 +130,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-bk-main overflow-hidden">
 
       {/* ── Top bar ── */}
-      <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-bk-side/40">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-bk-side/40">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="hub" size="sm" weight={300} className="text-amber-500" />
@@ -174,7 +174,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
         {/* ── Basic Info ── */}
         <Card
@@ -277,7 +277,6 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             sortable
             zebra
             emptyMessage={CM.jobQueueEmptyMsg}
-            showEmptyStateAsRow
           />
         </Card>
       </div>

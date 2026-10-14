@@ -218,10 +218,10 @@ export default function AutoVolumeLogModal() {
             loading={logsLoading}
             emptyMessage={CM.noAutomationLogsFoundMsg}
             className="h-full"
+            showEmptyStateAsRow
           />
         </div>
       </div>
     </Modal>
   );
 }
-

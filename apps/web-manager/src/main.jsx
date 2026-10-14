@@ -14,6 +14,18 @@ import { registerDesktopExitAuthReset } from './app/registerDesktopExitAuthReset
 
 registerDesktopExitAuthReset()
 
+// Development must always reflect current source. Clean up any production
+// PWA worker/cache left behind on the same localhost origin.
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.getRegistrations().then(async (registrations) => {
+    await Promise.all(registrations.map((registration) => registration.unregister()))
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((key) => caches.delete(key)))
+    }
+  })
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Provider store={store}>

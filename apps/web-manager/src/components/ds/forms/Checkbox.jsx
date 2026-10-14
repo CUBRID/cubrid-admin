@@ -42,7 +42,7 @@ export const Checkbox = forwardRef(({
             {...props}
           />
           {/* Custom Checkbox UI */}
-          <div className="w-4.5 h-4.5 bg-white dark:bg-white/10 border border-slate-300 dark:border-white/25 rounded-md flex shrink-0 justify-center items-center transition-all shadow-xs group-hover:border-amber-500/50 dark:group-hover:border-amber-500/50 peer-checked:bg-amber-500 peer-checked:border-amber-500 dark:peer-checked:bg-amber-500 dark:peer-checked:border-amber-500 peer-[&:indeterminate]:bg-amber-500/60 peer-[&:indeterminate]:border-amber-500/30 pointer-events-none">
+          <div className="w-4.5 h-4.5 bg-white dark:bg-white/10 border border-slate-300 dark:border-white/25 rounded-md flex shrink-0 justify-center items-center transition-all shadow-xs group-hover:border-amber-500/50 dark:group-hover:border-amber-500/50 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/70 peer-focus-visible:ring-offset-2 peer-checked:bg-amber-500 peer-checked:border-amber-500 dark:peer-checked:bg-amber-500 dark:peer-checked:border-amber-500 peer-[&:indeterminate]:bg-amber-500/60 peer-[&:indeterminate]:border-amber-500/30 pointer-events-none">
             {/* Checked Icon */}
             <svg 
               className={`w-3.5 h-3.5 text-white dark:text-bk-side pointer-events-none transition-opacity duration-150 ${checked && !indeterminate ? 'opacity-100' : 'opacity-0'}`} 

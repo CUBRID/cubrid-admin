@@ -11,17 +11,17 @@ export const Typography = ({
     : 'span';
 
   const baseStyles = {
-    h1: 'text-4xl font-bold text-slate-900 dark:text-white',
-    h2: 'text-3xl font-bold text-slate-900 dark:text-white',
-    h3: 'text-2xl font-semibold text-slate-900 dark:text-white',
-    h4: 'text-xl font-semibold text-slate-900 dark:text-white',
-    h5: 'text-lg font-medium text-slate-900 dark:text-white',
-    h6: 'text-base font-medium text-slate-900 dark:text-white',
-    p: 'text-slate-700 dark:text-slate-300',
+    h1: 'text-3xl font-bold text-slate-900 dark:text-white',
+    h2: 'text-2xl font-bold text-slate-900 dark:text-white',
+    h3: 'text-xl font-semibold text-slate-900 dark:text-white',
+    h4: 'text-base font-semibold text-slate-900 dark:text-white',
+    h5: 'text-sm font-medium text-slate-900 dark:text-white',
+    h6: 'text-[13px] font-medium text-slate-900 dark:text-white',
+    p: 'text-[13px] text-slate-700 dark:text-slate-300',
     span: 'text-inherit',
-    label: 'text-sm font-medium text-slate-700 dark:text-slate-300',
-    caption: 'text-[11.5px] text-slate-500 dark:text-slate-400',
-    code: 'font-mono text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded-sm text-slate-800 dark:text-slate-200',
+    label: 'text-[12px] font-medium text-slate-700 dark:text-slate-300',
+    caption: 'text-[11px] text-slate-500 dark:text-slate-400',
+    code: 'font-mono text-[12px] bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded-sm text-slate-800 dark:text-slate-200',
   };
 
   const appliedClass = `${baseStyles[variant] || baseStyles.span} ${className}`;
