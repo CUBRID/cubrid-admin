@@ -30,17 +30,7 @@ export default function ServerListItem({
 }) {
   const CM = useCM();
 
-  const getInferredHaInfo = () => {
-    if (haInfo?.isHA) return haInfo;
-    const alias = (host.alias || '').toLowerCase();
-    if (alias.includes('(master)')) return { isHA: true, currentNodeType: 'master' };
-    if (alias.includes('(slave)')) return { isHA: true, currentNodeType: 'slave' };
-    if (alias.includes('(replica)')) return { isHA: true, currentNodeType: 'replica' };
-    return null;
-  };
-
-  const activeHaInfo = getInferredHaInfo();
-  const haRole = activeHaInfo?.currentNodeType;
+  const haRole = haInfo?.isHA ? haInfo.currentNodeType : null;
   const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
   // Strip HA role tags from display name for cleanliness
