@@ -44,7 +44,11 @@ export default function VolumeInfoMonitor({ tabId }) {
     return dbSpace.volumes.find(v => v.spacename === volname);
   }, [dbSpace, volname]);
 
-  const pageSize = parseNumber(dbSpace?.summary?.[0]?.pagesize) || 4096;
+  // dbSpace.summary rows (dbinfo) never carry a pagesize field at all — the
+  // real value is top-level on the space-info response. Log volumes use the
+  // database's (potentially different) log page size.
+  const isLogVolume = /LOG|ACTIVE|ARCHIVE/i.test(volume?.type || '');
+  const pageSize = parseNumber(isLogVolume ? dbSpace?.logpagesize : dbSpace?.pagesize) || parseNumber(dbSpace?.pagesize) || 4096;
 
   if (isLoading && !volume) {
     return (
