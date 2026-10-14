@@ -30,7 +30,7 @@ test.describe('Feature: Header Controls & System Actions', () => {
     });
 
     await Then('the About dialog renders application version information', async () => {
-      await action('Verify dialog contains application name', () => expect(dialog.getByText(/CUBRID Web Manager/i).first()).toBeVisible(), 'Application name was not found in About dialog.');
+      await action('Verify dialog contains application name', () => expect(dialog.getByText(/Next CUBRID Admin/i).first()).toBeVisible(), 'Application name was not found in About dialog.');
       await action('Verify version 12.4.0-STABLE is displayed', () => expect(dialog.getByText('12.4.0-STABLE')).toBeVisible(), 'Version string was not displayed in About dialog.');
     });
 

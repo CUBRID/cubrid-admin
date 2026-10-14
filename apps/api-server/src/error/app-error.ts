@@ -84,6 +84,8 @@ export class AppError extends Error {
       'confname',
       'type',
       'parameter',
+      'requestedSizeBytes',
+      'maximumSizeBytes',
     ];
 
     const sensitiveFields = [

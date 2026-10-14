@@ -156,7 +156,7 @@ export class BrokerService extends BaseService {
       bname: bname,
     };
 
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       HandleBrokerCmsRequest,
       BaseCmsResponse
     >(userId, hostUid, cmsRequest);
@@ -177,7 +177,7 @@ export class BrokerService extends BaseService {
       bname: bname,
     };
 
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       HandleBrokerCmsRequest,
       BaseCmsResponse
     >(userId, hostUid, cmsRequest);
@@ -224,7 +224,7 @@ export class BrokerService extends BaseService {
     const cmsRequest: StopAllBrokersCmsRequest = {
       task: 'stopbroker',
     };
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       StopAllBrokersCmsRequest,
       StopAllBrokersCmsResponse
     >(userId, hostUid, cmsRequest);
@@ -242,7 +242,7 @@ export class BrokerService extends BaseService {
     const cmsRequest: StartAllBrokersCmsRequest = {
       task: 'startbroker',
     };
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       StartAllBrokersCmsRequest,
       StartAllBrokersCmsResponse
     >(userId, hostUid, cmsRequest);

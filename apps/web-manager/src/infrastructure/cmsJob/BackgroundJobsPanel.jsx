@@ -36,7 +36,7 @@ function useElapsedTime(startedAt, active) {
 }
 
 function StatusBadge({ status, CM }) {
-  const base = 'text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full';
+  const base = 'text-11 font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full';
   if (status === 'succeeded') {
     return (
       <span className={`${base} bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300`}>
@@ -74,8 +74,8 @@ function formatTimestamp(iso) {
 function DetailRow({ label, value, mono = false }) {
   return (
     <>
-      <span className="text-[11px] text-slate-400 dark:text-slate-500">{label}</span>
-      <span className={`text-[12px] text-slate-700 dark:text-slate-200 truncate ${mono ? 'font-mono tabular-nums' : ''}`}>
+      <span className="text-13 text-slate-400 dark:text-slate-500">{label}</span>
+      <span className={`text-14 text-slate-700 dark:text-slate-200 truncate ${mono ? 'font-mono tabular-nums' : ''}`}>
         {value ?? '—'}
       </span>
     </>
@@ -96,7 +96,7 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
         <div className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-2 items-center">
           <DetailRow label={CM.server} value={hostLabel} />
           <DetailRow label={CM.database} value={job.dbname} />
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">{CM.status}</span>
+          <span className="text-13 text-slate-400 dark:text-slate-500">{CM.status}</span>
           <div><StatusBadge status={job.jobStatus} CM={CM} /></div>
           <DetailRow label={CM.created} value={formatTimestamp(job.createdAt)} mono />
           {job.startedAt && <DetailRow label={CM.started} value={formatTimestamp(job.startedAt)} mono />}
@@ -104,16 +104,16 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
         </div>
         {job.error?.message && (
           <div>
-            <div className="text-[11px] text-slate-400 dark:text-slate-500 mb-1">{CM.error}</div>
-            <pre className="whitespace-pre-wrap break-all bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg px-2.5 py-2 font-mono text-[11px] max-h-40 overflow-y-auto">
+            <div className="text-13 text-slate-400 dark:text-slate-500 mb-1">{CM.error}</div>
+            <pre className="whitespace-pre-wrap break-all bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg px-2.5 py-2 font-mono text-13 max-h-40 overflow-y-auto">
               {job.error.message}
             </pre>
           </div>
         )}
         {job.result != null && (
           <div>
-            <div className="text-[11px] text-slate-400 dark:text-slate-500 mb-1">{CM.result}</div>
-            <pre className="whitespace-pre-wrap break-all bg-slate-100 dark:bg-white/5 rounded-lg px-2.5 py-2 font-mono text-[11px] max-h-40 overflow-y-auto">
+            <div className="text-13 text-slate-400 dark:text-slate-500 mb-1">{CM.result}</div>
+            <pre className="whitespace-pre-wrap break-all bg-slate-100 dark:bg-white/5 rounded-lg px-2.5 py-2 font-mono text-13 max-h-40 overflow-y-auto">
               {typeof job.result === 'string' ? job.result : JSON.stringify(job.result, null, 2)}
             </pre>
           </div>
@@ -145,19 +145,19 @@ function JobRow({ job, CM, hostLabel, onSelect, onDismiss }) {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <Typography variant="p" className="text-[12px] font-medium text-slate-800 dark:text-slate-100 truncate">
+          <Typography variant="p" className="text-14 font-medium text-slate-800 dark:text-slate-100 truncate">
             {op}
           </Typography>
-          <Typography variant="p" className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+          <Typography variant="p" className="text-12 text-slate-500 dark:text-slate-400 truncate">
             {job.dbname ? (hostLabel ? `${job.dbname}(${hostLabel})` : job.dbname) : '—'}
           </Typography>
           {isActive && anchorAt && (
-            <Typography variant="p" className="text-[10px] text-amber-600 dark:text-amber-400 tabular-nums">
+            <Typography variant="p" className="text-12 text-amber-600 dark:text-amber-400 tabular-nums">
               {formatElapsed(elapsed)}
             </Typography>
           )}
           {job.jobStatus === 'failed' && job.error?.message && (
-            <Typography variant="p" className="text-[10px] text-red-600 dark:text-red-400 mt-0.5 line-clamp-2">
+            <Typography variant="p" className="text-12 text-red-600 dark:text-red-400 mt-0.5 line-clamp-2">
               {job.error.message}
             </Typography>
           )}
@@ -234,12 +234,12 @@ export function BackgroundJobsPanel({
         )}
         <Typography
           variant="caption"
-          className="flex-1 min-w-0 font-bold text-[11px] uppercase tracking-widest text-slate-600 dark:text-slate-400 truncate text-left"
+          className="flex-1 min-w-0 font-bold text-13 uppercase tracking-widest text-slate-600 dark:text-slate-400 truncate text-left"
         >
           {CM.backgroundJobsTitle}
         </Typography>
         {activeCount > 0 && (
-          <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 shrink-0">
+          <span className="text-12 font-semibold text-amber-600 dark:text-amber-400 shrink-0">
             {CM.backgroundJobsRunning(activeCount)}
           </span>
         )}
@@ -252,7 +252,7 @@ export function BackgroundJobsPanel({
               <button
                 type="button"
                 onClick={onClearCompleted}
-                className="text-[10px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                className="text-12 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               >
                 {CM.clearCompletedJobs}
               </button>

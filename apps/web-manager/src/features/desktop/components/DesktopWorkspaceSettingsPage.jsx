@@ -9,8 +9,11 @@ import { useCM } from '../../../constants/useCM';
 
 function SettingsShell({ children }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-white dark:bg-[#0d0d0f]">
-      <div className="w-full max-w-lg">{children}</div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-[#070709] font-sans selection:bg-amber-500/20 relative overflow-hidden">
+      <div className="w-full max-w-lg bg-white/90 dark:bg-[#121215]/90 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-[0_24px_60px_-15px_rgba(0,0,0,0.08),0_0_40px_rgba(245,158,11,0.04)] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.6),0_0_50px_rgba(245,158,11,0.08)] relative z-10 overflow-hidden p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-500">
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500/40 via-amber-400 to-amber-500/40 shadow-[0_1px_8px_rgba(245,158,11,0.25)]" />
+        {children}
+      </div>
     </div>
   );
 }
@@ -155,7 +158,7 @@ export default function DesktopWorkspaceSettingsPage() {
     <SettingsShell>
       <div className="mb-8">
         {!setupMode && (
-          <Link to="/login" className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-amber-500 mb-4">
+          <Link to="/login" className="inline-flex items-center gap-1 text-14 text-slate-500 hover:text-amber-500 mb-4">
             <Icon name="arrow_back" size="sm" weight={300} />
             {CM.signIn}
           </Link>
@@ -163,7 +166,7 @@ export default function DesktopWorkspaceSettingsPage() {
         <h1 data-testid="workspace-setup-title" className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
           {setupMode ? CM.selectWorkspaceTitle : CM.workspaceTitle}
         </h1>
-        <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-15 text-slate-500 dark:text-slate-400 mt-1">
           {CM.workspaceDescPrefix}
           <strong className="font-semibold text-slate-700 dark:text-slate-200">{CM.workspaceDescFolderPhrase}</strong>
           {CM.workspaceDescMiddle}
@@ -186,7 +189,7 @@ export default function DesktopWorkspaceSettingsPage() {
           />
 
           {info && (
-            <div className="text-[12px] text-slate-500 dark:text-slate-400 space-y-1 font-mono break-all">
+            <div className="text-14 text-slate-500 dark:text-slate-400 space-y-1 font-mono break-all">
               {!info.isCustomWorkspace && (
                 <p className="text-amber-600 dark:text-amber-400">
                   {CM.defaultLocationLabel(info.defaultWorkspaceRoot)}
@@ -212,7 +215,7 @@ export default function DesktopWorkspaceSettingsPage() {
               type="button"
               data-testid="workspace-pick-btn"
               onClick={() => void handlePick()}
-              className="h-10 px-4 text-[13px] font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40"
+              className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40"
             >
               {CM.selectFolderEllipsis}
             </button>
@@ -222,7 +225,7 @@ export default function DesktopWorkspaceSettingsPage() {
                 data-testid="workspace-continue-btn"
                 disabled={saving || !workspaceRoot.trim()}
                 onClick={() => void handleContinue()}
-                className="h-10 px-4 text-[13px] font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+                className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
               >
                 {CM.continueBtn}
               </button>
@@ -233,7 +236,7 @@ export default function DesktopWorkspaceSettingsPage() {
                   data-testid="workspace-save-btn"
                   disabled={saving || !workspaceRoot.trim()}
                   onClick={() => void handleSave()}
-                  className="h-10 px-4 text-[13px] font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+                  className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
                 >
                   {CM.save}
                 </button>
@@ -243,7 +246,7 @@ export default function DesktopWorkspaceSettingsPage() {
                     data-testid="workspace-reset-btn"
                     disabled={saving}
                     onClick={() => void handleReset()}
-                    className="h-10 px-4 text-[13px] font-semibold rounded-xl text-slate-600 dark:text-slate-300"
+                    className="h-10 px-4 text-15 font-semibold rounded-xl text-slate-600 dark:text-slate-300"
                   >
                     {CM.defaultLocationBtn}
                   </button>

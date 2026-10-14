@@ -21,7 +21,7 @@ export function TabGroup({ tabs = [], active, onChange, className = '', fullWidt
             type="button"
             data-testid={testId ? `${testId}-${tab.id}` : undefined}
             onClick={() => onChange(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-sm text-[11px] font-bold uppercase tracking-wider transition-colors
+            className={`flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-sm text-13 font-bold uppercase tracking-wider transition-colors
               ${isActive
                 ? 'bg-white dark:bg-white/10 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200/80 dark:border-white/10'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -30,7 +30,7 @@ export function TabGroup({ tabs = [], active, onChange, className = '', fullWidt
             {tab.icon && <Icon name={tab.icon} size="sm" weight={300} className="shrink-0" />}
             <span className="truncate">{tab.label}</span>
             {tab.badge !== undefined && tab.badge !== null && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none transition-colors
+              <span className={`text-11 font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none transition-colors
                 ${isActive ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'}`}>
                 {tab.badge}
               </span>

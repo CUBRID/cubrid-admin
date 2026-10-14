@@ -10,7 +10,7 @@ import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
 import { fetchDatabaseVolumes } from '../../database/databaseMonitoringSlice';
 import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
-import { isHaClusterMissingMaster } from '../../host/haPeerUtils';
+import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
 import DatabaseListSection from './server/DatabaseListSection';
@@ -179,40 +179,45 @@ const Component = function ServerContent({ hostUid }) {
     return names;
   }, [haHeartbeat]);
 
+  const haDbServerModes = React.useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
+
   const dbListDisplay = databases.map(db => ({
     db: db.dbname,
     autoStart: autoStartDBs.includes(db.dbname),
     status: activeDatabases.includes(db.dbname) ? CM.statusOn : CM.statusOff,
-    isHA: isHA && haDbs.has(db.dbname)
+    isHA: isHA && haDbs.has(db.dbname),
+    haState: isHA && haDbs.has(db.dbname) ? haDbServerModes.get(db.dbname) : null,
   }));
 
   return (
     <div data-testid="server-dashboard" className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden">
 
       {/* ── Header ── */}
-      <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="dns" size="sm" weight={300} className="text-amber-500" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
                 {CM.serverDashboard}
               </Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences?.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
-            <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight">{hostLabel}</Typography>
+            <div className="flex items-center mt-0.5">
+              <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight leading-none">{hostLabel}</Typography>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[12px]">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 text-14">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -228,7 +233,7 @@ const Component = function ServerContent({ hostUid }) {
           >
             <Icon 
               name="refresh" 
-              size="18px" 
+              size="19px" 
               className={isRefreshing ? 'animate-spin' : ''} 
             />
           </button>

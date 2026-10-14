@@ -132,7 +132,7 @@ export default function MonitoringSettingsPopover() {
           }`}
         title={CM.monitoringSync}
       >
-        <Icon name="timer" size="18px" weight={300} />
+        <Icon name="timer" size="19px" weight={300} />
 
         {hasActiveMonitoring && (
           <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-green-500 rounded-full border border-white dark:border-background-dark ring-2 ring-green-500/20"></div>
@@ -145,7 +145,7 @@ export default function MonitoringSettingsPopover() {
             <Typography variant="caption" className="font-black text-slate-900 dark:text-white uppercase tracking-widest">{CM.globalHeartbeat}</Typography>
             <div className="flex items-center gap-1.5">
                <div className={`w-1.5 h-1.5 rounded-full ${hasActiveMonitoring ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></div>
-               <span className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">{hasActiveMonitoring ? CM.active : CM.manualLabel}</span>
+               <span className="text-10 font-black uppercase text-slate-400 tracking-tighter">{hasActiveMonitoring ? CM.active : CM.manualLabel}</span>
             </div>
           </div>
           
@@ -154,7 +154,7 @@ export default function MonitoringSettingsPopover() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <Typography variant="caption" className="font-bold text-slate-500 uppercase tracking-tight">{CM.resourceDashboard}</Typography>
-                <span className="text-[10px] text-amber-500 font-black px-1.5 py-0.5 rounded-md bg-amber-500/5 border border-amber-500/10 min-w-[32px] text-center font-mono">
+                <span className="text-12 text-amber-500 font-black px-1.5 py-0.5 rounded-md bg-amber-500/5 border border-amber-500/10 min-w-[32px] text-center font-mono">
                   {localPrefs.dashboardInterval > 0 ? `${localPrefs.dashboardInterval}s` : CM.statusOff.toUpperCase()}
                 </span>
               </div>
@@ -163,7 +163,7 @@ export default function MonitoringSettingsPopover() {
                   <button
                     key={opt.value}
                     onClick={() => handleDashboardPresetClick(opt.value)}
-                    className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all active:scale-95
+                    className={`flex-1 py-1.5 text-12 font-black rounded-lg transition-all active:scale-95
                       ${dashboardPresetActive && localPrefs.dashboardInterval === opt.value 
                         ? 'bg-amber-500 text-slate-900 shadow-md transform scale-[1.02]' 
                         : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
@@ -187,14 +187,14 @@ export default function MonitoringSettingsPopover() {
                 />
               </div>
 
-              <p className="text-[9px] text-slate-400 italic px-1">{CM.syncDbThroughputMsg}</p>
+              <p className="text-11 text-slate-400 italic px-1">{CM.syncDbThroughputMsg}</p>
             </div>
 
             {/* Broker Interval */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <Typography variant="caption" className="font-bold text-slate-500 uppercase tracking-tight">{CM.brokerInfrastructure}</Typography>
-                <span className="text-[10px] text-amber-500 font-black px-1.5 py-0.5 rounded-md bg-amber-500/5 border border-amber-500/10 min-w-[32px] text-center font-mono">
+                <span className="text-12 text-amber-500 font-black px-1.5 py-0.5 rounded-md bg-amber-500/5 border border-amber-500/10 min-w-[32px] text-center font-mono">
                   {localPrefs.brokerStatusInterval > 0 ? `${localPrefs.brokerStatusInterval}s` : CM.statusOff.toUpperCase()}
                 </span>
               </div>
@@ -203,7 +203,7 @@ export default function MonitoringSettingsPopover() {
                   <button
                     key={opt.value}
                     onClick={() => handleBrokerPresetClick(opt.value)}
-                    className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all active:scale-95
+                    className={`flex-1 py-1.5 text-12 font-black rounded-lg transition-all active:scale-95
                       ${brokerPresetActive && localPrefs.brokerStatusInterval === opt.value 
                         ? 'bg-amber-500 text-slate-900 shadow-md transform scale-[1.02]' 
                         : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
@@ -227,7 +227,7 @@ export default function MonitoringSettingsPopover() {
                 />
               </div>
 
-              <p className="text-[9px] text-slate-400 italic px-1">{CM.propagatesConnectionMsg}</p>
+              <p className="text-11 text-slate-400 italic px-1">{CM.propagatesConnectionMsg}</p>
             </div>
           </div>
 

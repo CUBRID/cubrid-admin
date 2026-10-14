@@ -44,10 +44,10 @@ export default function HaClusterStatusSection({ hostUid }) {
           <Icon name="hub" className="text-amber-500" size="sm" />
         </div>
         <div>
-          <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider leading-none">
+          <p className="text-13 font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider leading-none">
             {CM.haClusterStatus}
           </p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-none">
+          <p className="text-12 text-slate-500 dark:text-slate-400 mt-1.5 leading-none">
             {CM.nodesActiveInCluster(nodes.length)}
           </p>
         </div>
@@ -60,8 +60,8 @@ export default function HaClusterStatusSection({ hostUid }) {
             <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-white dark:bg-bk-main rounded-lg border border-slate-200/60 dark:border-white/5 shadow-xs">
               <div className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 leading-tight">{node.hostname}</span>
-                <span className={`text-[7px] font-black uppercase tracking-tighter mt-0.5 leading-none ${colors.text}`}>
+                <span className="text-12 font-bold text-slate-700 dark:text-slate-200 leading-tight">{node.hostname}</span>
+                <span className={`text-9 font-black uppercase tracking-tighter mt-0.5 leading-none ${colors.text}`}>
                   {nodeState}
                 </span>
               </div>
