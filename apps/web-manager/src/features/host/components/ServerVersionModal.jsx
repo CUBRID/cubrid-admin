@@ -62,7 +62,7 @@ export default function ServerVersionModal() {
         <div className="w-full space-y-5">
           <div className="flex flex-col items-center text-center w-full">
             <SectionHeader title={CM.cubridVersion} icon="verified" className="justify-center" />
-            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-[16px]">
+            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-18">
               {envData?.CUBRIDVER || CM.loadingLabel}
             </Typography>
           </div>

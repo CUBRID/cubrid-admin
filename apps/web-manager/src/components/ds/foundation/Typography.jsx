@@ -11,16 +11,19 @@ export const Typography = ({
     : 'span';
 
   const baseStyles = {
-    h1: 'text-4xl font-bold text-slate-900 dark:text-white',
-    h2: 'text-3xl font-bold text-slate-900 dark:text-white',
-    h3: 'text-2xl font-semibold text-slate-900 dark:text-white',
-    h4: 'text-xl font-semibold text-slate-900 dark:text-white',
-    h5: 'text-lg font-medium text-slate-900 dark:text-white',
-    h6: 'text-base font-medium text-slate-900 dark:text-white',
-    p: 'text-slate-700 dark:text-slate-300',
+    h1: 'text-3xl font-bold text-slate-900 dark:text-white',
+    h2: 'text-2xl font-bold text-slate-900 dark:text-white',
+    h3: 'text-xl font-semibold text-slate-900 dark:text-white',
+    h4: 'text-base font-semibold text-slate-900 dark:text-white',
+    h5: 'text-sm font-medium text-slate-900 dark:text-white',
+    h6: 'text-[13px] font-medium text-slate-900 dark:text-white',
+    p: 'text-[13px] text-slate-700 dark:text-slate-300',
     span: 'text-inherit',
+    // Font sizes use this project's scaled-up Tailwind text-sm/semantic
+    // text-N tokens (see styles/index.css) rather than literal px values,
+    // to stay consistent with the app-wide typography scale-up.
     label: 'text-sm font-medium text-slate-700 dark:text-slate-300',
-    caption: 'text-[11.5px] text-slate-500 dark:text-slate-400',
+    caption: 'text-13 text-slate-500 dark:text-slate-400',
     code: 'font-mono text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded-sm text-slate-800 dark:text-slate-200',
   };
 

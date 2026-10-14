@@ -3,11 +3,25 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 
+// Stable fallback reference — `activeDatabasesByHost[selectedHostUid] || []`
+// would otherwise hand the effect below a brand-new array every render for
+// as long as this host has no cached entry yet (e.g. just-selected, before
+// its first fetch resolves). That effect depends on this value and
+// dispatches a fetch, which changes Redux state and re-renders this
+// component — seeing a "new" array each time, it never settles and keeps
+// re-dispatching instead of waiting for the configured interval.
+const EMPTY_LIST = [];
+
 export default function MonitoringProvider({ children }) {
   const dispatch = useDispatch();
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
-  const { activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  // activeDatabasesByHost is keyed by hostUid — this provider only ever
+  // polls the currently selected host, so read straight out of its slot
+  // rather than a flat shared array a different, still in-flight host's
+  // response could clobber.
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || EMPTY_LIST;
   const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
   
   const dashboardTimer = useRef(null);

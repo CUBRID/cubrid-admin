@@ -230,14 +230,27 @@ export const updateBrokerConfig = createAsyncThunk(
 );
 
 const initialState = {
-  brokers: [],
+  // Keyed by hostUid — a bare shared `brokers` array meant a slow, still
+  // in-flight fetch for a host the user has since switched away from could
+  // resolve after the switch and overwrite the array the UI is now using to
+  // render a DIFFERENT, currently-selected host's broker tree. See the same
+  // reasoning on `activeHostUid` below and in fetchBrokerList's reducers.
+  brokersByHost: {}, // { hostUid: brokers[] }
+  // Mirrors state.host.selectedHostUid (via the addMatcher below) so a late
+  // response for a host the user is no longer viewing can tell it isn't the
+  // active one and skip touching the globally-shared selectedBroker.
+  activeHostUid: null,
   selectedBroker: null,
   selectedBrokerSubItem: null,
   detailedStatus: {}, // { brokerName: { data: {}, loading: false, error: null } }
   logsByBroker: {}, // { brokerName: [logs] }
   viewingLogs: {}, // { path: { data: {}, loading: false, error: null } }
   adminLogsByHost: {}, // { hostUid: [logs] }
-  loading: false,
+  loadingByHost: {}, // { hostUid: boolean } — fetchBrokerList's own loading, kept
+  // per host like brokersByHost itself: a single shared flag meant closing
+  // one host's tabs while fetchBrokerList was still in flight for it could
+  // only clear loading by zeroing it globally, which also hid a DIFFERENT,
+  // still-legitimately-loading host's own spinner.
   actionLoading: false,
   lastActionTarget: null, // Track broker name
   lastActionType: null,   // Track 'start' or 'stop'
@@ -249,6 +262,7 @@ const initialState = {
   dbLogsByDbName: {}, // { dbname: [logs] }
   dbLogsLoading: false,
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
+  latestBrokerListRequestIdByHost: {}, // { hostUid: requestId }
   propertyModal: {
     isOpen: false,
     brokerName: null,
@@ -277,8 +291,19 @@ const brokerSlice = createSlice({
     closeBrokerPropertyModal: (state) => {
       state.propertyModal.isOpen = false;
     },
-    resetBrokerState: (state) => {
-      state.brokers = [];
+    // Dispatched whenever focus leaves a host (plain focus switch, delete,
+    // disconnect/revoke) — hostUid is the host being LEFT, if known. Only
+    // that host's cached broker list is evicted; other hosts' cached data
+    // (and their own in-flight fetches) are untouched. selectedBroker and
+    // friends are always cleared since they always belonged to whichever
+    // host this reducer is firing for.
+    resetBrokerState: (state, action) => {
+      const hostUid = action.payload;
+      if (hostUid) {
+        delete state.brokersByHost[hostUid];
+      } else {
+        state.brokersByHost = {};
+      }
       state.selectedBroker = null;
       state.selectedBrokerSubItem = null;
       state.detailedStatus = {};
@@ -294,24 +319,51 @@ const brokerSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchBrokerList.pending, (state, action) => {
+        // Per-broker status calls inside this thunk mean a host with many
+        // brokers can take a while — track the latest requestId PER HOST so
+        // a slower earlier fetch for that same host (e.g. still in flight
+        // when the user switches focus away and back) can't resolve after a
+        // newer one and clobber its fresher data.
+        //
+        // Scoped by hostUid, not a single shared id: a bare shared id meant
+        // any fetch for ANY host — e.g. a different, still-mounted tab's
+        // poll for a completely unrelated host — would mark this host's own
+        // in-flight fetch as "stale" the moment it fired, discarding this
+        // host's response when it later resolved. Under sustained polling
+        // from multiple hosts/tabs, that could discard every response for a
+        // given host indefinitely, not just an actually-superseded one.
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        state.latestBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
         if (!action.meta.arg?.isBackground) {
-          state.loading = true;
+          state.loadingByHost[hostUid] = true;
         }
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
-        state.loading = false;
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
+        state.loadingByHost[hostUid] = false;
         const newBrokers = action.payload;
-        if (JSON.stringify(state.brokers) !== JSON.stringify(newBrokers)) {
-          state.brokers = newBrokers;
+        if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
+          state.brokersByHost[hostUid] = newBrokers;
         }
-        const exists = state.brokers.find(b => b.name === state.selectedBroker);
-        if (!exists) state.selectedBroker = null;
+        // Only let the CURRENTLY ACTIVE host's own response affect the
+        // shared selectedBroker. Without this, a response for a host the
+        // user has since switched away from (still "latest for that host" —
+        // nothing else for it superseded this request) could find its own
+        // list doesn't contain whatever broker is selected in the NEW host
+        // and wrongly null out that unrelated, still-valid selection.
+        if (hostUid === state.activeHostUid) {
+          const exists = (state.brokersByHost[hostUid] || []).find(b => b.name === state.selectedBroker);
+          if (!exists) state.selectedBroker = null;
+        }
       })
       .addCase(fetchBrokerList.rejected, (state, action) => {
-        state.loading = false;
+        const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
+        state.loadingByHost[hostUid] = false;
         state.error = action.payload;
-        state.brokers = [];
+        state.brokersByHost[hostUid] = [];
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
         const { brokerName } = action.meta.arg;
@@ -469,6 +521,15 @@ const brokerSlice = createSlice({
         state.brokerConfig[hostUid].loading = false;
         state.brokerConfig[hostUid].error = action.payload;
       })
+      // Mirrors hostSlice's selectedHostUid so fetchBrokerList's fulfilled
+      // handler can tell whether a given response belongs to the host the
+      // user is currently viewing (see the comment there).
+      .addMatcher(
+        (action) => action.type === 'host/setSelectedHost',
+        (state, action) => {
+          state.activeHostUid = action.payload;
+        }
+      )
       // Cleanup on tab close to prevent memory leaks
       .addMatcher(
         (action) => action.type === 'layout/closeTab',
@@ -502,10 +563,36 @@ const brokerSlice = createSlice({
         (action) => action.type === 'layout/closeHostTabs',
         (state, action) => {
           const hostUid = action.payload;
-          // Clean up logs and config for specifically closed host
+          // Clean up logs and config for specifically closed host. Dispatched
+          // unconditionally on delete/disconnect, regardless of whether this
+          // host was the currently selected one — unlike resetBrokerState,
+          // which only fires for the currently-selected host — so this is
+          // also where a NON-selected host's cached broker list must be
+          // evicted, or it would sit in brokersByHost forever.
           delete state.adminLogsByHost[hostUid];
           delete state.cmsLogsByHost[hostUid];
           delete state.brokerConfig[hostUid];
+          delete state.brokersByHost[hostUid];
+          // A fetchBrokerList already in flight for this host when it was
+          // deleted/disconnected is still "the latest for its own host" per
+          // the per-host dedup above — nothing else for this host will ever
+          // supersede it now that the host is gone — so it would pass that
+          // check and resurrect this host's just-evicted slot once it
+          // resolves, with nothing left to ever clean it up again. Clearing
+          // the id here makes that stale response get dropped like any
+          // other no-longer-latest one.
+          //
+          // That discard path returns before reaching the loadingByHost
+          // write, so if this host's now-orphaned request was the one that
+          // set it, nothing else would ever clear it — every other fetch is
+          // for a DIFFERENT host and only ever touches its own slot. Clear
+          // this host's own loading slot directly instead of leaving a
+          // stuck spinner with no fetch left that could ever turn it off —
+          // and ONLY this host's slot, not a single shared flag, or closing
+          // host A here would also hide host B's own, still-legitimate
+          // in-flight loading indicator.
+          delete state.latestBrokerListRequestIdByHost[hostUid];
+          delete state.loadingByHost[hostUid];
         }
       );
   },

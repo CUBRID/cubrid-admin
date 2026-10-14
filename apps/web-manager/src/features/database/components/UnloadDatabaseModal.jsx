@@ -46,8 +46,10 @@ export default function UnloadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isUnloadDatabaseModalOpen: isUnloadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const currentDb = databases.find((db) => db.dbname === selectedDatabase);
 
@@ -250,6 +252,7 @@ export default function UnloadDatabaseModal() {
       maxWidth="740px"
       testId="unload-database"
       onSubmit={handleUnloadDatabase}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="unload-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
