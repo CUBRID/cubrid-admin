@@ -12,6 +12,7 @@ import { DatabaseConfigService } from '../config/database-config.service';
 import { BrokerService } from '@broker';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
 import { DatabaseError } from '@error/database/database-error';
+import { ValidationError } from '@error/validation/validation-error';
 import { DatabaseErrorCode } from '@error/database/database-error-code';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
@@ -984,6 +985,77 @@ describe('DatabaseLifecycleService', () => {
           data: { success: true },
         },
       });
+    });
+
+    it('starts the database without OPERATION_IN_PROGRESS even while this same job still holds the host lock', async () => {
+      // createDatabase() runs entirely inside its own CmsJobService job, which
+      // registers this host as "active" before the job body runs and only
+      // releases it once the job finishes. If the internal start-after-create
+      // step called the public startDatabase() (which itself calls
+      // assertNoActiveJob()), it would see that same still-running job and
+      // always fail with OPERATION_IN_PROGRESS. Simulate that by having the
+      // lock service report an active job for this host throughout.
+      cmsJobLockService.hasActiveJobForHost.mockResolvedValue({
+        jobId: 'self-job',
+        dbname: 'testdb',
+      });
+
+      const request = {
+        ...mockCreateDbRequest,
+        setAutoStart: true,
+      };
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, request);
+
+      expect(result.startDatabase).toEqual({
+        success: true,
+        data: mockStartInfoForCreate,
+      });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          task: 'startdb',
+          dbname: request.dbname,
+          async: 'yes',
+        }),
+        expect.anything()
+      );
+    });
+
+    it('starts the database via a direct startdb call, without needing a stored login profile', async () => {
+      // A database this job just created can never have a stored db-login
+      // profile yet (nothing has logged into it before), so going through
+      // startNonHaDatabase()'s ensureDbLogin() gate would always throw
+      // MissingDBCredentials. startdb itself needs no db user credentials
+      // (see ensureDbLogin's own comment), so createDatabase() must send it
+      // directly rather than satisfying that gate indirectly. Prove it by
+      // making ensureDbLogin fail exactly as it would for a brand-new
+      // database, and confirming the start step never calls it at all.
+      databaseUserService.ensureDbLogin.mockRejectedValue(
+        ValidationError.MissingDBCredentials('testdb', ['id', 'password'])
+      );
+
+      const request = {
+        ...mockCreateDbRequest,
+        setAutoStart: true,
+      };
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, request);
+
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(result.startDatabase).toEqual({
+        success: true,
+        data: mockStartInfoForCreate,
+      });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          task: 'startdb',
+          dbname: request.dbname,
+          async: 'yes',
+        }),
+        expect.anything()
+      );
     });
 
     it('should use default username "dba" when username is not provided', async () => {
