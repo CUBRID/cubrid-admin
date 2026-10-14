@@ -4,13 +4,15 @@ export const Button = React.forwardRef(({
   variant = 'primary',
   size = 'md',
   loading = false,
+  disabled = false,
   icon,
   iconPosition = 'left',
+  type = 'button',
   className = '',
   children,
   ...props
 }, ref) => {
-  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg whitespace-nowrap transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-bk-side disabled:opacity-50 disabled:cursor-not-allowed';
   
   const variants = {
     primary: 'bg-amber-500 hover:bg-amber-400 text-white border border-amber-600/20 shadow-lg shadow-amber-500/10 active:scale-[0.98]',
@@ -25,7 +27,7 @@ export const Button = React.forwardRef(({
     sm: 'px-4 py-1.5 text-[11px] h-[32px]',
     md: 'px-6 py-2 text-[13px] h-[40px]',
     lg: 'px-8 py-3 text-[14.5px] h-[48px]',
-    icon: 'p-1.5',
+    icon: 'w-9 h-9 p-0',
   };
 
   const variantClass = variants[variant] || variants.primary;
@@ -34,8 +36,9 @@ export const Button = React.forwardRef(({
   return (
     <button
       ref={ref}
+      type={type}
       className={`${baseClasses} ${variantClass} ${sizeClass} ${className}`}
-      disabled={loading || props.disabled}
+      disabled={loading || disabled}
       {...props}
     >
       {loading && (

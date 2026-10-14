@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useSelector, useDispatch , shallowEqual } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { fetchLogContent } from '../brokerSlice';
 import { Icon } from '../../../components/ds/foundation/Icon';
+import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
+import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
+import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { useCM } from '../../../constants/useCM';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -34,7 +37,7 @@ const HighlightedLine = ({ line }) => {
     keyword:   'text-sky-500 dark:text-sky-400',
     number:    'text-orange-500',
   };
-  let hits = [];
+  const hits = [];
   PATTERNS.forEach(({ type, re }) => {
     const r = new RegExp(re);
     let m;
@@ -160,6 +163,7 @@ function LogViewer({ hostUid, path }) {
   const [viewMode, setViewMode]       = useState('raw');
   const [copying, setCopying]         = useState(false);
   const [isAll, setIsAll]             = useState(false);
+  const [toolbarMenu, setToolbarMenu] = useState(null);
   const pageSize = 100;
 
   const logState   = useSelector(s => s.broker.viewingLogs[path]);
@@ -184,6 +188,17 @@ function LogViewer({ hostUid, path }) {
       setViewMode('raw');
     }
   }, [isErrorLogFile, viewMode]);
+
+  useEffect(() => {
+    if (!toolbarMenu) return undefined;
+    const closeMenu = (event) => {
+      if (!event.target.closest('.context-menu-container, .log-toolbar-menu-trigger')) {
+        setToolbarMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', closeMenu, true);
+    return () => document.removeEventListener('mousedown', closeMenu, true);
+  }, [toolbarMenu]);
 
   const activeViewMode = isErrorLogFile ? 'raw' : viewMode;
   const sqls = activeViewMode === 'sql' ? extractSQL(lines) : [];
@@ -215,55 +230,50 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
     a.click();
   };
 
+  const modeSwitcher = !isErrorLogFile ? (
+    <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg p-0.5 shrink-0">
+      {MODE_KEYS.map(m => (
+        <button
+          type="button"
+          key={m.key}
+          data-testid={`log-viewer-mode-${m.key}`}
+          onClick={() => setViewMode(m.key)}
+          aria-pressed={activeViewMode === m.key}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap ${
+            activeViewMode === m.key
+              ? 'bg-white dark:bg-white/10 text-amber-600 dark:text-bk-yellow'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+          }`}
+        >
+          <Icon name={m.icon} size="sm" />
+          {CM[m.cmKey]}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   return (
     <div data-testid="log-viewer" className="flex-1 flex flex-col bg-slate-50 dark:bg-bk-main overflow-hidden font-mono">
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
-      <div className="shrink-0 px-4 py-2.5 bg-white dark:bg-bk-side border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-
-        {/* Left: file info */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
-            <Icon name="description" size="sm" className="text-amber-600 dark:text-bk-yellow" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 leading-tight truncate">{fileName}</h2>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{CM.brokerLogViewer}</p>
-          </div>
-        </div>
-
-        {/* Center: mode switcher */}
-        {!isErrorLogFile && (
-          <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg p-0.5 shrink-0">
-            {MODE_KEYS.map(m => (
-              <button
-                key={m.key}
-                data-testid={`log-viewer-mode-${m.key}`}
-                onClick={() => setViewMode(m.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap ${
-                  activeViewMode === m.key
-                    ? 'bg-white dark:bg-white/10 text-amber-600 dark:text-bk-yellow'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                }`}
-              >
-                <Icon name={m.icon} size="sm" />
-                {CM[m.cmKey]}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Right: actions */}
-        <div className="flex items-center gap-1 shrink-0">
+      <PageToolbar
+        icon="description"
+        title={fileName}
+        titleMonospace
+        subtitle={CM.brokerLogViewer}
+        center={modeSwitcher}
+        actions={(
+          <>
 
           {/* Export Excel */}
           {!isErrorLogFile && (
             <>
               <button
+                type="button"
                 onClick={() => handleExcel(top)}
                 disabled={top.length === 0}
                 title={CM.downloadExcel}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all active:scale-[0.98]
+                className={`log-toolbar-wide-only flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all active:scale-[0.98]
                   ${top.length === 0
                     ? 'bg-slate-50 dark:bg-white/5 text-slate-300 dark:text-slate-600 border-slate-200 dark:border-white/5 cursor-not-allowed opacity-50'
                     : 'bg-amber-500/10 text-amber-600 dark:text-bk-yellow border-amber-500/50 dark:border-bk-yellow/50 hover:bg-amber-500/20 shadow-xs'
@@ -273,16 +283,18 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
                 {CM.exportBtn}
               </button>
 
-              <div className="h-4 w-px bg-slate-200 dark:bg-white/10 mx-0.5" />
+              <div className="log-toolbar-wide-only h-4 w-px bg-slate-200 dark:bg-white/10 mx-0.5" />
             </>
           )}
 
           {/* Copy */}
           <button
+            type="button"
             onClick={handleCopy}
             disabled={lines.length === 0}
             title={CM.copyToClipboard}
-            className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all active:scale-[0.98] disabled:opacity-30 
+            aria-label={CM.copyToClipboard}
+            className={`log-toolbar-wide-only w-8 h-8 flex items-center justify-center rounded-lg border transition-all active:scale-[0.98] disabled:opacity-30
               ${copying
                 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 !w-auto !px-3 font-bold !gap-1.5 text-[10px]'
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-bk-yellow hover:border-amber-500/50 dark:hover:border-bk-yellow/50 hover:bg-white dark:hover:bg-white/5 shadow-xs'}`}
@@ -293,10 +305,12 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
 
           {/* Refresh */}
           <button
+            type="button"
             data-testid="log-viewer-refresh-btn"
             onClick={() => dispatch(fetchLogContent({ hostUid, path, start: String(startLine), end: String(endLine) }))}
             disabled={loading}
             title={CM.refresh}
+            aria-label={CM.refresh}
             className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all active:scale-[0.98]
               ${loading
                 ? 'bg-slate-100 dark:bg-white/5 text-slate-300 dark:text-slate-600 border-slate-200 dark:border-white/5 cursor-not-allowed opacity-50'
@@ -310,8 +324,10 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
           {/* Pagination */}
           <div className="flex items-center bg-slate-100 dark:bg-black/20 rounded-lg p-0.5">
             <button
+              type="button"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1 || loading || isAll}
+              aria-label={CM.previousPage}
               className="p-1 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-bk-yellow rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <Icon name="chevron_left" size="18px" />
@@ -320,17 +336,20 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
               {currentPage} / {totalPages}
             </div>
             <button
+              type="button"
               onClick={() => setCurrentPage(p => endLine < totalLines ? p + 1 : p)}
               disabled={endLine >= totalLines || loading || isAll}
+              aria-label={CM.nextPage}
               className="p-1 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700 hover:text-amber-600 dark:hover:text-bk-yellow rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <Icon name="chevron_right" size="18px" />
             </button>
 
-            <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
+            <div className="log-toolbar-wide-only w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
             <button
+              type="button"
               onClick={() => setIsAll(!isAll)}
-              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap transition-colors ${
+              className={`log-toolbar-wide-only px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${
                 isAll 
                 ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20' 
                 : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-white/5 hover:text-amber-600 dark:hover:text-bk-yellow'
@@ -339,8 +358,62 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
               {isAll ? CM.paginated : CM.viewAll}
             </button>
           </div>
-        </div>
-      </div>
+
+          <button
+            type="button"
+            className="log-toolbar-menu-trigger log-toolbar-overflow-action w-8 h-8 items-center justify-center rounded-lg border bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-bk-yellow hover:border-amber-500/50 transition-all"
+            title={CM.moreActions}
+            aria-label={CM.moreActions}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(toolbarMenu)}
+            onClick={(event) => {
+              if (toolbarMenu) {
+                setToolbarMenu(null);
+                return;
+              }
+              const rect = event.currentTarget.getBoundingClientRect();
+              setToolbarMenu({ x: rect.right, y: rect.bottom + 4 });
+            }}
+          >
+            <Icon name="more_horiz" size="18px" />
+          </button>
+          </>
+        )}
+      />
+
+      {toolbarMenu && (
+        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} width="w-48" onClose={() => setToolbarMenu(null)}>
+          <MenuItem
+            icon={copying ? 'check' : 'content_copy'}
+            label={copying ? CM.copiedLabel : CM.copyToClipboard}
+            disabled={lines.length === 0}
+            onClick={() => {
+              handleCopy();
+              setToolbarMenu(null);
+            }}
+          />
+          {activeViewMode === 'top' && (
+            <MenuItem
+              icon="download"
+              label={CM.exportBtn}
+              disabled={top.length === 0}
+              onClick={() => {
+                handleExcel(top);
+                setToolbarMenu(null);
+              }}
+            />
+          )}
+          <MenuDivider />
+          <MenuItem
+            icon={isAll ? 'view_week' : 'view_stream'}
+            label={isAll ? CM.paginated : CM.viewAll}
+            onClick={() => {
+              setIsAll(!isAll);
+              setToolbarMenu(null);
+            }}
+          />
+        </ContextMenuWrapper>
+      )}
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto bg-white dark:bg-bk-side">
@@ -415,7 +488,7 @@ ${data.map(d => `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}<
               <div className="flex-1">{CM.sqlPattern}</div>
             </div>
             {top.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 italic text-sm">{CM.noQueriesToAnalyze}</div>
+              <div className="py-8 text-center text-slate-400 text-sm">{CM.noQueriesToAnalyze}</div>
             ) : top.map((d, i) => (
               <div
                 key={i}

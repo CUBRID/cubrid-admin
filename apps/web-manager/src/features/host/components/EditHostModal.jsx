@@ -1,20 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { editHost, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
+import { editHost, moveHost, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
+import { findGroupIdForHost, orderedGroupEntries, UNGROUPED_GROUP_ID } from '../hostGroupUtils';
 import { useCM } from '../../../constants/useCM';
 
 export default function EditHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isEditHostModalOpen, hostToEditUid, hosts, selectedHostUid, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  const { isEditHostModalOpen, hostToEditUid, hosts, hostGroups, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
   const isCredentialError = /password/i.test(apiError || '');
 
   const [formData, setFormData] = useState({
@@ -23,8 +25,14 @@ export default function EditHostModal() {
     port: '8001',
     password: '',
     alias: '',
+    groupId: UNGROUPED_GROUP_ID,
   });
   const [errors, setErrors] = useState({});
+
+  const groupOptions = useMemo(() => orderedGroupEntries(hostGroups).map(([groupId, group]) => ({
+    value: groupId,
+    label: groupId === UNGROUPED_GROUP_ID ? CM.noGroupOption : group.name,
+  })), [hostGroups, CM]);
 
   useEffect(() => {
     // Only re-populate when the modal opens (or targets a different host) —
@@ -39,11 +47,11 @@ export default function EditHostModal() {
           port: hostToEdit.port ? String(hostToEdit.port) : '8001',
           password: '',
           alias: hostToEdit.alias || '',
+          groupId: findGroupIdForHost(hostGroups, hostToEditUid) || UNGROUPED_GROUP_ID,
         });
       }
       setErrors({});
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditHostModalOpen, hostToEditUid]);
 
   if (!isEditHostModalOpen) return null;
@@ -82,6 +90,14 @@ export default function EditHostModal() {
     return payload;
   };
 
+  const persistHostChanges = async (targetUid) => {
+    await dispatch(editHost({ hostUid: targetUid, payload: buildPayload() })).unwrap();
+    const currentGroupId = findGroupIdForHost(hostGroups, targetUid) || UNGROUPED_GROUP_ID;
+    if (formData.groupId !== currentGroupId) {
+      await dispatch(moveHost({ hostUid: targetUid, targetGroupId: formData.groupId })).unwrap();
+    }
+  };
+
   // Save only — persists changes without attempting a CMS login.
   const handleSave = async () => {
     const errs = validate();
@@ -91,7 +107,7 @@ export default function EditHostModal() {
     }
 
     try {
-      await dispatch(editHost({ hostUid: hostToEditUid, payload: buildPayload() })).unwrap();
+      await persistHostChanges(hostToEditUid);
       dispatch(closeEditHostModal());
       dispatch(clearHostError());
     } catch {
@@ -112,7 +128,7 @@ export default function EditHostModal() {
     const targetUid = hostToEditUid;
 
     try {
-      await dispatch(editHost({ hostUid: targetUid, payload: buildPayload() })).unwrap();
+      await persistHostChanges(targetUid);
     } catch {
       return; // Edit failed: modal stays open, error shown via state.host.error
     }
@@ -135,10 +151,6 @@ export default function EditHostModal() {
     dispatch(closeEditHostModal());
     dispatch(clearHostError());
   };
-
-  const connectionPreview = formData.address
-    ? `${formData.address}:${formData.port || '8001'}`
-    : null;
 
   return (
     <Modal
@@ -198,7 +210,7 @@ export default function EditHostModal() {
 
         {/* Section 1: Identity */}
         <SectionHeader title={CM.identity} icon="badge" />
-        <div className="px-1">
+        <div className="px-1 space-y-4">
           <Input
             label={CM.friendlyName}
             name="alias"
@@ -210,6 +222,14 @@ export default function EditHostModal() {
             disabled={loading}
             required
           />
+          <Select
+            label={CM.groupLabel}
+            value={formData.groupId}
+            onChange={(e) => handleChange({ target: { name: 'groupId', value: e.target.value } })}
+            options={groupOptions}
+            icon="folder"
+            disabled={loading}
+          />
         </div>
 
         {/* Section 2: Host Connection */}
@@ -219,8 +239,8 @@ export default function EditHostModal() {
           className="mt-8"
         />
         <div className="px-1">
-          <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="sm:col-span-3">
               <Input
                 label={CM.ipAddressDomain}
                 name="address"
@@ -233,7 +253,7 @@ export default function EditHostModal() {
                 required
               />
             </div>
-            <div className="col-span-1">
+            <div className="sm:col-span-1">
               <Input
                 label={CM.port}
                 name="port"
@@ -252,7 +272,7 @@ export default function EditHostModal() {
         {/* Section 3: Credentials */}
         <SectionHeader title={CM.credentials} icon="lock" className="mt-8" />
         <div className="px-1">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={CM.username}
               name="id"

@@ -34,7 +34,7 @@ export const Card = ({
   const renderRightContent = typeof rightContent === 'function' ? rightContent(isCollapsed) : rightContent;
 
   return (
-    <div data-testid={testId} className={`bg-white dark:bg-bk-side border border-slate-200 dark:border-white/5 rounded-xl overflow-hidden shadow-xs transition-all duration-300 ${isCollapsed ? 'ring-0 shadow-none' : ''} ${className}`}>
+    <div data-testid={testId} className={`bg-white dark:bg-bk-card border border-slate-200 dark:border-white/5 rounded-xl overflow-hidden shadow-xs transition-all duration-300 ${isCollapsed ? 'ring-0 shadow-none' : ''} ${className}`}>
       {(title || renderSubtitle) && (
         <div 
           className={`px-5 py-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/2 flex items-center justify-between ${collapsible ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/4 transition-colors group' : ''}`}

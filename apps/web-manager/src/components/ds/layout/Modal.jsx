@@ -1,7 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useId, useRef } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
 import { useCM } from '../../../constants/useCM';
+
+let openModalCount = 0;
+
+function getTopModalLayer() {
+  const layers = Array.from(document.querySelectorAll('[data-modal-layer="true"]'));
+  return layers.reduce((top, layer) => {
+    if (!top) return layer;
+    const topZ = Number.parseInt(window.getComputedStyle(top).zIndex, 10) || 0;
+    const layerZ = Number.parseInt(window.getComputedStyle(layer).zIndex, 10) || 0;
+    // For equal stacking levels, the later DOM node is painted on top.
+    return layerZ >= topZ ? layer : top;
+  }, null);
+}
 
 export const Modal = ({
   isOpen,
@@ -26,22 +39,28 @@ export const Modal = ({
 }) => {
   const CM = useCM();
   const modalRef = useRef(null);
+  const layerRef = useRef(null);
+  const generatedId = useId();
+  const titleId = `${generatedId}-title`;
+  const subtitleId = `${generatedId}-subtitle`;
   // Element focused before the modal opened — restored on close so keyboard
   // users land back where they were instead of on <body>.
   const previouslyFocusedRef = useRef(null);
+  const isTopModal = useCallback(() => layerRef.current === getTopModalLayer(), []);
 
   useEffect(() => {
     if (!showCloseButton) return undefined;
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) onClose();
+      if (e.key === 'Escape' && isOpen && !e.defaultPrevented && isTopModal()) onClose();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose, showCloseButton]);
+  }, [isOpen, isTopModal, onClose, showCloseButton]);
 
   useEffect(() => {
     if (!onSubmit || !isOpen) return undefined;
     const handleEnter = (e) => {
+      if (!isTopModal()) return;
       if (e.key !== 'Enter') return;
       const tag = e.target?.tagName;
       if (tag !== 'INPUT') return;
@@ -52,20 +71,21 @@ export const Modal = ({
     };
     document.addEventListener('keydown', handleEnter);
     return () => document.removeEventListener('keydown', handleEnter);
-  }, [isOpen, onSubmit]);
+  }, [isOpen, isTopModal, onSubmit]);
 
   // Focus trap: Tab/Shift+Tab cycle only through the modal's own focusable
   // elements instead of escaping to whatever's behind it. Also moves initial
   // focus into the modal on open and restores it to the trigger on close.
   useEffect(() => {
     if (!isOpen) return undefined;
+    const modalNode = modalRef.current;
 
     const FOCUSABLE_SELECTOR =
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
     const getFocusable = () => {
-      if (!modalRef.current) return [];
-      return Array.from(modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR))
+      if (!modalNode) return [];
+      return Array.from(modalNode.querySelectorAll(FOCUSABLE_SELECTOR))
         .filter((el) => el.offsetParent !== null); // skip hidden elements
     };
 
@@ -74,13 +94,14 @@ export const Modal = ({
     // Defer to the next frame so the modal's children (often conditionally
     // rendered) have mounted before we look for something to focus.
     const focusFrame = requestAnimationFrame(() => {
+      if (!isTopModal()) return;
       const focusable = getFocusable();
-      const autoFocusEl = modalRef.current?.querySelector('[autofocus]');
-      (autoFocusEl || focusable[0] || modalRef.current)?.focus();
+      const autoFocusEl = modalNode?.querySelector('[autofocus]');
+      (autoFocusEl || focusable[0] || modalNode)?.focus();
     });
 
     const handleTab = (e) => {
-      if (e.key !== 'Tab') return;
+      if (e.key !== 'Tab' || !isTopModal()) return;
       const focusable = getFocusable();
       if (focusable.length === 0) {
         e.preventDefault();
@@ -91,11 +112,11 @@ export const Modal = ({
       const active = document.activeElement;
 
       if (e.shiftKey) {
-        if (active === first || !modalRef.current?.contains(active)) {
+        if (active === first || !modalNode?.contains(active)) {
           e.preventDefault();
           last.focus();
         }
-      } else if (active === last || !modalRef.current?.contains(active)) {
+      } else if (active === last || !modalNode?.contains(active)) {
         e.preventDefault();
         first.focus();
       }
@@ -108,20 +129,19 @@ export const Modal = ({
       // Only restore if focus is still inside this modal (or gone entirely)
       // — avoids yanking focus away if another modal already took over.
       const active = document.activeElement;
-      if (!active || active === document.body || modalRef.current?.contains(active)) {
+      if (!active || active === document.body || modalNode?.contains(active)) {
         previouslyFocusedRef.current?.focus?.();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, isTopModal]);
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (!isOpen) return undefined;
+    openModalCount += 1;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      openModalCount = Math.max(0, openModalCount - 1);
+      if (openModalCount === 0) document.body.style.overflow = '';
     };
   }, [isOpen]);
 
@@ -135,7 +155,11 @@ export const Modal = ({
   };
 
   return (
-    <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}>
+    <div
+      ref={layerRef}
+      data-modal-layer="true"
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-bk-main/40 backdrop-blur-xs transition-opacity"
@@ -151,6 +175,8 @@ export const Modal = ({
         style={!maxWidth.startsWith('max-w-') ? { maxWidth } : {}}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={subtitle ? subtitleId : undefined}
       >
         {/* Subtle Top Accent */}
         <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-amber-500"></div>
@@ -174,11 +200,11 @@ export const Modal = ({
             </div>
           )}
           <div className="flex-1">
-            <Typography variant="h4" className="text-[12px] font-medium text-slate-900 dark:text-white leading-none tracking-wide">
+            <Typography id={titleId} variant="h4" className="text-[14px] font-medium text-slate-900 dark:text-white leading-snug tracking-tight">
               {title}
             </Typography>
             {subtitle && (
-              <Typography variant="p" className="text-[10px] mt-1 text-slate-500 font-medium">
+              <Typography id={subtitleId} variant="p" className="text-[12px] mt-1 text-slate-500 font-medium leading-snug">
                 {subtitle}
               </Typography>
             )}

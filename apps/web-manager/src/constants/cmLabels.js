@@ -508,7 +508,6 @@ export const CM = {
   signIn: 'Sign In',
   authorizeAccess: 'Login',
   createAccount: 'Create Account',
-  backToLogin: 'Back to Login',
   accountRecovery: 'Account Recovery',
   resetCredentials: 'Reset your access credentials.',
   registrationFailed: 'Registration failed. Please try again.',
@@ -1490,9 +1489,14 @@ export const CM = {
   source: 'Source',
 
   // Auth pages
-  recoverPassword: 'Recover your password',
-  linkExpiry: 'Link Expiry',
   registrationFailedTitle: 'Registration Failed',
+  registrationSuccessfulTitle: 'Account created',
+  registrationSuccessfulMessage: 'Your account is ready. Sign in with your new credentials.',
+  previousMonth: 'Previous month',
+  nextMonth: 'Next month',
+  moreActions: 'More actions',
+  previousPage: 'Previous page',
+  nextPage: 'Next page',
   desktopOnly: 'Desktop only',
   desktopBridgeUnavailable: 'Desktop bridge unavailable',
 
@@ -1545,7 +1549,6 @@ export const CM = {
   addNodeToGroup: 'Add host to group',
 
   // Auth pages
-  forgotLink: 'Forgot?',
   newToCubrid: 'New to CUBRID?',
   workspaceSettings: 'Workspace settings',
   website: 'Website',
@@ -1854,35 +1857,15 @@ export const CM = {
   // DatabaseSpaceMonitor inline labels
   freeBadge: 'free',
 
-  // ForgotPasswordPage
-  forgotPasswordLabel: 'Forgot Password',
   backToLogin: 'Back to Login',
-  backToSignIn: 'Back to Sign In',
-  enterpriseSuite: 'Database Administration Tool',
-  resetAccessCredentials: 'Reset your password.',
-  securityProtocol: 'How It Works',
-  recoveryLabel: 'Recovery',
-  emailPlaceholder: 'admin@organization.com',
-  sendRecoveryLink: 'Send Recovery Link',
-  linkSent: 'Link Sent',
-  checkInbox: 'Check your inbox',
-  rememberPasswordQuestion: 'Remember your password?',
-  enterEmailInstruction: 'Enter your email to reset your password.',
-  recoverySecurityDesc: 'We\'ll help you regain access to your account.',
-  recoveryProtocolDesc: 'You\'ll receive a link to reset your password. It expires in 15 minutes.',
-  submitEmailStep: 'Submit your registered email',
-  checkInboxStep: 'Check inbox for recovery link',
-  setNewPasswordStep: 'Set a new secure password',
-  securityInfrastructure: 'Your account stays secure.',
-  recoveryInstructionsSent: 'Recovery instructions have been sent to',
-  checkSpamMsg: 'The link expires in 15 minutes. Check your spam folder if it doesn\'t arrive.',
-  resendRecoveryEmail: 'Resend recovery email',
   serverListHeader: 'Server List',
   resourcesHeader: 'Resources',
 
   // CMSUserManagementModal
   managementAccountsRegistered: (count) => count === 1 ? '1 management account registered' : `${count} management accounts registered`,
   confirmDeleteCmsUser: (username) => `Are you sure you want to permanently delete the management user "${username}"?`,
+  cmsUserDeletedMessage: (username) => `Management user "${username}" was deleted.`,
+  credentialsNotSavedMessage: 'The database login succeeded, but the credentials could not be saved.',
   synchronizingRegistry: 'Loading users...',
   noUsersFound: 'No users found',
   managementRegistryEmpty: 'No management users found.',
@@ -1958,6 +1941,7 @@ export const CM = {
   // Breadcrumb
   unsavedChangesTitle: 'Unsaved Changes',
   unsavedChangesDesc: (name) => `You have unsaved changes in "${name}". If you close it, your changes will be lost.`,
+  unsavedReloadDesc: (name) => `You have unsaved changes in "${name}". Reloading will discard them.`,
 
   // Footer
   unknownFallback: 'unknown',
@@ -2064,4 +2048,3 @@ export const CM = {
   statusSuccessTitle: 'Operation complete',
   statusErrorTitle: 'Something went wrong',
 };
-

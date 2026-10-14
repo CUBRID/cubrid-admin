@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { loginStart, loginSuccess, loginFailure } from '../authSlice';
 import { toggleTheme } from '../../layout/layoutSlice';
 import { authApi } from '../authApi';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Input } from '../../../components/ds/forms/Input';
+import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { useCM } from '../../../constants/useCM';
 
@@ -42,6 +43,7 @@ export default function LoginPage() {
   const [apiError, setApiError] = useState('');
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const { loading } = useSelector((state) => state.auth, shallowEqual);
   const { theme } = useSelector((state) => state.layout, shallowEqual);
 
@@ -135,6 +137,11 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
+        {location.state?.registrationSuccess && (
+          <InfoBanner variant="success" title={CM.registrationSuccessfulTitle} className="mb-3">
+            {CM.registrationSuccessfulMessage}
+          </InfoBanner>
+        )}
         <form onSubmit={handleSubmit} className="space-y-3">
           <Input
             data-testid="login-username-input"
@@ -150,7 +157,6 @@ export default function LoginPage() {
           <Input
             data-testid="login-password-input"
             label={CM.password}
-            labelExtra={<Link to="/forgot-password" title={CM.recoverPassword} className="text-amber-500 hover:text-amber-400 transition-colors">{CM.forgotLink}</Link>}
             icon="lock"
             type={showPassword ? 'text' : 'password'}
             placeholder="••••••••"

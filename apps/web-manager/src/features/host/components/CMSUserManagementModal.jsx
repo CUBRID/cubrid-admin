@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { 
   fetchCmsUsers, 
@@ -6,17 +6,22 @@ import {
   openEditCmsUserModal,
   closeCmsUserManagementModal 
 } from '../hostSlice';
+import { showStatusModal } from '../../layout/layoutSlice';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
+import { EmptyState } from '../../../components/ds/layout/EmptyState';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
+import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 export default function CMSUserManagementModal() {
   const CM = useCM();
   const dispatch = useDispatch();
+  const confirm = useConfirm();
+  const [deletingUser, setDeletingUser] = useState(null);
   const { 
     isCmsUserManagementModalOpen, 
     selectedHostUid, 
@@ -44,13 +49,37 @@ export default function CMSUserManagementModal() {
     dispatch(openEditCmsUserModal({ hostUid: selectedHostUid, user }));
   };
 
-  const handleDeleteUser = (username) => {
+  const handleDeleteUser = async (username) => {
     if (username === 'admin') {
-      alert(CM.primaryAdminCannotDelete);
+      dispatch(showStatusModal({ type: 'info', title: CM.deleteUser, message: CM.primaryAdminCannotDelete }));
       return;
     }
-    if (window.confirm(CM.confirmDeleteCmsUser(username))) {
-      dispatch(deleteCmsUser({ hostUid: selectedHostUid, targetid: username }));
+
+    const accepted = await confirm({
+      title: CM.deleteUser,
+      description: CM.confirmDeleteCmsUser(username),
+      confirmLabel: CM.deleteUser,
+      variant: 'danger',
+    });
+    if (!accepted) return;
+
+    setDeletingUser(username);
+    try {
+      await dispatch(deleteCmsUser({ hostUid: selectedHostUid, targetid: username })).unwrap();
+      dispatch(showStatusModal({
+        type: 'success',
+        title: CM.success,
+        message: CM.cmsUserDeletedMessage(username),
+      }));
+    } catch (error) {
+      dispatch(showStatusModal({
+        type: 'error',
+        title: CM.operationFailed,
+        message: CM.operationCouldNotBeCompleted,
+        detail: typeof error === 'string' ? error : error?.message,
+      }));
+    } finally {
+      setDeletingUser(null);
     }
   };
 
@@ -148,12 +177,15 @@ export default function CMSUserManagementModal() {
           </button>
           {!isAdmin && (
             <button
+              type="button"
               data-testid={`cms-user-${username}-delete-btn`}
               onClick={() => handleDeleteUser(username)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all"
+              disabled={deletingUser === username}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all disabled:opacity-50 disabled:pointer-events-none"
               title={CM.deleteUser}
+              aria-label={CM.deleteUser}
             >
-              <Icon name="delete" size="14px" weight={300} />
+              <Icon name={deletingUser === username ? 'progress_activity' : 'delete'} size="14px" weight={300} className={deletingUser === username ? 'animate-spin' : ''} />
             </button>
           )}
         </div>
@@ -189,22 +221,18 @@ export default function CMSUserManagementModal() {
       <div className="space-y-8 pb-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
 
         {isLoading && userlist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 opacity-30">
+          <div className="flex flex-col items-center justify-center py-20 opacity-70">
             <div className="size-10 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin mb-4" />
             <Typography variant="caption" className="font-bold uppercase tracking-widest">
               {CM.synchronizingRegistry}
             </Typography>
           </div>
         ) : userlist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 opacity-20">
-            <Icon name="person_off" size="xl" className="mb-3" />
-            <Typography variant="p" className="font-black uppercase tracking-widest text-[11px]">
-              {CM.noUsersFound}
-            </Typography>
-            <Typography variant="caption" className="mt-1">
-              {CM.managementRegistryEmpty}
-            </Typography>
-          </div>
+          <EmptyState
+            icon="person_off"
+            title={CM.noUsersFound}
+            description={CM.managementRegistryEmpty}
+          />
         ) : (
           <>
             {/* Admin accounts */}
