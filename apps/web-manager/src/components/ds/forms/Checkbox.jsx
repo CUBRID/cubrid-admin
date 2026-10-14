@@ -42,7 +42,7 @@ export const Checkbox = forwardRef(({
             {...props}
           />
           {/* Custom Checkbox UI */}
-          <div className="w-4.5 h-4.5 bg-white dark:bg-white/10 border border-slate-300 dark:border-white/25 rounded-md flex shrink-0 justify-center items-center transition-all shadow-xs group-hover:border-amber-500/50 dark:group-hover:border-amber-500/50 peer-checked:bg-amber-500 peer-checked:border-amber-500 dark:peer-checked:bg-amber-500 dark:peer-checked:border-amber-500 peer-[&:indeterminate]:bg-amber-500/60 peer-[&:indeterminate]:border-amber-500/30 pointer-events-none">
+          <div className="w-4.5 h-4.5 bg-white dark:bg-white/10 border border-slate-300 dark:border-white/25 rounded-md flex shrink-0 justify-center items-center transition-all shadow-xs group-hover:border-amber-500/50 dark:group-hover:border-amber-500/50 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/70 peer-focus-visible:ring-offset-2 peer-checked:bg-amber-500 peer-checked:border-amber-500 dark:peer-checked:bg-amber-500 dark:peer-checked:border-amber-500 peer-[&:indeterminate]:bg-amber-500/60 peer-[&:indeterminate]:border-amber-500/30 pointer-events-none">
             {/* Checked Icon */}
             <svg 
               className={`w-3.5 h-3.5 text-white dark:text-bk-side pointer-events-none transition-opacity duration-150 ${checked && !indeterminate ? 'opacity-100' : 'opacity-0'}`} 
@@ -63,11 +63,11 @@ export const Checkbox = forwardRef(({
         
         {label && (
           <div className="flex flex-col">
-            <Typography variant="span" className="select-none text-[12px] font-medium text-slate-700 dark:text-slate-200 tracking-normal">
+            <Typography variant="span" className="select-none text-14 font-medium text-slate-700 dark:text-slate-200 tracking-normal">
               {label}
             </Typography>
             {description && (
-              <Typography variant="p" className="text-[10px] text-slate-500 mt-0.5 leading-relaxed font-medium">
+              <Typography variant="p" className="text-12 text-slate-500 mt-0.5 leading-relaxed font-medium">
                 {description}
               </Typography>
             )}
@@ -75,7 +75,7 @@ export const Checkbox = forwardRef(({
         )}
       </label>
       {error && (
-        <Typography variant="p" className="ml-6.5 mt-0.5 text-[11px] text-rose-500! dark:text-rose-400! font-semibold tracking-tight">
+        <Typography variant="p" className="ml-6.5 mt-0.5 text-13 text-rose-500! dark:text-rose-400! font-semibold tracking-tight">
           {error}
         </Typography>
       )}

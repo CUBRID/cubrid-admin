@@ -49,7 +49,7 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
             onChange={(e) => handleValueChange('estimated', e.target.value)}
             disabled={!formData.checkBoxes.estimated}
             placeholder="5000"
-            className="font-mono text-[11px]"
+            className="font-mono text-13"
           />
         </CaDialogField>
 
@@ -71,7 +71,7 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
             onChange={(e) => handleValueChange('period', e.target.value)}
             disabled={!formData.checkBoxes.period}
             placeholder="10000"
-            className="font-mono text-[11px]"
+            className="font-mono text-13"
           />
         </CaDialogField>
 
@@ -111,7 +111,7 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
             onChange={(e) => handleValueChange('errorcontrolfile', e.target.value)}
             disabled={!formData.checkBoxes.errorcontrolfile}
             placeholder="e.g. /path/to/error.err"
-            className="font-mono text-[11px]"
+            className="font-mono text-13"
           />
         </CaDialogField>
 
@@ -133,7 +133,7 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
             onChange={(e) => handleValueChange('ignoreclassfile', e.target.value)}
             disabled={!formData.checkBoxes.ignoreclassfile}
             placeholder="e.g. /path/to/ignore.txt"
-            className="font-mono text-[11px]"
+            className="font-mono text-13"
           />
         </CaDialogField>
       </CaDialogFieldGrid>

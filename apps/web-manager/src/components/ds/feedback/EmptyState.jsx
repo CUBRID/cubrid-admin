@@ -3,14 +3,14 @@ import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
 
 /**
- * Premium Empty State Component for Tables, Lists, and Monitors
+ * Empty State Component for Tables, Lists, and Monitors
  * Provides a consistent "Visual + Title + Subtitle" pattern for absence of data.
  * 
  * @param {string} icon - Material Icon name (default: "sentiment_neutral")
  * @param {string} title - Action-oriented headline
  * @param {string} subtitle - Explanatory narrative or hint to resolve
  * @param {string} accent - Design token: emerald, amber, rose, violet, slate
- * @param {string} py - Vertical padding (default: "py-16")
+ * @param {string} py - Vertical padding (default: "py-10")
  * @param {React.ReactNode} action - Optional action button or element
  */
 export const EmptyState = ({ 
@@ -18,7 +18,7 @@ export const EmptyState = ({
   title, 
   subtitle, 
   accent = 'emerald',
-  py = 'py-16',
+  py = 'py-10',
   action
 }) => {
   const accentClass = { 
@@ -32,24 +32,24 @@ export const EmptyState = ({
   const c = accentClass[accent] || accentClass.slate;
 
   return (
-    <div className={`flex flex-col items-center justify-center ${py} gap-5 opacity-40 animate-in fade-in zoom-in-95 duration-500`}>
-      <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center shadow-xs ${c}`}>
-        <Icon name={icon} size="lg" weight={100} />
+    <div className={`flex flex-col items-center justify-center ${py} gap-3 text-center animate-in fade-in duration-200`}>
+      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${c}`}>
+        <Icon name={icon} size="sm" weight={300} />
       </div>
       
-      <div className="text-center space-y-2 max-w-[320px]">
-        <Typography variant="p" className="text-[12px] font-black font-sans uppercase tracking-[0.2em] text-slate-700 dark:text-slate-200 leading-none">
+      <div className="space-y-1 max-w-[320px]">
+        <Typography variant="p" className="text-14 font-medium text-slate-700 dark:text-slate-300 leading-snug">
           {title}
         </Typography>
         {subtitle && (
-          <Typography variant="caption" className="text-[11px] font-sans text-slate-500 dark:text-slate-400 italic leading-relaxed block px-4">
+          <Typography variant="caption" className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed block px-4">
             {subtitle}
           </Typography>
         )}
       </div>
 
       {action && (
-        <div className="mt-2 animate-in slide-in-from-top-2 duration-300">
+        <div className="mt-1">
           {action}
         </div>
       )}

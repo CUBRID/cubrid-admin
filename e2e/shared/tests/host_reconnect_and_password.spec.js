@@ -88,7 +88,7 @@ test.describe('Feature: Host Change Password & Reconnect', () => {
 
     const reconnectModal = page.getByTestId('reconnect-host-modal');
     await action('Wait for passcode update confirmation or reconnect prompt', () => Promise.race([
-      page.getByText(/Passcode Updated|비밀번호 업데이트됨/i).waitFor({ state: 'visible', timeout: 30000 }),
+      page.getByText(/Password Updated|비밀번호 업데이트됨/i).waitFor({ state: 'visible', timeout: 30000 }),
       reconnectModal.waitFor({ state: 'visible', timeout: 30000 }),
     ]), 'Neither passcode update confirmation nor reconnect modal appeared in time.');
 

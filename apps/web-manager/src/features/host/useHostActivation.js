@@ -47,8 +47,8 @@ export function useHostActivation() {
       const isSwitchingHost = uid !== selectedHostUid;
       dispatch(setSelectedHost(uid));
       if (isSwitchingHost) {
-        dispatch(resetDatabaseState());
-        dispatch(resetBrokerState());
+        dispatch(resetDatabaseState(selectedHostUid));
+        dispatch(resetBrokerState(selectedHostUid));
       }
       dispatch(setActiveMainTab('host:' + uid));
       dispatch(fetchDatabaseStartInfo(uid));
@@ -63,8 +63,8 @@ export function useHostActivation() {
       .unwrap()
       .then(() => {
         dispatch(setSelectedHost(uid));
-        dispatch(resetDatabaseState());
-        dispatch(resetBrokerState());
+        dispatch(resetDatabaseState(selectedHostUid));
+        dispatch(resetBrokerState(selectedHostUid));
         dispatch(setActiveMainTab('host:' + uid));
         dispatch(fetchDatabaseStartInfo(uid));
         dispatch(fetchBrokerList(uid));

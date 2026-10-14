@@ -71,8 +71,6 @@ export default function KillTransactionModal() {
       });
       endSuccess();
       dispatch(notifyTransactionKilled());
-
-      setTimeout(() => dispatch(closeKillTransactionModal()), 800);
     } catch (err) {
       endError(err?.response?.data?.note || err?.message || CM.error);
     }

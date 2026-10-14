@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import React, { useState } from 'react';
-import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
 import DBPerformanceSection from './dashboard/DBPerformanceSection';
 import DBVolumesSection from './dashboard/DBVolumesSection';
@@ -14,15 +14,10 @@ import { isDatabaseInHa } from '../../host/haPeerUtils';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';
-import { Modal } from '../../../components/ds/layout/Modal';
-import { ModalStatusError } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 
 const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const CM = useCM();
-  const dispatch = useDispatch();
   const { selectedHostUid, hosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   
   const hostUid = propHostUid || selectedHostUid;
@@ -38,20 +33,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   const { dashboardData, dashboardLoading } = useSelector((state) => state.databaseMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { refreshCounter, activeMainTab } = useSelector((state) => state.layout, shallowEqual);
+  const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
 
   const [logModal, setLogModal] = useState({ isOpen: false, brokerName: '', casId: '', type: 'sql' });
   
 
-
-  const { 
-    startAction, 
-    endError, 
-    resetAction,
-    isLoading: isActionLoading,
-    isError: isActionError,
-    error: actionError
-  } = useActionState();
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -59,26 +45,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent }))
   });
-
-  const handleRestartCAS = async (row) => {
-    if (window.confirm(CM.restartCasConfirm(row.id, row.broker))) {
-      startAction();
-      try {
-        // We'll need to find the correct thunk for this, usually restartCAS or similar.
-        // Assuming it's in databaseSlice
-        // await dispatch(restartCAS({ hostUid, brokerName: row.broker, casId: row.id })).unwrap();
-        
-        // Let's check if it exists or use basic start/stop if needed, but for now I'll just use resetAction to simulate silent success after dispatch
-        // dispatch(fetchDashboardData({ hostUid, dbname, isBackground: true }));
-        
-        // Placeholder for the actual dispatch
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        resetAction();
-      } catch (err) {
-        endError(err);
-      }
-    }
-  };
 
   const activeHost = hosts.find(h => h.uid === selectedHostUid);
   const dashboardKey = `${hostUid}:${dbname}`;
@@ -170,26 +136,26 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   return (
     <div data-testid="database-dashboard" className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden font-sans">
-      <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-background-dark">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-background-dark">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="database" size="sm" weight={300} className="text-amber-500" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.databaseDashboard}</Typography>
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.databaseDashboard}</Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60" />
-              <Typography variant="label" className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">@{dbname}</Typography>
+              <Typography variant="label" className="text-12 text-slate-400 font-bold uppercase tracking-widest leading-none">@{dbname}</Typography>
               {isHA && isDbInHa && (
-                <span className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-600 dark:text-amber-400 tracking-wide uppercase leading-none">
+                <span className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-10 font-bold text-amber-600 dark:text-amber-400 tracking-wide uppercase leading-none">
                   HA
                 </span>
               )}
@@ -198,7 +164,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -212,7 +178,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
                 : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5 shadow-xs'}`}
             title={CM.refreshDatabaseStatus}
           >
-            <Icon name="refresh" size="18px" className={(isLoading || isManualRefreshing) ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="19px" className={(isLoading || isManualRefreshing) ? 'animate-spin' : ''} />
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -224,7 +190,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
             className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all active:scale-[0.98] bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5 shadow-xs`}
             title={CM.exportMetricsCsv}
           >
-            <Icon name="ios_share" size="18px" weight={300} />
+            <Icon name="ios_share" size="19px" weight={300} />
           </button>
         </div>
       </header>
@@ -232,13 +198,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 relative">
-        <RefreshingOverlay show={isActionLoading} title={CM.restartingCas} subtitle={CM.resettingCasProcess} />
-        
         {isLoading && (!data.volumes || data.volumes.length === 0) ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-              <Typography variant="label" className="text-[11px] text-slate-400 uppercase tracking-widest">{CM.loadingDashboard}</Typography>
+              <Typography variant="label" className="text-13 text-slate-400 uppercase tracking-widest">{CM.loadingDashboard}</Typography>
             </div>
           </div>
         ) : (
@@ -251,7 +215,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
               pollingProps={pollingProps}
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}
               onViewSlowQueryLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'slow' })}
-              onRestartCAS={handleRestartCAS}
             />
             <DBLockTransactionSection locks={data.locks || []} pollingProps={pollingProps} />
             <DBJobAutomationSection pollingProps={pollingProps} />
@@ -268,17 +231,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
         type={logModal.type}
       />
 
-      {isActionError && (
-        <Modal isOpen title={CM.updateFailed} icon="error" iconVariant="danger" onClose={resetAction} maxWidth="400px">
-          <ModalStatusError 
-            title={CM.failure}
-            error={actionError}
-            onRetry={resetAction}
-            onCancel={resetAction}
-            retryText={CM.dismiss}
-          />
-        </Modal>
-      )}
     </div>
   );
 }
