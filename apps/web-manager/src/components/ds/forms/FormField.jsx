@@ -8,6 +8,10 @@ export const FormField = ({
   description,
   error,
   required = false,
+  htmlFor,
+  labelId,
+  descriptionId,
+  errorId,
   className = '',
   children,
 }) => {
@@ -17,7 +21,7 @@ export const FormField = ({
       {label && (
         <div className="flex justify-between items-center mb-0.5 ml-0.5">
           <div className="flex items-center gap-1.5">
-            <Typography variant="label" className="text-[11px] font-medium text-slate-500 dark:text-slate-300 font-sans">
+            <Typography id={labelId} htmlFor={htmlFor} variant="label" className="text-[12px] font-medium text-slate-500 dark:text-slate-300 font-sans">
               {label}
             </Typography>
             {required && <span className="text-rose-500 text-[10px]" title={CM.requiredFieldTitle}>*</span>}
@@ -30,7 +34,7 @@ export const FormField = ({
         </div>
       )}
       {description && (
-        <Typography variant="p" className="text-[10px] text-slate-400 dark:text-slate-500 mb-0.5 ml-0.5 font-medium leading-tight">
+        <Typography id={descriptionId} variant="p" className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5 ml-0.5 font-medium leading-tight">
           {description}
         </Typography>
       )}
@@ -38,7 +42,7 @@ export const FormField = ({
       {children}
       
       {error && (
-        <Typography variant="p" className="mt-1 text-[11px] text-rose-500! dark:text-rose-400! font-semibold tracking-tight ml-0.5">
+        <Typography id={errorId} role="alert" variant="p" className="mt-1 text-[11px] text-rose-500! dark:text-rose-400! font-semibold tracking-tight ml-0.5">
           {error}
         </Typography>
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { toggleTheme, toggleSidebar, setIsResizing, setActiveMainTab, closeTab, closeOtherTabs, closeAllTabs, triggerRefreshActiveTab } from '../features/layout/layoutSlice';
@@ -58,7 +58,6 @@ import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import RegisterPage from '../features/auth/components/RegisterPage';
-import ForgotPasswordPage from '../features/auth/components/ForgotPasswordPage';
 import StatusModal from '../components/common/StatusModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import LogViewer from '../features/broker/components/LogViewer';
@@ -83,15 +82,17 @@ import ReconnectHostModal from '../features/host/components/ReconnectHostModal';
 
 import { Icon } from '../components/ds/foundation/Icon';
 import { useCM } from '../constants/useCM';
+import { useConfirm } from '../infrastructure/hooks/useConfirm';
 
 function DashboardLayout() {
   const CM = useCM();
+  const confirm = useConfirm();
   const dispatch = useDispatch();
   const { loading: dbCoreLoading } = useSelector((state) => state.database, shallowEqual);
   const { actionLoading: dbUILoading } = useSelector((state) => state.databaseUI, shallowEqual);
   const { operationLoading: dbOpLoading } = useSelector((state) => state.databaseOperation, shallowEqual);
   const dbActionLoading = dbCoreLoading || dbOpLoading || dbUILoading;
-  const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
+  const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, dirtyTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
   const [isFlashing, setIsFlashing] = useState(false);
   const { isAddHostModalOpen, hosts, isServiceOperating, serviceOperationType, serviceProgressMessage } = useSelector((state) => state.host, shallowEqual);
   // isAddDatabaseModalOpen removed
@@ -159,6 +160,21 @@ function DashboardLayout() {
     return acc;
   }, {});
 
+  const handleReloadTab = useCallback(async (tabId = activeMainTab) => {
+    if (!tabId) return;
+    if (dirtyTabs.includes(tabId)) {
+      const accepted = await confirm({
+        title: CM.unsavedChangesTitle,
+        description: CM.unsavedReloadDesc(tabLabels[tabId] || tabId),
+        confirmLabel: CM.reloadTab,
+        variant: 'danger',
+      });
+      if (!accepted) return;
+    }
+    dispatch(setActiveMainTab(tabId));
+    dispatch(triggerRefreshActiveTab(tabId));
+  }, [CM, activeMainTab, confirm, dirtyTabs, dispatch, tabLabels]);
+
   // Sync global selection with active tab
   useEffect(() => {
     if (activeMainTab) {
@@ -180,12 +196,12 @@ function DashboardLayout() {
     const handleKeyDown = (e) => {
       if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R'))) {
         e.preventDefault();
-        dispatch(triggerRefreshActiveTab());
+        void handleReloadTab();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch]);
+  }, [handleReloadTab]);
 
   // Construct dynamic loading message
   const getLoadingSubtitle = () => {
@@ -228,6 +244,7 @@ function DashboardLayout() {
               onCloseTab={(tab) => dispatch(closeTab(tab))}
               onCloseOthers={(tabId) => dispatch(closeOtherTabs(tabId))}
               onCloseAll={() => dispatch(closeAllTabs())}
+              onReload={(tabId) => void handleReloadTab(tabId)}
             />
           </div>
 
@@ -528,7 +545,6 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route
         path="/*"
         element={

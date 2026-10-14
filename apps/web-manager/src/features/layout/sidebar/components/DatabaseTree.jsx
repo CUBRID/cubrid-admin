@@ -12,11 +12,6 @@ import {
   setSelectedBackupId,
   openEditQueryPlanModal,
 } from '../../../database/databaseSlice';
-import { 
-  fetchDatabaseParamDump, 
-  fetchDatabasePlanDump, 
-  fetchAutoVolumeConfig 
-} from '../../../database/databaseConfigurationSlice';
 import { fetchDatabaseUsers } from '../../../user/userSlice';
 import { openTab } from '../../layoutSlice';
 import { dbKey } from '../../../database/dbKey';
@@ -24,7 +19,6 @@ import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Typography } from '../../../../components/ds/foundation/Typography';
-import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../../constants/useCM';
 
 // Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes
@@ -205,7 +199,7 @@ export default function DatabaseTree({
                <Skeleton variant="circular" width="16px" height="16px" className="opacity-40" />
                <Skeleton variant="text" width="85%" height="18px" className="rounded-md" />
             </div>
-            <div className="flex items-center gap-2 ml-6 opacity-30">
+            <div className="flex items-center gap-2 ml-6 opacity-60">
                <Skeleton variant="text" width="60%" height="14px" className="rounded-md" />
             </div>
           </div>
@@ -216,11 +210,11 @@ export default function DatabaseTree({
 
   if (!databases || databases.length === 0) {
     return (
-      <div className="px-6 py-12 flex flex-col items-center justify-center text-center space-y-3 opacity-40">
-        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-2">
-          <Icon name="database" size="md" className="text-slate-400" weight={100} />
+      <div className="px-6 py-8 flex flex-col items-center justify-center text-center space-y-2">
+        <div className="w-10 h-10 rounded-xl bg-slate-100/70 dark:bg-white/3 flex items-center justify-center mb-1">
+          <Icon name="database" size="sm" className="text-slate-400 dark:text-slate-500" weight={300} />
         </div>
-        <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-[10px]">
+        <Typography variant="caption" className="text-slate-500 font-medium text-[11px]">
           No databases found
         </Typography>
       </div>
@@ -367,7 +361,7 @@ const UsersFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
       onContextMenu={(e) => onUsersContextMenu(e, db.dbname, isActive, isLoggedIn)}
     >
       {!isLoading && users?.length === 0 ? (
-        <div className="px-10 py-3 opacity-30 flex items-center gap-2">
+        <div className="px-10 py-3 opacity-60 flex items-center gap-2">
            <Icon name="block" size="xs" weight={300} />
            <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-[8px]">{CM.emptyListLabel}</Typography>
         </div>

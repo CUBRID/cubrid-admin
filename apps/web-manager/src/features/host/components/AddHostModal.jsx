@@ -156,10 +156,6 @@ export default function AddHostModal({ isOpen, onClose }) {
     }
   };
 
-  const connectionPreview = formData.address
-    ? `${formData.address}:${formData.port || '8001'}`
-    : null;
-
   return (
     <Modal
       isOpen={isOpen}
@@ -245,8 +241,8 @@ export default function AddHostModal({ isOpen, onClose }) {
           className="mt-8"
         />
         <div className="px-1">
-          <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="sm:col-span-3">
               <Input
                 label={CM.ipAddressDomain}
                 name="address"
@@ -259,7 +255,7 @@ export default function AddHostModal({ isOpen, onClose }) {
                 required
               />
             </div>
-            <div className="col-span-1">
+            <div className="sm:col-span-1">
               <Input
                 label={CM.port}
                 name="port"
@@ -278,7 +274,7 @@ export default function AddHostModal({ isOpen, onClose }) {
         {/* Section 3: Credentials */}
         <SectionHeader title={CM.credentials} icon="lock" className="mt-8" />
         <div className="px-1">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={CM.username}
               name="id"

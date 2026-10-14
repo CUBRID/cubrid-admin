@@ -202,6 +202,7 @@ export default function DatabaseInfoModal() {
               columns={columns}
               data={paramList}
               emptyMessage={CM.noConfigParameters}
+              showEmptyStateAsRow
             />
           </div>
         </div>

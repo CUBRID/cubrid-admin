@@ -17,6 +17,27 @@ import { normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
 export const CmsJobContext = createContext(null);
 
 const MAX_TRACKED = 50;
+const MAX_DISMISSED = 200;
+const DISMISSED_STORAGE_KEY = 'cubrid.dismissedCmsJobIds';
+
+function readDismissedJobIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DISMISSED_STORAGE_KEY) || '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDismissedJobIds(ids) {
+  try {
+    const bounded = [...ids].slice(-MAX_DISMISSED);
+    localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(bounded));
+    return new Set(bounded);
+  } catch {
+    return ids;
+  }
+}
 
 export function enqueueUniqueJobResult(results, result) {
   if (results.some((existing) => existing.jobId === result.jobId)) return results;
@@ -35,6 +56,11 @@ export function CmsJobProvider({ children }) {
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [jobResults, setJobResults] = useState([]);
   const trackingRef = useRef(new Set());
+  // The API intentionally returns recently-finished jobs after reconnect so
+  // users can see work that completed while the browser was closed. Keep the
+  // user's explicit X/Clear choice separately so those jobs are not restored
+  // into the tray on every reload.
+  const dismissedJobIdsRef = useRef(readDismissedJobIds());
   // Incremented on logout so in-flight continuations that already have a terminal
   // result cannot enqueue a JobResultModal for the next session.
   const sessionRef = useRef(0);
@@ -45,7 +71,7 @@ export function CmsJobProvider({ children }) {
       const next =
         idx >= 0
           ? { ...prev[idx], ...patch, jobId }
-          : { jobId, dismissed: false, ...patch };
+          : { jobId, dismissed: dismissedJobIdsRef.current.has(jobId), ...patch };
       const list = idx >= 0 ? prev.map((j, i) => (i === idx ? next : j)) : [next, ...prev];
       return list.sort(sortJobs).slice(0, MAX_TRACKED);
     });
@@ -183,13 +209,30 @@ export function CmsJobProvider({ children }) {
   );
 
   const dismissJob = useCallback((jobId) => {
-    setJobs((prev) =>
-      prev.map((j) => (j.jobId === jobId ? { ...j, dismissed: true } : j))
-    );
+    dismissedJobIdsRef.current.add(jobId);
+    dismissedJobIdsRef.current = persistDismissedJobIds(dismissedJobIdsRef.current);
+    setJobs((prev) => prev.flatMap((job) => {
+      if (job.jobId !== jobId) return [job];
+      // Finished jobs no longer need to occupy the bounded live-tracking list.
+      // Keep only the persisted dismissal id so a recent-history restore does
+      // not bring the item back after a reload.
+      if (isTerminalCmsJobStatus(job.jobStatus)) return [];
+      return [{ ...job, dismissed: true }];
+    }));
   }, []);
 
   const clearCompleted = useCallback(() => {
-    setJobs((prev) => prev.filter((j) => !isTerminalCmsJobStatus(j.jobStatus)));
+    setJobs((prev) => {
+      for (const job of prev) {
+        if (isTerminalCmsJobStatus(job.jobStatus)) {
+          dismissedJobIdsRef.current.add(job.jobId);
+        }
+      }
+      dismissedJobIdsRef.current = persistDismissedJobIds(dismissedJobIdsRef.current);
+      // Removing terminal rows prevents dismissed history from consuming the
+      // MAX_TRACKED allowance and displacing a still-running older job.
+      return prev.filter((job) => !isTerminalCmsJobStatus(job.jobStatus));
+    });
   }, []);
 
   useEffect(() => {
@@ -205,28 +248,23 @@ export function CmsJobProvider({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        // listRecent (not listActive) so a job that finished while this
-        // client was gone (tab closed/reloaded) still shows up in the tray
-        // with its final result — listActive alone only returns jobs still
-        // queued/running, silently losing anything that completed meanwhile
-        // even though its record is still on disk.
+        // Restore recent history so users can see work that finished while the
+        // browser was closed. Explicitly dismissed ids remain hidden.
         const recent = await databaseJobApi.listRecent();
         if (cancelled) return;
         for (const job of recent) {
+          if (dismissedJobIdsRef.current.has(job.jobId)) continue;
           const normalized = normalizeTrackedJob(job);
           upsertJob(job.jobId, normalized);
-          // Only resume live polling for jobs still actually in flight —
-          // a terminal job just needs to be visible, not re-notified as if
-          // it had completed just now.
           if (!isTerminalCmsJobStatus(normalized.jobStatus)) {
             startTracking(job.jobId, {
               notify: true,
               initialJob: job,
-            }).catch(() => {});
+            }).catch(() => undefined);
           }
         }
       } catch {
-        // ignore — user may not have the recent jobs endpoint yet
+        // ignore — user may not have the jobs endpoint yet
       }
     })();
 

@@ -714,7 +714,7 @@ export default function DatabasePropertyModal() {
 
                 <div className="space-y-3">
                   <SectionHeader title={CM.standardParameters} icon="settings" />
-                  <Table columns={generalColumns} data={generalRows} zebra bordered />
+                  <Table columns={generalColumns} data={generalRows} zebra bordered showEmptyStateAsRow />
                 </div>
               </div>
 
@@ -727,7 +727,7 @@ export default function DatabasePropertyModal() {
                   </InfoBanner>
                 </div>
                 <div className="px-6 pb-6">
-                  <Table columns={advancedColumns} data={advancedRows} zebra bordered />
+                  <Table columns={advancedColumns} data={advancedRows} zebra bordered showEmptyStateAsRow />
                 </div>
               </div>
             )}
