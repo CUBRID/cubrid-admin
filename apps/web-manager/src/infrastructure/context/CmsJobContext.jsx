@@ -39,6 +39,11 @@ function persistDismissedJobIds(ids) {
   }
 }
 
+export function enqueueUniqueJobResult(results, result) {
+  if (results.some((existing) => existing.jobId === result.jobId)) return results;
+  return [...results, result];
+}
+
 function sortJobs(a, b) {
   const ta = a.createdAt || '';
   const tb = b.createdAt || '';
@@ -77,18 +82,22 @@ export function CmsJobProvider({ children }) {
       if (notify === false) return;
       if (job.jobStatus !== 'succeeded' && job.jobStatus !== 'failed') return;
       if (session !== sessionRef.current) return;
-      setJobResults((prev) => [
-        ...prev,
-        {
-          jobId: job.jobId,
-          type: job.type,
-          dbname: job.dbname,
-          status: job.jobStatus,
-          error: job.error,
-          successMessage,
-          errorMessage,
-        },
-      ]);
+      const result = {
+        jobId: job.jobId,
+        type: job.type,
+        dbname: job.dbname,
+        status: job.jobStatus,
+        error: job.error,
+        successMessage,
+        errorMessage,
+      };
+      setJobResults((prev) => {
+        // A failed poll can reach this notification path more than once
+        // (notably when React replays a state updater in development).
+        // Keep one result per job so dismissing the modal never reveals an
+        // identical modal underneath it.
+        return enqueueUniqueJobResult(prev, result);
+      });
     },
     []
   );

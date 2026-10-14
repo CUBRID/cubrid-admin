@@ -188,4 +188,35 @@ test.describe('Feature: Create Database & Login Authentication', () => {
       await action('Verify Create Database wizard is closed', () => expect(wizard).not.toBeVisible(), 'Create Database wizard did not close after clicking Cancel.');
     });
   });
+
+  test('Scenario: General volume size is limited to 20 GB before database creation', async ({ appPage: page }) => {
+    await bddMeta({
+      epic: 'Database Operations',
+      feature: 'Database Lifecycle',
+      story: 'Create Database General Volume Limit',
+    });
+
+    await Given('the user opens the Create Database wizard', async () => {
+      await action('Dismiss background selection', () => page.mouse.click(2, 2).catch(() => undefined), 'Could not click canvas background.');
+      await action('Right-click Database tree tab', () => page.getByTestId('tree-tab-db').click({ button: 'right' }), 'Could not right-click Database tree tab.');
+      await action('Click Create Database menu item', () => page.getByRole('button', { name: /Create Database|데이터베이스 생성/i }).click(), 'Could not click Create Database option in context menu.');
+      await action('Verify Create Database wizard is visible', () => expect(page.getByTestId('create-database-modal')).toBeVisible(), 'Create Database wizard was not displayed.');
+    });
+
+    await When('the user enters a general volume larger than 20 GB', async () => {
+      await action('Fill general volume size with 20,481 MB', () => page.getByTestId('create-database-generic-size-input').fill('20481'), 'Could not fill oversized general volume.');
+    });
+
+    await Then('the limit is shown and progression is blocked until the value is valid', async () => {
+      const nextBtn = page.getByTestId('create-database-next-btn');
+      const limitError = page.getByText('General volume size must be 20 GB (20,480 MB) or less.');
+
+      await action('Verify the maximum-size validation message is displayed', () => expect(limitError).toBeVisible(), 'General volume limit message was not displayed.');
+      await action('Verify Next is disabled for an oversized general volume', () => expect(nextBtn).toBeDisabled(), 'Next button was enabled for an oversized general volume.');
+      await action('Fill general volume size with exactly 20,480 MB', () => page.getByTestId('create-database-generic-size-input').fill('20480'), 'Could not fill the maximum valid general volume.');
+      await action('Verify the maximum-size error is cleared', () => expect(limitError).not.toBeVisible(), 'General volume limit message remained after entering a valid value.');
+      await action('Cancel database creation', () => page.getByTestId('create-database-cancel-btn').click(), 'Could not close Create Database wizard.');
+    });
+  });
+
 });
