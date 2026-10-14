@@ -15,7 +15,7 @@ export const fetchDatabaseVolumes = createAsyncThunk(
     let activeDatabases = arg?.activeDatabases;
     
     if (!activeDatabases) {
-      activeDatabases = getState().database.activeDatabases;
+      activeDatabases = getState().database.activeDatabasesByHost[hostUid];
     }
 
     if (!activeDatabases || activeDatabases.length === 0) return [];
@@ -230,7 +230,7 @@ const databaseMonitoringSlice = createSlice({
           summary: data.dbinfo || [],
           files: data.fileinfo || [],
           pagesize: data.pagesize,
-          logpagesize: data.logpagesize
+          logpagesize: data.logpagesize,
         };
         // Also merge into the per-DB dashboard cache — DBSpaceInfoSection's
         // own "became active" refresh dispatches this thunk, and the

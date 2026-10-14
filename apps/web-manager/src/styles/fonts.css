@@ -1,0 +1,25 @@
+/*
+Copyright (c) 2021 Kil Hyung-jin, with Reserved Font Name Pretendard.
+https://github.com/orioncactus/pretendard
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+*/
+
+/*
+ * Bundled locally (pretendard@1.3.9's variable woff2, same version the app
+ * previously loaded from jsDelivr at runtime) instead of linked from a CDN —
+ * an offline Electron build, or any network where the CDN is blocked, has
+ * no fallback path and no service-worker cache for a runtime-only stylesheet
+ * link, so Korean text silently dropped back to whatever CJK font the OS
+ * happened to have. Bundling makes it a normal build artifact: same-origin,
+ * content-hashed, and present regardless of network conditions.
+ */
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('../assets/fonts/PretendardVariable.woff2') format('woff2-variations');
+}

@@ -83,7 +83,12 @@ function startApi() {
     cwd: REPO_ROOT,
     shell: true,
     stdio: 'inherit',
-    env: { ...process.env },
+    // Nx's terminal UI (default since Nx 20+) assumes it owns the terminal
+    // directly; run as a child of this launcher script it can panic
+    // (packages/nx/src/native/tui/tui.rs) instead of falling back to plain
+    // log output. Disable it here rather than in nx.json, so a plain
+    // `nx serve` run by a person directly still gets the normal TUI.
+    env: { ...process.env, NX_TUI: 'false' },
   });
 }
 
@@ -93,7 +98,7 @@ function startWebDev() {
     cwd: REPO_ROOT,
     shell: true,
     stdio: 'inherit',
-    env: { ...process.env },
+    env: { ...process.env, NX_TUI: 'false' },
   });
 }
 

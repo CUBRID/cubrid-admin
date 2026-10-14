@@ -12,9 +12,9 @@ export default function SystemInfo({ hostUid }) {
   const envData = hostEnvs[hostUid];
 
   const InfoRow = ({ label, value }) => (
-    <div className="flex items-start py-2.5 border-b border-slate-100 dark:border-white/5 last:border-0 group/row hover:bg-slate-50 dark:hover:bg-white/2 transition-colors -mx-4 px-4">
-      <Typography variant="span" className="text-slate-500 font-medium text-[13px] min-w-[140px] truncate">{label}</Typography>
-      <Typography variant="span" className="text-slate-900 dark:text-slate-100 font-mono text-[13px] break-all flex-1">{value || CM.notApplicableFallback}</Typography>
+    <div className="grid grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[10rem_minmax(0,1fr)] items-start gap-x-4 py-2 border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/2 transition-colors -mx-4 px-4">
+      <Typography variant="span" className="text-13 font-medium text-slate-600 dark:text-slate-400 truncate">{label}</Typography>
+      <Typography variant="span" className="min-w-0 text-13 font-normal font-mono text-slate-900 dark:text-slate-200 break-words">{value || CM.notApplicableFallback}</Typography>
     </div>
   );
 
@@ -28,7 +28,7 @@ export default function SystemInfo({ hostUid }) {
   return (
     <Card testId="server-dashboard-system-info" title={cardTitle} collapsible defaultCollapsed>
       {!envData ? (
-        <div className="flex flex-col items-center justify-center py-8 opacity-40">
+        <div className="flex flex-col items-center justify-center py-8 opacity-70">
           <Icon name="cloud_off" size="md" className="mb-2"  weight={300} />
           <Typography variant="caption">{CM.environmentUnavailable}</Typography>
         </div>
@@ -46,4 +46,3 @@ export default function SystemInfo({ hostUid }) {
     </Card>
   );
 }
-

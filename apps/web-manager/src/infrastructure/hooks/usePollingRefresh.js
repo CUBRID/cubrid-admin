@@ -30,6 +30,10 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   
   const isActiveRef = useRef(isTabActive);
   const initialLoadDone = useRef(false);
+  // Guards every trigger path (initial load, polling tick, tab resume,
+  // global refresh, online recovery) against overlapping with an
+  // already-in-flight fetch — see handleRefresh for why this matters.
+  const isFetchingRef = useRef(false);
 
   // 1. Browser Visibility Listener
   useEffect(() => {
@@ -41,20 +45,26 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   const handleRefresh = useCallback(async (silent = false) => {
     // Only attempt to fetch if the host is authorized, or if it's the global dashboard
     const isAuthorized = hostUid === 'global' || (hostUid && authorizedHosts.includes(hostUid));
-    if (isAuthorized) {
-      if (!silent) setIsManualRefreshing(true);
-      try {
-        const result = await dispatch(onFetch(silent));
-        // Safely handle Redux thunk results that have .unwrap()
-        if (result && typeof result.unwrap === 'function') {
-          await result.unwrap();
-        }
-        setLastRefreshed(new Date());
-      } catch (err) {
-        console.error(`Failed to refresh data for ${tabId}:`, err);
-      } finally {
-        if (!silent) setIsManualRefreshing(false);
+    if (!isAuthorized) return;
+    // If a fetch triggered by ANY path (initial load, a poll tick, tab
+    // resume, global refresh, network recovery) is still in flight, skip —
+    // see the Polling Timer effect below for why letting fetches overlap is
+    // actively harmful, not just wasteful.
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (!silent) setIsManualRefreshing(true);
+    try {
+      const result = await dispatch(onFetch(silent));
+      // Safely handle Redux thunk results that have .unwrap()
+      if (result && typeof result.unwrap === 'function') {
+        await result.unwrap();
       }
+      setLastRefreshed(new Date());
+    } catch (err) {
+      console.error(`Failed to refresh data for ${tabId}:`, err);
+    } finally {
+      isFetchingRef.current = false;
+      if (!silent) setIsManualRefreshing(false);
     }
   }, [dispatch, hostUid, authorizedHosts, onFetch, tabId]);
 
@@ -118,6 +128,15 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   // render, so depending on it here would tear down and restart this timer
   // on every unrelated re-render, and a component that re-renders faster
   // than the interval would never let it actually elapse.
+  //
+  // A tick that lands while a fetch is still in flight (from ANY trigger —
+  // see isFetchingRef in handleRefresh) is a no-op, not just wasted work: if
+  // a single fetch ever takes longer than the interval, every subsequent
+  // tick would otherwise start its own overlapping request. Some consumers
+  // (e.g. brokerSlice's fetchBrokerList) dedupe by "latest request wins" —
+  // under sustained overlap, a newer request is *always* already pending by
+  // the time any older one resolves, so every response gets discarded as
+  // stale forever and the data never updates again.
   useEffect(() => {
     if (!isTabActive || pollingIntervalSeconds <= 0) return;
 

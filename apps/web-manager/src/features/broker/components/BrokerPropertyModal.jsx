@@ -63,11 +63,11 @@ function ParamRow({ param, value, isModified, onChange }) {
     <div className={`flex items-center h-10 px-4 border-b border-slate-100 dark:border-white/4 last:border-0 group transition-colors ${isModified ? 'bg-amber-500/[0.03]' : 'hover:bg-slate-50 dark:hover:bg-white/2'}`}>
       <div className="w-[280px] shrink-0 flex items-center gap-2">
         {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
-        <span className={`text-[10.5px] font-mono truncate ${isModified ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+        <span className={`text-12 font-mono truncate ${isModified ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
           {param.name}
         </span>
       </div>
-      <span className="text-[8.5px] font-bold text-slate-400 dark:text-slate-600 font-mono opacity-60 w-[90px] shrink-0 truncate">
+      <span className="text-10 font-bold text-slate-400 dark:text-slate-600 font-mono opacity-60 w-[90px] shrink-0 truncate">
         {param.type.split('(')[0]}
       </span>
       <div className="flex-1 min-w-0">
@@ -272,7 +272,7 @@ export default function BrokerPropertyModal() {
             {modifiedCount > 0 && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-amber-500/10 border border-amber-500/20 shrink-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">{CM.pendingCountLabel(modifiedCount)}</span>
+                <span className="text-12 font-bold text-amber-700 dark:text-amber-400 uppercase">{CM.pendingCountLabel(modifiedCount)}</span>
               </div>
             )}
           </div>
@@ -280,7 +280,7 @@ export default function BrokerPropertyModal() {
             {config.loading ? (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="h-10 w-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
-                <p className="text-[12px] text-slate-400 font-medium">{CM.synchronizing}</p>
+                <p className="text-14 text-slate-400 font-medium">{CM.synchronizing}</p>
               </div>
             ) : (
               <div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Icon } from '../foundation/Icon';
 import { useCM } from '../../../constants/useCM';
 
@@ -8,8 +8,11 @@ export const SearchInput = ({
   onClear,
   placeholder = null,
   className = '',
+  id,
+  label,
 }) => {
   const CM = useCM();
+  const generatedId = useId();
   const resolvedPlaceholder = placeholder ?? CM.searchPlaceholder;
   return (
     <div className={`relative flex items-center w-full ${className}`}>
@@ -18,8 +21,10 @@ export const SearchInput = ({
       </div>
       
       <input
+        id={id || generatedId}
         type="text"
-        className="w-full pl-9 pr-8 py-1.5 text-sm bg-slate-50/50 dark:bg-bk-main/20 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden focus:border-bk-yellow/50 hover:border-slate-300/60 dark:hover:border-white/20 transition-all duration-200"
+        aria-label={label || resolvedPlaceholder}
+        className="w-full h-10 pl-9 pr-8 text-[13px] font-medium bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus:border-amber-500/60 focus:ring-4 focus:ring-amber-500/10 hover:border-slate-300 dark:hover:border-white/20 transition-all duration-200"
         placeholder={resolvedPlaceholder}
         value={value}
         onChange={(e) => onChange && onChange(e.target.value)}

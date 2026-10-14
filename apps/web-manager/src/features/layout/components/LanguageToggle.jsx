@@ -3,7 +3,7 @@ import { setUiLocale } from '../../user/userSlice';
 import { useCM, getStoredLocale } from '../../../constants/useCM';
 
 const btn =
-  'h-full px-2.5 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider transition-colors rounded-sm';
+  'h-full px-2.5 flex items-center justify-center text-12 font-bold uppercase tracking-wider transition-colors rounded-sm';
 
 export default function LanguageToggle({ className = '' }) {
   const CM = useCM();
