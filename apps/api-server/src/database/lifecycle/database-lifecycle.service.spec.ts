@@ -950,6 +950,15 @@ describe('DatabaseLifecycleService', () => {
         success: true,
         data: mockStartInfoForCreate,
       });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          task: 'startdb',
+          dbname: request.dbname,
+          async: 'yes',
+        }),
+        expect.anything()
+      );
     });
 
     it('starts the database via a direct startdb call, without needing a stored login profile', async () => {
