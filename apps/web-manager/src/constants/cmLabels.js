@@ -531,6 +531,8 @@ export const CM = {
   synchronizing: 'Loading…',
   failedToLoadStatus: 'Failed to load status',
   refreshBrokerStatus: 'Refresh broker status',
+  staleDataBadge: 'Stale',
+  basicInfoStaleMsg: 'Broker list unavailable — Basic Information shows the last known values',
   downloadExcel: 'Download as Excel',
   copyToClipboard: 'Copy to clipboard',
   copyStatement: 'Copy statement',
