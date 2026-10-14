@@ -92,6 +92,7 @@ describe('DatabaseLifecycleService', () => {
       setAutoAddVol: jest.fn(),
       setAutoStart: jest.fn(),
       removeAutoStart: jest.fn(),
+      ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined),
     };
 
     const mockBrokerService = {
@@ -1239,6 +1240,147 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('createDatabaseInternal no longer owns HA mode config', () => {
+    const mockRequest = {
+      dbname: 'testdb',
+      numpage: '1000',
+      pagesize: '16384',
+      logsize: '100',
+      logpagesize: '16384',
+      genvolpath: '/path/to/testdb',
+      logvolpath: '/path/to/testdb',
+      charset: 'ko_KR.utf8',
+      overwrite_config_file: 'YES' as const,
+    };
+
+    beforeEach(() => {
+      (fileService as any).checkfileInternal = jest.fn().mockResolvedValue({
+        existfile: undefined,
+      });
+      cmsClient.postAuthenticated.mockResolvedValue({
+        __EXEC_TIME: '0 ms',
+        note: 'none',
+        status: 'success',
+        task: 'createdb',
+      });
+    });
+
+    it('never calls ensureDbHaModeOff itself, even on an HA-configured host (moved to createDatabase orchestration)', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      await expect(
+        service.createDatabaseInternal(mockUserId, mockHostUid, mockRequest as any)
+      ).resolves.toEqual({ success: true });
+
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createDatabase HA mode config (ensureDbHaModeOff)', () => {
+    const mockRequest = {
+      dbname: 'testdb',
+      numpage: '1000',
+      pagesize: '16384',
+      logsize: '100',
+      logpagesize: '16384',
+      genvolpath: '/path/to/testdb',
+      logvolpath: '/path/to/testdb',
+      charset: 'ko_KR.utf8',
+      overwrite_config_file: 'YES' as const,
+    };
+
+    beforeEach(() => {
+      jest.spyOn(service, 'createDatabaseInternal').mockResolvedValue({ success: true });
+    });
+
+    it('auto-configures ha_mode=off for the new db after createdb succeeds', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(databaseConfigService.ensureDbHaModeOff).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        'testdb'
+      );
+      expect(result.createDatabase).toEqual({ success: true, data: { success: true } });
+      expect(result.haModeConfig).toEqual({ success: true });
+    });
+
+    it('does not call ensureDbHaModeOff when the host is not HA-configured', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=off'] }],
+      } as never);
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+      expect(result.haModeConfig).toBeUndefined();
+    });
+
+    it('calls ensureDbHaModeOff only after createDatabaseInternal (createdb) resolves, not before', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      const callOrder: string[] = [];
+      (service.createDatabaseInternal as jest.Mock).mockImplementation(async () => {
+        callOrder.push('createdb');
+        return { success: true };
+      });
+      databaseConfigService.ensureDbHaModeOff.mockImplementation(async () => {
+        callOrder.push('ensureDbHaModeOff');
+      });
+
+      await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(callOrder).toEqual(['createdb', 'ensureDbHaModeOff']);
+    });
+
+    it('does not call ensureDbHaModeOff when createdb fails for a name that already exists (createDatabase rejects before reaching the HA step)', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+
+      // CMS rejects createdb (e.g. dbname already exists) instead of succeeding.
+      const createError = DatabaseError.Unknown();
+      jest.spyOn(service, 'createDatabaseInternal').mockRejectedValue(createError);
+
+      await expect(
+        service.createDatabase(mockUserId, mockHostUid, mockRequest as any)
+      ).rejects.toThrow(createError);
+
+      // The create failed, so the per-database HA override must never have
+      // been written — no stray ha_mode=off left on an untouched database.
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+    });
+
+    // Regression test for RND-2855 follow-up P1: a failure in ensureDbHaModeOff
+    // happens strictly AFTER createdb has already succeeded (createDatabaseInternal
+    // already returned). It must not be mistaken for a createdb failure — the
+    // database genuinely exists, so createDatabase.success must stay true, and
+    // the HA-step failure is recorded on its own independent response field.
+    it('records haModeConfig failure but still reports createDatabase success when ensureDbHaModeOff fails after createdb succeeds', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on'] }],
+      } as never);
+      const haError = new Error('cms config write failed');
+      databaseConfigService.ensureDbHaModeOff.mockRejectedValue(haError);
+
+      const result = await service.createDatabase(mockUserId, mockHostUid, mockRequest as any);
+
+      expect(result.createDatabase).toEqual({ success: true, data: { success: true } });
+      expect(result.haModeConfig).toEqual({
+        success: false,
+        error: expect.objectContaining({ message: 'cms config write failed' }),
+      });
+    });
+  });
+
   describe('deleteDatabase', () => {
     const mockSuccessResponse: DeleteDatabaseCmsResponse = {
       __EXEC_TIME: '848 ms',
@@ -1322,6 +1464,43 @@ describe('DatabaseLifecycleService', () => {
     it('should throw DatabaseError when host is HA (deletedb blocked)', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=ON'] }],
+      } as any);
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      await expect(
+        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
+      ).rejects.toThrow(DatabaseError);
+
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('allows deletion on an HA host when this database has its own [@dbname] ha_mode=off override', async () => {
+      // This is exactly the state createDatabaseInternal's ensureDbHaModeOff
+      // leaves behind for a one-off, non-replicated database created on an
+      // HA host — it must remain deletable even though the host is HA.
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=off'] }],
+      } as any);
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      const result = await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'deletedb', dbname: mockDbname })
+      );
+      expect(result).toEqual(mockStartInfoAfterDelete);
+    });
+
+    it('still blocks deletion on an HA host for a different database without the per-db override', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[common]', 'ha_mode=on', '[@some_other_db]', 'ha_mode=off'] }],
       } as any);
       const request: DeleteDatabaseRequest = {
         delbackup: 'y',

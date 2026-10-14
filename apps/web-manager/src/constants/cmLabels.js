@@ -147,6 +147,7 @@ export const CM = {
   wizardAdditionalVol: 'Additional Volume Information',
   wizardAutoVol: 'Automatic volume extension',
   wizardSetDbaPass: 'Set DBA Password',
+  wizardHaModeConfig: 'Exclude from HA replication',
   wizardDbInfo: 'Database Information',
   wizardDbInfoList:
     'You have completed the steps required to create a new database. The new database will be created according to the below preferences.',
