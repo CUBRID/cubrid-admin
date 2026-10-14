@@ -26,7 +26,7 @@ export const Tabs = ({
               <button
                 key={tab.id}
                 onClick={() => onChange(tab.id)}
-                className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2 text-[11px] font-semibold rounded-lg border transition-all duration-150 ${
+                className={`relative flex-1 flex items-center justify-center gap-2 px-4 py-2 text-13 font-semibold rounded-lg border transition-all duration-150 ${
                   isActive
                     ? 'bg-white dark:bg-bk-side text-slate-900 dark:text-amber-500 shadow-sm border-slate-200/80 dark:border-white/10'
                     : 'bg-transparent border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-white/5'
@@ -35,7 +35,7 @@ export const Tabs = ({
                 {tab.icon && (
                   <Icon
                     name={tab.icon}
-                    size="13px"
+                    size="14px"
                     weight={isActive ? 600 : 300}
                     className={isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'}
                   />
@@ -53,7 +53,7 @@ export const Tabs = ({
             <button
               key={tab.id}
               onClick={() => onChange(tab.id)}
-              className={`relative flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold border-b-2 transition-all ${
+              className={`relative flex items-center gap-1.5 px-4 py-2 text-14 font-semibold border-b-2 transition-all ${
                 isActive
                   ? 'border-amber-500 text-slate-900 dark:text-amber-500'
                   : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:border-slate-200 dark:hover:border-slate-700'
@@ -62,7 +62,7 @@ export const Tabs = ({
               {tab.icon && (
                 <Icon
                   name={tab.icon}
-                  size="13px"
+                  size="14px"
                   weight={isActive ? 600 : 300}
                   className={isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'}
                 />

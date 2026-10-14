@@ -34,16 +34,52 @@ test.describe('Feature: Database Properties & Diagnostic Info', () => {
     });
 
     let modal;
+    let loadedParams;
 
     await Given('the user opens Properties from database context menu', async () => {
       await action('Open context menu for database ' + E2E_DB, () => dbTree.openContextMenu(E2E_DB), 'Could not open database context menu.');
-      await action('Click Properties menu item', () => page.getByRole('button', { name: /Properties|속성/i }).click(), 'Could not click Properties option.');
+      await action('Click Properties menu item and verify configuration fetch', async () => {
+        const responsePromise = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname.endsWith('/cms-config/all-sys-param')
+            && url.searchParams.get('confname') === 'cubridconf'
+            && response.request().method() === 'GET';
+        });
+        await page.getByRole('button', { name: /Properties|속성/i }).click();
+        const response = await responsePromise;
+        expect(response.ok()).toBe(true);
+        const body = await response.json();
+        const lines = (body.data ?? body)?.conflist?.[0]?.confdata;
+        expect(Array.isArray(lines)).toBe(true);
+        loadedParams = {};
+        let section = '';
+        for (const line of lines) {
+          const text = line.trim();
+          if (!text || text.startsWith('#')) continue;
+          if (text.startsWith('[') && text.endsWith(']')) {
+            section = text.slice(1, -1).toLowerCase();
+          } else if (section === 'common' || section === `@${E2E_DB.toLowerCase()}`) {
+            const [key, ...parts] = text.split('=');
+            loadedParams[key.trim()] = parts.join('=').trim();
+          }
+        }
+      }, 'Configuration fetch failed or did not return configuration lines.');
       modal = page.getByTestId('database-property-modal');
       await action('Verify Database Property modal is visible', () => expect(modal).toBeVisible({ timeout: 10000 }), 'Database Property modal did not appear.');
     });
 
     await When('the modal loads property details for the database', async () => {
       await action('Verify database name ' + E2E_DB + ' is visible in property modal', () => expect(modal.getByText(E2E_DB).first()).toBeVisible(), 'Database name was not visible in Property modal.');
+      await action('Verify loaded properties are not reported as modified', async () => {
+        await expect(modal.locator('table').first()).toBeVisible({ timeout: 10000 });
+        const knownKey = ['max_clients', 'cubrid_port_id', 'lock_escalation', 'lock_timeout_in_secs']
+          .find(key => loadedParams[key] !== undefined);
+        expect(knownKey, 'Configuration must contain a known General setting').toBeTruthy();
+        const row = modal.locator('table tbody tr').filter({ hasText: knownKey });
+        await expect(row.locator('input')).toHaveValue(loadedParams[knownKey]);
+        await expect(page.getByTestId('database-property-modified-count')).toHaveCount(0);
+        await expect(page.getByTestId('database-property-apply-btn')).toBeDisabled();
+      }, 'Unchanged database properties were incorrectly reported as modified.');
     });
 
     await Then('clicking Cancel closes the modal without applying changes', async () => {

@@ -35,8 +35,9 @@ export default function CopyDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isCopyDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
@@ -388,6 +389,7 @@ export default function CopyDatabaseModal() {
       maxWidth="820px"
       testId="copy-database"
       onSubmit={handleCopy}
+      submitDisabled={!formData.destName.trim()}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="copy-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -410,7 +412,7 @@ export default function CopyDatabaseModal() {
           <SectionHeader title={CM.grpDbSourceName || 'Source database'} icon="database" />
           <div className="bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/8 rounded-xl p-3.5 space-y-3">
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblSrcDbName || 'Database name:'}
               </label>
               <div className="col-span-2">
@@ -418,13 +420,13 @@ export default function CopyDatabaseModal() {
                   value={selectedDatabase}
                   disabled
                   size="md"
-                  className="font-bold text-[13px]"
+                  className="font-bold text-15"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblSrcDbPathName || 'Database path:'}
               </label>
               <div className="col-span-2">
@@ -432,13 +434,13 @@ export default function CopyDatabaseModal() {
                   value={currentDb?.dbdir || '-'}
                   disabled
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblSrcLogPathName || 'Log file path:'}
               </label>
               <div className="col-span-2">
@@ -446,7 +448,7 @@ export default function CopyDatabaseModal() {
                   value={srcLogDir || currentDb?.dbdir || '-'}
                   disabled
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
@@ -458,7 +460,7 @@ export default function CopyDatabaseModal() {
           <SectionHeader title={CM.grpDbDestName || 'Destination database'} icon="move_to_inbox" />
           <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/8 rounded-xl p-3.5 space-y-3">
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblDescDbName || 'Database name:'}
               </label>
               <div className="col-span-2">
@@ -474,7 +476,7 @@ export default function CopyDatabaseModal() {
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblDescDbPathName || 'Database path:'}
               </label>
               <div className="col-span-2">
@@ -483,13 +485,13 @@ export default function CopyDatabaseModal() {
                   onChange={e => handleInputChange('destPath', e.target.value)}
                   disabled={formData.copyIndividual}
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblVolumePathName || 'Extend volume path:'}
               </label>
               <div className="col-span-2">
@@ -498,13 +500,13 @@ export default function CopyDatabaseModal() {
                   onChange={e => handleInputChange('extPath', e.target.value)}
                   disabled={formData.copyIndividual}
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblDescLogPathName || 'Log file path:'}
               </label>
               <div className="col-span-2">
@@ -512,7 +514,7 @@ export default function CopyDatabaseModal() {
                   value={formData.logPath}
                   onChange={e => handleInputChange('logPath', e.target.value)}
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
@@ -520,7 +522,7 @@ export default function CopyDatabaseModal() {
         </div>
 
         {/* Disk Space Indicator */}
-        <div className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[11.5px] text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-13 text-slate-600 dark:text-slate-300">
           <Icon name="sd_card" size="xs" className="text-amber-500" />
           <span>{typeof CM.lblCopyFreeDiskSize === 'function' ? CM.lblCopyFreeDiskSize(diskInfo.freeSpace) : `Free disk space: ${diskInfo.freeSpace}`}</span>
         </div>
@@ -540,7 +542,7 @@ export default function CopyDatabaseModal() {
             !formData.copyIndividual ? 'opacity-50 pointer-events-none select-none bg-slate-50/50 dark:bg-white/[0.01]' : ''
           }`}>
             {volInfoLoading ? (
-              <div className="p-4 text-center text-slate-400 text-[12px]">{CM.loadingLabel}</div>
+              <div className="p-4 text-center text-slate-400 text-14">{CM.loadingLabel}</div>
             ) : (
               <Table
                 columns={volumeColumns}

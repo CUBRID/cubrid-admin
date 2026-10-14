@@ -30,17 +30,7 @@ export default function ServerListItem({
 }) {
   const CM = useCM();
 
-  const getInferredHaInfo = () => {
-    if (haInfo?.isHA) return haInfo;
-    const alias = (host.alias || '').toLowerCase();
-    if (alias.includes('(master)')) return { isHA: true, currentNodeType: 'master' };
-    if (alias.includes('(slave)')) return { isHA: true, currentNodeType: 'slave' };
-    if (alias.includes('(replica)')) return { isHA: true, currentNodeType: 'replica' };
-    return null;
-  };
-
-  const activeHaInfo = getInferredHaInfo();
-  const haRole = activeHaInfo?.currentNodeType;
+  const haRole = haInfo?.isHA ? haInfo.currentNodeType : null;
   const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
   // Strip HA role tags from display name for cleanliness
@@ -122,7 +112,7 @@ export default function ServerListItem({
       </div>
 
       {/* Server name */}
-      <span className={`flex-1 min-w-0 text-[12.5px] leading-none truncate font-medium transition-colors ${
+      <span className={`flex-1 min-w-0 text-14 leading-none truncate font-medium transition-colors ${
         isSelected
           ? 'text-amber-700 dark:text-amber-400 font-semibold'
           : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200'
@@ -132,7 +122,7 @@ export default function ServerListItem({
 
       {/* Right side: HA role badge */}
       {roleConfig && (
-        <span className={`shrink-0 inline-flex items-center justify-center min-w-[56px] px-1.5 h-4 rounded border text-[8.5px] font-black leading-none transition-all whitespace-nowrap ${roleConfig.className}`}>
+        <span className={`shrink-0 inline-flex items-center justify-center min-w-[56px] px-1.5 h-4 rounded border text-10 font-black leading-none transition-all whitespace-nowrap ${roleConfig.className}`}>
           {CM[roleConfig.cmKey]}
         </span>
       )}

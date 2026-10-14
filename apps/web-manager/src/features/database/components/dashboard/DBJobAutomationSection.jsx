@@ -78,23 +78,23 @@ export default function DBJobAutomationSection({ pollingProps }) {
     {
       header: CM.planIdLabel,
       accessor: 'backupid',
-      render: (v) => <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200">{v}</span>,
+      render: (v) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{v}</span>,
     },
     {
       header: CM.path,
       accessor: 'path',
-      render: (v) => <span className="font-mono text-[11px] text-slate-500 truncate block max-w-[240px]">{v}</span>,
+      render: (v) => <span className="font-mono text-13 text-slate-500 truncate block max-w-[240px]">{v}</span>,
     },
     {
       header: CM.backupLevelColumn,
       accessor: 'level',
-      render: (v) => <span className="text-[11px] text-slate-600 dark:text-slate-300">{CM[BACKUP_LEVEL_TITLE_KEY[v]] || v}</span>,
+      render: (v) => <span className="text-13 text-slate-600 dark:text-slate-300">{CM[BACKUP_LEVEL_TITLE_KEY[v]] || v}</span>,
     },
     { header: CM.rotationLabel, accessor: 'period_type' },
     {
       header: CM.targetTime,
       accessor: 'time',
-      render: (v) => <span className="font-mono text-[11px] text-slate-400">{v}</span>,
+      render: (v) => <span className="font-mono text-13 text-slate-400">{v}</span>,
     },
     {
       header: CM.actions,
@@ -116,18 +116,18 @@ export default function DBJobAutomationSection({ pollingProps }) {
     {
       header: CM.queryIdentifierLabel,
       accessor: 'query_id',
-      render: (v) => <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200">{v}</span>,
+      render: (v) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{v}</span>,
     },
     {
       header: CM.databaseUsernameLabel,
       accessor: 'username',
-      render: (v) => <span className="text-[11px] text-slate-500">{v || 'public'}</span>,
+      render: (v) => <span className="text-13 text-slate-500">{v || 'public'}</span>,
     },
     { header: CM.recurrenceFrequency, accessor: 'period' },
     {
       header: 'SQL',
       accessor: 'query_string',
-      render: (v) => <span className="font-mono text-[11px] text-slate-500 truncate block max-w-[280px]">{v}</span>,
+      render: (v) => <span className="font-mono text-13 text-slate-500 truncate block max-w-[280px]">{v}</span>,
     },
     {
       header: CM.actions,
@@ -162,7 +162,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
       <div className="p-4 space-y-2 border-b border-slate-100 dark:border-white/5">
         <div className="flex items-center gap-2">
           <Icon name="backup" size="xs" weight={300} className="text-slate-400" />
-          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{CM.backupPlan}</span>
+          <span className="text-13 font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{CM.backupPlan}</span>
         </div>
       </div>
       {(backupSchedules?.length ?? 0) === 0 ? (
@@ -184,7 +184,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
       <div className="p-4 space-y-2 border-t border-b border-slate-100 dark:border-white/5">
         <div className="flex items-center gap-2">
           <Icon name="schema" size="xs" weight={300} className="text-slate-400" />
-          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{CM.queryPlan}</span>
+          <span className="text-13 font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{CM.queryPlan}</span>
         </div>
       </div>
       {(queryPlans?.length ?? 0) === 0 ? (

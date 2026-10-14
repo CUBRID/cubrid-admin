@@ -9,8 +9,9 @@ import DatabaseVolumes from './DatabaseVolumes';
 import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
 import { fetchDatabaseVolumes } from '../../database/databaseMonitoringSlice';
+import { dbKey } from '../../database/dbKey';
 import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
-import { isHaClusterMissingMaster } from '../../host/haPeerUtils';
+import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
 import DatabaseListSection from './server/DatabaseListSection';
@@ -34,6 +35,7 @@ const Component = function ServerContent({ hostUid }) {
   const [databases, setDatabases] = useState([]);
   const [activeDatabases, setActiveDatabases] = useState([]);
   const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const { refreshCounter } = useSelector((state) => state.layout, shallowEqual);
   const [autoStartDBs, setAutoStartDBs] = useState([]);
@@ -58,12 +60,17 @@ const Component = function ServerContent({ hostUid }) {
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
       setActiveDatabases(newActiveDatabases);
+      // A database stays active (running) after logout — logout only drops
+      // the session — so volumes must only be polled for ones still logged
+      // in, or this re-fetches (and DatabaseVolumes keeps showing) storage
+      // info for a database the user already logged out of.
+      const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
 
       // 2. Then fetch other data, using the just-fetched active databases list
       await Promise.all([
         dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)),
         dispatch(fetchHostEnv(hostUid)),
-        dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newActiveDatabases })),
+        dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newLoggedInActiveDatabases })),
         fetchAutoStartInfo(),
         isHA ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
       ]);
@@ -179,11 +186,14 @@ const Component = function ServerContent({ hostUid }) {
     return names;
   }, [haHeartbeat]);
 
+  const haDbServerModes = React.useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
+
   const dbListDisplay = databases.map(db => ({
     db: db.dbname,
     autoStart: autoStartDBs.includes(db.dbname),
     status: activeDatabases.includes(db.dbname) ? CM.statusOn : CM.statusOff,
-    isHA: isHA && haDbs.has(db.dbname)
+    isHA: isHA && haDbs.has(db.dbname),
+    haState: isHA && haDbs.has(db.dbname) ? haDbServerModes.get(db.dbname) : null,
   }));
 
   return (
@@ -197,24 +207,24 @@ const Component = function ServerContent({ hostUid }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+              <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
                 {CM.serverDashboard}
               </Typography>
               <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
                 <div className={`w-1 h-1 rounded-full ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-[9px] font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <span className={`text-11 font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {preferences?.dashboardInterval > 0 ? CM.live : CM.paused}
                 </span>
               </div>
             </div>
             <div className="flex items-center mt-0.5">
-              <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight leading-none">{hostLabel}</Typography>
+              <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight leading-none">{hostLabel}</Typography>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[12px]">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 text-14">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -230,7 +240,7 @@ const Component = function ServerContent({ hostUid }) {
           >
             <Icon 
               name="refresh" 
-              size="18px" 
+              size="19px" 
               className={isRefreshing ? 'animate-spin' : ''} 
             />
           </button>

@@ -28,8 +28,9 @@ export default function LoadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isLoadDatabaseModalOpen: isLoadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const isActive = !!selectedDatabase && activeDatabases?.includes(selectedDatabase);
   // Load only ever targets an offline database, so this can't be satisfied by
@@ -429,7 +430,7 @@ export default function LoadDatabaseModal() {
       subtitle={
         validationError ? (
           <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1 font-semibold transition-colors duration-150">
-            <Icon name="error" size="12px" className="shrink-0" />
+            <Icon name="error" size="13px" className="shrink-0" />
             {validationError}
           </span>
         ) : (
@@ -440,6 +441,7 @@ export default function LoadDatabaseModal() {
       maxWidth="720px"
       testId="load-database"
       onSubmit={handleFormSubmit}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="load-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>

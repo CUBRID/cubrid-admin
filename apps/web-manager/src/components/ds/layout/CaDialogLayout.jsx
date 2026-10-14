@@ -14,7 +14,7 @@ export const CaDialogTabs = ({ tabs, activeTab, onChange }) => (
 
 export const CaDialogGroup = ({ title, children, className = '' }) => (
   <fieldset className={`border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 ${className}`}>
-    <legend className="px-1 text-[12px] font-semibold text-slate-700 dark:text-slate-300">
+    <legend className="px-1 text-14 font-semibold text-slate-700 dark:text-slate-300">
       {title}
     </legend>
     {children}
@@ -37,7 +37,7 @@ export const CaDialogField = ({ label, children, fullWidth = false }) => {
 
   return (
     <>
-      <Typography variant="label" className="text-[12px] text-slate-700 dark:text-slate-300">
+      <Typography variant="label" className="text-14 text-slate-700 dark:text-slate-300">
         {label}
       </Typography>
       {children}

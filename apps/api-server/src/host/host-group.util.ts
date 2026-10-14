@@ -133,6 +133,18 @@ export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
   return out;
 }
 
+/**
+ * Group names are display strings only, never the map key groups are stored
+ * under (a real group's key is always a generated uuid — see createEmptyGroup
+ * — and UNGROUPED_GROUP_ID is a fixed literal in that same key namespace, not
+ * derived from any name). So a user naming a group "__ungrouped__" can't
+ * actually collide with the reserved bucket. This guard exists purely so
+ * group names don't read like an internal/reserved token in the sidebar.
+ */
+export function isValidGroupNameStart(name: string): boolean {
+  return /^[\p{L}\p{N}]/u.test(name);
+}
+
 export function createEmptyGroup(user: User, name: string): string {
   const groupId = uuidv4();
   const trimmed = (name ?? '').trim();
@@ -167,6 +179,9 @@ export function updateGroup(
     const trimmed = String(patch.name ?? '').trim();
     if (!trimmed) {
       throw new Error('BLANK_GROUP_NAME_NOT_ALLOWED');
+    }
+    if (!isValidGroupNameStart(trimmed)) {
+      throw new Error('GROUP_NAME_INVALID_START');
     }
     group.name = trimmed;
   }

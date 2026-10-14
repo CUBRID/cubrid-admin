@@ -284,7 +284,7 @@ export default function AddQueryPlanModal() {
                     type="button"
                     onClick={() => toggleDetail(ix + 1)}
                     aria-pressed={isSel}
-                    className={`h-9 rounded-lg border text-[11px] font-medium transition-colors cursor-pointer
+                    className={`h-9 rounded-lg border text-13 font-medium transition-colors cursor-pointer
                       ${isSel
                         ? 'bg-amber-500 border-amber-500 text-slate-900'
                         : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}
@@ -306,7 +306,7 @@ export default function AddQueryPlanModal() {
                     type="button"
                     onClick={() => toggleDetail(d)}
                     aria-pressed={isSel}
-                    className={`h-8 rounded-lg border text-[11px] font-medium transition-colors cursor-pointer
+                    className={`h-8 rounded-lg border text-13 font-medium transition-colors cursor-pointer
                       ${isSel
                         ? 'bg-amber-500 border-amber-500 text-slate-900'
                         : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}

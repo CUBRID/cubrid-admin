@@ -69,7 +69,7 @@ export const Input = forwardRef(({
           }}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
-          className={`w-full ${isSm ? 'h-8 text-[12px]' : 'h-10 text-[13px]'} font-medium bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl focus:outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${
+          className={`w-full ${isSm ? 'h-8 text-14' : 'h-10 text-15'} font-medium bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl focus:outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${
             icon ? 'pl-12' : 'pl-3'
           } ${
             isNumber && suffix ? 'pr-20' : (isNumber ? 'pr-9' : (suffix ? 'pr-12' : 'pr-3'))
@@ -91,7 +91,7 @@ export const Input = forwardRef(({
         {suffix && (
           <div className={`absolute inset-y-0 select-none flex items-center justify-center animate-in fade-in duration-300 ${isNumber ? 'right-9' : 'right-3.5'}`}>
             {typeof suffix === 'string' ? (
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5">
+              <span className="text-12 font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5">
                 {suffix}
               </span>
             ) : suffix}
@@ -106,7 +106,7 @@ export const Input = forwardRef(({
                onClick={() => (onStepChange ? onStepChange(1) : handleAdjust(1))}
                className="w-4 h-2.5 flex items-center justify-center text-slate-400 hover:text-bk-yellow transition-all active:scale-95 pointer-events-auto"
             >
-              <Icon name="keyboard_arrow_up" size="14px" weight={700} />
+              <Icon name="keyboard_arrow_up" size="15px" weight={700} />
             </button>
             <button
                type="button"
@@ -114,7 +114,7 @@ export const Input = forwardRef(({
                onClick={() => (onStepChange ? onStepChange(-1) : handleAdjust(-1))}
                className="w-4 h-2.5 flex items-center justify-center text-slate-400 hover:text-bk-yellow transition-all active:scale-95 pointer-events-auto"
             >
-              <Icon name="keyboard_arrow_down" size="14px" weight={700} />
+              <Icon name="keyboard_arrow_down" size="15px" weight={700} />
             </button>
           </div>
         )}

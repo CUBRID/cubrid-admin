@@ -38,11 +38,11 @@ export const EmptyState = ({
       </div>
       
       <div className="space-y-1 max-w-[320px]">
-        <Typography variant="p" className="text-[13px] font-medium text-slate-700 dark:text-slate-300 leading-snug">
+        <Typography variant="p" className="text-14 font-medium text-slate-700 dark:text-slate-300 leading-snug">
           {title}
         </Typography>
         {subtitle && (
-          <Typography variant="caption" className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed block px-4">
+          <Typography variant="caption" className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed block px-4">
             {subtitle}
           </Typography>
         )}

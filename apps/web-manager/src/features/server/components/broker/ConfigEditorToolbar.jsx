@@ -54,7 +54,7 @@ export default function ConfigEditorToolbar({
         {hasChanges && (
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 mr-1">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">{CM.modified}</span>
+            <span className="text-12 font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">{CM.modified}</span>
           </div>
         )}
 
@@ -65,7 +65,7 @@ export default function ConfigEditorToolbar({
           onClick={handleSave}
           disabled={!hasChanges || saving || loading}
           title={CM.saveChanges}
-          className="page-toolbar-primary-action h-8 flex items-center gap-1.5 px-4 rounded-lg text-[11px] font-bold text-white dark:text-slate-900 bg-slate-800 dark:bg-bk-yellow hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          className="page-toolbar-primary-action h-8 flex items-center gap-1.5 px-4 rounded-lg text-13 font-bold text-white dark:text-slate-900 bg-slate-800 dark:bg-bk-yellow hover:brightness-110 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {saving ? <Spinner size="xs" className="text-white dark:text-slate-900" /> : <Icon name="check_circle" size="sm" />}
           <span className="page-toolbar-primary-label">{CM.saveChanges}</span>

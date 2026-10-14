@@ -75,8 +75,8 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
         const color = v > 0 ? 'text-emerald-500' : 'text-slate-400';
         return (
           <div className="flex flex-col">
-            <span className={`font-mono text-[18px] font-black leading-none transition-colors duration-500 ${color}`}>{val}</span>
-            <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">{CM.transPerSec}</span>
+            <span className={`font-mono text-20 font-black leading-none transition-colors duration-500 ${color}`}>{val}</span>
+            <span className="text-11 text-slate-400 uppercase tracking-widest font-bold mt-0.5">{CM.transPerSec}</span>
           </div>
         );
       }
@@ -89,8 +89,8 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
         const color = v > 0 ? 'text-rose-500' : 'text-slate-400';
         return (
           <div className="flex flex-col">
-            <span className={`font-mono text-[18px] font-black leading-none transition-colors duration-500 ${color}`}>{val}</span>
-            <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">{CM.queriesPerSec}</span>
+            <span className={`font-mono text-20 font-black leading-none transition-colors duration-500 ${color}`}>{val}</span>
+            <span className="text-11 text-slate-400 uppercase tracking-widest font-bold mt-0.5">{CM.queriesPerSec}</span>
           </div>
         );
       }
@@ -109,10 +109,10 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
         </div>
       )
     },
-    { header: CM.fetchesPerSec, accessor: 'fetch',    render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
-    { header: CM.dirtyPerSec,   accessor: 'dirty',    render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
-    { header: CM.ioReadsPerSec, accessor: 'ioReads',  render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
-    { header: CM.ioWritesPerSec, accessor: 'ioWrites', render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
+    { header: CM.fetchesPerSec, accessor: 'fetch',    render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    { header: CM.dirtyPerSec,   accessor: 'dirty',    render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    { header: CM.ioReadsPerSec, accessor: 'ioReads',  render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    { header: CM.ioWritesPerSec, accessor: 'ioWrites', render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
   ], [CM]);
 
   return (
@@ -122,7 +122,7 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
         <div className="flex items-center gap-2">
           <Icon name="monitoring" size="sm" weight={300} className="text-amber-500" />
           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{CM.performanceMetrics}</span>
-          <span className="text-[10px] text-slate-400 font-normal ml-1">· {CM.realTime}</span>
+          <span className="text-12 text-slate-400 font-normal ml-1">· {CM.realTime}</span>
         </div>
       }
       bodyClassName="p-0"
