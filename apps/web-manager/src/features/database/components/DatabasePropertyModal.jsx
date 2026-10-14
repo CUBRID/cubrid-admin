@@ -565,7 +565,14 @@ export default function DatabasePropertyModal() {
       <div className="flex h-[600px] -m-5 overflow-hidden">
 
         {/* ─── Sidebar ─── */}
-        <div className="w-[180px] bg-slate-900/60 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
+        {/* Deliberately dark in both themes (nav items below use light-on-dark
+            text/hover colors with no `dark:` variants of their own). Must be
+            opaque in light mode — a translucent bg-slate-900/60 blends toward
+            a medium gray against this panel's white background, landing
+            close enough to the inactive label's text-slate-500 to be
+            unreadable until hover. dark:bg-black/40 stays translucent since
+            it only ever blends with the panel's own dark background. */}
+        <div className="w-[180px] bg-slate-900 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
           <div className="px-4 py-4 border-b border-white/5">
             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
           </div>
