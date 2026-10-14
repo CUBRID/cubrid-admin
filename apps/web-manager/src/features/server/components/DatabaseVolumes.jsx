@@ -1,6 +1,7 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseVolumes } from '../../database/databaseSlice';
+import { dbKey } from '../../database/dbKey';
 import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -81,6 +82,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   // Fetched into local state (not the shared `state.databaseMonitoring.volumes`
   // slice) so multiple simultaneously-open dashboard tabs don't clobber each other.
   const [volumes, setVolumes] = useState([]);
@@ -95,25 +97,49 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
     setHasLoadedOnce(false);
   }, [hostUid]);
 
+  // A database can stay active (running) after logout — logout only drops
+  // the session, not the engine process — so filtering on "active" alone
+  // keeps showing (and re-fetching) a logged-out database's storage volumes.
+  const loggedInActiveDatabases = React.useMemo(
+    () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db))),
+    [activeDatabases, loggedInDatabases, hostUid]
+  );
+
+  // Guards against a stale response repopulating the table: if the user logs
+  // out of (or stops) the last active database while a fetch for it is still
+  // in flight, the effect below re-runs and clears `volumes` immediately, but
+  // the earlier in-flight request can still resolve afterwards. Without this,
+  // its `setVolumes(result)` would overwrite the cleared state with the
+  // now-logged-out database's stale volume info.
+  const requestIdRef = useRef(0);
+
   const fetchVolumes = useCallback(async () => {
-    if (!hostUid || !authorizedHosts.includes(hostUid) || activeDatabases.length === 0) {
-      // Stopping the last active database shrinks activeDatabases to empty —
-      // without this, the last fetch's result just lingers in local state
-      // showing a now-stopped database's stale volume info as if current.
+    const requestId = ++requestIdRef.current;
+    if (!hostUid || !authorizedHosts.includes(hostUid) || loggedInActiveDatabases.length === 0) {
+      // Stopping the last active database, or logging out of all of them,
+      // shrinks this to empty — without this, the last fetch's result just
+      // lingers in local state showing stale volume info as if current.
       setVolumes([]);
+      // An earlier in-flight fetch's own `finally` won't run this (its
+      // requestId no longer matches, by design — see requestIdRef above),
+      // so without this, logging out while a fetch is in flight leaves
+      // `loading` stuck true forever instead of showing the empty-state
+      // message.
       setLoading(false);
       setHasLoadedOnce(true);
       return;
     }
     setLoading(true);
     try {
-      const result = await dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases })).unwrap();
-      setVolumes(result);
+      const result = await dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases })).unwrap();
+      if (requestIdRef.current === requestId) setVolumes(result);
     } finally {
-      setLoading(false);
-      setHasLoadedOnce(true);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+        setHasLoadedOnce(true);
+      }
     }
-  }, [hostUid, authorizedHosts, activeDatabases, dispatch]);
+  }, [hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
   useEffect(() => { fetchVolumes(); }, [fetchVolumes]);
 
@@ -169,7 +195,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
         data={volumeData}
         loading={loading && !hasLoadedOnce}
         className="text-14"
-        emptyMessage={activeDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
+        emptyMessage={loggedInActiveDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
       />
     </Card>
   );

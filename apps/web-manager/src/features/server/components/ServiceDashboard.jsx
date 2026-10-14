@@ -18,6 +18,7 @@ import {
   resolveDefaultHostUid,
   sortHostUidsByHaRole,
   inferHaNodeType,
+  stripHaRoleTagFromAlias,
 } from '../../host/hostGroupUtils';
 
 const MetricBar = ({ pct }) => (
@@ -251,24 +252,10 @@ const Component = function ServiceDashboard() {
         const isConnected = authorizedHosts.includes(row.uid);
         const meta = hostMetaByUid[row.uid] || {};
         
-        const getInferredHaInfo = () => {
-          const info = haInfo[row.uid];
-          if (info?.isHA) return info;
-          const alias = (row.alias || '').toLowerCase();
-          if (alias.includes('(master)')) return { isHA: true, currentNodeType: 'master' };
-          if (alias.includes('(slave)')) return { isHA: true, currentNodeType: 'slave' };
-          if (alias.includes('(replica)')) return { isHA: true, currentNodeType: 'replica' };
-          return null;
-        };
+        const haRole = inferHaNodeType(row, haInfo[row.uid]);
+        const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
-        const activeHaInfo = getInferredHaInfo();
-        const roleConfig = activeHaInfo?.currentNodeType ? HA_ROLE_CONFIG[activeHaInfo.currentNodeType] : null;
-
-        const displayName = (val || row.id)
-          .replace(/\s*\(master\)/i, '')
-          .replace(/\s*\(slave\)/i, '')
-          .replace(/\s*\(replica\)/i, '')
-          .trim();
+        const displayName = stripHaRoleTagFromAlias(val || row.id);
 
         return (
           <div className="flex items-center gap-3 py-0.5 w-full">

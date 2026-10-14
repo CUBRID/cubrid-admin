@@ -44,6 +44,7 @@ import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-
 import {
   convertExvolArrayToCmsFormat,
   isHostHaModeOnFromCubridConf,
+  getPerDbHaModeOffDbNames,
   getSectionParams,
   parseConfigParamsBySection,
   mapWithConcurrency,
@@ -734,22 +735,6 @@ export class DatabaseLifecycleService extends BaseService {
     assertValidGeneralVolumeSize(request.numpage, request.pagesize);
     const host = await this.hostService.findHostInternal(userId, hostUid);
 
-    const cubridConf = await this.cmsConfigService.getAllSystemParam(
-      userId,
-      hostUid,
-      CMS_CONFNAME_CUBRID
-    );
-    if (isHostHaModeOnFromCubridConf(cubridConf)) {
-      throw DatabaseError.InvalidParameter(
-        'Cannot create databases on hosts configured for HA.',
-        {
-          hostUid,
-          dbname: request.dbname,
-          reason: 'HA_HOST_CREATE_DB_BLOCKED',
-        }
-      );
-    }
-
     // Collect files to check before parsing exvol
     const filesToCheck: string[] = [];
 
@@ -839,7 +824,7 @@ export class DatabaseLifecycleService extends BaseService {
 
   /**
    * Create a new database with optional configuration.
-   * Executes database creation, user update, auto-add volume, and auto-start in sequence.
+   * Executes database creation, HA mode config, user update, auto-add volume, and auto-start in sequence.
    * Returns results from all executed operations with success/error status.
    * Operations continue even if previous ones fail, allowing partial success.
    *
@@ -875,6 +860,52 @@ export class DatabaseLifecycleService extends BaseService {
       data: createDatabaseResult,
     };
 
+    // 1-0. Opt this database out of the host's HA replication set, if the
+    // host is HA-configured. This only runs here, AFTER createDatabaseInternal
+    // has already returned successfully above — confirming `createdb` itself
+    // genuinely succeeded — so it never races ahead of database creation and
+    // never applies to a dbname that createdb just rejected (e.g. already
+    // exists). Unlike createDatabase above, a failure here is an independent,
+    // recoverable step: the database was already created either way, so we
+    // record success/failure on its own response field instead of failing
+    // the whole operation (same "continue even if previous steps fail"
+    // pattern as startDatabase/updateUser/setAutoAddVol/setAutoStart below).
+    //
+    // Known residual limitation: if this step fails, no [@dbname] ha_mode=off
+    // marker gets written, so deleteDatabase's HA gate will still treat this
+    // database as HA-blocked until the marker is added (e.g. via a retry of
+    // this step through a config endpoint) — the same pre-existing gap that
+    // existed before this database could even be deleted automatically.
+    const cubridConf = await this.cmsConfigService.getAllSystemParam(
+      userId,
+      hostUid,
+      CMS_CONFNAME_CUBRID
+    );
+    const hostIsHaConfigured = isHostHaModeOnFromCubridConf(cubridConf);
+
+    if (hostIsHaConfigured) {
+      try {
+        await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, createDbRequest.dbname);
+        response.haModeConfig = {
+          success: true,
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        const errorCode = (error as any)?.code || (error instanceof Error ? error.name : 'UNKNOWN');
+        const errorDetails = (error as any)?.details;
+        this.logger.error(`Failed to configure ha_mode=off for new database: ${errorMessage}`, errorStack);
+        response.haModeConfig = {
+          success: false,
+          error: {
+            message: errorMessage || 'Failed to configure ha_mode=off for new database',
+            code: errorCode,
+            details: errorDetails,
+          },
+        };
+      }
+    }
+
     // A freshly created database's dba user already has a blank password, so
     // an empty `userpass` is a no-op update — treating it as "requested"
     // anyway forced the database to start (see below) even with both the
@@ -883,9 +914,29 @@ export class DatabaseLifecycleService extends BaseService {
 
     // 1-1. Start database when requested OR when updateUser needs DB access.
     // userinfo/updateuser CMS tasks require the database to be running.
+    //
+    // Sends the CMS `startdb` task directly instead of going through either
+    // startDatabase() or startNonHaDatabase(): this whole createDatabase()
+    // call already runs inside this job's own active-job lock (registered by
+    // CmsJobService.createJob before executeCmsForJob invokes us), so
+    // startDatabase()'s assertNoActiveJob() would see that same still-running
+    // job and always throw OPERATION_IN_PROGRESS on itself. And
+    // startNonHaDatabase() gates on ensureDbLogin(), which requires a stored
+    // db-login profile — a database this job just created can never have
+    // one (nothing has logged into it before), so it would always throw
+    // MissingDBCredentials. Neither check means anything for a database
+    // we're still in the middle of creating in this same job, and `startdb`
+    // itself needs no db user credentials (see ensureDbLogin's own comment),
+    // so both gates are just skipped here rather than satisfied indirectly.
+    // A freshly created database is also never HA (createDatabaseInternal
+    // above rejects HA hosts outright), so no ha_start branch is needed.
     if (setAutoStart || wantsPasswordChange) {
       try {
-        const startInfo = await this.startDatabase(userId, hostUid, createDbRequest.dbname);
+        await this.executeAsyncCmsJobRequest<
+          StartDatabaseCmsRequest & { task: 'startdb' },
+          BaseCmsResponse
+        >(userId, hostUid, { task: 'startdb', dbname: createDbRequest.dbname });
+        const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
         response.startDatabase = {
           success: true,
           data: startInfo,
@@ -922,52 +973,18 @@ export class DatabaseLifecycleService extends BaseService {
           ''
         );
 
-        let groups: { group: string[] } = { group: [] };
-        let authorization: string[] = [];
-
-        // Fetch current user info to preserve existing groups and authorization.
-        try {
-          const userInfoResponse = await this.databaseUserService.getUserInfo(
-            userId,
-            hostUid,
-            createDbRequest.dbname
-          );
-
-          const existingUser = (userInfoResponse.user ?? []).find(
-            (u) => String(u['@name'] ?? '').toLowerCase() === usernameToUse.toLowerCase()
-          );
-
-          if (existingUser?.groups) {
-            const raw = existingUser.groups as any;
-            if (Array.isArray(raw?.group)) {
-              groups.group = raw.group.filter((g: unknown) => typeof g === 'string');
-            }
-          }
-
-          if (existingUser?.authorization) {
-            for (const entry of existingUser.authorization as Array<Record<string, string>>) {
-              const name = entry?.['@name'];
-              if (typeof name === 'string' && name) {
-                authorization.push(name);
-              }
-            }
-          }
-        } catch (userInfoError: unknown) {
-          this.logger.warn(
-            `userinfo failed for "${usernameToUse}" on "${createDbRequest.dbname}", ` +
-            `proceeding with empty groups/authorization: ` +
-            `${userInfoError instanceof Error ? userInfoError.message : String(userInfoError)}`
-          );
-        }
-
+        // DatabaseUserService.updateUser fetches and preserves the user's
+        // real groups/authorization itself now, so these are just
+        // placeholders for a caller with nothing to preserve yet (a
+        // freshly-created database's dba user has none).
         const updateUserResult = await this.databaseUserService.updateUser(
           userId,
           hostUid,
           createDbRequest.dbname,
           usernameToUse,
           updateUser.userpass,
-          groups,
-          authorization
+          { group: [] },
+          []
         );
         response.updateUser = {
           success: true,
@@ -1091,7 +1108,15 @@ export class DatabaseLifecycleService extends BaseService {
       hostUid,
       CMS_CONFNAME_CUBRID
     );
-    if (isHostHaModeOnFromCubridConf(cubridConf)) {
+    // A database with its own [@dbname] ha_mode=off override (e.g. one this
+    // service created via createDatabaseInternal's ensureDbHaModeOff) was
+    // deliberately excluded from this host's HA replication set, so it's
+    // safe to delete even though the host itself is HA-configured — only
+    // databases still participating in HA need to stay blocked.
+    if (
+      isHostHaModeOnFromCubridConf(cubridConf) &&
+      !getPerDbHaModeOffDbNames(cubridConf).has(dbname)
+    ) {
       throw DatabaseError.InvalidParameter(
         'Cannot delete databases on hosts configured for HA.',
         {

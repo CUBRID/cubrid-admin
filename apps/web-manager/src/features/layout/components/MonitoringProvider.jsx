@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
+import { dbKey } from '../../database/dbKey';
 
 // Stable fallback reference — `activeDatabasesByHost[selectedHostUid] || []`
 // would otherwise hand the effect below a brand-new array every render for
@@ -16,13 +17,20 @@ export default function MonitoringProvider({ children }) {
   const dispatch = useDispatch();
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
-  const { activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { activeDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   // activeDatabasesByHost is keyed by hostUid — this provider only ever
   // polls the currently selected host, so read straight out of its slot
   // rather than a flat shared array a different, still in-flight host's
   // response could clobber.
   const activeDatabases = activeDatabasesByHost[selectedHostUid] || EMPTY_LIST;
   const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
+  // A database stays active (running) after logout — logout only drops the
+  // session — so polling volumes for every active db keeps re-fetching (and
+  // the storage volume table kept showing) one the user already logged out of.
+  const loggedInActiveDatabases = useMemo(
+    () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(selectedHostUid, db))),
+    [activeDatabases, loggedInDatabases, selectedHostUid]
+  );
   
   const dashboardTimer = useRef(null);
   const brokerTimer = useRef(null);
@@ -56,8 +64,8 @@ export default function MonitoringProvider({ children }) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
           dispatch(fetchDatabaseStartInfo({ hostUid, isBackground: true }));
-          if (activeDatabases.length > 0) {
-            dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases, isBackground: true }));
+          if (loggedInActiveDatabases.length > 0) {
+            dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases, isBackground: true }));
           }
         }
       };
@@ -69,7 +77,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (dashboardTimer.current) clearInterval(dashboardTimer.current);
     };
-  }, [dispatch, preferences.dashboardInterval, selectedHostUid, authorizedHosts, activeDatabases, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.dashboardInterval, selectedHostUid, authorizedHosts, activeDatabases, loggedInActiveDatabases, activeMainTab, isMonitoringTab]);
 
   // Broker Interval Refresh
   useEffect(() => {

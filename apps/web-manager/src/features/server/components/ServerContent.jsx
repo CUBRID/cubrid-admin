@@ -9,6 +9,7 @@ import DatabaseVolumes from './DatabaseVolumes';
 import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
 import { fetchDatabaseVolumes } from '../../database/databaseMonitoringSlice';
+import { dbKey } from '../../database/dbKey';
 import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
 import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
@@ -34,6 +35,7 @@ const Component = function ServerContent({ hostUid }) {
   const [databases, setDatabases] = useState([]);
   const [activeDatabases, setActiveDatabases] = useState([]);
   const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const { refreshCounter } = useSelector((state) => state.layout, shallowEqual);
   const [autoStartDBs, setAutoStartDBs] = useState([]);
@@ -58,12 +60,17 @@ const Component = function ServerContent({ hostUid }) {
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
       setActiveDatabases(newActiveDatabases);
+      // A database stays active (running) after logout — logout only drops
+      // the session — so volumes must only be polled for ones still logged
+      // in, or this re-fetches (and DatabaseVolumes keeps showing) storage
+      // info for a database the user already logged out of.
+      const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
 
       // 2. Then fetch other data, using the just-fetched active databases list
       await Promise.all([
         dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)),
         dispatch(fetchHostEnv(hostUid)),
-        dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newActiveDatabases })),
+        dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newLoggedInActiveDatabases })),
         fetchAutoStartInfo(),
         isHA ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
       ]);

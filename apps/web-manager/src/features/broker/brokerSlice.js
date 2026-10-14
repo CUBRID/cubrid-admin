@@ -13,10 +13,17 @@ export const fetchBrokerList = createAsyncThunk(
   'broker/fetchBrokerList',
   async (arg, { rejectWithValue }) => {
     const hostUid = typeof arg === 'string' ? arg : arg.hostUid;
+    // Callers that only need the plain list fields (pid/port/jq/auto/sqll/
+    // long_tran_time/long_query_time — e.g. BrokerStatus.jsx's "Basic
+    // Information" panel) can skip the per-broker getBrokerStatus enrichment
+    // loop below, which issues one extra request per broker on this host
+    // just to compute qps/tps. Those fields are all already present on
+    // `formattedBrokers` before enrichment runs.
+    const skipStatusEnrichment = typeof arg === 'object' && !!arg.skipStatusEnrichment;
     try {
       const response = await brokerApi.getBrokerList(hostUid);
       const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
-      
+
       if (!brokerList) return [];
 
       const formattedBrokers = brokerList.map(item => ({
@@ -34,6 +41,8 @@ export const fetchBrokerList = createAsyncThunk(
         long_query_time: item.long_query_time || '0',
         error_query: item.error_query || '0',
       }));
+
+      if (skipStatusEnrichment) return formattedBrokers;
 
       const responses = await Promise.all(
         formattedBrokers.map(async (b) => {
