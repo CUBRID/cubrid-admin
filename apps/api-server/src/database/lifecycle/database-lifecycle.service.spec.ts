@@ -1565,7 +1565,8 @@ describe('DatabaseLifecycleService', () => {
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ task: 'deletedb', dbname: mockDbname })
+        expect.objectContaining({ task: 'deletedb', dbname: mockDbname }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoAfterDelete);
     });
