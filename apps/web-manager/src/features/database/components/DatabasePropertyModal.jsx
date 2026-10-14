@@ -147,13 +147,13 @@ function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, dis
   const options = SELECT_OPTIONS_BY_KEY[paramKey];
   if (options) {
     return (
-      <div title={disabled ? disabledHint : undefined}>
+      <div className="w-full max-w-none" title={disabled ? disabledHint : undefined}>
         <Select
           size="sm"
           value={value ?? defaultValue}
           options={options.map(o => ({ value: o, label: o }))}
           onChange={e => onChange(e.target.value)}
-          className="w-full max-w-[260px]"
+          className="w-full max-w-none"
           disabled={disabled}
         />
       </div>
@@ -165,7 +165,7 @@ function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, dis
       value={value ?? ''}
       onChange={e => onChange(e.target.value)}
       placeholder={defaultValue || '—'}
-      className="w-full max-w-[260px]"
+      className="w-full max-w-none"
     />
   );
 }
@@ -504,7 +504,7 @@ export default function DatabasePropertyModal() {
   const generalColumns = [
     { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} /> },
     {
-      header: CM.value, accessor: 'value', width: '55%', sortable: false,
+      header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
       render: (_, row) => (
         <ParamValueCell
           paramKey={row.key}
@@ -538,7 +538,7 @@ export default function DatabasePropertyModal() {
     },
     { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{val}</span> },
     {
-      header: CM.parameterValueLabel, accessor: 'value', width: '36%', sortable: false,
+      header: CM.parameterValueLabel, accessor: 'value', width: '36%', cellClassName: 'w-[36%]', sortable: false,
       render: (_, row) => {
         const hasBoolOptions = row.type.includes('yes|no') || row.type.includes('on|off');
         const boolOptions = row.type.includes('on|off') && row.type.includes('yes|no')
@@ -550,7 +550,7 @@ export default function DatabasePropertyModal() {
             value={row.value}
             options={boolOptions.map(o => ({ value: o, label: o.toUpperCase() }))}
             onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-[220px]"
+            className="w-full max-w-none"
           />
         ) : (
           <Input
@@ -558,7 +558,7 @@ export default function DatabasePropertyModal() {
             size="sm"
             value={row.value}
             onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-[220px]"
+            className="w-full max-w-none"
           />
         );
       },
