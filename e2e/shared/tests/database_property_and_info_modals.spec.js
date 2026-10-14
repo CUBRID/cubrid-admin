@@ -44,6 +44,11 @@ test.describe('Feature: Database Properties & Diagnostic Info', () => {
 
     await When('the modal loads property details for the database', async () => {
       await action('Verify database name ' + E2E_DB + ' is visible in property modal', () => expect(modal.getByText(E2E_DB).first()).toBeVisible(), 'Database name was not visible in Property modal.');
+      await action('Verify loaded properties are not reported as modified', async () => {
+        await expect(modal.locator('table').first()).toBeVisible({ timeout: 10000 });
+        await expect(page.getByTestId('database-property-modified-count')).toHaveCount(0);
+        await expect(page.getByTestId('database-property-apply-btn')).toBeDisabled();
+      }, 'Unchanged database properties were incorrectly reported as modified.');
     });
 
     await Then('clicking Cancel closes the modal without applying changes', async () => {
