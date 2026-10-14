@@ -155,6 +155,8 @@ export const CM = {
   localeCharset: 'Charset',
   userDefined: 'User Defined',
   volumeSize: 'Volume size (Mbyte)',
+  volumeSizePositiveError: 'Volume size must be greater than 0 MB.',
+  generalVolumeSizeMaxError: 'General volume size must be 20 GB (20,480 MB) or less.',
   genericVolInfo: 'Generic Volume Information',
   genericVolPath: 'Generic volume path',
   logVolInfo: 'Log Volume Information',
@@ -883,6 +885,7 @@ export const CM = {
     'ASCII only (no Korean or other non-ASCII characters) — letters, numbers, "_", "-", "." are all fine.',
     'No spaces, "/", "\\", or "@", and it cannot start with "#".',
     'Make sure the volume path is writable and has enough disk space.',
+    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GB.',
   ],
   addVolumeGuidance: [
     'Make sure the volume path is writable and has enough free disk space.',
@@ -2064,4 +2067,3 @@ export const CM = {
   statusSuccessTitle: 'Operation complete',
   statusErrorTitle: 'Something went wrong',
 };
-

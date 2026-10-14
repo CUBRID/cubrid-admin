@@ -48,6 +48,7 @@ import {
   parseConfigParamsBySection,
 } from '@util';
 import { BrokerService } from '@broker';
+import { assertValidGeneralVolumeSize } from './database-volume-size';
 
 /**
  * Service for managing database lifecycle operations.
@@ -691,6 +692,7 @@ export class DatabaseLifecycleService extends BaseService {
     request: CreateDatabaseClientRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CreateDatabaseClientResponse> {
+    assertValidGeneralVolumeSize(request.numpage, request.pagesize);
     const host = await this.hostService.findHostInternal(userId, hostUid);
 
     const cubridConf = await this.cmsConfigService.getAllSystemParam(

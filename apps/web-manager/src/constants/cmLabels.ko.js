@@ -151,6 +151,8 @@ export const CM_KO = {
   localeCharset: '문자 집합',
   userDefined: '사용자 정의',
   volumeSize: '볼륨 크기 (Mbyte)',
+  volumeSizePositiveError: 'Volume size must be greater than 0 MB.',
+  generalVolumeSizeMaxError: 'General volume size must be 20 GB (20,480 MB) or less.',
   genericVolInfo: '일반 볼륨 정보',
   genericVolPath: '일반 볼륨 경로',
   logVolInfo: '로그 볼륨 정보',
@@ -871,6 +873,7 @@ export const CM_KO = {
     'ASCII만 가능합니다(한글 등 비ASCII 문자는 안 됨) — 영문/숫자/"_"/"-"/"."은 다 괜찮습니다.',
     '공백, "/", "\\", "@"는 쓸 수 없고 "#"으로 시작할 수 없습니다.',
     '볼륨 경로에 쓰기 권한이 있고 디스크 공간이 충분한지 확인하세요.',
+    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GB.',
   ],
   addVolumeGuidance: [
     '볼륨 경로에 쓰기 권한이 있고 여유 디스크 공간이 충분한지 확인하세요.',
@@ -2050,4 +2053,3 @@ export const CM_KO = {
   statusSuccessTitle: '작업이 완료되었습니다',
   statusErrorTitle: '문제가 발생했습니다',
 };
-
