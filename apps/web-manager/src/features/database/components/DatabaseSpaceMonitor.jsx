@@ -46,14 +46,14 @@ const barColor = (pct) => pct > 85 ? 'bg-rose-500' : 'bg-amber-500';
 const StatusHeader = memo(({ dbname, lastRefreshed, loading, onRefresh, dashboardInterval }) => {
   const CM = useCM();
   return (
-  <header className="px-6 py-2.5 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-white dark:bg-background-dark">
-    <div className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shadow-sm">
+  <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-white dark:bg-background-dark">
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
         <Icon name="donut_small" size="sm" weight={300} className="text-amber-500" />
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 leading-tight">
+          <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
             {CM.dbSpaceMonitor}
           </Typography>
           <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
@@ -63,7 +63,9 @@ const StatusHeader = memo(({ dbname, lastRefreshed, loading, onRefresh, dashboar
             </span>
           </div>
         </div>
-        <Typography variant="label" className="text-11 text-slate-400 font-mono tracking-tight">{dbname}</Typography>
+        <div className="flex items-center mt-0.5">
+          <Typography variant="label" className="text-11 text-slate-400 font-mono tracking-tight leading-none">{dbname}</Typography>
+        </div>
       </div>
     </div>
     
@@ -151,8 +153,13 @@ const isLogVolume = (row) => {
   return t.includes('LOG') || t.includes('ACTIVE') || t.includes('ARCHIVE');
 };
 
-const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
+const VolumeCategorization = memo(({ hostUid, dbname, dbinfo, pagesize, logpagesize }) => {
   const CM = useCM();
+  // dbinfo's used/free/total_size are page counts (CMS runs spacedb with
+  // --size-unit=PAGE), not bytes — convert per row before formatting as a
+  // size, using the log page size for log-type rows since CUBRID databases
+  // can have a different page size for data vs. the log.
+  const bytesPerPage = (row) => cleanInt(isLogVolume(row) ? logpagesize : pagesize) || cleanInt(pagesize);
   const dispatch = useDispatch();
 
   // CMS's dbinfo summary rows use single-word "type" (PERMANENT/TEMPORARY)
@@ -213,9 +220,9 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
             )
           },
           { header: CM.qtyLabel, accessor: 'volume_count', className: 'text-center', width: '60px' },
-          { header: CM.usedLabel, accessor: 'used_size', render: (val) => <span className="font-mono text-13">{formatSize(val)}</span> },
-          { header: CM.freeLabel, accessor: 'free_size', render: (val) => <span className="font-mono text-13 text-slate-400">{formatSize(val)}</span> },
-          { header: CM.totalLabel, accessor: 'total_size', render: (val) => <span className="font-mono text-13 font-bold">{formatSize(val)}</span> },
+          { header: CM.usedLabel, accessor: 'used_size', render: (val, row) => <span className="font-mono text-13">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
+          { header: CM.freeLabel, accessor: 'free_size', render: (val, row) => <span className="font-mono text-13 text-slate-400">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
+          { header: CM.totalLabel, accessor: 'total_size', render: (val, row) => <span className="font-mono text-13 font-bold">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
           {
             header: CM.usageLabel,
             accessor: 'pct',
@@ -464,10 +471,17 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
 
   const totals = useMemo(() => {
     if (!data?.dbinfo) return null;
+    // dbinfo's sizes are page counts, not bytes (see VolumeCategorization's
+    // comment) — convert each row with its own page size before summing,
+    // since a data row and a log row can have different page sizes.
     let total = 0, free = 0;
-    data.dbinfo.forEach(i => { total += cleanInt(i.total_size); free += cleanInt(i.free_size); });
+    data.dbinfo.forEach(i => {
+      const bytesPerPage = cleanInt(isLogVolume(i) ? data.logpagesize : data.pagesize) || cleanInt(data.pagesize);
+      total += cleanInt(i.total_size) * bytesPerPage;
+      free += cleanInt(i.free_size) * bytesPerPage;
+    });
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
-  }, [data?.dbinfo]);
+  }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
 
   if (loading && !data) {
     return (
@@ -488,7 +502,7 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
         dashboardInterval={preferences.dashboardInterval}
       />
 
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {error && (
           <InfoBanner variant="danger" title={CM.storageAnalysisError} icon="error">
             {error}
@@ -497,10 +511,12 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
 
         <SummaryCards dbname={dbname} data={data} totals={totals} />
         
-        <VolumeCategorization 
-          hostUid={hostUid} 
-          dbname={dbname} 
-          dbinfo={data?.dbinfo} 
+        <VolumeCategorization
+          hostUid={hostUid}
+          dbname={dbname}
+          dbinfo={data?.dbinfo}
+          pagesize={data?.pagesize}
+          logpagesize={data?.logpagesize}
         />
         
         <VolumeTopology 

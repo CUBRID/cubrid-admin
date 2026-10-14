@@ -8,6 +8,7 @@ import {
 import { SaveDatabaseProfileDto, DeleteDatabaseDto, CreateDatabaseWithConfigDto, StartStopAllDatabasesDto } from '@type/index';
 import { DatabaseLifecycleService } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
+import { assertValidGeneralVolumeSize } from './database-volume-size';
 
 /**
  * Controller for handling database lifecycle operations.
@@ -327,6 +328,7 @@ export class DatabaseLifecycleController {
   ): Promise<CreateCmsJobResponse> {
     const userId = req.user.sub;
 
+    assertValidGeneralVolumeSize(body.numpage, body.pagesize);
     this.logger.log(`Enqueue create database job: ${body.dbname} on host: ${hostUid}`);
     return await this.cmsJobService.createJob(userId, hostUid, 'create', body.dbname, body);
   }

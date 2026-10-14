@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDeleteHostModal, deleteHost, setSelectedHost, clearHostError } from '../hostSlice';
 import { closeHostTabs } from '../../layout/layoutSlice';
@@ -8,17 +9,38 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
+import { useActionState } from '../../../infrastructure/hooks/useActionState';
+import {
+  ModalStatusLoading,
+  ModalStatusSuccess,
+  ModalStatusError
+} from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 
 export default function DeleteHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isDeleteHostModalOpen, hostToDeleteUid, hostToDeleteAlias, selectedHostUid, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  const { isDeleteHostModalOpen, hostToDeleteUid, hostToDeleteAlias, selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const {
+    error: actionError,
+    startAction,
+    endSuccess,
+    endError,
+    resetAction,
+    isLoading,
+    isSuccess,
+    isError
+  } = useActionState();
+
+  useEffect(() => {
+    if (isDeleteHostModalOpen) resetAction();
+  }, [isDeleteHostModalOpen, resetAction]);
 
   if (!isDeleteHostModalOpen) return null;
 
   const handleDelete = async () => {
     if (!hostToDeleteUid) return;
+    startAction();
     try {
       await dispatch(deleteHost(hostToDeleteUid)).unwrap();
       // The host no longer exists — close any tabs/state pointing at it,
@@ -31,8 +53,9 @@ export default function DeleteHostModal() {
         dispatch(resetDatabaseState(hostToDeleteUid));
         dispatch(resetBrokerState(hostToDeleteUid));
       }
-    } catch {
-      // Delete failed: modal stays open, error shown via state.host.error
+      endSuccess(hostToDeleteAlias || hostToDeleteUid);
+    } catch (err) {
+      endError(typeof err === 'string' ? err : (err.message || CM.operationFailed));
     }
   };
 
@@ -47,6 +70,38 @@ export default function DeleteHostModal() {
     { icon: 'settings_backup_restore', label: CM.deleteHostBullet2 },
   ];
 
+  if (isLoading) {
+    return (
+      <Modal isOpen title={CM.removeHostConnection} icon="delete_forever" iconVariant="danger" onClose={handleClose} maxWidth="420px" showCloseButton={false} testId="delete-host">
+        <ModalStatusLoading title={CM.deletingLabel} subtitle={hostToDeleteAlias || hostToDeleteUid} variant="danger" />
+      </Modal>
+    );
+  }
+
+  if (isSuccess) {
+    return (
+      <Modal isOpen title={CM.deletionSuccess} icon="verified" iconVariant="success" onClose={handleClose} maxWidth="420px" testId="delete-host">
+        <ModalStatusSuccess title={CM.deletionSuccess} message={hostToDeleteAlias || hostToDeleteUid} onConfirm={handleClose} confirmText={CM.ok} />
+      </Modal>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Modal isOpen title={CM.operationFailed} icon="error" iconVariant="danger" onClose={resetAction} maxWidth="420px" testId="delete-host">
+        <ModalStatusError
+          title={CM.operationInterrupted}
+          error={actionError}
+          guidance={CM.irreversibleActionNotice}
+          onRetry={handleDelete}
+          onCancel={resetAction}
+          retryText={CM.retryDeletion}
+          cancelText={CM.dismiss}
+        />
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       isOpen={isDeleteHostModalOpen}
@@ -54,7 +109,6 @@ export default function DeleteHostModal() {
       title={CM.removeHostConnection}
       icon="delete_forever"
       iconVariant="danger"
-      loading={loading}
       maxWidth="420px"
       testId="delete-host"
       footer={
@@ -63,7 +117,6 @@ export default function DeleteHostModal() {
             data-testid="delete-host-cancel-btn"
             variant="secondary"
             onClick={handleClose}
-            disabled={loading}
           >
             {CM.keepHost}
           </Button>
@@ -71,7 +124,6 @@ export default function DeleteHostModal() {
             data-testid="delete-host-confirm-btn"
             variant="danger"
             onClick={handleDelete}
-            loading={loading}
             icon="delete_forever"
           >
             {CM.confirmRemoval}
@@ -80,18 +132,6 @@ export default function DeleteHostModal() {
       }
     >
       <div className="space-y-5">
-        {/* Error Banner */}
-        {apiError && (
-          <div className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="w-7 h-7 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0 border border-rose-500/20">
-              <Icon name="error" size="xs" weight={300} className="text-rose-500" />
-            </div>
-            <div className="flex-1 min-w-0 pt-0.5">
-              <Typography variant="p" className="text-rose-500 font-bold text-13 leading-snug">{apiError}</Typography>
-            </div>
-          </div>
-        )}
-
         {/* Danger Hero */}
         <div className="flex flex-col items-center text-center py-2">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shadow-lg shadow-rose-500/5 mb-4">
@@ -134,4 +174,3 @@ export default function DeleteHostModal() {
     </Modal>
   );
 }
-

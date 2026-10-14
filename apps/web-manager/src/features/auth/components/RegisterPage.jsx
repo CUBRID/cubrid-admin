@@ -71,7 +71,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await authApi.register(username, password);
-      navigate('/login');
+      navigate('/login', { replace: true, state: { registrationSuccess: true } });
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.error || CM.registrationFailed;
       setApiError(msg);
@@ -84,19 +84,6 @@ export default function RegisterPage() {
   // one digit) — a live pass/fail signal instead of a cosmetic strength
   // score that could disagree with what submitting the form would accept.
   const isPasswordValid = password.trim().length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
-
-  const inputBase  = 'w-full h-11 text-15 font-medium bg-slate-50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 dark:text-white';
-  const inputFocus = 'focus:border-amber-500/50 dark:focus:border-amber-500/40 focus:bg-amber-500/2 dark:focus:bg-amber-500/3';
-  const inputErr   = 'border-rose-500/60 dark:border-rose-500/40';
-  const inputOk    = 'border-emerald-500/50 dark:border-emerald-500/40';
-  const inputNorm  = 'hover:border-slate-300 dark:hover:border-white/20';
-
-  const specs = [
-    { icon: 'hub',           label: CM.architecture, val: '3-Tier'      },
-    { icon: 'verified_user', label: CM.license,      val: 'Open Source' },
-    { icon: 'speed',         label: CM.engine,       val: 'MVCC'        },
-    { icon: 'security',      label: CM.security,     val: 'Enterprise'  },
-  ];
 
   return (
     <div 
@@ -262,7 +249,12 @@ export default function RegisterPage() {
         {/* Terms */}
         <p className="mt-4 text-center text-11 text-slate-400/60 leading-relaxed max-w-[280px] mx-auto">
           {CM.agreeTermsPrefix}
-          <a href="#" className="underline hover:text-amber-500 transition-colors">{CM.projectTerms}</a>{CM.agreeTermsSuffix}
+          <a
+            href="https://github.com/CUBRID/cubrid/blob/develop/LICENSE"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-amber-500 transition-colors"
+          >{CM.projectTerms}</a>{CM.agreeTermsSuffix}
         </p>
       </div>
     </div>

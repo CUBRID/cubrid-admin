@@ -155,6 +155,9 @@ export const CM = {
   localeCharset: 'Charset',
   userDefined: 'User Defined',
   volumeSize: 'Volume size (Mbyte)',
+  volumeSizePositiveError: 'Volume size must be greater than 0 MB.',
+  generalVolumeSizeMinError: 'General volume size must be at least 1 MB.',
+  generalVolumeSizeMaxError: 'General volume size must be 20 GB (20,480 MB) or less.',
   genericVolInfo: 'Generic Volume Information',
   genericVolPath: 'Generic volume path',
   logVolInfo: 'Log Volume Information',
@@ -508,7 +511,6 @@ export const CM = {
   signIn: 'Sign In',
   authorizeAccess: 'Login',
   createAccount: 'Create Account',
-  backToLogin: 'Back to Login',
   accountRecovery: 'Account Recovery',
   resetCredentials: 'Reset your access credentials.',
   registrationFailed: 'Registration failed. Please try again.',
@@ -883,6 +885,7 @@ export const CM = {
     'ASCII only (no Korean or other non-ASCII characters) — letters, numbers, "_", "-", "." are all fine.',
     'No spaces, "/", "\\", or "@", and it cannot start with "#".',
     'Make sure the volume path is writable and has enough disk space.',
+    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GB.',
   ],
   addVolumeGuidance: [
     'Make sure the volume path is writable and has enough free disk space.',
@@ -1498,9 +1501,14 @@ export const CM = {
   source: 'Source',
 
   // Auth pages
-  recoverPassword: 'Recover your password',
-  linkExpiry: 'Link Expiry',
   registrationFailedTitle: 'Registration Failed',
+  registrationSuccessfulTitle: 'Account created',
+  registrationSuccessfulMessage: 'Your account is ready. Sign in with your new credentials.',
+  previousMonth: 'Previous month',
+  nextMonth: 'Next month',
+  moreActions: 'More actions',
+  previousPage: 'Previous page',
+  nextPage: 'Next page',
   desktopOnly: 'Desktop only',
   desktopBridgeUnavailable: 'Desktop bridge unavailable',
 
@@ -1553,7 +1561,6 @@ export const CM = {
   addNodeToGroup: 'Add host to group',
 
   // Auth pages
-  forgotLink: 'Forgot?',
   newToCubrid: 'New to CUBRID?',
   workspaceSettings: 'Workspace settings',
   website: 'Website',
@@ -1864,35 +1871,15 @@ export const CM = {
   // DatabaseSpaceMonitor inline labels
   freeBadge: 'free',
 
-  // ForgotPasswordPage
-  forgotPasswordLabel: 'Forgot Password',
   backToLogin: 'Back to Login',
-  backToSignIn: 'Back to Sign In',
-  enterpriseSuite: 'Database Administration Tool',
-  resetAccessCredentials: 'Reset your password.',
-  securityProtocol: 'How It Works',
-  recoveryLabel: 'Recovery',
-  emailPlaceholder: 'admin@organization.com',
-  sendRecoveryLink: 'Send Recovery Link',
-  linkSent: 'Link Sent',
-  checkInbox: 'Check your inbox',
-  rememberPasswordQuestion: 'Remember your password?',
-  enterEmailInstruction: 'Enter your email to reset your password.',
-  recoverySecurityDesc: 'We\'ll help you regain access to your account.',
-  recoveryProtocolDesc: 'You\'ll receive a link to reset your password. It expires in 15 minutes.',
-  submitEmailStep: 'Submit your registered email',
-  checkInboxStep: 'Check inbox for recovery link',
-  setNewPasswordStep: 'Set a new secure password',
-  securityInfrastructure: 'Your account stays secure.',
-  recoveryInstructionsSent: 'Recovery instructions have been sent to',
-  checkSpamMsg: 'The link expires in 15 minutes. Check your spam folder if it doesn\'t arrive.',
-  resendRecoveryEmail: 'Resend recovery email',
   serverListHeader: 'Host List',
   resourcesHeader: 'Resources',
 
   // CMSUserManagementModal
   managementAccountsRegistered: (count) => count === 1 ? '1 management account registered' : `${count} management accounts registered`,
   confirmDeleteCmsUser: (username) => `Are you sure you want to permanently delete the management user "${username}"?`,
+  cmsUserDeletedMessage: (username) => `Management user "${username}" was deleted.`,
+  credentialsNotSavedMessage: 'The database login succeeded, but the credentials could not be saved.',
   synchronizingRegistry: 'Loading users...',
   noUsersFound: 'No users found',
   managementRegistryEmpty: 'No management users found.',
@@ -1968,6 +1955,7 @@ export const CM = {
   // Breadcrumb
   unsavedChangesTitle: 'Unsaved Changes',
   unsavedChangesDesc: (name) => `You have unsaved changes in "${name}". If you close it, your changes will be lost.`,
+  unsavedReloadDesc: (name) => `You have unsaved changes in "${name}". Reloading will discard them.`,
 
   // Footer
   unknownFallback: 'unknown',
@@ -2074,4 +2062,3 @@ export const CM = {
   statusSuccessTitle: 'Operation complete',
   statusErrorTitle: 'Something went wrong',
 };
-

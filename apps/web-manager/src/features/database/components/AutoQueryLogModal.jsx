@@ -227,11 +227,11 @@ export default function AutoQueryLogModal() {
             loading={logsLoading}
             emptyMessage={CM.noExecutionLogsFoundMsg}
             className="h-full"
+            showEmptyStateAsRow
           />
         </div>
       </div>
     </Modal>
   );
 }
-
 

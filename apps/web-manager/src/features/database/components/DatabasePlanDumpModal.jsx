@@ -293,7 +293,7 @@ export default function DatabasePlanDumpModal() {
                   icon="topic"
                   title={CM.noPlanData}
                   subtitle={CM.runDumpHint}
-                  py="py-12"
+                  py="py-8"
                 />
               )}
             </div>

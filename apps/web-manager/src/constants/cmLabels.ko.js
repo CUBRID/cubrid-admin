@@ -151,6 +151,9 @@ export const CM_KO = {
   localeCharset: '문자 집합',
   userDefined: '사용자 정의',
   volumeSize: '볼륨 크기 (Mbyte)',
+  volumeSizePositiveError: 'Volume size must be greater than 0 MB.',
+  generalVolumeSizeMinError: 'General volume size must be at least 1 MB.',
+  generalVolumeSizeMaxError: 'General volume size must be 20 GB (20,480 MB) or less.',
   genericVolInfo: '일반 볼륨 정보',
   genericVolPath: '일반 볼륨 경로',
   logVolInfo: '로그 볼륨 정보',
@@ -495,7 +498,6 @@ export const CM_KO = {
   signIn: '로그인',
   authorizeAccess: '로그인',
   createAccount: '계정 만들기',
-  backToLogin: '로그인으로 돌아가기',
   accountRecovery: '계정 복구',
   resetCredentials: '접근 자격 증명을 재설정합니다.',
   registrationFailed: '등록에 실패했습니다. 다시 시도하세요.',
@@ -871,6 +873,7 @@ export const CM_KO = {
     'ASCII만 가능합니다(한글 등 비ASCII 문자는 안 됨) — 영문/숫자/"_"/"-"/"."은 다 괜찮습니다.',
     '공백, "/", "\\", "@"는 쓸 수 없고 "#"으로 시작할 수 없습니다.',
     '볼륨 경로에 쓰기 권한이 있고 디스크 공간이 충분한지 확인하세요.',
+    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GB.',
   ],
   addVolumeGuidance: [
     '볼륨 경로에 쓰기 권한이 있고 여유 디스크 공간이 충분한지 확인하세요.',
@@ -1484,9 +1487,14 @@ export const CM_KO = {
   source: '소스',
 
   // Auth pages
-  recoverPassword: '비밀번호 복구',
-  linkExpiry: '링크 만료',
   registrationFailedTitle: '회원가입 실패',
+  registrationSuccessfulTitle: '계정 생성 완료',
+  registrationSuccessfulMessage: '계정이 준비되었습니다. 새 자격 증명으로 로그인하세요.',
+  previousMonth: '이전 달',
+  nextMonth: '다음 달',
+  moreActions: '추가 작업',
+  previousPage: '이전 페이지',
+  nextPage: '다음 페이지',
   desktopOnly: '데스크톱 전용',
   desktopBridgeUnavailable: '데스크톱 브리지를 사용할 수 없음',
 
@@ -1539,7 +1547,6 @@ export const CM_KO = {
   addNodeToGroup: '그룹에 호스트 추가',
 
   // Auth pages
-  forgotLink: '비밀번호를 잊으셨나요?',
   newToCubrid: 'CUBRID가 처음이신가요?',
   workspaceSettings: '워크스페이스 설정',
   website: '웹사이트',
@@ -1850,35 +1857,16 @@ export const CM_KO = {
   // 데이터베이스 공간 모니터
   freeBadge: '여유',
 
-  // 비밀번호 찾기 페이지
-  forgotPasswordLabel: '비밀번호 찾기',
   backToLogin: '로그인으로 돌아가기',
   backToSignIn: '로그인으로 돌아가기',
-  enterpriseSuite: '데이터베이스 관리 도구',
-  resetAccessCredentials: '비밀번호를 재설정하세요.',
-  securityProtocol: '복구 절차',
-  recoveryLabel: '비밀번호 찾기',
-  emailPlaceholder: 'admin@organization.com',
-  sendRecoveryLink: '재설정 링크 전송',
-  linkSent: '링크 전송됨',
-  checkInbox: '수신함을 확인하세요',
-  rememberPasswordQuestion: '비밀번호가 생각나셨나요?',
-  enterEmailInstruction: '비밀번호를 재설정할 이메일을 입력하세요.',
-  recoverySecurityDesc: '계정을 다시 사용할 수 있도록 도와드리겠습니다.',
-  recoveryProtocolDesc: '비밀번호를 재설정할 수 있는 링크를 보내드립니다. 링크는 15분 후 만료됩니다.',
-  submitEmailStep: '등록된 이메일 주소 입력',
-  checkInboxStep: '수신함에서 복구 링크 확인',
-  setNewPasswordStep: '새로운 보안 비밀번호 설정',
-  securityInfrastructure: '계정은 안전하게 보호됩니다.',
-  recoveryInstructionsSent: '복구 지침이 다음 이메일로 전송되었습니다:',
-  checkSpamMsg: '링크는 15분 후에 만료됩니다. 메일이 오지 않으면 스팸 메일함을 확인해 주세요.',
-  resendRecoveryEmail: '복구 이메일 재전송',
   serverListHeader: '호스트 목록',
   resourcesHeader: '리소스',
 
   // CMSUserManagementModal
   managementAccountsRegistered: (count) => `${count}개의 관리자 계정이 등록되었습니다.`,
   confirmDeleteCmsUser: (username) => `관리자 계정 "${username}"을(를) 영구히 삭제하시겠습니까?`,
+  cmsUserDeletedMessage: (username) => `관리자 계정 "${username}"이(가) 삭제되었습니다.`,
+  credentialsNotSavedMessage: '데이터베이스 로그인에 성공했지만 자격 증명을 저장하지 못했습니다.',
   synchronizingRegistry: '사용자 목록을 불러오는 중...',
   noUsersFound: '등록된 사용자가 없습니다',
   managementRegistryEmpty: '관리 사용자가 없습니다.',
@@ -1954,6 +1942,7 @@ export const CM_KO = {
   // Breadcrumb
   unsavedChangesTitle: '저장하지 않은 변경 사항',
   unsavedChangesDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 닫으면 변경 사항이 사라집니다.`,
+  unsavedReloadDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 다시 불러오면 변경 사항이 사라집니다.`,
 
   // Footer
   unknownFallback: '알 수 없음',
@@ -2060,4 +2049,3 @@ export const CM_KO = {
   statusSuccessTitle: '작업이 완료되었습니다',
   statusErrorTitle: '문제가 발생했습니다',
 };
-

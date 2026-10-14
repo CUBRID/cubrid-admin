@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { FormField } from './FormField';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
+import { useCM } from '../../../constants/useCM';
 
 export const TimePicker = ({
   label,
@@ -14,8 +15,14 @@ export const TimePicker = ({
   icon = "history_toggle_off",
   className = "",
   disabled = false,
+  id,
   ...props
 }) => {
+  const CM = useCM();
+  const generatedId = useId();
+  const controlId = id || generatedId;
+  const descriptionId = description ? `${controlId}-description` : undefined;
+  const errorId = error ? `${controlId}-error` : undefined;
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState({});
   const buttonRef = useRef(null);
@@ -47,6 +54,20 @@ export const TimePicker = ({
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setIsOpen(false);
+        buttonRef.current?.querySelector('input')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
   }, [isOpen]);
 
   const handleTimeSelect = (type, val) => {
@@ -133,7 +154,7 @@ export const TimePicker = ({
   };
 
   return (
-    <FormField label={label} description={description} error={error} required={required} className={className}>
+    <FormField label={label} description={description} error={error} required={required} className={className} htmlFor={controlId} descriptionId={descriptionId} errorId={errorId}>
       <div
         ref={buttonRef}
         className={`relative w-full h-10 px-4 flex items-center justify-between bg-slate-50 dark:bg-white/3 border rounded-xl transition-all ${
@@ -145,11 +166,15 @@ export const TimePicker = ({
             <Icon name={icon} size="15px" weight={300} />
           </div>
           <input
+            id={controlId}
             type="text"
             inputMode="numeric"
             placeholder="HH:MM"
             value={draft}
             disabled={disabled}
+            required={required}
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitDraft}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
@@ -160,6 +185,9 @@ export const TimePicker = ({
           type="button"
           disabled={disabled}
           onClick={() => !disabled && (isOpen ? setIsOpen(false) : openDropdown())}
+          aria-label={label || CM.timeLabel}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
           className={`flex items-center justify-center shrink-0 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
         >
           <Icon name="expand_more" size="sm" className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-amber-500' : ''}`} />

@@ -28,7 +28,7 @@ export default function ConfigTableEditor({
 
           {/* Sticky header */}
           <div className="sticky top-0 z-20 flex w-full bg-slate-50 dark:bg-[#0D1117] border-b border-slate-200 dark:border-white/8">
-            <div className="w-80 shrink-0 px-4 py-2.5 border-r border-slate-200 dark:border-white/8 text-12 font-bold uppercase tracking-widest text-slate-400">
+            <div className="config-property-column shrink-0 px-4 py-2.5 border-r border-slate-200 dark:border-white/8 text-12 font-bold uppercase tracking-widest text-slate-400">
               {CM.propertyLabel}
             </div>
             {sections.map((sec, idx) => (
@@ -53,7 +53,7 @@ export default function ConfigTableEditor({
                   className="flex border-b border-slate-100 dark:border-white/4 transition-colors"
                 >
                   {/* Key cell */}
-                  <div className={`w-80 shrink-0 flex items-center border-r border-slate-100 dark:border-white/5`}>
+                  <div className="config-property-column shrink-0 flex items-center border-r border-slate-100 dark:border-white/5">
                     {isBrokerName ? (
                       <div className="flex items-center gap-2 px-4 py-2">
                         <Icon name="label_important" size="sm" weight={300} className="text-sky-500" />
@@ -67,7 +67,7 @@ export default function ConfigTableEditor({
                           value={key}
                           onChange={(e) => handleKeyChange(key, e.target.value)}
                           className="w-full gap-0"
-                          inputClassName="border-none bg-transparent rounded-none! font-mono text-14! px-4! focus:outline-none"
+                          inputClassName="border-none bg-transparent rounded-none! font-mono text-14! px-4! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500/60"
                         />
                       </div>
                     )}
@@ -108,7 +108,7 @@ export default function ConfigTableEditor({
                             value={val}
                             onChange={(e) => handleValueChange(colIdx, key, e.target.value)}
                             className="w-full gap-0"
-                            inputClassName={`border-none bg-transparent rounded-none! font-mono text-14! px-4! focus:outline-none
+                            inputClassName={`border-none bg-transparent rounded-none! font-mono text-14! px-4! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500/60
                               ${isSelected ? 'text-amber-600 dark:text-bk-yellow font-bold' : ''}`}
                           />
                         )}

@@ -191,6 +191,7 @@ export default function ManageGroupMembersModal() {
             data={rows}
             onRowClick={(row) => toggleHost(row.uid)}
             bordered
+            showEmptyStateAsRow
           />
         </div>
       </div>

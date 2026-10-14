@@ -29,7 +29,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
                <Skeleton variant="circular" width="16px" height="16px" className="opacity-40" />
                <Skeleton variant="text" width="85%" height="18px" className="rounded-md" />
             </div>
-            <div className="flex items-center gap-2 ml-6 opacity-30">
+            <div className="flex items-center gap-2 ml-6 opacity-60">
                <Skeleton variant="text" width="60%" height="14px" className="rounded-md" />
             </div>
           </div>
@@ -40,9 +40,9 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
 
   if (!brokers || brokers.length === 0) {
     return (
-      <div className="px-6 py-12 flex flex-col items-center justify-center text-center space-y-3 opacity-40">
-        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-2">
-          <Icon name="hub" size="md" className="text-slate-400" weight={100} />
+      <div className="px-6 py-8 flex flex-col items-center justify-center text-center space-y-2">
+        <div className="w-10 h-10 rounded-xl bg-slate-100/70 dark:bg-white/3 flex items-center justify-center mb-1">
+          <Icon name="hub" size="sm" className="text-slate-400 dark:text-slate-500" weight={300} />
         </div>
         <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-12">
           {CM.noMatches}
@@ -112,7 +112,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
                 );
               })}
               {!logsLoading && brokerLogs.length === 0 && (
-                <div className="px-10 py-3 opacity-30 flex items-center gap-2">
+                <div className="px-10 py-3 opacity-60 flex items-center gap-2">
                     <Icon name="block" size="xs" weight={300} />
                     <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
                 </div>

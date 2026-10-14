@@ -153,7 +153,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
             )}
 
             {!hasResults && !isLoading && (
-              <div className="py-8">
+              <div className="py-2">
                 <EmptyState
                   icon="search_off"
                   title={CM.noMatches}

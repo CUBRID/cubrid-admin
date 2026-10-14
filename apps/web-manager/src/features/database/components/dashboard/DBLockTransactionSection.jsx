@@ -144,7 +144,7 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
               icon="verified_user"
               title={CM.lockAndTransaction}
               subtitle={CM.loadingLockAndTransaction}
-              py="py-12"
+              py="py-8"
             />
           }
         />

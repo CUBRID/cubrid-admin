@@ -120,6 +120,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const [selectedHostUids, setSelectedHostUids] = useState(() => new Set());
   const [bulkHostContextMenu, setBulkHostContextMenu] = useState(null);
   const [bulkDeleteHostConfirm, setBulkDeleteHostConfirm] = useState(null);
+  const [serverToolbarMenu, setServerToolbarMenu] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [groupContextMenu, setGroupContextMenu] = useState(null);
   const [dbContextMenu, setDbContextMenu] = useState(null);
@@ -210,6 +211,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   const closeAllContextMenus = useCallback(() => {
     setContextMenu(null);
+    setServerToolbarMenu(null);
     setBulkHostContextMenu(null);
     setGroupContextMenu(null);
     setDbContextMenu(null);
@@ -549,7 +551,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   useEffect(() => {
     const handleOutsideAction = (e) => {
-      const isInsideMenu = e.target.closest('.context-menu-container');
+      const isInsideMenu = e.target.closest('.context-menu-container, .context-menu-trigger');
       if (!isInsideMenu) {
         closeAllContextMenus();
       }
@@ -583,7 +585,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   return (
     <>
-      <aside ref={sidebarRef} className={`w-full h-full bg-white dark:bg-bk-side flex flex-col ${isCollapsed ? 'hidden' : ''}`} id="sidebar">
+      <aside ref={sidebarRef} className={`sidebar-responsive-container w-full h-full bg-white dark:bg-bk-side flex flex-col ${isCollapsed ? 'hidden' : ''}`} id="sidebar">
 
         <SidebarHeader />
 
@@ -598,14 +600,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
         >
           <div className="h-full flex flex-col overflow-hidden bg-white dark:bg-bk-side">
             <div
-              className={`flex-none px-4 py-2 border-b border-slate-200 dark:border-white/5 flex items-center justify-between cursor-pointer transition-all duration-300 group/host-header
+              className={`server-list-header flex-none px-4 py-2 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-2 cursor-pointer transition-all duration-300 group/host-header
                 ${!isServerListCollapsed
                   ? 'bg-white dark:bg-bk-side'
                   : 'bg-slate-50 dark:bg-white/2 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               onClick={toggleServerListCollapse}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all duration-200
                   ${!isServerListCollapsed ? 'text-amber-500' : 'text-slate-400 group-hover/host-header:text-amber-500'}`}>
                   <Icon
@@ -615,13 +617,13 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     weight={300}
                   />
                 </div>
-                <Typography variant="caption" className={`font-bold text-14 uppercase tracking-widest transition-colors
+                <Typography variant="caption" className={`server-list-header-title whitespace-nowrap font-bold text-14 uppercase tracking-widest transition-colors
                   ${!isServerListCollapsed ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500 group-hover/host-header:text-amber-500'}`}>
                   {CM.serverListHeader}
                 </Typography>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="server-list-header-actions flex items-center gap-2 shrink-0">
                 {isServerListCollapsed && (
                   <StatusBadge 
                     label={hosts.length.toString()} 
@@ -632,28 +634,33 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 )}
                 {!isServerListCollapsed && (
                   <button
+                    type="button"
                     data-testid="add-host-toolbar-btn"
                     onClick={(e) => { e.stopPropagation(); onAddHost(); }}
-                    className="flex items-center gap-1 h-6 px-2 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
+                    className="server-toolbar-action flex items-center justify-center gap-1 h-7 px-2 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
                     title={CM.addHost}
+                    aria-label={CM.addHost}
                   >
                     <Icon name="add" size="13px" weight={400} />
-                    <span className="text-12 font-semibold tracking-wide">{CM.add}</span>
+                    <span className="server-toolbar-label text-12 font-semibold tracking-wide whitespace-nowrap">{CM.add}</span>
                   </button>
                 )}
                 {!isServerListCollapsed && (
                   <button
+                    type="button"
                     data-testid="new-group-toolbar-btn"
                     onClick={(e) => { e.stopPropagation(); dispatch(openCreateGroupModal()); }}
-                    className="flex items-center gap-1 h-6 px-2 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
+                    className="server-toolbar-action server-toolbar-secondary-action flex items-center justify-center gap-1 h-7 px-2 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
                     title={CM.newGroup}
+                    aria-label={CM.newGroup}
                   >
                     <Icon name="create_new_folder" size="13px" weight={400} />
-                    <span className="text-12 font-semibold tracking-wide">{CM.newGroup}</span>
+                    <span className="server-toolbar-label text-12 font-semibold tracking-wide whitespace-nowrap">{CM.newGroup}</span>
                   </button>
                 )}
                 {!isServerListCollapsed && hosts.length > 0 && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (pendingLoginCount === 0) {
@@ -667,25 +674,51 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       handleLoginAll(null);
                     }}
                     disabled={isLoggingIntoHost}
-                    className="flex items-center gap-1 h-6 px-2 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
+                    className="server-toolbar-action server-toolbar-login-action flex items-center justify-center gap-1 h-7 px-2 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
                     title={CM.loginAll}
+                    aria-label={CM.loginAll}
                   >
                     <Icon name="login" size="13px" weight={400} />
-                    <span className="text-12 font-semibold tracking-wide">{CM.loginAll}</span>
+                    <span className="server-toolbar-label text-12 font-semibold tracking-wide whitespace-nowrap">{CM.loginAll}</span>
                   </button>
                 )}
                 {!isServerListCollapsed && (
                   <button
+                    type="button"
                     data-testid="refresh-server-list-toolbar-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       dispatch(refreshServerList());
                     }}
                     disabled={hostsLoading}
-                    className="flex items-center justify-center h-6 w-6 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
+                    className="server-toolbar-action flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
                     title={CM.refresh}
+                    aria-label={CM.refresh}
                   >
                     <Icon name="refresh" size="13px" weight={400} className={hostsLoading ? 'animate-spin' : ''} />
+                  </button>
+                )}
+                {!isServerListCollapsed && (
+                  <button
+                    type="button"
+                    data-testid="server-toolbar-more-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (serverToolbarMenu) {
+                        setServerToolbarMenu(null);
+                        return;
+                      }
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      closeAllContextMenus();
+                      setServerToolbarMenu({ mouseX: rect.right, mouseY: rect.bottom + 4 });
+                    }}
+                    className="context-menu-trigger server-toolbar-action server-toolbar-overflow-action items-center justify-center h-7 w-7 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
+                    title={CM.moreActions}
+                    aria-label={CM.moreActions}
+                    aria-haspopup="menu"
+                    aria-expanded={Boolean(serverToolbarMenu)}
+                  >
+                    <Icon name="more_horiz" size="14px" weight={400} />
                   </button>
                 )}
               </div>
@@ -948,6 +981,35 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       </aside>
 
       {/* Context Menus */}
+      {serverToolbarMenu && (
+        <ContextMenuWrapper
+          x={serverToolbarMenu.mouseX}
+          y={serverToolbarMenu.mouseY}
+          onClose={() => setServerToolbarMenu(null)}
+          width="w-48"
+        >
+          <MenuItem
+            icon="create_new_folder"
+            label={CM.newGroup}
+            onClick={() => {
+              dispatch(openCreateGroupModal());
+              setServerToolbarMenu(null);
+            }}
+          />
+          {hosts.length > 0 && (
+            <MenuItem
+              icon="login"
+              label={CM.loginAll}
+              disabled={isLoggingIntoHost || pendingLoginCount === 0}
+              onClick={() => {
+                handleLoginAll(null);
+                setServerToolbarMenu(null);
+              }}
+            />
+          )}
+        </ContextMenuWrapper>
+      )}
+
       {contextMenu && (
         <ContextMenuWrapper x={contextMenu.mouseX} y={contextMenu.mouseY} onClose={() => setContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">

@@ -1165,6 +1165,27 @@ describe('DatabaseLifecycleService', () => {
   });
 
   describe('createDatabaseInternal logsize conversion', () => {
+    it('rejects an oversized general volume before contacting CMS', async () => {
+      const request = {
+        dbname: 'testdb',
+        numpage: '1310721',
+        pagesize: '16384',
+        logsize: '512',
+        logpagesize: '16384',
+        genvolpath: '/path/to/testdb',
+        logvolpath: '/path/to/testdb',
+        charset: 'en_US.utf8',
+        overwrite_config_file: 'YES' as const,
+      };
+
+      await expect(
+        service.createDatabaseInternal(mockUserId, mockHostUid, request)
+      ).rejects.toMatchObject({ code: DatabaseErrorCode.INVALID_VOLUME_SIZE });
+
+      expect(hostService.findHostInternal).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
     it('should convert logsize from MB to CMS pages using logpagesize', async () => {
       // Arrange: prevent file existence check from blocking the flow
       (fileService as any).checkfileInternal = jest.fn().mockResolvedValue({

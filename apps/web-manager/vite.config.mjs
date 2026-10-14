@@ -3,15 +3,50 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig(({ mode }) => {
+const devServiceWorkerCleanup = {
+  name: 'dev-service-worker-cleanup',
+  configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      const pathname = new URL(req.url || '/', 'http://localhost').pathname
+      if (pathname !== '/sw.js') {
+        next()
+        return
+      }
+
+      // A production PWA worker previously registered on this localhost
+      // origin can keep serving an old bundle even while Vite serves current
+      // source. Replace it with a one-shot worker that clears caches,
+      // unregisters itself, and reloads controlled tabs onto the dev server.
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-store')
+      res.end(`
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+    await self.registration.unregister();
+    const clients = await self.clients.matchAll({ type: 'window' });
+    await Promise.all(clients.map((client) => client.navigate(client.url)));
+  })());
+});
+`)
+    })
+  },
+}
+
+export default defineConfig(({ mode, command }) => {
   const isElectronBuild = mode === 'electron'
   const disablePwa = isElectronBuild || process.env.DISABLE_PWA === '1'
+  const isDevServer = command === 'serve'
 
   return {
   base: isElectronBuild ? './' : '/',
   plugins: [
     react(),
     tailwindcss(),
+    ...(isDevServer ? [devServiceWorkerCleanup] : []),
   ].concat(
     disablePwa
       ? []

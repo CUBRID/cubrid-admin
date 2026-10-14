@@ -74,7 +74,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
 
                 if (!logsLoading && errorLogs.length === 0) {
                   return (
-                    <div className="px-10 py-3 opacity-30 flex items-center gap-2">
+                    <div className="px-10 py-3 opacity-60 flex items-center gap-2">
                        <Icon name="block" size="xs" weight={300} />
                        <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
                     </div>
@@ -140,7 +140,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
                 );
               })}
               {!adminLogsLoading && (adminLogsByHost[hostUid] || []).length === 0 && (
-                <div className="px-10 py-3 opacity-30 flex items-center gap-2">
+                <div className="px-10 py-3 opacity-60 flex items-center gap-2">
                    <Icon name="block" size="xs" weight={300} />
                    <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
                 </div>
@@ -244,7 +244,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
                     );
                   })}
                   {!dbLogsLoading && (dbLogsByDbName[db.dbname] || []).length === 0 && (
-                    <div className="px-10 py-3 opacity-30 flex items-center gap-2">
+                    <div className="px-10 py-3 opacity-60 flex items-center gap-2">
                        <Icon name="block" size="xs" weight={300} />
                        <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
                     </div>
@@ -252,7 +252,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
             </TreeNode>
           ))}
           {(!databases || databases.length === 0) && (
-            <div className="px-10 py-5 opacity-40 flex flex-col items-center justify-center">
+            <div className="px-10 py-5 opacity-70 flex flex-col items-center justify-center">
                <Typography variant="caption" className="italic text-12">{CM.noDatabasesAvailable}</Typography>
             </div>
           )}
@@ -260,4 +260,3 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
     </div>
   );
 }
-

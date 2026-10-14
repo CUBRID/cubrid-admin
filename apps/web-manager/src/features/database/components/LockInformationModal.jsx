@@ -6,12 +6,11 @@ import { databaseApi } from '../databaseApi';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { TabGroup } from '../../../components/ds/layout/TabGroup';
-import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { MetricCard } from '../../../components/ds/foundation/MetricCard';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { ProgressBar } from '../../../components/ds/foundation/ProgressBar';
-import { EmptyState } from '../../../components/ds/feedback/EmptyState';
+import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
 
 function buildObjectLockRows(lot) {
@@ -86,6 +85,23 @@ export default function LockInformationModal() {
   }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase]);
 
   const objectRows = useMemo(() => buildObjectLockRows(lot), [lot]);
+  const sessionColumns = useMemo(() => [
+    { accessor: 'index', header: CM.lockIndex, cellClassName: 'font-mono' },
+    { accessor: 'pname', header: CM.pname, render: (value, row) => `${value || '-'}${row.waitfor ? CM.waitingSuffix : ''}` },
+    { accessor: '@uid', header: CM.uid, render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'host', header: CM.host, render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'pid', header: CM.pid, render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'isolevel', header: CM.isolationLevel, render: (value) => <StatusBadge label={value || '-'} variant="sky" /> },
+    { accessor: 'timeout', header: CM.timeOut, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'lock', header: CM.locks, align: 'center', render: (value) => Array.isArray(value) ? value.length : value ? 1 : '-' },
+  ], [CM]);
+  const objectColumns = useMemo(() => [
+    { accessor: 'oid', header: CM.oid, cellClassName: 'font-mono' },
+    { accessor: 'class_name', header: CM.objectType },
+    { accessor: 'holder', header: CM.numHolders, cellClassName: 'font-mono' },
+    { accessor: 'mode', header: CM.mode, cellClassName: 'font-mono' },
+    { accessor: 'waiters', header: CM.numWaiters, align: 'right', cellClassName: 'font-mono' },
+  ], [CM]);
 
   if (!isLockInfoModalOpen) return null;
 
@@ -122,41 +138,9 @@ export default function LockInformationModal() {
 
         <div className="min-h-[300px]">
           {activeTab === 'sessions' && (
-            transactions.length === 0 ? (
-              <EmptyState icon="info" title={CM.noSessions} subtitle={CM.noActiveTransactions} py="py-12" />
-            ) : (
-              <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-                <table className="w-full text-left text-14">
-                  <thead className="bg-slate-50 dark:bg-white/5 text-12 uppercase text-slate-500">
-                    <tr>
-                      {[CM.lockIndex, CM.pname, CM.uid, CM.host, CM.pid, CM.isolationLevel, CM.timeOut, CM.locks].map((h) => (
-                        <th key={h} className="px-3 py-2 whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-mono">
-                    {transactions.map((t, idx) => {
-                      const holdCount = Array.isArray(t.lock) ? t.lock.length : t.lock ? 1 : 0;
-                      const isWaiting = !!t.waitfor;
-                      return (
-                        <tr key={idx} className={isWaiting ? 'bg-rose-50/40 dark:bg-rose-500/5' : ''}>
-                          <td className="px-3 py-2">{t.index ?? idx}</td>
-                          <td className="px-3 py-2 font-sans">{t.pname || '-'}{isWaiting ? CM.waitingSuffix : ''}</td>
-                          <td className="px-3 py-2">{t['@uid'] ?? '-'}</td>
-                          <td className="px-3 py-2">{t.host ?? '-'}</td>
-                          <td className="px-3 py-2">{t.pid ?? '-'}</td>
-                          <td className="px-3 py-2">
-                            <StatusBadge label={t.isolevel || '-'} variant="sky" />
-                          </td>
-                          <td className="px-3 py-2 text-right">{t.timeout ?? '-'}</td>
-                          <td className="px-3 py-2 text-center">{holdCount || '-'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
+            <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
+              <Table columns={sessionColumns} data={transactions} emptyMessage={CM.noActiveTransactions} stickyHeader selectable showEmptyStateAsRow />
+            </div>
           )}
 
           {activeTab === 'objects' && (
@@ -166,32 +150,9 @@ export default function LockInformationModal() {
                 <MetricCard icon="view_list" label={CM.maxLockedObjNum} value={lot.numallocated ?? 0} unit="" accent="sky" isLoading={loading} />
                 <MetricCard icon="memory" label={CM.size} value={lot.sizelock ?? '-'} unit="bytes" accent="violet" isLoading={loading} />
               </div>
-              {objectRows.length === 0 ? (
-                <EmptyState icon="info" title={CM.noObjectLocks} subtitle={CM.noHeldObjectLocks} py="py-10" />
-              ) : (
-                <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-                  <table className="w-full text-left text-14">
-                    <thead className="bg-slate-50 dark:bg-white/5 text-12 uppercase text-slate-500">
-                      <tr>
-                        {[CM.oid, CM.objectType, CM.mode, CM.numHolders, CM.numWaiters].map((h) => (
-                          <th key={h} className="px-3 py-2">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-mono">
-                      {objectRows.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="px-3 py-2">{row.oid}</td>
-                          <td className="px-3 py-2 font-sans">{row.class_name}</td>
-                          <td className="px-3 py-2">{row.holder}</td>
-                          <td className="px-3 py-2">{row.mode}</td>
-                          <td className="px-3 py-2 text-right">{row.waiters}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
+                <Table columns={objectColumns} data={objectRows} emptyMessage={CM.noHeldObjectLocks} stickyHeader selectable showEmptyStateAsRow />
+              </div>
             </div>
           )}
 

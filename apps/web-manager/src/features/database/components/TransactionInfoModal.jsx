@@ -7,7 +7,7 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { EmptyState } from '../../../components/ds/feedback/EmptyState';
+import { Table } from '../../../components/ds/layout/Table';
 import { ModalStatusLoading } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 
@@ -85,6 +85,28 @@ export default function TransactionInfoModal() {
     if (selectedTran) dispatch(openKillTransactionModal(selectedTran));
   };
 
+  const columns = [
+    { accessor: 'tranindex', header: CM.tranIndex, sortable: true, cellClassName: 'font-mono' },
+    { accessor: '@user', header: CM.userNameCol, render: (value) => value || '-' },
+    { accessor: 'host', header: CM.host, render: (value) => value || '-', cellClassName: 'font-mono' },
+    { accessor: 'pid', header: CM.processId, render: (value) => value || '-', cellClassName: 'font-mono' },
+    {
+      accessor: 'program',
+      header: CM.programName,
+      render: (value, row) => (
+        <span className="inline-flex items-center gap-1">
+          {isHaReplicationProcess(row.program) && (
+            <Icon name="warning" size="12px" weight={400} className="text-amber-500" title={CM.haReplicationProcessWarning} />
+          )}
+          {value || '-'}
+        </span>
+      ),
+    },
+    { accessor: 'query_time', header: CM.queryTime, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'tran_time', header: CM.tranTime, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'wait_for_lock_holder', header: CM.waitHolder, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+  ];
+
   if (view === VIEW_LOADING) {
     return (
       <Modal isOpen title={CM.transactionInformation} icon="swap_horiz" onClose={handleClose} maxWidth="540px" showCloseButton={false}>
@@ -148,54 +170,17 @@ export default function TransactionInfoModal() {
         </div>
 
         <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden flex-1 overflow-y-auto min-h-0">
-          {transactions.length === 0 ? (
-            <EmptyState icon="info" title={CM.transactionInformation} subtitle={CM.activeTransactionsOf} py="py-12" />
-          ) : (
-            <table className="w-full text-left text-14">
-              <thead className="bg-slate-50 dark:bg-white/5 text-12 uppercase text-slate-500 sticky top-0">
-                <tr>
-                  <th className="px-4 py-2">{CM.tranIndex}</th>
-                  <th className="px-4 py-2">{CM.userNameCol}</th>
-                  <th className="px-4 py-2">{CM.host}</th>
-                  <th className="px-4 py-2">{CM.processId}</th>
-                  <th className="px-4 py-2">{CM.programName}</th>
-                  <th className="px-4 py-2 text-right">{CM.queryTime}</th>
-                  <th className="px-4 py-2 text-right">{CM.tranTime}</th>
-                  <th className="px-4 py-2 text-right">{CM.waitHolder}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {transactions.map((tran, idx) => {
-                  const tranIndex = tran.tranindex;
-                  const isSelected = String(selectedTranIndex) === String(tranIndex);
-                  const isHaProcess = isHaReplicationProcess(tran.program);
-                  return (
-                    <tr
-                      key={idx}
-                      className={`cursor-pointer ${isSelected ? 'bg-amber-500/10' : isHaProcess ? 'bg-amber-500/4 hover:bg-amber-500/8' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
-                      onClick={() => setSelectedTranIndex(tranIndex)}
-                    >
-                      <td className="px-4 py-2 font-mono">{tranIndex}</td>
-                      <td className="px-4 py-2">{tran['@user'] || '-'}</td>
-                      <td className="px-4 py-2 font-mono">{tran.host || '-'}</td>
-                      <td className="px-4 py-2 font-mono">{tran.pid || '-'}</td>
-                      <td className="px-4 py-2">
-                        <span className="inline-flex items-center gap-1">
-                          {isHaProcess && (
-                            <Icon name="warning" size="13px" weight={400} className="text-amber-500" title={CM.haReplicationProcessWarning} />
-                          )}
-                          {tran.program || '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono">{tran.query_time ?? '-'}</td>
-                      <td className="px-4 py-2 text-right font-mono">{tran.tran_time ?? '-'}</td>
-                      <td className="px-4 py-2 text-right font-mono">{tran.wait_for_lock_holder ?? '-'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          <Table
+            columns={columns}
+            data={transactions}
+            emptyMessage={CM.activeTransactionsOf}
+            onRowClick={(tran) => setSelectedTranIndex(tran.tranindex)}
+            isRowSelected={(tran) => String(selectedTranIndex) === String(tran.tranindex)}
+            getRowAriaLabel={(tran) => `${CM.tranIndex} ${tran.tranindex}`}
+            stickyHeader
+            selectable
+            showEmptyStateAsRow
+          />
         </div>
       </div>
     </Modal>

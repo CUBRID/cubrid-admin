@@ -228,7 +228,9 @@ const databaseMonitoringSlice = createSlice({
         state.spaceInfo[key] = {
           volumes: data.spaceinfo || [],
           summary: data.dbinfo || [],
-          files: data.fileinfo || []
+          files: data.fileinfo || [],
+          pagesize: data.pagesize,
+          logpagesize: data.logpagesize,
         };
         // Also merge into the per-DB dashboard cache — DBSpaceInfoSection's
         // own "became active" refresh dispatches this thunk, and the

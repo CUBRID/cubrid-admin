@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDeleteBackupPlanModal, deleteBackupSchedule, fetchBackupSchedule } from '../databaseSlice';
 import { useCM } from '../../../constants/useCM';
@@ -15,12 +15,6 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 
-// view states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
-
 export default function DeleteBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -29,7 +23,6 @@ export default function DeleteBackupPlanModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   
   const { 
-    state, 
     error: actionError, 
     startAction, 
     endSuccess, 
@@ -63,10 +56,6 @@ export default function DeleteBackupPlanModal() {
       endSuccess(CM.backupPlanRemovedMsg(selectedBackupId));
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: selectedDatabase }));
 
-      // Auto close after brief success
-      setTimeout(() => {
-        dispatch(closeDeleteBackupPlanModal());
-      }, 1500);
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.deleteBackupPlanRejectedMsg));
     }
