@@ -88,6 +88,10 @@ export function CmsJobProvider({ children }) {
         dbname: job.dbname,
         status: job.jobStatus,
         error: job.error,
+        maintenanceSummary: job.maintenanceSummary,
+        result: job.result,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
         successMessage,
         errorMessage,
       };
@@ -177,7 +181,7 @@ export function CmsJobProvider({ children }) {
         setJobs((prev) => {
           const cur = prev.find((j) => j.jobId === jobId);
           const failed = normalizeTrackedJob(
-            { ...(cur || {}), jobId, jobStatus: 'failed', error: { message: err?.message } },
+            { ...(cur || {}), ...err?.job, jobId, jobStatus: 'failed', error: err?.job?.error ?? { message: err?.message } },
             cur || {}
           );
           notifyTerminal(failed, { notify, successMessage, errorMessage }, session);

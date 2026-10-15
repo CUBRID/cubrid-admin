@@ -15,6 +15,7 @@ export function normalizeTrackedJob(serverJob, fallback = {}) {
     createdAt: serverJob?.createdAt ?? fallback.createdAt ?? new Date().toISOString(),
     startedAt: serverJob?.startedAt,
     finishedAt: serverJob?.finishedAt,
+    maintenanceSummary: serverJob?.maintenanceSummary ?? fallback.maintenanceSummary,
     error: serverJob?.error ?? fallback.error,
     result: serverJob?.result,
     dismissed: fallback.dismissed ?? false,

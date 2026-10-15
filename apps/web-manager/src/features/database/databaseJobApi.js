@@ -153,6 +153,7 @@ export function pollCmsJob(jobId, { onUpdate } = {}) {
         if (status === 'failed') {
           const terminalErr = new Error(formatCmsJobError(job));
           terminalErr.jobTerminalFailure = true;
+          terminalErr.job = job;
           finish(reject, terminalErr);
           return;
         }

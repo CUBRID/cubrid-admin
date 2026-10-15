@@ -5,6 +5,8 @@ import { Typography } from '../../components/ds/foundation/Typography';
 import { Modal } from '../../components/ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
 import { stripHaRoleTagFromAlias } from '../../features/host/hostGroupUtils';
+import { MaintenanceDetails } from './MaintenanceDetails';
+import { isMaintenanceJob } from './maintenanceDetails';
 import {
   getCmsJobTypeLabel,
   getCmsJobStatusLabel,
@@ -110,7 +112,8 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
             </pre>
           </div>
         )}
-        {job.result != null && (
+        {isMaintenanceJob(job) && <MaintenanceDetails key={job.jobId} job={job} />}
+        {!isMaintenanceJob(job) && job.result != null && (
           <div>
             <div className="text-[11px] text-slate-400 dark:text-slate-500 mb-1">{CM.result}</div>
             <pre className="whitespace-pre-wrap break-all bg-slate-100 dark:bg-white/5 rounded-lg px-2.5 py-2 font-mono text-[11px] max-h-40 overflow-y-auto">

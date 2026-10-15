@@ -4,6 +4,7 @@ import { closeCheckDatabaseModal } from '../databaseSlice';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
+import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -29,31 +30,54 @@ export default function CheckDatabaseModal() {
     useActionState();
   const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
+  const [resultJob, setResultJob] = useState(null);
   const [repair, setRepair] = useState(false);
 
   useEffect(() => {
     if (isCheckDatabaseModalOpen) {
       setRepair(false);
+      setResultJob(null);
+      setJobStatus(null);
       resetAction();
     }
   }, [isCheckDatabaseModalOpen, resetAction]);
 
   if (!isCheckDatabaseModalOpen) return null;
 
+  const previewJob = {
+    type: 'check',
+    dbname: selectedDatabase,
+    maintenanceSummary: {
+      operation: 'consistency-check',
+      scope: 'entire-database',
+      repairRequested: repair,
+    },
+  };
+
   const handleCheck = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
     startAction();
+    setJobStatus(null);
+    setResultJob(previewJob);
+    let lastJob = previewJob;
     try {
-      await runJob(
+      const job = await runJob(
         () =>
           databaseJobApi.submitCheck(selectedHostUid, selectedDatabase, {
             repairdb: repair ? 'y' : 'n',
           }),
-        { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
+        { onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
-      if (!wasBackgrounded()) endSuccess();
+      if (!wasBackgrounded()) {
+        setResultJob({ ...job, maintenanceSummary: job.maintenanceSummary ?? previewJob.maintenanceSummary });
+        endSuccess();
+      }
     } catch (err) {
-      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : err.message || CM.failure);
+      if (!wasBackgrounded()) {
+        const failedJob = err?.job ?? lastJob;
+        setResultJob({ ...failedJob, maintenanceSummary: failedJob.maintenanceSummary ?? previewJob.maintenanceSummary, jobStatus: 'failed' });
+        endError(typeof err === 'string' ? err : err.message || CM.failure);
+      }
     }
   };
 
@@ -70,6 +94,7 @@ export default function CheckDatabaseModal() {
           subtitle={getCmsJobLoadingSubtitle(selectedDatabase, jobStatus, CM)}
           onBackground={() => { background(); handleClose(); }}
         />
+        <MaintenanceDetails job={resultJob || previewJob} preview />
       </Modal>
     );
   }
@@ -82,7 +107,9 @@ export default function CheckDatabaseModal() {
           message={CM.jobCompletedSuccess(CM.checkDatabase)}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
@@ -97,7 +124,9 @@ export default function CheckDatabaseModal() {
           onRetry={handleCheck}
           onCancel={resetAction}
           cancelText={CM.close}
-        />
+        >
+          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
+        </ModalStatusError>
       </Modal>
     );
   }
@@ -153,6 +182,7 @@ export default function CheckDatabaseModal() {
             <Toggle checked={repair} onChange={setRepair} />
           </div>
         </div>
+        <MaintenanceDetails job={previewJob} preview />
       </div>
     </Modal>
   );

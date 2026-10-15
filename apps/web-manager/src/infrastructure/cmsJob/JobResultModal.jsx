@@ -3,6 +3,7 @@ import { Modal } from '../../components/ds/layout/Modal';
 import { ModalStatusSuccess, ModalStatusError } from '../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../constants/useCM';
 import { getCmsJobTypeLabel, getCmsJobGuidance } from './cmsJobLabels';
+import { MaintenanceDetails } from './MaintenanceDetails';
 
 export function JobResultModal({ result, onClose }) {
   const CM = useCM();
@@ -26,7 +27,9 @@ export function JobResultModal({ result, onClose }) {
           message={db !== '—' ? `"${db}"` : undefined}
           onConfirm={onClose}
           confirmText={CM.ok}
-        />
+        >
+          <MaintenanceDetails key={result.jobId} job={result} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
@@ -49,7 +52,9 @@ export function JobResultModal({ result, onClose }) {
         guidance={getCmsJobGuidance(result.type, CM)}
         onCancel={onClose}
         cancelText={CM.dismiss}
-      />
+      >
+        <MaintenanceDetails key={result.jobId} job={result} />
+      </ModalStatusError>
     </Modal>
   );
 }

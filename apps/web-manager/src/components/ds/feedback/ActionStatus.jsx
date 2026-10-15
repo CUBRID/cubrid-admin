@@ -47,6 +47,7 @@ export const ModalStatusSuccess = ({
   message,
   onConfirm,
   confirmText,
+  children,
 }) => {
   const CM = useCM();
   const displayTitle = title || CM.operationComplete;
@@ -68,6 +69,8 @@ export const ModalStatusSuccess = ({
         </Typography>
       </div>
 
+      {children}
+
       {onConfirm && (
         <Button data-testid="modal-status-confirm-btn" variant="primary" onClick={onConfirm} icon="check_circle" className="px-10">{displayConfirmText}</Button>
       )}
@@ -83,6 +86,7 @@ export const ModalStatusError = ({
   onCancel,
   retryText,
   cancelText,
+  children,
 }) => {
   const CM = useCM();
   const [showDetail, setShowDetail] = useState(false);
@@ -145,6 +149,8 @@ export const ModalStatusError = ({
           )}
         </div>
       )}
+
+      {children}
 
       <div className="flex items-center gap-3">
         {onCancel && <Button data-testid="modal-status-cancel-btn" variant="secondary" onClick={onCancel}>{displayCancelText}</Button>}
