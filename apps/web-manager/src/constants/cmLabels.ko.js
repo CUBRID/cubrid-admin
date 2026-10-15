@@ -1834,6 +1834,7 @@ export const CM_KO = {
   noContentAvailable: '표시할 내용이 없습니다.',
   noSqlStatementsFound: '이 페이지에서 SQL 구문을 찾을 수 없습니다.',
   maxSeconds: '최대 (초)',
+  minSeconds: '최소 (초)',
   avgSeconds: '평균 (초)',
   countLabel: '횟수',
   errorsLabel: '오류',
