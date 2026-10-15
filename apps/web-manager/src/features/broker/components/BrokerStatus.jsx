@@ -144,7 +144,10 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     { header: CM.pid, accessor: 'as_pid',       width: '80px',  render: (v) => <span className="font-mono">{v}</span> },
     { header: CM.qps, accessor: 'qps', width: '60px',  render: (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span> },
     { header: CM.tps, accessor: 'tps', width: '60px',  render: (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span> },
-    { header: CM.port, accessor: 'as_port',     width: '80px',  render: (v) => <span className="font-mono">{v}</span> },
+    // Not a per-AS CMS field — getbrokerstatus's asinfo has no as_port at
+    // all (every AS under a broker shares that broker's own listen port),
+    // so this column just shows the broker's port for every row.
+    { header: CM.port, accessor: 'as_port', width: '80px', render: () => <span className="font-mono">{basicInfo.port ?? '—'}</span> },
     { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{(parseInt(v) / 1024).toFixed(1)} KB</span> },
     { 
       header: CM.status, 
@@ -156,7 +159,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
       }
     },
     { header: CM.database, accessor: 'as_dbname', render: (v) => <span className="text-amber-600/80 dark:text-amber-500/70 font-mono">{v || '—'}</span> },
-    { header: CM.lastAccess, accessor: 'as_last_access_time', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v}</span> },
+    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
     { header: CM.clientIp, accessor: 'as_client_ip', render: (v) => <span className="font-mono">{v || '—'}</span> },
   ];
 
