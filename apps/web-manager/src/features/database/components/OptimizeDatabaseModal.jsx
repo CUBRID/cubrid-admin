@@ -8,6 +8,7 @@ import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
+import { getCmsJobErrorResult } from '../../../infrastructure/cmsJob/cmsJobUtils';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -310,8 +311,7 @@ export default function OptimizeDatabaseModal() {
       }
     } catch (err) {
       if (!wasBackgrounded()) {
-        const failedJob = err?.job ?? lastJob;
-        setResultJob({ ...failedJob, maintenanceSummary: failedJob.maintenanceSummary ?? previewJob.maintenanceSummary, jobStatus: 'failed' });
+        setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
         endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
       }
     }
@@ -364,10 +364,11 @@ export default function OptimizeDatabaseModal() {
     return (
       <Modal isOpen title={CM.optimizeDatabase} icon="auto_fix_high" iconVariant="danger" onClose={handleClose} maxWidth="480px">
         <ModalStatusError
-          title={CM.optimizationFailed}
+          title={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknown : CM.optimizationFailed}
+          message={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
           error={error}
-          guidance={CM.optimizeDbGuidance}
-          onRetry={handleOptimize}
+          guidance={resultJob?.outcomeUnknown ? undefined : CM.optimizeDbGuidance}
+          onRetry={resultJob?.outcomeUnknown ? undefined : handleOptimize}
           onCancel={handleClose}
           retryText={CM.retryOptimization}
           cancelText={CM.dismiss}

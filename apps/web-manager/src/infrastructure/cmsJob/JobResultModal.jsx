@@ -10,7 +10,7 @@ export function JobResultModal({ result, onClose }) {
   const op = getCmsJobTypeLabel(result.type, CM);
   const db = result.dbname || '—';
 
-  if (result.status === 'succeeded') {
+  if (result.status === 'succeeded' && !result.outcomeUnknown) {
     return (
       <Modal
         isOpen
@@ -47,9 +47,10 @@ export function JobResultModal({ result, onClose }) {
       testId="job-result"
     >
       <ModalStatusError
-        title={CM.jobNotifyFailed(op, db)}
+        title={result.outcomeUnknown ? CM.jobOutcomeUnknown : CM.jobNotifyFailed(op, db)}
+        message={result.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
         error={errMsg}
-        guidance={getCmsJobGuidance(result.type, CM)}
+        guidance={result.outcomeUnknown ? undefined : getCmsJobGuidance(result.type, CM)}
         onCancel={onClose}
         cancelText={CM.dismiss}
       >

@@ -35,7 +35,9 @@ export function getMaintenanceRows(job, CM, preview = false) {
     rows.push([CM.maintenanceDuration, Number.isFinite(elapsed) && elapsed >= 0
       ? CM.maintenanceDurationSeconds((elapsed / 1000).toFixed(1)) : '—']);
     const status = job.jobStatus ?? job.status;
-    if (status === 'succeeded' || status === 'failed') {
+    if (job.outcomeUnknown) {
+      rows.push([CM.result, CM.jobOutcomeUnknown]);
+    } else if (status === 'succeeded' || status === 'failed') {
       rows.push([CM.result, status === 'succeeded' ? CM.maintenanceCommandSucceeded : CM.maintenanceCommandFailed]);
       if (!job.result?.output) {
         rows.push([optimize ? CM.maintenanceOutput : CM.maintenanceFindings, CM.maintenanceNotReported]);

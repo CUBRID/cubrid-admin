@@ -80,6 +80,7 @@ export const ModalStatusSuccess = ({
 
 export const ModalStatusError = ({
   title,
+  message,
   error,
   guidance,
   onRetry,
@@ -107,7 +108,7 @@ export const ModalStatusError = ({
       <div className="space-y-2 px-6">
         <Typography variant="h4" className="text-[15px] font-bold text-rose-600 dark:text-rose-400">{displayTitle}</Typography>
         <Typography variant="p" className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
-          {CM.operationCouldNotBeCompleted}
+          {message || CM.operationCouldNotBeCompleted}
         </Typography>
       </div>
 

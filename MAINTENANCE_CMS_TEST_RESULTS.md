@@ -147,3 +147,16 @@ The test harness initially encountered an error while formatting an absent error
 The missing scope in the screenshot came from the older deployed API build. After rebuilding and restarting, the live API tests confirm `maintenanceSummary` is present in job-status responses and recent-job history. The previously missing requested scope is resolved at the backend API layer.
 
 Actual CMS findings and scan-method reporting remain outside this change when CMS does not supply them. These tests do not establish full-scan execution, exact internal check coverage, or repaired-object counts.
+
+## PR review regression: lost status polling
+
+Addressed [Greptile's review finding](https://github.com/CUBRID/cubrid-admin/pull/155#discussion_r4277943624) that failed status requests could be displayed as a failed command.
+
+- Three consecutive status-request failures now produce an unconfirmed outcome with the accepted job ID and last known server snapshot.
+- Foreground maintenance dialogs, background notifications, and jobs-panel details display “Result unconfirmed” without overwriting the last server status as failed.
+- Requested scope and repair settings remain available even when the first status response cannot be retrieved.
+- The unconfirmed-result dialogs instruct users to reload and check status before rerunning; they do not offer a retry that could submit a duplicate maintenance job.
+- A server-confirmed failure still displays “Command failed” and allows retry.
+- A subsequent authoritative server snapshot clears the connection-warning state.
+
+Regression verification uses simulated status-request failures; no running CMS service was interrupted. The complete web test suite contains 102 passing tests, including polling, both foreground dialogs, background-provider notifications, and jobs-panel rendering.

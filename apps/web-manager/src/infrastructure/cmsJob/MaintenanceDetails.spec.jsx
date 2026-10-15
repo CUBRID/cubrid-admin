@@ -8,7 +8,7 @@ import { MaintenanceDetails } from './MaintenanceDetails';
 import { getMaintenanceRows } from './maintenanceDetails';
 import { JobResultModal } from './JobResultModal';
 import { BackgroundJobsPanel } from './BackgroundJobsPanel';
-import { normalizeTrackedJob } from './cmsJobUtils';
+import { getCmsJobErrorResult, normalizeTrackedJob } from './cmsJobUtils';
 
 const completed = {
   jobId: 'job-1', type: 'optimize', dbname: 'demodb', hostUid: 'host-1', jobStatus: 'succeeded',
@@ -51,6 +51,14 @@ describe('maintenance result rows', () => {
     expect(normalizeTrackedJob({ jobId: completed.jobId }, normalizeTrackedJob(completed)).maintenanceSummary)
       .toEqual(completed.maintenanceSummary);
   });
+
+  it('preserves the last server status and clears uncertainty on an authoritative success', () => {
+    const running = { ...completed, jobStatus: 'running', finishedAt: undefined, result: undefined };
+    const uncertain = getCmsJobErrorResult(new Error('Network unavailable'), running);
+    expect(uncertain.jobStatus).toBe('running');
+    expect(uncertain.outcomeUnknown).toBe(true);
+    expect(normalizeTrackedJob(completed, uncertain).outcomeUnknown).toBe(false);
+  });
 });
 
 let container;
@@ -88,6 +96,24 @@ it('shows persisted maintenance summaries when a restored job is opened from the
   const details = container.querySelector('[data-testid="job-detail-modal"] [data-testid="maintenance-details"]');
   expect(details.textContent).toContain('Selected class: dba.employee');
   expect(details.textContent).toContain('6.0 seconds');
+});
+
+it('shows an unconfirmed background result without claiming the command failed', async () => {
+  const result = { ...completed, jobStatus: 'running', status: 'running', finishedAt: undefined, result: undefined, outcomeUnknown: true };
+  await render(<JobResultModal result={result} onClose={vi.fn()} />);
+  expect(container.textContent).toContain('Result unconfirmed');
+  expect(container.textContent).toContain('may still be running or may have completed');
+  expect(container.textContent).not.toContain('Command failed');
+  expect(container.textContent).not.toContain('Optimize failed');
+});
+
+it('labels a job with lost polling as unconfirmed in the jobs panel', async () => {
+  const uncertain = { ...completed, jobStatus: 'running', finishedAt: undefined, result: undefined, outcomeUnknown: true };
+  await render(<BackgroundJobsPanel jobs={[uncertain]} activeCount={0} expanded onToggleExpanded={vi.fn()} onDismiss={vi.fn()} onClearCompleted={vi.fn()} />);
+  expect(container.querySelector('li').textContent).toContain('Result unconfirmed');
+  await act(async () => container.querySelector('li > div').click());
+  expect(container.querySelector('[data-testid="maintenance-details"]').textContent).toContain('Result unconfirmed');
+  expect(container.textContent).not.toContain('Command failed');
 });
 
 it('copies available output and displays a fallback when clipboard access fails', async () => {

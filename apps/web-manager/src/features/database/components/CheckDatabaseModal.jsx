@@ -5,6 +5,7 @@ import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
+import { getCmsJobErrorResult } from '../../../infrastructure/cmsJob/cmsJobUtils';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -74,8 +75,7 @@ export default function CheckDatabaseModal() {
       }
     } catch (err) {
       if (!wasBackgrounded()) {
-        const failedJob = err?.job ?? lastJob;
-        setResultJob({ ...failedJob, maintenanceSummary: failedJob.maintenanceSummary ?? previewJob.maintenanceSummary, jobStatus: 'failed' });
+        setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
         endError(typeof err === 'string' ? err : err.message || CM.failure);
       }
     }
@@ -118,10 +118,11 @@ export default function CheckDatabaseModal() {
     return (
       <Modal isOpen title={CM.checkDatabase} icon="verified" iconVariant="danger" onClose={resetAction} maxWidth="480px">
         <ModalStatusError
-          title={CM.failure}
+          title={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknown : CM.failure}
+          message={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
           error={error}
-          guidance={CM.checkDbGuidance}
-          onRetry={handleCheck}
+          guidance={resultJob?.outcomeUnknown ? undefined : CM.checkDbGuidance}
+          onRetry={resultJob?.outcomeUnknown ? undefined : handleCheck}
           onCancel={resetAction}
           cancelText={CM.close}
         >

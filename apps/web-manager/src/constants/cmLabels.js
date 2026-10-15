@@ -39,6 +39,8 @@ export const CM = {
   maintenanceDurationSeconds: (seconds) => `${seconds} seconds`,
   maintenanceCommandSucceeded: 'Command completed successfully',
   maintenanceCommandFailed: 'Command failed',
+  jobOutcomeUnknown: 'Result unconfirmed',
+  jobOutcomeUnknownMessage: 'The job status could not be retrieved. The operation may still be running or may have completed. Reload the page to check its status before running it again.',
   maintenanceFindings: 'Detailed findings',
   maintenanceOutput: 'Utility output',
   maintenanceCopyOutput: 'Copy output',

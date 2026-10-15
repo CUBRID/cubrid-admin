@@ -83,3 +83,45 @@ it('retains the failed job diagnostics and repair context in the foreground erro
   expect(text).toContain('Command failed');
   expect(text).toContain('Index inconsistency reported');
 });
+
+it.each([
+  ['check', CheckDatabaseModal, 'check-database-run-btn'],
+  ['optimize', OptimizeDatabaseModal, 'optimize-database-run-btn'],
+])('does not report a command failure or offer resubmission when %s status polling loses connection', async (type, Component, buttonId) => {
+  const running = { jobId: 'job-1', type, dbname: 'demodb', jobStatus: 'running' };
+  mocks.runJob.mockImplementation(async (_submit, { onProgress }) => {
+    onProgress(running);
+    throw Object.assign(new Error('Network unavailable'), { jobStatusUnavailable: true, jobId: 'job-1', lastKnownJob: running });
+  });
+  await render(<Component />);
+  await act(async () => container.querySelector(`[data-testid="${buttonId}"]`).click());
+  const text = container.textContent;
+  expect(text).toContain('Result unconfirmed');
+  expect(text).toContain('may still be running or may have completed');
+  expect(text).not.toContain('Command failed');
+  expect(container.querySelector('[data-testid="modal-status-retry-btn"]')).toBeNull();
+  expect(mocks.runJob).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  [CheckDatabaseModal, 'check-database-run-btn', 'Check only'],
+  [OptimizeDatabaseModal, 'optimize-database-run-btn', 'All classes'],
+])('preserves the requested scope when the first status response is unavailable', async (Component, buttonId, option) => {
+  mocks.runJob.mockRejectedValue(Object.assign(new Error('Network unavailable'), { jobStatusUnavailable: true, jobId: 'job-1' }));
+  await render(<Component />);
+  await act(async () => container.querySelector(`[data-testid="${buttonId}"]`).click());
+  const text = container.querySelector('[data-testid="maintenance-details"]').textContent;
+  expect(text).toContain(option);
+  expect(text).toContain('Result unconfirmed');
+  expect(text).not.toContain('Command failed');
+});
+
+it('continues to show command failure and retry for a server-confirmed optimization failure', async () => {
+  const failed = { ...job('optimize', { scope: 'all-classes', scanMethod: 'unknown' }), jobStatus: 'failed', error: { message: 'Optimization failed on server' } };
+  mocks.runJob.mockRejectedValue(Object.assign(new Error('Optimization failed on server'), { jobTerminalFailure: true, job: failed }));
+  await render(<OptimizeDatabaseModal />);
+  await act(async () => container.querySelector('[data-testid="optimize-database-run-btn"]').click());
+  expect(container.querySelector('[data-testid="maintenance-details"]').textContent).toContain('Command failed');
+  expect(container.querySelector('[data-testid="modal-status-retry-btn"]')).not.toBeNull();
+  expect(container.textContent).not.toContain('Result unconfirmed');
+});
