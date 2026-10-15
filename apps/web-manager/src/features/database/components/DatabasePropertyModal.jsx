@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
@@ -261,6 +261,10 @@ export default function DatabasePropertyModal() {
   const [bufferUnit, setBufferUnit] = useState(DEFAULT_BUFFER_UNIT);
   const [brokers, setBrokers] = useState([]);
   const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
+  // Tracks which (host, database) the Server Parameter config has already
+  // been fetched for, so switching to Connection Information and back
+  // doesn't re-fetch and clobber unsaved edits — see the fetch effect below.
+  const fetchedConfigKeyRef = useRef(null);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
@@ -273,6 +277,7 @@ export default function DatabasePropertyModal() {
       setBufferUnit(DEFAULT_BUFFER_UNIT);
       setRawLines([]);
       setActiveSidebar('Server Parameter');
+      fetchedConfigKeyRef.current = null;
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase, resetAction]);
 
@@ -294,7 +299,13 @@ export default function DatabasePropertyModal() {
   }, [isDatabasePropertyModalOpen, selectedHostUid, isAuthorized]);
 
   useEffect(() => {
-    if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && activeSidebar !== 'Connection Information') {
+    const configKey = `${selectedHostUid}:${selectedDatabase || ''}`;
+    if (
+      isDatabasePropertyModalOpen && selectedHostUid && isAuthorized &&
+      activeSidebar !== 'Connection Information' &&
+      fetchedConfigKeyRef.current !== configKey
+    ) {
+      fetchedConfigKeyRef.current = configKey;
       const fetchParams = async () => {
         setFetching(true);
         try {
@@ -345,7 +356,20 @@ export default function DatabasePropertyModal() {
           setBufferUnit(loadedBufferUnit);
           setInitialParams({ ...newParams });
           setParams({ ...newParams });
-        } catch (err) { console.error('Failed to fetch config:', err); }
+        } catch (err) {
+          console.error('Failed to fetch config:', err);
+          // Allow a retry on the next tab switch instead of permanently
+          // marking this (host, database) as "fetched" — but only if this
+          // request is still the current one. A stale request for an
+          // earlier (host, database) can still be in flight and reject
+          // after a newer request for a different target already
+          // succeeded; clearing the ref unconditionally here would wipe
+          // out that newer success and trigger a pointless re-fetch (and
+          // possible edit-clobbering) on the next tab switch.
+          if (fetchedConfigKeyRef.current === configKey) {
+            fetchedConfigKeyRef.current = null;
+          }
+        }
         finally { setFetching(false); }
       };
       fetchParams();
