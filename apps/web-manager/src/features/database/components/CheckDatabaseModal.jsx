@@ -16,7 +16,6 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -27,9 +26,9 @@ export default function CheckDatabaseModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
-  const { error, startAction, endSuccess, endError, resetAction, isLoading, isSuccess, isError } =
+  const { error, startAction, endError, resetAction, isLoading, isError } =
     useActionState();
-  const { runJob, background, wasBackgrounded } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob({ sharedResult: true });
   const [jobStatus, setJobStatus] = useState(null);
   const [resultJob, setResultJob] = useState(null);
   const [repair, setRepair] = useState(false);
@@ -62,19 +61,22 @@ export default function CheckDatabaseModal() {
     setResultJob(previewJob);
     let lastJob = previewJob;
     try {
-      const job = await runJob(
+      await runJob(
         () =>
           databaseJobApi.submitCheck(selectedHostUid, selectedDatabase, {
             repairdb: repair ? 'y' : 'n',
           }),
-        { onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
+        { initialJob: { ...previewJob, jobStatus: 'queued' }, onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
       if (!wasBackgrounded()) {
-        setResultJob({ ...job, maintenanceSummary: job.maintenanceSummary ?? previewJob.maintenanceSummary });
-        endSuccess();
+        handleClose();
       }
     } catch (err) {
       if (!wasBackgrounded()) {
+        if (err?.job || err?.jobId || lastJob?.jobId || err?.cancelled) {
+          handleClose();
+          return;
+        }
         setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
         endError(typeof err === 'string' ? err : err.message || CM.failure);
       }
@@ -95,21 +97,6 @@ export default function CheckDatabaseModal() {
           onBackground={() => { background(); handleClose(); }}
         />
         <MaintenanceDetails job={resultJob || previewJob} preview />
-      </Modal>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.checkDatabase} icon="verified" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess
-          title={CM.success}
-          message={CM.jobCompletedSuccess(CM.checkDatabase)}
-          onConfirm={handleClose}
-          confirmText={CM.ok}
-        >
-          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
-        </ModalStatusSuccess>
       </Modal>
     );
   }

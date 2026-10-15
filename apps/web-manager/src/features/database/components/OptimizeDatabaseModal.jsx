@@ -21,7 +21,6 @@ import { useCM } from '../../../constants/useCM';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 import {
@@ -209,14 +208,12 @@ export default function OptimizeDatabaseModal() {
   const {
     error,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError,
   } = useActionState();
-  const { runJob, background, wasBackgrounded } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob({ sharedResult: true });
   const [selectedClassName, setSelectedClassName] = useState('');
   const [jobStatus, setJobStatus] = useState(null);
   const [resultJob, setResultJob] = useState(null);
@@ -301,17 +298,20 @@ export default function OptimizeDatabaseModal() {
         ...(isActive && dbuser.trim() && { dbuser: dbuser.trim(), dbpasswd }),
       };
 
-      const job = await runJob(
+      await runJob(
         () => databaseJobApi.submitOptimize(selectedHostUid, selectedDatabase, payload),
-        { onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
+        { initialJob: { ...previewJob, jobStatus: 'queued' }, onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
 
       if (!wasBackgrounded()) {
-        setResultJob({ ...job, maintenanceSummary: job.maintenanceSummary ?? previewJob.maintenanceSummary });
-        endSuccess();
+        handleClose();
       }
     } catch (err) {
       if (!wasBackgrounded()) {
+        if (err?.job || err?.jobId || lastJob?.jobId || err?.cancelled) {
+          handleClose();
+          return;
+        }
         setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
         endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
       }
@@ -333,22 +333,6 @@ export default function OptimizeDatabaseModal() {
           onBackground={() => { background(); handleClose(); }}
         />
         <MaintenanceDetails job={resultJob || previewJob} preview />
-      </Modal>
-    );
-  }
-
-  /* ─── SUCCESS view ─── */
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.optimizeDatabase} icon="auto_fix_high" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess
-          title={CM.optimizationSuccess}
-          message={resultJob?.dbname || selectedDatabase}
-          onConfirm={handleClose}
-          confirmText={CM.close}
-        >
-          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
-        </ModalStatusSuccess>
       </Modal>
     );
   }

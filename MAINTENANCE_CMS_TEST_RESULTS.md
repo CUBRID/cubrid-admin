@@ -160,3 +160,12 @@ Addressed [Greptile's review finding](https://github.com/CUBRID/cubrid-admin/pul
 - A subsequent authoritative server snapshot clears the connection-warning state.
 
 Regression verification uses simulated status-request failures; no running CMS service was interrupted. The complete web test suite contains 102 passing tests, including polling, both foreground dialogs, background-provider notifications, and jobs-panel rendering.
+
+## Shared maintenance result popup
+
+Optimize and Check now close their operation dialogs when an accepted job settles and use the shared job-result popup for both foreground and background execution. The separate foreground success and accepted-job error views are no longer displayed. Submission errors before a job is accepted stay local with retry; confirmed job failures and unconfirmed outcomes use the shared popup without automatic resubmission.
+
+- Requested scope and repair settings are seeded into job tracking, preserving details even if the first status request fails.
+- Strict Mode effect setup restores the hook's mounted flag. Other operations retaining local result views continue to suppress the shared popup correctly.
+- Strict Mode integration tests verify a single popup for successful and failed jobs, lost polling, and background completion. Dismissing results does not expose another operation modal.
+- Verification: 158 web tests across 21 files passed; production web build and targeted lint passed. These are automated tests with simulated job responses, not a new live CMS/browser test.

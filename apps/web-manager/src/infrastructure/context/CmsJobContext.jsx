@@ -156,7 +156,7 @@ export function CmsJobProvider({ children }) {
       };
 
       if (initialJob) {
-        onUpdate(initialJob);
+        onUpdate({ ...initialJob, jobId });
       } else {
         try {
           const snapshot = await databaseJobApi.getJob(jobId);

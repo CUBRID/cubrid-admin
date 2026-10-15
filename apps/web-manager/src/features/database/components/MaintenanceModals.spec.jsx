@@ -1,127 +1,144 @@
-import React, { act } from 'react';
+import React, { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import CheckDatabaseModal from './CheckDatabaseModal';
 import OptimizeDatabaseModal from './OptimizeDatabaseModal';
+import uiReducer from '../databaseUISlice';
+import { CmsJobProvider } from '../../../infrastructure/context/CmsJobContext';
 
-const mocks = vi.hoisted(() => ({ runJob: vi.fn(), getClassInfo: vi.fn() }));
-vi.mock('../../../infrastructure/hooks/useCmsJob', () => ({
-  useCmsJob: () => ({ runJob: mocks.runJob, background: vi.fn(), wasBackgrounded: () => false }),
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), run: vi.fn(), getClassInfo: vi.fn() }));
+vi.mock('../../../api/apiClient', () => ({ default: { defaults: { headers: { common: {} } } } }));
+vi.mock('../databaseJobApi', async importOriginal => ({
+  ...await importOriginal(),
+  databaseJobApi: { submitCheck: mocks.submit, submitOptimize: mocks.submit, listRecent: async () => [] },
+}));
+vi.mock('../../../infrastructure/services/cmsJobRunner', () => ({
+  runCmsJobInBackground: mocks.run, isCmsJobPolling: () => false,
+  cancelAllCmsJobPolls: vi.fn(), cancelCmsJobPoll: vi.fn(),
 }));
 vi.mock('../databaseApi', () => ({ databaseApi: { getClassInfo: mocks.getClassInfo } }));
 
 let container;
 let root;
 let store;
+const cases = [
+  ['check', CheckDatabaseModal, 'check-database-run-btn'],
+  ['optimize', OptimizeDatabaseModal, 'optimize-database-run-btn'],
+];
+const summary = type => type === 'check'
+  ? { operation: 'consistency-check', scope: 'entire-database', repairRequested: false }
+  : { operation: 'statistics-update', scope: 'all-classes', scanMethod: 'unknown' };
+const job = type => ({
+  jobId: 'job-1', type, dbname: 'demodb', jobStatus: 'succeeded', maintenanceSummary: summary(type),
+  startedAt: '2026-10-15T01:01:00Z', finishedAt: '2026-10-15T01:01:06Z', result: { success: true },
+});
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  vi.resetAllMocks();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  store = configureStore({ reducer: () => ({
-    user: { preferences: { uiLocale: 'en' } },
+  const state = {
+    auth: { isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } },
     host: { selectedHostUid: 'host-1' },
     database: { selectedDatabase: 'demodb', activeDatabasesByHost: { 'host-1': [] }, loggedInDatabases: [] },
-    databaseUI: { isCheckDatabaseModalOpen: true, isOptimizeDatabaseModalOpen: true },
-  }) });
+  };
+  store = configureStore({ reducer: {
+    ...Object.fromEntries(Object.entries(state).map(([key, value]) => [key, () => value])),
+    databaseUI: uiReducer,
+  }, preloadedState: { databaseUI: {
+    ...uiReducer(undefined, { type: 'init' }), isCheckDatabaseModalOpen: true, isOptimizeDatabaseModalOpen: true,
+  } } });
+  mocks.submit.mockResolvedValue({ jobId: 'job-1' });
   mocks.getClassInfo.mockResolvedValue({ userclass: [{ classname: 'dba.employee' }] });
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
-  vi.clearAllMocks();
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
-const render = (node) => act(async () => root.render(<Provider store={store}>{node}</Provider>));
+const render = Component => act(async () => root.render(
+  <StrictMode><Provider store={store}><CmsJobProvider><Component /></CmsJobProvider></Provider></StrictMode>
+));
+const click = selector => act(async () => container.querySelector(selector).click());
+const resultModal = () => container.querySelector('[data-testid="job-result-modal"]');
 
-const job = (type, summary) => ({
-  jobId: 'job-1', type, dbname: 'demodb', jobStatus: 'succeeded', maintenanceSummary: summary,
-  startedAt: '2026-10-15T01:01:00Z', finishedAt: '2026-10-15T01:01:06Z', result: { success: true },
+it.each(cases)('shows exactly one shared result for foreground %s success', async (type, Component, buttonId) => {
+  mocks.run.mockResolvedValue(job(type));
+  await render(Component);
+  await click(`[data-testid="${buttonId}"]`);
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  expect(resultModal().textContent).toContain('6.0 seconds');
+  expect(resultModal().textContent).toContain('Command completed successfully');
+  expect(mocks.submit).toHaveBeenCalledTimes(1);
+  await click('[data-testid="modal-status-confirm-btn"]');
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(0);
 });
 
-it.each([false, true])('shows inspection repair option %s before execution and in the foreground result', async (repair) => {
-  mocks.runJob.mockResolvedValue(job('check', { operation: 'consistency-check', scope: 'entire-database', repairRequested: repair }));
-  await render(<CheckDatabaseModal />);
-  if (repair) await act(async () => container.querySelector('input[type="checkbox"]').click());
+it.each([false, true])('keeps inspection repair=%s in preview and shared result', async repair => {
+  mocks.run.mockResolvedValue({ ...job('check'), maintenanceSummary: { ...summary('check'), repairRequested: repair } });
+  await render(CheckDatabaseModal);
+  if (repair) await click('input[type="checkbox"]');
   const mode = repair ? 'Check with repair enabled' : 'Check only';
-  expect(container.querySelector('[data-testid="maintenance-details"]').textContent).toContain(mode);
-  await act(async () => container.querySelector('[data-testid="check-database-run-btn"]').click());
-  const text = container.querySelector('[data-testid="maintenance-details"]').textContent;
-  expect(text).toContain(mode);
-  expect(text).toContain('6.0 seconds');
-  expect(text).toContain('Detailed findingsNot reported by server');
+  expect(container.textContent).toContain(mode);
+  await click('[data-testid="check-database-run-btn"]');
+  expect(resultModal().textContent).toContain(mode);
+  expect(mocks.submit).toHaveBeenCalledWith('host-1', 'demodb', { repairdb: repair ? 'y' : 'n' });
 });
 
-it.each([false, true])('shows optimization scope for selected-class=%s before execution and in the foreground result', async (selected) => {
-  const summary = { operation: 'statistics-update', scope: selected ? 'selected-class' : 'all-classes', scanMethod: 'unknown', ...(selected ? { className: 'dba.employee' } : {}) };
-  mocks.runJob.mockResolvedValue(job('optimize', summary));
-  await render(<OptimizeDatabaseModal />);
-  if (selected) {
-    const select = [...container.querySelectorAll('button')].find((button) => button.textContent.includes('All Tables'));
-    await act(async () => select.click());
-    const option = [...document.querySelectorAll('button')].find((button) => button.textContent.includes('dba.employee'));
-    await act(async () => option.click());
-  }
-  const scope = selected ? 'Selected class: dba.employee' : 'All classes';
-  expect(container.querySelector('[data-testid="maintenance-details"]').textContent).toContain(scope);
-  await act(async () => container.querySelector('[data-testid="optimize-database-run-btn"]').click());
-  const text = container.querySelector('[data-testid="maintenance-details"]').textContent;
-  expect(text).toContain(scope);
-  expect(text).toContain('Full scan or sampling: not reported by server');
-  expect(text).toContain('6.0 seconds');
+it('keeps selected-class scope in preview and shared optimization result', async () => {
+  mocks.run.mockResolvedValue({ ...job('optimize'), maintenanceSummary: { ...summary('optimize'), scope: 'selected-class', className: 'dba.employee' } });
+  await render(OptimizeDatabaseModal);
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent.includes('All Tables')).click());
+  await act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('dba.employee')).click());
+  expect(container.textContent).toContain('Selected class: dba.employee');
+  await click('[data-testid="optimize-database-run-btn"]');
+  expect(resultModal().textContent).toContain('Selected class: dba.employee');
+  expect(resultModal().textContent).toContain('Full scan or sampling: not reported by server');
 });
 
-it('retains the failed job diagnostics and repair context in the foreground error view', async () => {
-  const failed = { ...job('check', { scope: 'entire-database', repairRequested: false }), jobStatus: 'failed', result: { success: false, output: 'Index inconsistency reported' } };
-  mocks.runJob.mockRejectedValue(Object.assign(new Error('Check failed'), { job: failed }));
-  await render(<CheckDatabaseModal />);
-  await act(async () => container.querySelector('[data-testid="check-database-run-btn"]').click());
-  const text = container.querySelector('[data-testid="maintenance-details"]').textContent;
-  expect(text).toContain('Check only');
-  expect(text).toContain('Command failed');
-  expect(text).toContain('Index inconsistency reported');
+it.each(cases)('shows only the shared error for a confirmed %s failure', async (type, Component, buttonId) => {
+  const failed = { ...job(type), jobStatus: 'failed', error: { message: 'Utility failed' }, result: { success: false, output: 'Diagnostic output' } };
+  mocks.run.mockRejectedValue(Object.assign(new Error('Utility failed'), { jobTerminalFailure: true, job: failed }));
+  await render(Component);
+  await click(`[data-testid="${buttonId}"]`);
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  expect(resultModal().textContent).toContain('Command failed');
+  expect(resultModal().textContent).toContain('Diagnostic output');
+  await click('[data-testid="modal-status-cancel-btn"]');
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(0);
 });
 
-it.each([
-  ['check', CheckDatabaseModal, 'check-database-run-btn'],
-  ['optimize', OptimizeDatabaseModal, 'optimize-database-run-btn'],
-])('does not report a command failure or offer resubmission when %s status polling loses connection', async (type, Component, buttonId) => {
-  const running = { jobId: 'job-1', type, dbname: 'demodb', jobStatus: 'running' };
-  mocks.runJob.mockImplementation(async (_submit, { onProgress }) => {
-    onProgress(running);
-    throw Object.assign(new Error('Network unavailable'), { jobStatusUnavailable: true, jobId: 'job-1', lastKnownJob: running });
-  });
-  await render(<Component />);
-  await act(async () => container.querySelector(`[data-testid="${buttonId}"]`).click());
-  const text = container.textContent;
-  expect(text).toContain('Result unconfirmed');
-  expect(text).toContain('may still be running or may have completed');
-  expect(text).not.toContain('Command failed');
+it.each(cases)('preserves requested %s scope in a shared unconfirmed result', async (type, Component, buttonId) => {
+  mocks.run.mockRejectedValue(Object.assign(new Error('Network unavailable'), { jobStatusUnavailable: true, jobId: 'job-1' }));
+  await render(Component);
+  await click(`[data-testid="${buttonId}"]`);
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  expect(resultModal().textContent).toContain('Result unconfirmed');
+  expect(resultModal().textContent).toContain(type === 'check' ? 'Check only' : 'All classes');
+  expect(resultModal().textContent).not.toContain('Command failed');
   expect(container.querySelector('[data-testid="modal-status-retry-btn"]')).toBeNull();
-  expect(mocks.runJob).toHaveBeenCalledTimes(1);
 });
 
-it.each([
-  [CheckDatabaseModal, 'check-database-run-btn', 'Check only'],
-  [OptimizeDatabaseModal, 'optimize-database-run-btn', 'All classes'],
-])('preserves the requested scope when the first status response is unavailable', async (Component, buttonId, option) => {
-  mocks.runJob.mockRejectedValue(Object.assign(new Error('Network unavailable'), { jobStatusUnavailable: true, jobId: 'job-1' }));
-  await render(<Component />);
-  await act(async () => container.querySelector(`[data-testid="${buttonId}"]`).click());
-  const text = container.querySelector('[data-testid="maintenance-details"]').textContent;
-  expect(text).toContain(option);
-  expect(text).toContain('Result unconfirmed');
-  expect(text).not.toContain('Command failed');
-});
-
-it('continues to show command failure and retry for a server-confirmed optimization failure', async () => {
-  const failed = { ...job('optimize', { scope: 'all-classes', scanMethod: 'unknown' }), jobStatus: 'failed', error: { message: 'Optimization failed on server' } };
-  mocks.runJob.mockRejectedValue(Object.assign(new Error('Optimization failed on server'), { jobTerminalFailure: true, job: failed }));
-  await render(<OptimizeDatabaseModal />);
-  await act(async () => container.querySelector('[data-testid="optimize-database-run-btn"]').click());
-  expect(container.querySelector('[data-testid="maintenance-details"]').textContent).toContain('Command failed');
+it.each(cases)('keeps %s submission errors local with retry because no job was accepted', async (_type, Component, buttonId) => {
+  mocks.submit.mockRejectedValue(new Error('Submission rejected'));
+  await render(Component);
+  await click(`[data-testid="${buttonId}"]`);
+  expect(resultModal()).toBeNull();
   expect(container.querySelector('[data-testid="modal-status-retry-btn"]')).not.toBeNull();
-  expect(container.textContent).not.toContain('Result unconfirmed');
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it.each(cases)('shows one shared result after %s continues in the background', async (type, Component, buttonId) => {
+  let finish;
+  mocks.run.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await render(Component);
+  await click(`[data-testid="${buttonId}"]`);
+  await act(async () => [...container.querySelectorAll('button')].find(button => button.textContent.includes('Confirm')).click());
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+  await act(async () => finish(job(type)));
+  expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  expect(resultModal()).not.toBeNull();
 });

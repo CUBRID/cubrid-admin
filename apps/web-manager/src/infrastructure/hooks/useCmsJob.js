@@ -5,8 +5,10 @@ import { useCmsJobs } from '../context/CmsJobContext';
 /**
  * Run a CMS background job: submit (202 + jobId) then poll until done.
  * Tracking, toasts, and the bottom-left panel are handled by CmsJobProvider.
+ * sharedResult keeps the provider's result popup for foreground jobs too;
+ * callers using it must close their operation dialog when the job settles.
  */
-export function useCmsJob({ cancelOnUnmount = false } = {}) {
+export function useCmsJob({ cancelOnUnmount = false, sharedResult = false } = {}) {
   const { runJob: contextRunJob, dismissJobResult } = useCmsJobs();
   const jobIdRef = useRef(null);
   // Tracks whether the component that owns this hook instance is still
@@ -34,12 +36,15 @@ export function useCmsJob({ cancelOnUnmount = false } = {}) {
   const lastSettledBackgroundedRef = useRef(false);
 
   useEffect(
-    () => () => {
-      isMountedRef.current = false;
-      if (cancelOnUnmount && jobIdRef.current) {
-        cancelCmsJobPoll(jobIdRef.current);
-        jobIdRef.current = null;
-      }
+    () => {
+      isMountedRef.current = true;
+      return () => {
+        isMountedRef.current = false;
+        if (cancelOnUnmount && jobIdRef.current) {
+          cancelCmsJobPoll(jobIdRef.current);
+          jobIdRef.current = null;
+        }
+      };
     },
     [cancelOnUnmount]
   );
@@ -64,17 +69,17 @@ export function useCmsJob({ cancelOnUnmount = false } = {}) {
       try {
         const result = await contextRunJob(wrappedSubmit, options);
         lastSettledBackgroundedRef.current = backgroundedFlag.current;
-        if (isMountedRef.current && !backgroundedFlag.current) dismissJobResult(capturedJobId);
+        if (!sharedResult && isMountedRef.current && !backgroundedFlag.current) dismissJobResult(capturedJobId);
         return result;
       } catch (err) {
         lastSettledBackgroundedRef.current = backgroundedFlag.current;
-        if (isMountedRef.current && !backgroundedFlag.current) dismissJobResult(capturedJobId);
+        if (!sharedResult && isMountedRef.current && !backgroundedFlag.current) dismissJobResult(capturedJobId);
         throw err;
       } finally {
         jobIdRef.current = null;
       }
     },
-    [contextRunJob, dismissJobResult]
+    [contextRunJob, dismissJobResult, sharedResult]
   );
 
   const cancel = useCallback(() => {
