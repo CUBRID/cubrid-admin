@@ -7,7 +7,8 @@ export const LOCALE_STORAGE_KEY = 'cwm-ui-locale';
 
 const PACKS = {
   en: CM_EN,
-  ko: CM_KO,
+  // Missing translations use English until the locale pack supplies the same key.
+  ko: { ...CM_EN, ...CM_KO },
 };
 
 /** @returns {'en'|'ko'} */

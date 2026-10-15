@@ -7,6 +7,8 @@ import { databaseApi } from '../databaseApi';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
+import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
+import { getCmsJobErrorResult } from '../../../infrastructure/cmsJob/cmsJobUtils';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -19,7 +21,6 @@ import { useCM } from '../../../constants/useCM';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 import {
@@ -207,16 +208,15 @@ export default function OptimizeDatabaseModal() {
   const {
     error,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError,
   } = useActionState();
-  const { runJob, background, wasBackgrounded } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob({ sharedResult: true });
   const [selectedClassName, setSelectedClassName] = useState('');
   const [jobStatus, setJobStatus] = useState(null);
+  const [resultJob, setResultJob] = useState(null);
   const [dbuser, setDbuser] = useState('dba');
   const [dbpasswd, setDbpasswd] = useState('');
 
@@ -252,6 +252,8 @@ export default function OptimizeDatabaseModal() {
   useEffect(() => {
     if (isOptimizeDatabaseModalOpen && selectedDatabase) {
       setSelectedClassName('');
+      setResultJob(null);
+      setJobStatus(null);
       // Blank when a prior login already covers this db — leaving it blank
       // tells the backend to reuse that cache instead of logging in again.
       setDbuser(alreadyLoggedIn ? '' : 'dba');
@@ -262,6 +264,17 @@ export default function OptimizeDatabaseModal() {
   }, [isOptimizeDatabaseModalOpen, selectedDatabase, alreadyLoggedIn, fetchClasses, resetAction]);
 
   if (!isOptimizeDatabaseModalOpen) return null;
+
+  const previewJob = {
+    type: 'optimize',
+    dbname: selectedDatabase,
+    maintenanceSummary: {
+      operation: 'statistics-update',
+      scope: selectedClassName ? 'selected-class' : 'all-classes',
+      ...(selectedClassName ? { className: selectedClassName } : {}),
+      scanMethod: 'unknown',
+    },
+  };
 
   const handleOptimize = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
@@ -276,6 +289,9 @@ export default function OptimizeDatabaseModal() {
     }
 
     startAction();
+    setJobStatus(null);
+    setResultJob(previewJob);
+    let lastJob = previewJob;
     try {
       const payload = {
         ...(selectedClassName && { classname: selectedClassName }),
@@ -284,12 +300,21 @@ export default function OptimizeDatabaseModal() {
 
       await runJob(
         () => databaseJobApi.submitOptimize(selectedHostUid, selectedDatabase, payload),
-        { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
+        { initialJob: { ...previewJob, jobStatus: 'queued' }, onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
 
-      if (!wasBackgrounded()) endSuccess();
+      if (!wasBackgrounded()) {
+        handleClose();
+      }
     } catch (err) {
-      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
+      if (!wasBackgrounded()) {
+        if (err?.job || err?.jobId || lastJob?.jobId || err?.cancelled) {
+          handleClose();
+          return;
+        }
+        setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
+        endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
+      }
     }
   };
 
@@ -307,20 +332,7 @@ export default function OptimizeDatabaseModal() {
           subtitle={getCmsJobLoadingSubtitle(selectedClassName || selectedDatabase, jobStatus, CM)}
           onBackground={() => { background(); handleClose(); }}
         />
-      </Modal>
-    );
-  }
-
-  /* ─── SUCCESS view ─── */
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.optimizeDatabase} icon="auto_fix_high" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess
-          title={CM.optimizationSuccess}
-          message={selectedClassName || selectedDatabase}
-          onConfirm={handleClose}
-          confirmText={CM.close}
-        />
+        <MaintenanceDetails job={resultJob || previewJob} preview />
       </Modal>
     );
   }
@@ -330,14 +342,17 @@ export default function OptimizeDatabaseModal() {
     return (
       <Modal isOpen title={CM.optimizeDatabase} icon="auto_fix_high" iconVariant="danger" onClose={handleClose} maxWidth="480px">
         <ModalStatusError
-          title={CM.optimizationFailed}
+          title={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknown : CM.optimizationFailed}
+          message={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
           error={error}
-          guidance={CM.optimizeDbGuidance}
-          onRetry={handleOptimize}
+          guidance={resultJob?.outcomeUnknown ? undefined : CM.optimizeDbGuidance}
+          onRetry={resultJob?.outcomeUnknown ? undefined : handleOptimize}
           onCancel={handleClose}
           retryText={CM.retryOptimization}
           cancelText={CM.dismiss}
-        />
+        >
+          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
+        </ModalStatusError>
       </Modal>
     );
   }
@@ -404,6 +419,7 @@ export default function OptimizeDatabaseModal() {
             {CM.lblOptimizeDesc}
           </Typography>
         </CaDialogGroup>
+        <MaintenanceDetails job={previewJob} preview />
       </div>
     </Modal>
   );

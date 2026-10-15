@@ -5,6 +5,8 @@ import { Typography } from '../../components/ds/foundation/Typography';
 import { Modal } from '../../components/ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
 import { stripHaRoleTagFromAlias } from '../../features/host/hostGroupUtils';
+import { MaintenanceDetails } from './MaintenanceDetails';
+import { isMaintenanceJob } from './maintenanceDetails';
 import {
   getCmsJobTypeLabel,
   getCmsJobStatusLabel,
@@ -35,8 +37,11 @@ function useElapsedTime(startedAt, active) {
   return elapsed;
 }
 
-function StatusBadge({ status, CM }) {
+function StatusBadge({ status, outcomeUnknown, CM }) {
   const base = 'text-11 font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full';
+  if (outcomeUnknown) {
+    return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200`}>{CM.jobOutcomeUnknown}</span>;
+  }
   if (status === 'succeeded') {
     return (
       <span className={`${base} bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300`}>
@@ -97,7 +102,7 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
           <DetailRow label={CM.server} value={hostLabel} />
           <DetailRow label={CM.database} value={job.dbname} />
           <span className="text-13 text-slate-400 dark:text-slate-500">{CM.status}</span>
-          <div><StatusBadge status={job.jobStatus} CM={CM} /></div>
+          <div><StatusBadge status={job.jobStatus} outcomeUnknown={job.outcomeUnknown} CM={CM} /></div>
           <DetailRow label={CM.created} value={formatTimestamp(job.createdAt)} mono />
           {job.startedAt && <DetailRow label={CM.started} value={formatTimestamp(job.startedAt)} mono />}
           {job.finishedAt && <DetailRow label={CM.finished} value={formatTimestamp(job.finishedAt)} mono />}
@@ -110,7 +115,8 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
             </pre>
           </div>
         )}
-        {job.result != null && (
+        {isMaintenanceJob(job) && <MaintenanceDetails key={job.jobId} job={job} />}
+        {!isMaintenanceJob(job) && job.result != null && (
           <div>
             <div className="text-13 text-slate-400 dark:text-slate-500 mb-1">{CM.result}</div>
             <pre className="whitespace-pre-wrap break-all bg-slate-100 dark:bg-white/5 rounded-lg px-2.5 py-2 font-mono text-13 max-h-40 overflow-y-auto">
@@ -124,7 +130,7 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
 }
 
 function JobRow({ job, CM, hostLabel, onSelect, onDismiss }) {
-  const isActive = job.jobStatus === 'queued' || job.jobStatus === 'running';
+  const isActive = !job.outcomeUnknown && (job.jobStatus === 'queued' || job.jobStatus === 'running');
   const op = getCmsJobTypeLabel(job.type, CM);
   const anchorAt = job.startedAt || job.createdAt;
   const elapsed = useElapsedTime(anchorAt, isActive);
@@ -136,7 +142,9 @@ function JobRow({ job, CM, hostLabel, onSelect, onDismiss }) {
         onClick={() => onSelect(job.jobId)}
       >
         <div className="mt-0.5 shrink-0">
-          {isActive ? (
+          {job.outcomeUnknown ? (
+            <Icon name="help_outline" className="text-amber-500" size="sm" weight={300} />
+          ) : isActive ? (
             <Icon name="sync" className="text-amber-500 animate-spin" size="sm" weight={300} />
           ) : job.jobStatus === 'succeeded' ? (
             <Icon name="check_circle" className="text-green-500" size="sm" weight={300} />
@@ -163,7 +171,7 @@ function JobRow({ job, CM, hostLabel, onSelect, onDismiss }) {
           )}
         </div>
         <div className="flex flex-col items-end gap-0.5 shrink-0">
-          <StatusBadge status={job.jobStatus} CM={CM} />
+          <StatusBadge status={job.jobStatus} outcomeUnknown={job.outcomeUnknown} CM={CM} />
           {isTerminalCmsJobStatus(job.jobStatus) && (
             <button
               type="button"

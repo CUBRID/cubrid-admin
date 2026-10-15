@@ -4,6 +4,8 @@ import { closeCheckDatabaseModal } from '../databaseSlice';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
+import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
+import { getCmsJobErrorResult } from '../../../infrastructure/cmsJob/cmsJobUtils';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -14,7 +16,6 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -25,35 +26,60 @@ export default function CheckDatabaseModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
-  const { error, startAction, endSuccess, endError, resetAction, isLoading, isSuccess, isError } =
+  const { error, startAction, endError, resetAction, isLoading, isError } =
     useActionState();
-  const { runJob, background, wasBackgrounded } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob({ sharedResult: true });
   const [jobStatus, setJobStatus] = useState(null);
+  const [resultJob, setResultJob] = useState(null);
   const [repair, setRepair] = useState(false);
 
   useEffect(() => {
     if (isCheckDatabaseModalOpen) {
       setRepair(false);
+      setResultJob(null);
+      setJobStatus(null);
       resetAction();
     }
   }, [isCheckDatabaseModalOpen, resetAction]);
 
   if (!isCheckDatabaseModalOpen) return null;
 
+  const previewJob = {
+    type: 'check',
+    dbname: selectedDatabase,
+    maintenanceSummary: {
+      operation: 'consistency-check',
+      scope: 'entire-database',
+      repairRequested: repair,
+    },
+  };
+
   const handleCheck = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
     startAction();
+    setJobStatus(null);
+    setResultJob(previewJob);
+    let lastJob = previewJob;
     try {
       await runJob(
         () =>
           databaseJobApi.submitCheck(selectedHostUid, selectedDatabase, {
             repairdb: repair ? 'y' : 'n',
           }),
-        { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
+        { initialJob: { ...previewJob, jobStatus: 'queued' }, onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
-      if (!wasBackgrounded()) endSuccess();
+      if (!wasBackgrounded()) {
+        handleClose();
+      }
     } catch (err) {
-      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : err.message || CM.failure);
+      if (!wasBackgrounded()) {
+        if (err?.job || err?.jobId || lastJob?.jobId || err?.cancelled) {
+          handleClose();
+          return;
+        }
+        setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
+        endError(typeof err === 'string' ? err : err.message || CM.failure);
+      }
     }
   };
 
@@ -70,19 +96,7 @@ export default function CheckDatabaseModal() {
           subtitle={getCmsJobLoadingSubtitle(selectedDatabase, jobStatus, CM)}
           onBackground={() => { background(); handleClose(); }}
         />
-      </Modal>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.checkDatabase} icon="verified" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess
-          title={CM.success}
-          message={CM.jobCompletedSuccess(CM.checkDatabase)}
-          onConfirm={handleClose}
-          confirmText={CM.ok}
-        />
+        <MaintenanceDetails job={resultJob || previewJob} preview />
       </Modal>
     );
   }
@@ -91,13 +105,16 @@ export default function CheckDatabaseModal() {
     return (
       <Modal isOpen title={CM.checkDatabase} icon="verified" iconVariant="danger" onClose={resetAction} maxWidth="480px">
         <ModalStatusError
-          title={CM.failure}
+          title={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknown : CM.failure}
+          message={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
           error={error}
-          guidance={CM.checkDbGuidance}
-          onRetry={handleCheck}
+          guidance={resultJob?.outcomeUnknown ? undefined : CM.checkDbGuidance}
+          onRetry={resultJob?.outcomeUnknown ? undefined : handleCheck}
           onCancel={resetAction}
           cancelText={CM.close}
-        />
+        >
+          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
+        </ModalStatusError>
       </Modal>
     );
   }
@@ -153,6 +170,7 @@ export default function CheckDatabaseModal() {
             <Toggle checked={repair} onChange={setRepair} />
           </div>
         </div>
+        <MaintenanceDetails job={previewJob} preview />
       </div>
     </Modal>
   );

@@ -115,6 +115,7 @@ export function pollCmsJob(jobId, { onUpdate } = {}) {
   let cancelled = false;
   let timerId = null;
   let consecutiveErrors = 0;
+  let lastKnownJob = null;
   const pollStartedAt = Date.now();
 
   const cancel = () => {
@@ -136,6 +137,7 @@ export function pollCmsJob(jobId, { onUpdate } = {}) {
       try {
         const job = await databaseJobApi.getJob(jobId);
         if (cancelled) return;
+        lastKnownJob = job;
         consecutiveErrors = 0;
         if (onUpdate) {
           try {
@@ -153,6 +155,7 @@ export function pollCmsJob(jobId, { onUpdate } = {}) {
         if (status === 'failed') {
           const terminalErr = new Error(formatCmsJobError(job));
           terminalErr.jobTerminalFailure = true;
+          terminalErr.job = job;
           finish(reject, terminalErr);
           return;
         }
@@ -161,7 +164,11 @@ export function pollCmsJob(jobId, { onUpdate } = {}) {
       } catch (err) {
         consecutiveErrors += 1;
         if (consecutiveErrors >= POLL_MAX_RETRIES) {
-          finish(reject, err);
+          const statusError = new Error(err?.message || String(err));
+          statusError.jobStatusUnavailable = true;
+          statusError.jobId = jobId;
+          statusError.lastKnownJob = lastKnownJob;
+          finish(reject, statusError);
           return;
         }
         // Transient error — retry after normal interval.

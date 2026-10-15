@@ -36,6 +36,7 @@ import {
 import { CmsJobStore } from './cms-job.store';
 import { CMS_JOB_CLEANUP_INTERVAL_MS, isTerminalJobStatus } from './cms-job.cleanup';
 import { CMS_JOB_RECENT_LIST_LIMIT } from './cms-job.constants';
+import { getMaintenanceResult, getMaintenanceSummary, redactMaintenanceText } from './maintenance-job';
 
 @Injectable()
 export class CmsJobService implements OnModuleInit, OnModuleDestroy {
@@ -298,6 +299,10 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         message: extractCmsLongJobFailureMessage(cmsResponse),
         cmsStatus: String((cmsResponse as { status?: string }).status ?? ''),
       };
+      if (getMaintenanceSummary(job)) {
+        job.error.message = redactMaintenanceText(job, cmsResponse, job.error.message);
+        job.result = getMaintenanceResult(job, cmsResponse, false);
+      }
       return false;
     }
 
@@ -307,6 +312,9 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   private mapJobResult(job: CmsJobRecord, cmsResponse: unknown): unknown {
+    if (getMaintenanceSummary(job)) {
+      return getMaintenanceResult(job, cmsResponse, true);
+    }
     if (!cmsResponse || typeof cmsResponse !== 'object') {
       return { success: true };
     }
@@ -473,6 +481,10 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           job.error = {
             message: this.jobErrorMessage(err, 'CMS operation failed'),
           };
+          if (getMaintenanceSummary(job)) {
+            job.error.message = redactMaintenanceText(job, cmsFromError, job.error.message);
+            job.result = getMaintenanceResult(job, cmsFromError, false);
+          }
         }
       }
     } finally {
@@ -532,6 +544,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   private toStatusResponse(record: CmsJobRecord): CmsJobStatusResponse {
+    const maintenanceSummary = getMaintenanceSummary(record);
     return {
       jobId: record.jobId,
       type: record.type,
@@ -541,8 +554,11 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       createdAt: record.createdAt,
       startedAt: record.startedAt,
       finishedAt: record.finishedAt,
+      maintenanceSummary,
       result: record.result,
-      error: record.error,
+      error: maintenanceSummary && record.error
+        ? { ...record.error, message: redactMaintenanceText(record, undefined, record.error.message) }
+        : record.error,
     };
   }
 }
