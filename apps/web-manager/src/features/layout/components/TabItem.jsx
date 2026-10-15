@@ -1,4 +1,4 @@
-import { Typography } from '../../../components/ds/foundation/Typography';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../../../components/ds/foundation/Icon';
 
 /**
@@ -15,10 +15,42 @@ export default function TabItem({
   onClose,
   onContextMenu
 }) {
+  const labelRef = useRef(null);
+  const [isLabelTruncated, setIsLabelTruncated] = useState(false);
+
+  const updateLabelTruncation = useCallback(() => {
+    const labelElement = labelRef.current;
+    if (!labelElement) return;
+    setIsLabelTruncated(labelElement.scrollWidth > labelElement.clientWidth + 1);
+  }, []);
+
+  useLayoutEffect(() => {
+    updateLabelTruncation();
+  }, [label, updateLabelTruncation]);
+
+  useEffect(() => {
+    const labelElement = labelRef.current;
+    if (!labelElement) return undefined;
+
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(updateLabelTruncation);
+    observer?.observe(labelElement);
+    window.addEventListener('resize', updateLabelTruncation);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateLabelTruncation);
+    };
+  }, [updateLabelTruncation]);
+
   return (
     <div
       data-testid={`tab-${tabId}`}
-      className={`group flex items-center gap-2 px-3 h-full border-r cursor-pointer min-w-[120px] max-w-[220px] transition-colors whitespace-nowrap relative select-none ${
+      data-tab-id={tabId}
+      title={isLabelTruncated ? label : undefined}
+      aria-label={label}
+      className={`group flex flex-none items-center gap-2 px-3 h-full border-r cursor-pointer min-w-[160px] max-w-[260px] transition-colors whitespace-nowrap relative select-none ${
         isActive
           ? 'bg-white dark:bg-bk-main border-r-slate-200 dark:border-r-white/6 z-10'
           : 'bg-slate-100/80 dark:bg-bk-side border-r-slate-200 dark:border-r-white/4 text-slate-500 hover:bg-white/70 dark:hover:bg-white/3'
@@ -55,12 +87,13 @@ export default function TabItem({
       </div>
       
       {/* Label */}
-      <Typography 
-        variant="caption" 
-        className={`truncate flex-1 text-14 font-semibold tracking-tight leading-none ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'}`}
+      <span
+        ref={labelRef}
+        data-testid={`tab-${tabId}-label`}
+        className={`min-w-0 truncate flex-1 text-14 font-semibold tracking-tight leading-none ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'}`}
       >
         {label}
-      </Typography>
+      </span>
 
       {/* Close button */}
       <button
