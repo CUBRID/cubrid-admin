@@ -22,7 +22,7 @@ export const CopyableValue = ({
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       {label && (
-        <Typography variant="label" className="text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wider">
+        <Typography variant="label" className="text-slate-500 dark:text-slate-400 text-13 uppercase tracking-wider">
           {label}
         </Typography>
       )}

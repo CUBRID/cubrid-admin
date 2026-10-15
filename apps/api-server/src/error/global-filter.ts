@@ -58,9 +58,11 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         problemDetails.detail || problemDetails.title || exception.message || 'An error occurred';
 
       errorData = {
-        code: problemDetails.code,
-        type: problemDetails.type,
-        title: problemDetails.title,
+        // Spread first: carries any extra client-safe fields toProblemDetails
+        // computed (e.g. dbname, missingFields — see AppError.getSafeFieldsForClient)
+        // that hand-picking just code/type/title/detail previously dropped on
+        // the floor, silently, for every AppError with additionalData.
+        ...problemDetails,
         /** Same text as top-level `note` — clients that read `data.message` / `data.detail` (e.g. Problem Details) */
         message: note,
         detail: note,

@@ -122,7 +122,7 @@ export default function CMSUserManagementModal() {
         }`}>
           <Icon
             name={isAdmin ? 'verified_user' : 'person'}
-            size="16px"
+            size="17px"
             weight={isAdmin ? 400 : 300}
             className={isAdmin ? 'text-slate-900' : 'text-slate-400 group-hover:text-amber-500'}
           />
@@ -131,11 +131,11 @@ export default function CMSUserManagementModal() {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <Typography variant="p" className="font-black text-[13px] text-slate-800 dark:text-white truncate">
+            <Typography variant="p" className="font-black text-15 text-slate-800 dark:text-white truncate">
               {username}
             </Typography>
             {isAdmin && (
-              <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-amber-500 uppercase tracking-wider">
+              <span className="shrink-0 text-11 font-black px-1.5 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-amber-500 uppercase tracking-wider">
                 {CM.admin}
               </span>
             )}
@@ -143,24 +143,24 @@ export default function CMSUserManagementModal() {
           <div className="flex flex-wrap items-center gap-2">
             {!isAdmin && (
               <>
-                <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                  <Icon name="storage" size="10px" weight={300} />
+                <span className="flex items-center gap-1 text-12 text-slate-400 font-medium">
+                  <Icon name="storage" size="11px" weight={300} />
                   <span>{CM.dbCreatePermission}: <span className="font-bold text-slate-600 dark:text-slate-300 capitalize">{dbcreate}</span></span>
                 </span>
                 <span className="w-px h-3 bg-slate-200 dark:bg-white/8" />
-                <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                  <Icon name="hub" size="10px" weight={300} />
+                <span className="flex items-center gap-1 text-12 text-slate-400 font-medium">
+                  <Icon name="hub" size="11px" weight={300} />
                   <span>{CM.brokerPermission}: <span className="font-bold text-slate-600 dark:text-slate-300 capitalize">{casauth}</span></span>
                 </span>
                 <span className="w-px h-3 bg-slate-200 dark:bg-white/8" />
-                <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                  <Icon name="monitor_heart" size="10px" weight={300} />
+                <span className="flex items-center gap-1 text-12 text-slate-400 font-medium">
+                  <Icon name="monitor_heart" size="11px" weight={300} />
                   <span>{CM.monitoringPermission}: <span className="font-bold text-slate-600 dark:text-slate-300 capitalize">{statusmonitorauth}</span></span>
                 </span>
               </>
             )}
             {isAdmin && (
-              <span className="text-[10px] text-slate-400 font-medium">{CM.fullSystemAuthorization}</span>
+              <span className="text-12 text-slate-400 font-medium">{CM.fullSystemAuthorization}</span>
             )}
           </div>
         </div>
@@ -173,7 +173,7 @@ export default function CMSUserManagementModal() {
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
             title={CM.editUser}
           >
-            <Icon name="edit" size="14px" weight={300} />
+            <Icon name="edit" size="15px" weight={300} />
           </button>
           {!isAdmin && (
             <button
@@ -263,9 +263,9 @@ export default function CMSUserManagementModal() {
                   className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border border-dashed border-slate-200 dark:border-white/8 bg-slate-50/50 dark:bg-white/1 text-slate-400 hover:border-amber-500/50 hover:text-amber-500 hover:bg-amber-500/4 transition-all group/add"
                 >
                   <div className="w-8 h-8 rounded-lg border border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center group-hover/add:border-amber-500/50 transition-all">
-                    <Icon name="add" size="14px" weight={300} />
+                    <Icon name="add" size="15px" weight={300} />
                   </div>
-                  <span className="text-[13px] font-bold">{CM.addManagementUserBtn}</span>
+                  <span className="text-15 font-bold">{CM.addManagementUserBtn}</span>
                 </button>
               </div>
             )}

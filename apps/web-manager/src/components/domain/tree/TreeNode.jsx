@@ -101,7 +101,7 @@ export const TreeNode = React.memo(({
         <span className="w-3 shrink-0" />
         <Icon
           name={icon}
-          size="16px"
+          size="17px"
           weight={300}
           className={`shrink-0 transition-colors ${
             isActive
@@ -112,7 +112,7 @@ export const TreeNode = React.memo(({
         <Typography
           variant="span"
           title={typeof label === 'string' ? label : undefined}
-          className={`text-[13px] font-mono truncate flex-1 ${
+          className={`text-15 font-mono truncate flex-1 ${
             isActive ? 'font-semibold' : 'font-medium'
           }`}
         >
@@ -147,7 +147,7 @@ export const TreeNode = React.memo(({
         >
           <Icon
             name="chevron_right"
-            size="14px"
+            size="15px"
             weight={400}
             className={`transition-transform duration-150 ${displayOpen ? 'rotate-90' : ''} ${
               isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-600'
@@ -157,7 +157,7 @@ export const TreeNode = React.memo(({
 
         <Icon
           name={icon}
-          size="16px"
+          size="17px"
           weight={300}
           className={`shrink-0 transition-colors ${
             isActive
@@ -169,7 +169,7 @@ export const TreeNode = React.memo(({
         <Typography
           variant="span"
           title={typeof label === 'string' ? label : undefined}
-          className={`text-[13px] font-mono truncate flex-1 ${
+          className={`text-15 font-mono truncate flex-1 ${
             isActive ? 'font-semibold' : 'font-medium'
           }`}
         >

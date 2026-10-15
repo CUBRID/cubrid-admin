@@ -6,7 +6,7 @@ export const Icon = ({ name, size = '16px', weight = 300, className = '', ...pro
       className={`material-symbols-outlined ${className}`}
       style={{
         fontVariationSettings: `'wght' ${weight}`,
-        fontSize: size === 'sm' ? '14px' : size === 'md' ? '16px' : size === 'lg' ? '20px' : size === 'xl' ? '24px' : size,
+        fontSize: size === 'sm' ? '15px' : size === 'md' ? '17px' : size === 'lg' ? '21px' : size === 'xl' ? '25px' : size,
       }}
       {...props}
     >

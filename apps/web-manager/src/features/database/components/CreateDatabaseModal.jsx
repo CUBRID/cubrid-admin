@@ -80,8 +80,8 @@ const INITIAL_FORM_DATA = {
 function SummaryRow({ label, value, accent }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/4 last:border-0">
-      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{label}</span>
-      <span className={`text-[11px] font-bold font-mono ${accent ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>{value}</span>
+      <span className="text-13 text-slate-500 dark:text-slate-400 font-medium">{label}</span>
+      <span className={`text-13 font-bold font-mono ${accent ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>{value}</span>
     </div>
   );
 }
@@ -348,6 +348,12 @@ export default function CreateDatabaseModal() {
         result?.updateUser?.success === false && { label: CM.wizardSetDbaPass, message: result.updateUser.error?.message },
         result?.setAutoAddVol?.success === false && { label: CM.wizardAutoVol, message: result.setAutoAddVol.error?.message },
         result?.setAutoStart?.success === false && { label: CM.autoStart, message: result.setAutoStart.error?.message },
+        // On an HA-configured host, a failure here means the new database
+        // never got its ha_mode=off marker — it silently stays subject to
+        // the host's HA replication, and can't be deleted through this API
+        // until that marker is added (deleteDatabase's HA gate checks for
+        // it). Surfacing nothing here would make that look like full success.
+        result?.haModeConfig?.success === false && { label: CM.wizardHaModeConfig, message: result.haModeConfig.error?.message },
       ].filter(Boolean);
       setCreationWarning(
         failedSteps.length > 0
@@ -539,7 +545,7 @@ export default function CreateDatabaseModal() {
                     {/* Label — only under active step */}
                     <div className="h-8 flex flex-col items-center justify-center mt-1.5">
                       {isActive && (
-                        <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 text-center leading-tight px-1">
+                        <span className="text-12 font-medium text-amber-600 dark:text-amber-400 text-center leading-tight px-1">
                           {s.label}
                         </span>
                       )}
@@ -610,11 +616,11 @@ export default function CreateDatabaseModal() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                       <Icon name="storage" size="14px" weight={400} className="text-amber-500" />
+                    <span className="text-13 font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                       <Icon name="storage" size="15px" weight={400} className="text-amber-500" />
                       {CM.genericVolume}
                     </span>
-                    <span className="text-[9px] font-black uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-sm border border-amber-500/20">{CM.systemBadge}</span>
+                    <span className="text-11 font-black uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-sm border border-amber-500/20">{CM.systemBadge}</span>
                   </div>
                   <Input data-testid="create-database-generic-path-input" label={CM.genericVolPath} value={formData.genericVolPath} onChange={(e) => handleInputChange('genericVolPath', e.target.value)} />
                   <Input
@@ -631,11 +637,11 @@ export default function CreateDatabaseModal() {
 
                 <div className="space-y-3 p-4 bg-slate-50/50 dark:bg-white/3 border border-slate-200 dark:border-white/10 rounded-xl">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <Icon name="history" size="14px" weight={400} className="text-amber-500" />
+                    <span className="text-13 font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                      <Icon name="history" size="15px" weight={400} className="text-amber-500" />
                       {CM.logVolume}
                     </span>
-                    <span className="text-[9px] font-black uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded-sm border border-rose-500/20">{CM.criticalBadge}</span>
+                    <span className="text-11 font-black uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded-sm border border-rose-500/20">{CM.criticalBadge}</span>
                   </div>
                   <Input label={CM.logVolPath} value={formData.logVolPath} onChange={(e) => handleInputChange('logVolPath', e.target.value)} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -657,7 +663,7 @@ export default function CreateDatabaseModal() {
                   <Icon name={formData.autoStart ? 'flash_on' : 'flash_off'} size="sm" weight={300} />
                 </div>
                 <div>
-                  <Typography variant="p" className={`text-[12px] font-medium transition-colors ${formData.autoStart ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>{CM.startAfterCreationLabel}</Typography>
+                  <Typography variant="p" className={`text-14 font-medium transition-colors ${formData.autoStart ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>{CM.startAfterCreationLabel}</Typography>
                 </div>
               </div>
               <div onClick={(e) => e.stopPropagation()}>
@@ -672,8 +678,8 @@ export default function CreateDatabaseModal() {
           <div className="animate-in fade-in duration-200 space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <Typography variant="h4" className="text-[14px] font-bold text-slate-800 dark:text-white">{CM.wizardAdditionalVol}</Typography>
-                <Typography variant="p" className="text-[11px] text-slate-500 font-medium">{CM.extraVolumesDesc}</Typography>
+                <Typography variant="h4" className="text-16 font-bold text-slate-800 dark:text-white">{CM.wizardAdditionalVol}</Typography>
+                <Typography variant="p" className="text-13 text-slate-500 font-medium">{CM.extraVolumesDesc}</Typography>
               </div>
               <Button
                 variant="primary"
@@ -692,8 +698,8 @@ export default function CreateDatabaseModal() {
                     <Icon name="storage" size="sm" weight={300} />
                   </div>
                   <div>
-                    <p className="text-[13px] font-semibold text-slate-600 dark:text-slate-400">{CM.noAdditionalVolumesMsg}</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{CM.clickAddVolumeHint}</p>
+                    <p className="text-15 font-semibold text-slate-600 dark:text-slate-400">{CM.noAdditionalVolumesMsg}</p>
+                    <p className="text-12 text-slate-400 dark:text-slate-500 mt-1">{CM.clickAddVolumeHint}</p>
                   </div>
                 </div>
               ) : (
@@ -703,11 +709,11 @@ export default function CreateDatabaseModal() {
                     {/* Card Header */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Icon name="storage" size="14px" className="text-amber-500 shrink-0" />
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        <Icon name="storage" size="15px" className="text-amber-500 shrink-0" />
+                        <span className="text-13 font-bold text-slate-700 dark:text-slate-300">
                           {CM.volumeNumberLabel(idx + 1)}
                         </span>
-                        <span className="text-[9px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 dark:border-blue-500/30 px-1.5 py-0.5 rounded-md">
+                        <span className="text-11 font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 dark:border-blue-500/30 px-1.5 py-0.5 rounded-md">
                           {CM.permanent}
                         </span>
                       </div>
@@ -728,7 +734,7 @@ export default function CreateDatabaseModal() {
                         onChange={(e) => handleVolumeChange(idx, 'name', e.target.value)}
                         size="sm"
                         placeholder={CM.identifier}
-                        className="font-mono text-[11px]"
+                        className="font-mono text-13"
                       />
                       <Input
                         type="number"
@@ -744,7 +750,7 @@ export default function CreateDatabaseModal() {
                           <button
                             type="button"
                             onClick={() => handleVolumeChange(idx, 'unit', vol.unit === 'GB' ? 'MB' : 'GB')}
-                            className="text-[10px] font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
+                            className="text-12 font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                             title={CM.switchUnit}
                           >
                             {vol.unit === 'GB' ? 'GB' : 'MB'}
@@ -756,7 +762,7 @@ export default function CreateDatabaseModal() {
                         onChange={(e) => handleVolumeChange(idx, 'path', e.target.value)}
                         size="sm"
                         placeholder={CM.absolutePath}
-                        className="font-mono text-[10px]"
+                        className="font-mono text-12"
                         title={vol.path}
                       />
                     </div>
@@ -772,6 +778,7 @@ export default function CreateDatabaseModal() {
           <div className="animate-in fade-in duration-200 space-y-4">
 
             <SectionHeader title={CM.autoVolumeExpansionTitle} icon="auto_mode" />
+            <Typography variant="p" className="text-13 text-slate-500 font-medium">{CM.autoVolumeExpansionDesc}</Typography>
 
             {/* PERMANENT volume policy */}
             <div className={`rounded-xl border transition-colors overflow-hidden ${
@@ -793,7 +800,7 @@ export default function CreateDatabaseModal() {
                     <Icon name="database" size="sm" weight={300} />
                   </div>
                   <div>
-                    <p className={`text-[12px] font-medium leading-tight transition-colors ${
+                    <p className={`text-14 font-medium leading-tight transition-colors ${
                       formData.autoAddVol.permanent === 'ON' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-600'
                     }`}>{CM.permanent}</p>
                   </div>
@@ -809,7 +816,7 @@ export default function CreateDatabaseModal() {
               <div className={`px-4 py-4 transition-all duration-300 ${formData.autoAddVol.permanent !== 'ON' ? 'opacity-30 pointer-events-none' : ''}`}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    <label className="text-12 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                       {CM.warningThresholdLabel}
                     </label>
                     <Input
@@ -817,10 +824,10 @@ export default function CreateDatabaseModal() {
                       onChange={(e) => handleAutoAddVolChange('warn', e.target.value)}
                       placeholder="e.g. 0.15"
                     />
-                    <p className="text-[9px] text-slate-400">{CM.ratioHintText}</p>
+                    <p className="text-11 text-slate-400">{CM.ratioHintText}</p>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    <label className="text-12 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                       {CM.extensionSizeLabel}
                     </label>
                     <div className="flex gap-1.5">
@@ -840,7 +847,7 @@ export default function CreateDatabaseModal() {
                         />
                       </div>
                     </div>
-                    <p className="text-[9px] text-slate-400">{CM.pagesPerExtensionDesc}</p>
+                    <p className="text-11 text-slate-400">{CM.pagesPerExtensionDesc}</p>
                   </div>
                 </div>
               </div>
@@ -857,8 +864,8 @@ export default function CreateDatabaseModal() {
                 <Icon name="admin_panel_settings" size="lg" weight={300} />
               </div>
               <div className="space-y-1">
-                <Typography variant="h4" className="text-[16px] font-bold text-slate-800 dark:text-white">{CM.wizardSetDbaPass}</Typography>
-                <Typography variant="p" className="text-[11px] text-slate-500 font-medium">{CM.dbaPasswordSetupDesc}</Typography>
+                <Typography variant="h4" className="text-18 font-bold text-slate-800 dark:text-white">{CM.wizardSetDbaPass}</Typography>
+                <Typography variant="p" className="text-13 text-slate-500 font-medium">{CM.dbaPasswordSetupDesc}</Typography>
               </div>
             </div>
 
@@ -911,17 +918,17 @@ export default function CreateDatabaseModal() {
                   <SummaryRow label={CM.genericVolume} value={`${formData.genericVolSize} MB`} />
                   <SummaryRow label={CM.logVolume} value={`${formData.logVolSize} MB`} />
                   <div className="py-2 border-b border-slate-100 dark:border-white/4">
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block mb-1">{CM.genericVolPath}</span>
+                    <span className="text-13 text-slate-500 dark:text-slate-400 font-medium block mb-1">{CM.genericVolPath}</span>
                     <span
                       title={formData.genericVolPath}
-                      className="text-[10.5px] font-bold font-mono text-slate-700 dark:text-slate-200 break-all"
+                      className="text-12 font-bold font-mono text-slate-700 dark:text-slate-200 break-all"
                     >
                       {formData.genericVolPath}
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-3 mt-1.5 border-t border-slate-100 dark:border-white/4">
-                    <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{CM.totalLabel}</span>
-                    <span className="text-[16px] font-black font-mono text-emerald-500 tracking-tight">{totalStorage} MB</span>
+                    <span className="text-13 font-black text-slate-500 uppercase tracking-widest">{CM.totalLabel}</span>
+                    <span className="text-18 font-black font-mono text-emerald-500 tracking-tight">{totalStorage} MB</span>
                   </div>
                 </div>
               </div>
@@ -937,9 +944,9 @@ export default function CreateDatabaseModal() {
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-inherit">
                   <div className="flex items-center gap-2">
                     <Icon name="database" size="sm" weight={300} className={formData.autoAddVol.permanent === 'ON' ? 'text-amber-500' : 'text-slate-400'} />
-                    <span className="text-[11px] font-bold uppercase text-slate-700 dark:text-slate-300">{CM.permanent}</span>
+                    <span className="text-13 font-bold uppercase text-slate-700 dark:text-slate-300">{CM.permanent}</span>
                   </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${
+                  <span className={`text-11 font-black px-2 py-0.5 rounded-md border ${
                     formData.autoAddVol.permanent === 'ON'
                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                       : 'bg-slate-500/10 text-slate-500 border-slate-500/15'
@@ -947,13 +954,13 @@ export default function CreateDatabaseModal() {
                 </div>
                 <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-white/5">
                   <div className="px-4 py-3">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{CM.warningThresholdLabel}</p>
-                    <p className="text-[13px] font-black font-mono text-slate-700 dark:text-slate-200">{formData.autoAddVol.warn}</p>
-                    <p className="text-[9px] text-slate-400 mt-0.5">{CM.ratioSuffixLabel}</p>
+                    <p className="text-11 font-semibold uppercase tracking-wider text-slate-400 mb-1">{CM.warningThresholdLabel}</p>
+                    <p className="text-15 font-black font-mono text-slate-700 dark:text-slate-200">{formData.autoAddVol.warn}</p>
+                    <p className="text-11 text-slate-400 mt-0.5">{CM.ratioSuffixLabel}</p>
                   </div>
                   <div className="px-4 py-3">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{CM.extensionSizeLabel}</p>
-                    <p className="text-[13px] font-black font-mono text-slate-700 dark:text-slate-200">{formData.autoAddVol.extSize} {formData.autoAddVol.extUnit}</p>
+                    <p className="text-11 font-semibold uppercase tracking-wider text-slate-400 mb-1">{CM.extensionSizeLabel}</p>
+                    <p className="text-15 font-black font-mono text-slate-700 dark:text-slate-200">{formData.autoAddVol.extSize} {formData.autoAddVol.extUnit}</p>
                   </div>
                 </div>
               </div>
@@ -970,12 +977,12 @@ export default function CreateDatabaseModal() {
                   ...formData.volumes
                 ].map((vol, idx) => (
                   <div key={idx} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50/50 dark:hover:bg-white/2 transition-colors">
-                    <Icon name="storage" size="14px" weight={300} className="text-slate-400 shrink-0" />
-                    <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 flex-1 truncate">{vol.name}</span>
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border leading-tight ${typeBadge('data')}`}>
+                    <Icon name="storage" size="15px" weight={300} className="text-slate-400 shrink-0" />
+                    <span className="text-13 font-mono font-bold text-slate-600 dark:text-slate-300 flex-1 truncate">{vol.name}</span>
+                    <span className={`text-11 font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border leading-tight ${typeBadge('data')}`}>
                       {CM.permanent}
                     </span>
-                    <span className="text-[11px] font-black font-mono text-slate-700 dark:text-slate-300 w-16 text-right tabular-nums">{vol.size} MB</span>
+                    <span className="text-13 font-black font-mono text-slate-700 dark:text-slate-300 w-16 text-right tabular-nums">{vol.size} MB</span>
                   </div>
                 ))}
               </div>

@@ -53,24 +53,24 @@ const StatusHeader = memo(({ dbname, lastRefreshed, loading, onRefresh, dashboar
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <Typography variant="h1" className="text-[13px] font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
+          <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
             {CM.dbSpaceMonitor}
           </Typography>
           <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
             <div className={`w-1 h-1 rounded-full ${dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-            <span className={`text-[9px] font-bold ${dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+            <span className={`text-11 font-bold ${dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
               {dashboardInterval > 0 ? CM.live : CM.paused}
             </span>
           </div>
         </div>
         <div className="flex items-center mt-0.5">
-          <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight leading-none">{dbname}</Typography>
+          <Typography variant="label" className="text-11 text-slate-400 font-mono tracking-tight leading-none">{dbname}</Typography>
         </div>
       </div>
     </div>
     
     <div className="flex items-center gap-1.5">
-      <Typography variant="label" className="text-[10px] text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+      <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
         {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
       </Typography>
       <button
@@ -82,7 +82,7 @@ const StatusHeader = memo(({ dbname, lastRefreshed, loading, onRefresh, dashboar
             : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5'}`}
         title={CM.refreshSpaceMetrics}
       >
-        <Icon name="refresh" size="18px" weight={300} className={loading ? 'animate-spin' : ''} />
+        <Icon name="refresh" size="19px" weight={300} className={loading ? 'animate-spin' : ''} />
       </button>
 
       <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -97,23 +97,23 @@ const SummaryCards = memo(({ dbname, data, totals }) => {
   return (
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
     <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm p-3.5 flex flex-col gap-1.5">
-      <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.databaseLabel}</Typography>
-      <Typography variant="p" className="text-[13px] font-bold text-slate-700 dark:text-slate-200 font-mono truncate">{data?.dbname || dbname}</Typography>
+      <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.databaseLabel}</Typography>
+      <Typography variant="p" className="text-15 font-bold text-slate-700 dark:text-slate-200 font-mono truncate">{data?.dbname || dbname}</Typography>
     </div>
     <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm p-3.5 flex flex-col gap-1">
-      <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.usedLabel}</Typography>
+      <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.usedLabel}</Typography>
       <Typography variant="p" className="text-base font-black text-slate-700 dark:text-slate-100 font-mono leading-none">{formatSize(totals?.used)}</Typography>
-      <Typography variant="label" className="text-[9px] text-slate-400">{CM.ofSizeLabel(formatSize(totals?.total))}</Typography>
+      <Typography variant="label" className="text-11 text-slate-400">{CM.ofSizeLabel(formatSize(totals?.total))}</Typography>
     </div>
     <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm p-3.5 flex flex-col gap-1">
-      <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.freeLabel}</Typography>
+      <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.freeLabel}</Typography>
       <Typography variant="p" className="text-base font-black text-emerald-500 font-mono leading-none">{formatSize(totals?.free)}</Typography>
-      <Typography variant="label" className="text-[9px] text-slate-400">{CM.headroomAvailable}</Typography>
+      <Typography variant="label" className="text-11 text-slate-400">{CM.headroomAvailable}</Typography>
     </div>
     <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm p-3.5 flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <Typography variant="label" className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{CM.usageLabel}</Typography>
-        <Typography variant="label" className={`text-[9px] font-black font-mono ${usageSeverity(totals?.pct || 0)}`}>{(totals?.pct || 0).toFixed(1)}%</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.usageLabel}</Typography>
+        <Typography variant="label" className={`text-11 font-black font-mono ${usageSeverity(totals?.pct || 0)}`}>{(totals?.pct || 0).toFixed(1)}%</Typography>
       </div>
       <div className="w-full h-1 bg-slate-100 dark:bg-white/6 overflow-hidden mt-1.5">
         <div
@@ -122,8 +122,8 @@ const SummaryCards = memo(({ dbname, data, totals }) => {
         />
       </div>
       <div className="flex justify-between mt-1">
-        <Typography variant="label" className="text-[9px] text-slate-400 font-mono">PG {data?.pagesize}B</Typography>
-        <Typography variant="label" className="text-[9px] text-slate-400 font-mono">LOG {data?.logpagesize}B</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-mono">PG {data?.pagesize}B</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-mono">LOG {data?.logpagesize}B</Typography>
       </div>
     </div>
   </div>
@@ -153,8 +153,13 @@ const isLogVolume = (row) => {
   return t.includes('LOG') || t.includes('ACTIVE') || t.includes('ARCHIVE');
 };
 
-const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
+const VolumeCategorization = memo(({ hostUid, dbname, dbinfo, pagesize, logpagesize }) => {
   const CM = useCM();
+  // dbinfo's used/free/total_size are page counts (CMS runs spacedb with
+  // --size-unit=PAGE), not bytes — convert per row before formatting as a
+  // size, using the log page size for log-type rows since CUBRID databases
+  // can have a different page size for data vs. the log.
+  const bytesPerPage = (row) => cleanInt(isLogVolume(row) ? logpagesize : pagesize) || cleanInt(pagesize);
   const dispatch = useDispatch();
 
   // CMS's dbinfo summary rows use single-word "type" (PERMANENT/TEMPORARY)
@@ -184,7 +189,7 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
       title={
         <div className="flex items-center gap-1.5">
           <Icon name="layers" size="xs" weight={300} className="text-amber-500" />
-          <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{CM.volumeCategorization}</span>
+          <span className="text-14 font-semibold text-slate-800 dark:text-slate-100">{CM.volumeCategorization}</span>
         </div>
       }
       bodyClassName="p-0"
@@ -200,7 +205,7 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
             render: (val, row) => (
               <button
                 onClick={() => handleOpenCategory(val, row.purpose)}
-                className={`px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-tight border hover:brightness-110 active:scale-95 transition-all text-left ${TYPE_BADGE(val)}`}
+                className={`px-1.5 py-0.5 rounded-sm text-12 font-bold uppercase tracking-tight border hover:brightness-110 active:scale-95 transition-all text-left ${TYPE_BADGE(val)}`}
               >
                 {row.purpose && row.purpose.toUpperCase() !== val?.toUpperCase() ? `${val} / ${row.purpose}` : val}
               </button>
@@ -211,13 +216,13 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
             accessor: 'purpose',
             width: '130px',
             render: (_, row) => (
-              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{getPurposeDisplay(row)}</span>
+              <span className="text-13 font-semibold text-slate-600 dark:text-slate-300">{getPurposeDisplay(row)}</span>
             )
           },
           { header: CM.qtyLabel, accessor: 'volume_count', className: 'text-center', width: '60px' },
-          { header: CM.usedLabel, accessor: 'used_size', render: (val) => <span className="font-mono text-[11px]">{formatSize(val)}</span> },
-          { header: CM.freeLabel, accessor: 'free_size', render: (val) => <span className="font-mono text-[11px] text-slate-400">{formatSize(val)}</span> },
-          { header: CM.totalLabel, accessor: 'total_size', render: (val) => <span className="font-mono text-[11px] font-bold">{formatSize(val)}</span> },
+          { header: CM.usedLabel, accessor: 'used_size', render: (val, row) => <span className="font-mono text-13">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
+          { header: CM.freeLabel, accessor: 'free_size', render: (val, row) => <span className="font-mono text-13 text-slate-400">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
+          { header: CM.totalLabel, accessor: 'total_size', render: (val, row) => <span className="font-mono text-13 font-bold">{formatSize(cleanInt(val) * bytesPerPage(row))}</span> },
           {
             header: CM.usageLabel,
             accessor: 'pct',
@@ -230,7 +235,7 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo }) => {
                   <div className="flex-1 h-1 bg-slate-100 dark:bg-white/4 overflow-hidden">
                     <div className={`h-full ${barColor(pct)}`} style={{ width: `${pct}%` }} />
                   </div>
-                  <span className={`text-[10px] font-bold font-mono w-7 text-right ${usageSeverity(pct)}`}>{pct.toFixed(0)}%</span>
+                  <span className={`text-12 font-bold font-mono w-7 text-right ${usageSeverity(pct)}`}>{pct.toFixed(0)}%</span>
                 </div>
               );
             }
@@ -251,7 +256,7 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
       title={
         <div className="flex items-center gap-1.5">
           <Icon name="dataset" size="xs" weight={300} className="text-amber-500" />
-          <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{CM.physicalVolumeTopology}</span>
+          <span className="text-14 font-semibold text-slate-800 dark:text-slate-100">{CM.physicalVolumeTopology}</span>
         </div>
       }
       bodyClassName="p-0"
@@ -272,7 +277,7 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
                   className="flex items-center gap-1.5 min-w-0 group hover:bg-slate-50 dark:hover:bg-white/5 px-2 py-1 rounded transition-colors w-full text-left"
                 >
                   <Icon name="draft" size="xs" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-amber-500" />
-                  <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-amber-600 dark:group-hover:text-amber-500" title={val}>{name}</span>
+                  <span className="font-mono text-13 font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-amber-600 dark:group-hover:text-amber-500" title={val}>{name}</span>
                 </button>
               );
             }
@@ -282,7 +287,7 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
             accessor: 'type',
             width: '100px',
             render: (val) => (
-              <span className={`px-1 py-0.5 rounded-sm text-[10px] font-bold uppercase border ${TYPE_BADGE(val)}`}>{val}</span>
+              <span className={`px-1 py-0.5 rounded-sm text-12 font-bold uppercase border ${TYPE_BADGE(val)}`}>{val}</span>
             )
           },
           {
@@ -290,7 +295,7 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
             accessor: 'purpose',
             width: '120px',
             render: (_, row) => (
-              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{getPurposeDisplay(row)}</span>
+              <span className="text-13 font-semibold text-slate-600 dark:text-slate-300">{getPurposeDisplay(row)}</span>
             )
           },
           {
@@ -307,11 +312,11 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
               return (
                 <div className="flex flex-col gap-0.5 min-w-[130px]">
                   <div className="flex justify-between items-end">
-                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                    <span className="text-13 font-mono text-slate-500 dark:text-slate-400">
                       <span className="text-slate-700 dark:text-slate-200 font-bold">{formatPages(usedPages)}</span> / {formatPages(totalPages)}
                     </span>
-                    <span className={`text-[10px] font-mono font-black ${getFreeSeverity(freePct)} ml-2`}>
-                      {isZero ? '0' : Math.round(freePct)}% <span className="opacity-50 text-[8px] font-sans uppercase">{CM.freeBadge}</span>
+                    <span className={`text-12 font-mono font-black ${getFreeSeverity(freePct)} ml-2`}>
+                      {isZero ? '0' : Math.round(freePct)}% <span className="opacity-50 text-10 font-sans uppercase">{CM.freeBadge}</span>
                     </span>
                   </div>
                   <div className="w-full h-0.5 bg-slate-100 dark:bg-white/4 rounded-full overflow-hidden">
@@ -326,27 +331,27 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
             accessor: 'freepage',
             render: (val, row) => {
               if (val != null && typeof val === 'string' && val.trim() === '') {
-                return <span className="font-mono text-[11px] text-slate-400">{val}</span>;
+                return <span className="font-mono text-13 text-slate-400">{val}</span>;
               }
               if (isLogVolume(row)) {
-                return <span className="font-mono text-[11px] text-slate-400">-</span>;
+                return <span className="font-mono text-13 text-slate-400">-</span>;
               }
               const totalPages = cleanInt(row.totalpage);
               const usedPages = cleanInt(row.usedpage);
               const freePages = val != null && val !== '' ? cleanInt(val) : Math.max(0, totalPages - usedPages);
-              return <span className="font-mono text-[11px] text-slate-400">{formatPages(freePages)}</span>;
+              return <span className="font-mono text-13 text-slate-400">{formatPages(freePages)}</span>;
             }
           },
           {
             header: CM.totalLabel,
             accessor: 'totalpage',
-            render: (val) => <span className="font-mono text-[11px] font-bold">{formatPages(val)}</span>
+            render: (val) => <span className="font-mono text-13 font-bold">{formatPages(val)}</span>
           },
           {
             header: CM.date,
             accessor: 'date',
             width: '90px',
-            render: (val) => <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{val || '-'}</span>
+            render: (val) => <span className="font-mono text-12 text-slate-500 dark:text-slate-400">{val || '-'}</span>
           },
           { 
             header: CM.path, 
@@ -354,7 +359,7 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
             render: (val) => (
               <div className="flex items-center gap-1 group min-w-0">
                 <Icon name="folder" size="xs" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-amber-500/50 transition-colors" />
-                <span className="text-[10px] text-slate-400 font-mono truncate" title={val}>{val?.toString().trim()}</span>
+                <span className="text-12 text-slate-400 font-mono truncate" title={val}>{val?.toString().trim()}</span>
               </div>
             )
           }
@@ -372,7 +377,7 @@ const FileSpaceUsage = memo(({ fileinfo }) => {
     title={
       <div className="flex items-center gap-1.5">
         <Icon name="analytics" size="xs" weight={300} className="text-amber-500" />
-        <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{CM.fileSpaceUsage}</span>
+        <span className="text-14 font-semibold text-slate-800 dark:text-slate-100">{CM.fileSpaceUsage}</span>
       </div>
     }
     bodyClassName="p-0"
@@ -382,8 +387,8 @@ const FileSpaceUsage = memo(({ fileinfo }) => {
       columns={[
         { header: CM.dataTypeLabel, accessor: 'data_type' },
         { header: CM.qtyLabel, accessor: 'file_count', className: 'text-center' },
-        { header: CM.usedLabel, accessor: 'used_size', className: 'text-right', render: (val) => <span className="font-mono text-[11px] font-bold">{formatPages(val)}</span> },
-        { header: CM.totalLabel, accessor: 'total_size', className: 'text-right', render: (val) => <span className="font-mono text-[11px] text-slate-400">{formatPages(val)}</span> },
+        { header: CM.usedLabel, accessor: 'used_size', className: 'text-right', render: (val) => <span className="font-mono text-13 font-bold">{formatPages(val)}</span> },
+        { header: CM.totalLabel, accessor: 'total_size', className: 'text-right', render: (val) => <span className="font-mono text-13 text-slate-400">{formatPages(val)}</span> },
       ]}
       data={fileinfo || []}
     />
@@ -397,7 +402,7 @@ const DistributionChart = memo(({ totals }) => {
   <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm p-4 flex flex-col gap-4 h-full">
     <div className="flex items-center gap-1.5">
       <Icon name="pie_chart" size="xs" weight={300} className="text-amber-500" />
-      <Typography variant="p" className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{CM.distributionLabel}</Typography>
+      <Typography variant="p" className="text-14 font-semibold text-slate-800 dark:text-slate-100">{CM.distributionLabel}</Typography>
     </div>
 
     <div className="flex items-center gap-6 flex-1">
@@ -415,7 +420,7 @@ const DistributionChart = memo(({ totals }) => {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={`text-base font-black font-mono leading-none ${usageSeverity(totals?.pct || 0)}`}>{(totals?.pct || 0).toFixed(0)}%</span>
-          <span className="text-[7px] text-slate-400 uppercase tracking-widest mt-0.5 font-bold">{CM.usedLabel}</span>
+          <span className="text-9 text-slate-400 uppercase tracking-widest mt-0.5 font-bold">{CM.usedLabel}</span>
         </div>
       </div>
 
@@ -423,16 +428,16 @@ const DistributionChart = memo(({ totals }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">{CM.usedLabel}</span>
+            <span className="text-12 text-slate-400 uppercase font-bold tracking-tight">{CM.usedLabel}</span>
           </div>
-          <span className="text-[11px] font-black font-mono text-slate-700 dark:text-slate-200">{formatSize(totals?.used)}</span>
+          <span className="text-13 font-black font-mono text-slate-700 dark:text-slate-200">{formatSize(totals?.used)}</span>
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-slate-200 dark:bg-white/10" />
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">{CM.freeLabel}</span>
+            <span className="text-12 text-slate-400 uppercase font-bold tracking-tight">{CM.freeLabel}</span>
           </div>
-          <span className="text-[11px] font-black font-mono text-slate-700 dark:text-slate-200">{formatSize(totals?.free)}</span>
+          <span className="text-13 font-black font-mono text-slate-700 dark:text-slate-200">{formatSize(totals?.free)}</span>
         </div>
       </div>
     </div>
@@ -466,10 +471,17 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
 
   const totals = useMemo(() => {
     if (!data?.dbinfo) return null;
+    // dbinfo's sizes are page counts, not bytes (see VolumeCategorization's
+    // comment) — convert each row with its own page size before summing,
+    // since a data row and a log row can have different page sizes.
     let total = 0, free = 0;
-    data.dbinfo.forEach(i => { total += cleanInt(i.total_size); free += cleanInt(i.free_size); });
+    data.dbinfo.forEach(i => {
+      const bytesPerPage = cleanInt(isLogVolume(i) ? data.logpagesize : data.pagesize) || cleanInt(data.pagesize);
+      total += cleanInt(i.total_size) * bytesPerPage;
+      free += cleanInt(i.free_size) * bytesPerPage;
+    });
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
-  }, [data?.dbinfo]);
+  }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
 
   if (loading && !data) {
     return (
@@ -481,7 +493,7 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-text text-[12px]">
+    <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-text text-14">
       <StatusHeader 
         dbname={dbname} 
         lastRefreshed={lastRefreshed} 
@@ -499,10 +511,12 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
 
         <SummaryCards dbname={dbname} data={data} totals={totals} />
         
-        <VolumeCategorization 
-          hostUid={hostUid} 
-          dbname={dbname} 
-          dbinfo={data?.dbinfo} 
+        <VolumeCategorization
+          hostUid={hostUid}
+          dbname={dbname}
+          dbinfo={data?.dbinfo}
+          pagesize={data?.pagesize}
+          logpagesize={data?.logpagesize}
         />
         
         <VolumeTopology 

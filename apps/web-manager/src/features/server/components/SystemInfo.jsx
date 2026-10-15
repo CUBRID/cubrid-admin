@@ -13,8 +13,8 @@ export default function SystemInfo({ hostUid }) {
 
   const InfoRow = ({ label, value }) => (
     <div className="grid grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[10rem_minmax(0,1fr)] items-start gap-x-4 py-2 border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/2 transition-colors -mx-4 px-4">
-      <Typography variant="span" className="text-[13px] font-medium text-slate-600 dark:text-slate-400 truncate">{label}</Typography>
-      <Typography variant="span" className="min-w-0 text-[13px] font-normal font-mono text-slate-900 dark:text-slate-200 break-words">{value || CM.notApplicableFallback}</Typography>
+      <Typography variant="span" className="text-13 font-medium text-slate-600 dark:text-slate-400 truncate">{label}</Typography>
+      <Typography variant="span" className="min-w-0 text-13 font-normal font-mono text-slate-900 dark:text-slate-200 break-words">{value || CM.notApplicableFallback}</Typography>
     </div>
   );
 

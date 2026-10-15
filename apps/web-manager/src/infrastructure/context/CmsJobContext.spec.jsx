@@ -15,6 +15,13 @@ vi.mock('../services/cmsJobRunner', () => ({
   isCmsJobPolling: () => false,
   cancelAllCmsJobPolls: vi.fn(),
 }));
+// Avoids apiClient.js's top-level `localStorage.getItem('token')` read, which
+// this test's minimal jsdom setup doesn't need to exercise.
+vi.mock('../../api/apiClient', () => ({ default: {
+  defaults: { headers: { common: {} } },
+  get: vi.fn(),
+  post: vi.fn(),
+} }));
 
 describe('enqueueUniqueJobResult', () => {
   it('does not queue the same job result twice', () => {

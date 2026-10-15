@@ -83,23 +83,23 @@ export default function StatusModal() {
           </div>
 
           {/* Status badge */}
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-bold uppercase tracking-widest mb-3 ${t.badgeBg}`}>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-11 font-bold uppercase tracking-widest mb-3 ${t.badgeBg}`}>
             <div className={`w-1.5 h-1.5 rounded-full ${t.accent}`} />
             {tLabel}
           </div>
 
           {message && (
-            <p className="text-[13px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-[280px]">
+            <p className="text-13 text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-[280px]">
               {message}
             </p>
           )}
 
           {guidanceItems.length > 0 && (
             <div className="mt-4 w-full bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-left">
-              <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-500 mb-1.5">{CM.thingsToCheck}</p>
+              <p className="text-11 font-semibold uppercase tracking-wide text-amber-500 mb-1.5">{CM.thingsToCheck}</p>
               <ul className="space-y-1">
                 {guidanceItems.map((item, idx) => (
-                  <li key={idx} className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed flex gap-1.5">
+                  <li key={idx} className="text-13 text-slate-600 dark:text-slate-300 leading-relaxed flex gap-1.5">
                     <span className="text-amber-500 shrink-0">•</span>
                     <span>{item}</span>
                   </li>
@@ -113,14 +113,14 @@ export default function StatusModal() {
               <button
                 type="button"
                 onClick={() => setShowDetail((v) => !v)}
-                className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                className="flex items-center gap-1 text-11 font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
-                <Icon name={showDetail ? 'expand_less' : 'expand_more'} size="12px" weight={300} />
+                <Icon name={showDetail ? 'expand_less' : 'expand_more'} size="13px" weight={300} />
                 {showDetail ? CM.hideDetails : CM.showDetails}
               </button>
               {showDetail && (
                 <div className="mt-2 bg-rose-500/5 border border-rose-500/15 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <p className="text-rose-600/90 dark:text-rose-400/90 font-mono text-[10.5px] leading-relaxed break-words">{detail}</p>
+                  <p className="text-rose-600/90 dark:text-rose-400/90 font-mono text-12 leading-relaxed break-words">{detail}</p>
                 </div>
               )}
             </div>

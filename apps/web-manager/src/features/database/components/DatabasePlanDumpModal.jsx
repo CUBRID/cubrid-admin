@@ -149,8 +149,8 @@ export default function DatabasePlanDumpModal() {
                   <Icon name="database" size="sm" weight={300} />
                 </div>
                 <div>
-                  <Typography variant="caption" className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{CM.selectedInstance}</Typography>
-                  <Typography variant="p" className="text-[14px] font-black text-slate-900 dark:text-white font-mono leading-none">{selectedDatabase}</Typography>
+                  <Typography variant="caption" className="text-12 font-black text-slate-400 uppercase tracking-widest">{CM.selectedInstance}</Typography>
+                  <Typography variant="p" className="text-16 font-black text-slate-900 dark:text-white font-mono leading-none">{selectedDatabase}</Typography>
                 </div>
               </div>
               <StatusBadge label={CM.xaslCache} variant="amber" />
@@ -162,9 +162,9 @@ export default function DatabasePlanDumpModal() {
                 <React.Fragment key={i}>
                   <div className="flex items-center gap-2 group">
                     <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
-                      <Icon name={s.icon} size="12px" weight={400} />
+                      <Icon name={s.icon} size="13px" weight={400} />
                     </div>
-                    <Typography variant="caption" className="text-[10px] font-bold uppercase tracking-tight text-slate-500">{s.label}</Typography>
+                    <Typography variant="caption" className="text-12 font-bold uppercase tracking-tight text-slate-500">{s.label}</Typography>
                   </div>
                   {i < planSteps.length - 1 && (
                     <div className="flex-1 h-px bg-slate-200 dark:bg-white/10 mx-2" />
@@ -191,8 +191,8 @@ export default function DatabasePlanDumpModal() {
                     <Icon name="delete_sweep" size="xs" weight={300} />
                   </div>
                   <div className="flex-1">
-                    <Typography variant="p" className={`font-bold text-[12px] ${planDrop ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>{CM.flushCacheAfterExport}</Typography>
-                    <Typography variant="caption" className="text-slate-400 text-[10px] block mt-0.5">{CM.clearsXaslEntries}</Typography>
+                    <Typography variant="p" className={`font-bold text-14 ${planDrop ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>{CM.flushCacheAfterExport}</Typography>
+                    <Typography variant="caption" className="text-slate-400 text-12 block mt-0.5">{CM.clearsXaslEntries}</Typography>
                   </div>
                   <div onClick={(e) => e.stopPropagation()}>
                     <Toggle checked={planDrop} onChange={setPlanDrop} />
@@ -203,7 +203,7 @@ export default function DatabasePlanDumpModal() {
               {planDrop && (
                 <div className="flex items-start gap-2.5 px-3 py-2.5 bg-rose-50/50 dark:bg-rose-500/5 border border-rose-200 dark:border-rose-500/20 rounded-xl animate-in fade-in slide-in-from-top-2">
                   <Icon name="warning" size="xs" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
-                  <Typography variant="caption" className="text-rose-600 dark:text-rose-400 font-medium leading-relaxed text-[10px]">
+                  <Typography variant="caption" className="text-rose-600 dark:text-rose-400 font-medium leading-relaxed text-12">
                     {CM.clearCachedPlansWarning}
                   </Typography>
                 </div>
@@ -224,10 +224,10 @@ export default function DatabasePlanDumpModal() {
                     key={i}
                     className={`px-6 py-3 ${i < statCards.length - 1 ? 'border-r border-slate-100 dark:border-white/5' : ''}`}
                   >
-                    <Typography variant="label" className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                    <Typography variant="label" className="text-11 font-bold uppercase tracking-widest text-slate-400">
                       {card.label}
                     </Typography>
-                    <Typography variant="h2" className={`text-[18px] font-black font-mono leading-tight mt-0.5 ${card.color}`}>
+                    <Typography variant="h2" className={`text-20 font-black font-mono leading-tight mt-0.5 ${card.color}`}>
                       {card.value}
                     </Typography>
                   </div>
@@ -239,12 +239,12 @@ export default function DatabasePlanDumpModal() {
             <div className="px-6 py-2 flex items-center justify-between bg-slate-50/80 dark:bg-white/2 border-b border-slate-100 dark:border-white/5 shrink-0">
               <div className="flex items-center gap-2">
                 <Icon name="list_alt" size="sm" weight={300} className="text-slate-400" />
-                <Typography variant="label" className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <Typography variant="label" className="text-12 font-black uppercase tracking-widest text-slate-500">
                   {CM.queryPlanEntriesLabel}
                 </Typography>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${visibleLines.length > 0 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10'}`}>
+                <span className={`px-2 py-0.5 rounded-full text-11 font-black uppercase tracking-widest border ${visibleLines.length > 0 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10'}`}>
                   {visibleLines.length > 0 ? CM.linesCountLabel(visibleLines.length) : CM.emptyLabel}
                 </span>
                 {visibleLines.length > 0 && (
@@ -254,7 +254,7 @@ export default function DatabasePlanDumpModal() {
                     title={CM.copyToClipboard}
                     className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
                   >
-                    <Icon name={copied ? 'check' : 'content_copy'} size="14px" weight={300} className={copied ? 'text-emerald-500' : ''} />
+                    <Icon name={copied ? 'check' : 'content_copy'} size="15px" weight={300} className={copied ? 'text-emerald-500' : ''} />
                   </button>
                 )}
               </div>
@@ -274,10 +274,10 @@ export default function DatabasePlanDumpModal() {
                       className={`px-6 py-1.5 flex gap-3 border-b border-slate-50 dark:border-white/3 last:border-0
                         ${isHeader ? 'bg-amber-500/3 dark:bg-amber-500/5' : 'hover:bg-slate-50/80 dark:hover:bg-white/2'}`}
                     >
-                      <span className="shrink-0 w-7 text-[9px] font-mono text-slate-300 dark:text-slate-700 mt-0.5 tabular-nums">
+                      <span className="shrink-0 w-7 text-11 font-mono text-slate-300 dark:text-slate-700 mt-0.5 tabular-nums">
                         {(idx + 1).toString().padStart(3, '0')}
                       </span>
-                      <span className={`text-[12px] font-mono leading-snug break-all
+                      <span className={`text-14 font-mono leading-snug break-all
                         ${isHeader ? 'text-amber-600 dark:text-amber-400 font-bold' :
                           isPlanLine ? 'text-sky-600 dark:text-sky-400 pl-2 border-l border-sky-500/20' :
                             isStatLine ? 'text-slate-600 dark:text-slate-300' :

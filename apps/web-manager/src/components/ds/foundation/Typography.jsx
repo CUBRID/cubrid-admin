@@ -19,9 +19,12 @@ export const Typography = ({
     h6: 'text-[13px] font-medium text-slate-900 dark:text-white',
     p: 'text-[13px] text-slate-700 dark:text-slate-300',
     span: 'text-inherit',
-    label: 'text-[12px] font-medium text-slate-700 dark:text-slate-300',
-    caption: 'text-[11px] text-slate-500 dark:text-slate-400',
-    code: 'font-mono text-[12px] bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded-sm text-slate-800 dark:text-slate-200',
+    // Font sizes use this project's scaled-up Tailwind text-sm/semantic
+    // text-N tokens (see styles/index.css) rather than literal px values,
+    // to stay consistent with the app-wide typography scale-up.
+    label: 'text-sm font-medium text-slate-700 dark:text-slate-300',
+    caption: 'text-13 text-slate-500 dark:text-slate-400',
+    code: 'font-mono text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded-sm text-slate-800 dark:text-slate-200',
   };
 
   const appliedClass = `${baseStyles[variant] || baseStyles.span} ${className}`;

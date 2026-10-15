@@ -41,9 +41,10 @@ export default function AddBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isAddBackupPlanModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { backupDbInfo: databaseBackupInfo } = useSelector((state) => state.databaseOperation, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
@@ -300,10 +301,10 @@ export default function AddBackupPlanModal() {
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                   formData.backupLevel === item.value ? 'bg-amber-500 text-slate-900' : 'bg-white dark:bg-white/8 text-slate-400'
                 }`}>
-                  <Icon name={item.icon} size="14px" weight={300} />
+                  <Icon name={item.icon} size="15px" weight={300} />
                 </div>
                 <div className="text-left min-w-0">
-                  <Typography variant="p" className="font-medium text-[12px] leading-tight text-slate-700 dark:text-slate-200">{item.title}</Typography>
+                  <Typography variant="p" className="font-medium text-14 leading-tight text-slate-700 dark:text-slate-200">{item.title}</Typography>
                   <Typography variant="caption" className="block truncate leading-tight">{CM[item.descKey]}</Typography>
                 </div>
               </button>
@@ -343,7 +344,7 @@ export default function AddBackupPlanModal() {
                         key={preset.id}
                         type="button"
                         onClick={() => setBulkDays(preset.id)}
-                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-colors"
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-13 font-medium text-slate-500 dark:text-slate-400 hover:border-amber-500/50 hover:text-amber-500 transition-colors"
                       >
                          {preset.label}
                       </button>
@@ -356,7 +357,7 @@ export default function AddBackupPlanModal() {
                         type="button"
                         onClick={() => toggleDay(day)}
                         aria-pressed={formData.periodDetail.includes(day)}
-                        className={`h-8 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center ${
+                        className={`h-8 rounded-lg border text-13 font-medium transition-colors flex items-center justify-center ${
                           formData.periodDetail.includes(day)
                             ? 'bg-amber-500 border-amber-500 text-slate-900'
                             : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'
@@ -380,7 +381,7 @@ export default function AddBackupPlanModal() {
                         type="button"
                         onClick={() => toggleDay(dayValue)}
                         aria-pressed={isActive}
-                        className={`h-9 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center ${
+                        className={`h-9 rounded-lg border text-13 font-medium transition-colors flex items-center justify-center ${
                           isActive
                             ? 'bg-amber-500 border-amber-500 text-slate-900'
                             : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'
@@ -417,7 +418,7 @@ export default function AddBackupPlanModal() {
             ].map(opt => (
               <div key={opt.field} className="flex items-center gap-3 min-h-10">
                 <Icon name={opt.icon} size="16px" weight={300} className={formData[opt.field] ? 'text-amber-500' : 'text-slate-400'} />
-                <Typography variant="p" className="flex-1 min-w-0 text-[12px] font-medium text-slate-700 dark:text-slate-200 leading-tight">{opt.label}</Typography>
+                <Typography variant="p" className="flex-1 min-w-0 text-14 font-medium text-slate-700 dark:text-slate-200 leading-tight">{opt.label}</Typography>
                 <div className="shrink-0">
                   <Toggle checked={formData[opt.field]} onChange={(val) => handleInputChange(opt.field, val)} size="sm" variant="primary" />
                 </div>
@@ -442,7 +443,7 @@ export default function AddBackupPlanModal() {
               }`}
             >
               <Icon name={mode.icon} size="18px" weight={300} className={formData.onlineType === mode.value ? 'text-amber-500' : 'text-slate-400'} />
-              <Typography variant="p" className="flex-1 font-medium text-[12px] leading-tight text-slate-700 dark:text-slate-200">{mode.label}</Typography>
+              <Typography variant="p" className="flex-1 font-medium text-14 leading-tight text-slate-700 dark:text-slate-200">{mode.label}</Typography>
               <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                 formData.onlineType === mode.value ? 'border-amber-500' : 'border-slate-300 dark:border-white/20'
               }`}>

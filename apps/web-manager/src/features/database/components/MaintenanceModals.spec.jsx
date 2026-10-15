@@ -23,7 +23,7 @@ beforeEach(() => {
   store = configureStore({ reducer: () => ({
     user: { preferences: { uiLocale: 'en' } },
     host: { selectedHostUid: 'host-1' },
-    database: { selectedDatabase: 'demodb', activeDatabases: [], loggedInDatabases: [] },
+    database: { selectedDatabase: 'demodb', activeDatabasesByHost: { 'host-1': [] }, loggedInDatabases: [] },
     databaseUI: { isCheckDatabaseModalOpen: true, isOptimizeDatabaseModalOpen: true },
   }) });
   mocks.getClassInfo.mockResolvedValue({ userclass: [{ classname: 'dba.employee' }] });
