@@ -122,15 +122,21 @@ export default function Breadcrumb({
   }, [CM, dirtyTabs, labels, onCloseTab]);
 
   useEffect(() => {
-    const handleClickOutside = () => {
+    const closeMenus = () => {
       setContextMenu(null);
       setOverflowMenu(null);
     };
-    window.addEventListener('click', handleClickOutside);
-    window.addEventListener('scroll', handleClickOutside, true);
+    const handleScrollOutside = (event) => {
+      if (event.target instanceof Element && event.target.closest('.context-menu-container')) {
+        return;
+      }
+      closeMenus();
+    };
+    window.addEventListener('click', closeMenus);
+    window.addEventListener('scroll', handleScrollOutside, true);
     return () => {
-      window.removeEventListener('click', handleClickOutside);
-      window.removeEventListener('scroll', handleClickOutside, true);
+      window.removeEventListener('click', closeMenus);
+      window.removeEventListener('scroll', handleScrollOutside, true);
     };
   }, []);
 
@@ -326,7 +332,7 @@ export default function Breadcrumb({
           onClose={() => setOverflowMenu(null)}
           width="w-72"
         >
-          <div className="max-h-80 overflow-y-auto custom-scrollbar">
+          <div data-testid="all-tabs-menu-list" className="max-h-80 overflow-y-auto custom-scrollbar">
             {openTabs.map((tabId) => {
               const label = getTabLabel(tabId);
               const isActive = activeTab === tabId;

@@ -167,6 +167,39 @@ it('shows page navigation and an all-tabs menu when tabs overflow', async () => 
   expect(handlers.onTabChange).toHaveBeenCalledWith('settings');
 });
 
+it('keeps a long all-tabs menu open while it is scrolled and allows selecting a lower tab', async () => {
+  const handlers = callbacks();
+  const openTabs = Array.from({ length: 20 }, (_, index) => `tab-${index + 1}`);
+  const labels = Object.fromEntries(openTabs.map((tabId, index) => [tabId, `Open tab ${index + 1}`]));
+  await renderBreadcrumb(handlers, [], { activeTab: openTabs[0], openTabs, labels });
+
+  const tabBar = container.querySelector('[data-testid="top-tab-bar"]');
+  const tabScroller = container.querySelector('[data-testid="top-tab-scroller"]');
+  Object.defineProperties(tabBar, {
+    clientWidth: { configurable: true, value: 500 },
+  });
+  Object.defineProperties(tabScroller, {
+    clientWidth: { configurable: true, value: 300 },
+    scrollWidth: { configurable: true, value: 3200 },
+    scrollLeft: { configurable: true, writable: true, value: 0 },
+  });
+
+  await act(async () => window.dispatchEvent(new Event('resize')));
+  await act(async () => container.querySelector('[data-testid="all-tabs-menu-btn"]').click());
+
+  const menuList = document.querySelector('[data-testid="all-tabs-menu-list"]');
+  expect(menuList).not.toBeNull();
+
+  await act(async () => menuList.dispatchEvent(new Event('scroll')));
+
+  const lastTabMenuItem = Array.from(document.querySelectorAll('[role="menuitem"]'))
+    .find((node) => node.textContent.includes('Open tab 20'));
+  expect(lastTabMenuItem).toBeDefined();
+
+  await act(async () => lastTabMenuItem.click());
+  expect(handlers.onTabChange).toHaveBeenCalledWith('tab-20');
+});
+
 it('adds a full-name tooltip only while a tab label is truncated', async () => {
   const longLabel = 'Database configuration with a very long descriptive name';
   await renderBreadcrumb(callbacks(), [], {
