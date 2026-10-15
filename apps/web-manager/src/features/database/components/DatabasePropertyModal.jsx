@@ -17,10 +17,10 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
+import { useToast } from '../../../infrastructure/hooks/useToast';
 import { getModifiedKeys } from '../databasePropertyUtils';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -239,14 +239,13 @@ export default function DatabasePropertyModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
+  const toast = useToast();
   const {
     error: actionError,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError
   } = useActionState();
 
@@ -389,8 +388,25 @@ export default function DatabasePropertyModal() {
         }
         if (!found) updatedSection.push(`${key}=${value}`);
       });
-      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: [...otherBefore, ...updatedSection, ...otherAfter] });
-      endSuccess(CM.configurationAppliedMsg(selectedDatabase));
+      const nextLines = [...otherBefore, ...updatedSection, ...otherAfter];
+      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: nextLines });
+      // Stay on the form view showing the values that were just applied,
+      // instead of closing the modal — the user asked to keep editing
+      // without having to reopen it. `params`/`bufferMode`/`bufferUnit`
+      // already hold exactly what `saveParams` persisted (`saveParams` is
+      // only their effective on-disk form — pages vs size reconciled, with
+      // the unit letter suffixed back on for cubrid.conf — so reusing it
+      // here would bake that suffix into the raw, unsuffixed state the
+      // buffer inputs expect). Promoting the current values to the
+      // "initial" baseline is what correctly zeroes out modifiedCount and
+      // makes a subsequent "Reset to original" target these just-applied
+      // values instead of the pre-session ones.
+      setRawLines(nextLines);
+      setInitialParams({ ...params });
+      setInitialBufferMode({ ...bufferMode });
+      setInitialBufferUnit({ ...bufferUnit });
+      resetAction();
+      toast.success(CM.configurationAppliedMsg(selectedDatabase));
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.configPatchRejectedMsg));
     }
@@ -467,18 +483,6 @@ export default function DatabasePropertyModal() {
       <ModalStatusLoading
         title={CM.updatingConfigTitle}
         subtitle={CM.updatingConfigSubtitle}
-      />
-    </Modal>
-  );
-
-  /* ─── SUCCESS VIEW ─── */
-  if (isSuccess) return (
-    <Modal isOpen title={CM.updateSuccessful} icon="check_circle" iconVariant="success" onClose={handleClose} maxWidth="900px">
-      <ModalStatusSuccess
-        title={CM.configurationReIndexed}
-        message={CM.configurationAppliedMsg(selectedDatabase)}
-        onConfirm={handleClose}
-        confirmText={CM.confirmReturn}
       />
     </Modal>
   );

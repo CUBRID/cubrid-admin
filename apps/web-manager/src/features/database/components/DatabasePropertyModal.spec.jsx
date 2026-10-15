@@ -9,6 +9,7 @@ vi.mock('../../broker/brokerApi', () => ({ brokerApi: { getBrokerList: vi.fn() }
 vi.mock('../databaseSlice', () => ({ closeDatabasePropertyModal: () => ({ type: 'close' }) }));
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { ToastProvider } from '../../../infrastructure/context/ToastContext';
 import DatabasePropertyModal from './DatabasePropertyModal';
 
 let container;
@@ -31,7 +32,9 @@ beforeEach(async () => {
     user: { preferences: { uiLocale: 'en' } },
   };
   const store = configureStore({ reducer: () => state });
-  await act(async () => root.render(<Provider store={store}><DatabasePropertyModal /></Provider>));
+  await act(async () => root.render(
+    <Provider store={store}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -76,6 +79,32 @@ it('detects mode changes followed by value entry and clears them on reversion', 
   await click(radio('data', 'size'));
   expect(control('modified-count')).toBeNull();
   expect(control('apply-btn').disabled).toBe(true);
+});
+
+it('Apply stays on the form view and re-baselines modified/reset state to the applied values', async () => {
+  hostApi.setHostConfig.mockResolvedValue({});
+  await selectUnit('data', 'GB');
+  expect(control('modified-count').textContent).toBe('1 modified');
+  await click(control('apply-btn'));
+
+  // Modal stays open on the form view (no success screen), the backend call
+  // fired with the reconciled config, and a success toast was shown.
+  expect(hostApi.setHostConfig).toHaveBeenCalledTimes(1);
+  expect(control('apply-btn')).not.toBeNull();
+  expect(container.textContent).toContain('demodb configuration was saved.');
+
+  // The just-applied values are now the baseline: modified count clears and
+  // Apply disables again, even though nothing was reverted.
+  expect(control('modified-count')).toBeNull();
+  expect(control('apply-btn').disabled).toBe(true);
+
+  // A subsequent edit+Reset targets the newly-applied baseline (GB), not the
+  // original pre-session one (MB) fetched at mount.
+  await selectUnit('data', 'TB');
+  expect(control('modified-count').textContent).toBe('1 modified');
+  await click(control('reset-btn'));
+  expect(unitControl('data').textContent).toContain('GB');
+  expect(control('modified-count')).toBeNull();
 });
 
 it('Reset restores loaded values, modes, and units across buffer groups', async () => {
