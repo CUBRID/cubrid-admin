@@ -1,0 +1,123 @@
+name: CI Pipeline (Two-Tier)
+
+on:
+  pull_request:
+    types:
+      - opened           # When a PR is created
+      - synchronize      # When a new commit is pushed to the PR
+      - reopened         # When a closed PR is reopened
+      - ready_for_review # When a draft PR is marked ready
+      - labeled          # When a label like 'run-e2e' is added
+  workflow_dispatch:     # Manual run button in GitHub Actions UI
+
+# 🛑 Auto-cancel in-progress runs when a new commit is pushed to the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # Tier 1: Fast static and unit checks (~2-3 minutes)
+  # ALWAYS runs on PR creation and every commit pushed to the PR.
+  # =========================================================================
+  tier-1-fast-checks:
+    name: "Tier 1: Fast Checks (Lint, Test, Build)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint codebase
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test
+
+      - name: Build server bundle
+        run: npm run build:server
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+  # =========================================================================
+  # Tier 2: Heavy TCP E2E against Ephemeral CUBRID CMS Container (~10-15 mins)
+  # Uses official external test suite: CUBRID/cubrid-webmanager-e2e
+  # Runs ONLY when:
+  #   1. Tier 1 has successfully passed
+  #   2. The PR is NOT a draft
+  #   3. Explicitly triggered by:
+  #      - Clicking "Ready for review" (ready_for_review), OR
+  #      - Adding the 'run-e2e' label to the PR, OR
+  #      - Clicking the manual "Run workflow" button
+  # =========================================================================
+  tier-2-tcp-e2e:
+    name: "Tier 2: TCP E2E against Ephemeral CUBRID CMS"
+    needs: tier-1-fast-checks
+    if: >-
+      !cancelled() &&
+      github.event.pull_request.draft == false && (
+        github.event_name == 'workflow_dispatch' ||
+        github.event.action == 'ready_for_review' ||
+        contains(github.event.pull_request.labels.*.name, 'run-e2e')
+      )
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact CWM PR commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Checkout TCP test suite (cubrid-webmanager-e2e)
+        uses: actions/checkout@v4
+        with:
+          repository: CUBRID/cubrid-webmanager-e2e
+          token: ${{ secrets.TCP_REPOSITORY_TOKEN }}
+          path: tcp
+          persist-credentials: false
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tcp/package-lock.json
+
+      - name: Install and build CWM server
+        run: |
+          npm ci
+          npm run build:server
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Install TCP dependencies and Playwright Chromium
+        working-directory: tcp
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run TCP against Ephemeral Docker CUBRID CMS
+        run: ./scripts/ci/run-e2e-docker.sh
+
+      - name: Upload TCP Playwright HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcp-playwright-report-pr-${{ github.event.pull_request.number || github.run_id }}-attempt-${{ github.run_attempt }}
+          path: tcp/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
