@@ -211,7 +211,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
         icon="description"
         title={fileName}
         titleMonospace
-        subtitle={CM.brokerLogViewer}
+        subtitle={CM.logViewerSubtitle}
         center={modeSwitcher}
         actions={(
           <>

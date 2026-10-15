@@ -1829,8 +1829,8 @@ export const CM_KO = {
   showingRangeOfTotal: (start, end, total) => `전체 ${total}개 중 ${start}–${end}`,
   recordsCountLabel: (count) => `${count}개 레코드`,
 
-  // 로그 뷰어 (브로커)
-  brokerLogViewer: '브로커 로그 뷰어',
+  // 로그 뷰어 — 브로커/매니저/서버-데이터베이스 로그 전부에서 공용으로 쓰임
+  logViewerSubtitle: '로그 뷰어',
   noContentAvailable: '표시할 내용이 없습니다.',
   noSqlStatementsFound: '이 페이지에서 SQL 구문을 찾을 수 없습니다.',
   maxSeconds: '최대 (초)',
