@@ -773,6 +773,7 @@ export const CM_KO = {
   dataBufferAllocLabel: '데이터 버퍼 할당',
   sortBufferAllocLabel: '정렬 버퍼 할당',
   logBufferAllocLabel: '로그 버퍼 할당',
+  indexScanOidBufferAllocLabel: '인덱스 스캔 OID 버퍼 할당',
   advancedParamsWarning: '고급 매개변수 — 변경하면 서버 안정성과 성능에 영향을 줄 수 있습니다. 값을 바꿀 때 주의하세요.',
   databaseProperties: '데이터베이스 속성',
   initializingSchedule: '초기화 중',

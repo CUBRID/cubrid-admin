@@ -788,6 +788,7 @@ export const CM = {
   dataBufferAllocLabel: 'Data Buffer Allocation',
   sortBufferAllocLabel: 'Sort Buffer Allocation',
   logBufferAllocLabel: 'Log Buffer Allocation',
+  indexScanOidBufferAllocLabel: 'Index Scan OID Buffer Allocation',
   advancedParamsWarning: 'Advanced parameters — changes may affect server stability and performance. Be careful when changing these values.',
   databaseProperties: 'Database Properties',
   initializingSchedule: 'Initializing',

@@ -19,6 +19,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { useToast } from '../../../infrastructure/hooks/useToast';
 import { getModifiedKeys } from '../databasePropertyUtils';
+import { DATABASE_PARAM_GUARDS, collectGuardErrors } from '../../../constants/paramGuards';
 import {
   ModalStatusLoading,
   ModalStatusError
@@ -30,18 +31,50 @@ const VIEW_LOADING = 'loading';
 const VIEW_SUCCESS = 'success';
 const VIEW_ERROR   = 'error';
 
+// Params removed from here, with the source-verified reason (see
+// CUBRID-DATABASE-PROPERTY-PARAM-AUDIT.md for full citations):
+//  - uj_job_timeout: fictional — no PRM_ID/conf-key has ever existed for
+//    this name in any engine branch (git log -S across history: 0 hits).
+//  - lock_timeout_message_type, media_failure_support: PRM_OBSOLETED with
+//    PRM_NO_TYPE (no storage) in all 6 branches — editing has zero effect.
+//  - query_cache_mode: PRM_HIDDEN with upper==lower==default==2 in all 6
+//    branches — structurally frozen, can never be set to anything else.
+//  - compat_numeric_division_scale, max_plan_cache_entries: the only two
+//    cubrid.conf keys in this table whose status/range actually differs
+//    across the 6 supported engine branches (the former gains
+//    DEPRECATED+HIDDEN only on develop; the latter's upper bound only
+//    exists on develop) — pulled rather than guarded with a single
+//    version-unaware rule.
+//  - index_scan_oid_buffer_pages/_size: moved into BUFFER_GROUPS below —
+//    they share one underlying PRM (same dynamic_flag) exactly like the
+//    other three pages/size pairs, so they get the same radio treatment
+//    instead of two independent rows.
 const ADVANCED_PARAMS_SCHEMA = [
   { key: 'access_ip_control', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
   { key: 'access_ip_control_file', type: 'string', default: '', scope: 'SERVER' },
   { key: 'async_commit', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'backup_volume_max_size_bytes', type: 'int', default: '-1', scope: 'SERVER' },
+  // Added — real, version-common (Section 1 of CUBRID-PARAM-VERSION-MATRIX.md)
+  // cubrid.conf keys that weren't exposed anywhere in this editor, flagged
+  // there as DBA-relevant candidates missing from the UI. (A few other
+  // candidates from that same audit — max_query_per_tran,
+  // ha_sql_log_max_count, ha_sql_log_path, vacuum_ovfp_check_* — were
+  // deliberately left out: they only exist from release/11.3 onward, not
+  // across all 6 supported branches, so they don't meet the
+  // version-common bar this table otherwise holds to.)
+  { key: 'checkpoint_every_npages', type: 'int', default: '10', scope: 'SERVER' },
+  { key: 'data_aout_ratio', type: 'float', default: '0.0', scope: 'SERVER' },
+  { key: 'data_buffer_flush_ratio', type: 'float', default: '0.01', scope: 'SERVER' },
+  // PRM_BIGINT, not PRM_INTEGER — <input type=number> cannot safely round-trip
+  // 64-bit values, so this one gets a plain text input (see valueTypeLabel
+  // handling below) instead of the number input the other int-typed rows use.
+  { key: 'backup_volume_max_size_bytes', type: 'bigint', default: '0', scope: 'SERVER' },
   { key: 'block_ddl_statement', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
   { key: 'block_nowhere_statement', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'call_stack_dump_activation_list', type: 'string', default: '', scope: 'BOTH' },
-  { key: 'call_stack_dump_deactivation_list', type: 'string', default: '', scope: 'BOTH' },
+  // PRM_INTEGER_LIST, not PRM_STRING — comma-separated integer error codes.
+  { key: 'call_stack_dump_activation_list', type: 'intList', default: '', scope: 'BOTH' },
+  { key: 'call_stack_dump_deactivation_list', type: 'intList', default: '', scope: 'BOTH' },
   { key: 'call_stack_dump_on_error', type: 'bool(yes|no)', default: 'no', scope: 'BOTH' },
   { key: 'compactdb_page_reclaim_only', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'compat_numeric_division_scale', type: 'bool(yes|no)', default: 'no', scope: 'BOTH' },
   { key: 'compat_primary_key', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
   { key: 'csql_history_num', type: 'int', default: '50', scope: 'CLIENT' },
   { key: 'db_hosts', type: 'string', default: '', scope: 'CLIENT' },
@@ -55,24 +88,17 @@ const ADVANCED_PARAMS_SCHEMA = [
   { key: 'ha_port_id', type: 'int', default: '', scope: 'SERVER' },
   { key: 'hostvar_late_binding', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
   { key: 'index_scan_in_oid_order', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'index_scan_oid_buffer_pages', type: 'int', default: '4', scope: 'SERVER' },
-  { key: 'index_scan_oid_buffer_size', type: 'int', default: '65536', scope: 'SERVER' },
   { key: 'insert_execution_mode', type: 'int', default: '1', scope: 'CLIENT' },
   { key: 'intl_mbs_support', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'lock_timeout_message_type', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'max_plan_cache_entries', type: 'int', default: '1000', scope: 'BOTH' },
-  { key: 'max_query_cache_entries', type: 'int', default: '-1', scope: 'SERVER' },
-  { key: 'media_failure_support', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
+  { key: 'max_query_cache_entries', type: 'int', default: '0', scope: 'SERVER' },
   { key: 'oracle_style_empty_string', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
   { key: 'oracle_style_outerjoin', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
   { key: 'pthread_scope_process', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
-  { key: 'query_cache_mode', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'query_cache_size_in_pages', type: 'int', default: '-1', scope: 'SERVER' },
+  { key: 'query_cache_size_in_pages', type: 'int', default: '0', scope: 'SERVER' },
   { key: 'single_byte_compare', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
   { key: 'temp_file_max_size_in_pages', type: 'int', default: '-1', scope: 'SERVER' },
   { key: 'temp_file_memory_size_in_pages', type: 'int', default: '4', scope: 'SERVER' },
   { key: 'temp_volume_path', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'uj_job_timeout', type: 'int', default: '0', scope: 'SERVER' },
   { key: 'unfill_factor', type: 'float', default: '0.1', scope: 'SERVER' },
   { key: 'volume_extension_path', type: 'string', default: '', scope: 'SERVER' }
 ];
@@ -80,31 +106,42 @@ const ADVANCED_PARAMS_SCHEMA = [
 // General params table schema — excludes the six buffer pages/size keys,
 // which get their own CUBRID Admin-style radio (pages vs size) groups above
 // the table instead of flat rows (see BUFFER_GROUPS / BufferChoiceGroup).
+// replication removed: PRM_OBSOLETED + PRM_NO_TYPE in all 6 branches (no
+// storage at all) — the UI used to show a yes/no toggle that could never
+// have any effect. See CUBRID-DATABASE-PROPERTY-PARAM-AUDIT.md.
 const GENERAL_PARAMS_SCHEMA = {
   lock_escalation: '100000',
   lock_timeout_in_secs: '-1',
   deadlock_detection_interval_in_secs: '1',
   checkpoint_interval_in_mins: '1000',
-  isolation_level: 'TRAN_REP_CLASS_UNCOMMIT_INSTANCE',
+  // TRAN_REP_CLASS_COMMIT_INSTANCE == TRAN_READ_COMMITTED, the engine's own
+  // literal default (system_parameter.c, isolation_level's prm_Def entry).
+  isolation_level: 'TRAN_REP_CLASS_COMMIT_INSTANCE',
   cubrid_port_id: '1523',
   max_clients: '100',
-  auto_restart_server: 'no',
-  replication: 'no'
+  auto_restart_server: 'no'
 };
 
 const GENERAL_PARAMS_KEYS = Object.keys(GENERAL_PARAMS_SCHEMA);
 
 // Mirrors CA's PageSizeChoiceComposite: one radio picks pages, the other
 // picks size (+ unit); default page-count/size defaults from dbBaseParameters.
+// index_scan_oid_buffer_{pages,size} share one underlying PRM (same
+// dynamic_flag in system_parameter.c) exactly like the other three pairs
+// below, so they get the same pages/size radio treatment instead of two
+// independent rows — unlike the other three, the "pages" side is a float
+// ratio (engine range [0.05, 16.0]), not a page count, but the same
+// pages/size-with-unit-suffix mechanism still applies (PRM_SIZE_UNIT).
 const BUFFER_GROUPS = [
   { type: 'data', groupLabel: CM => CM.dataBufferAllocLabel, pagesKey: 'data_buffer_pages', sizeKey: 'data_buffer_size', pagesDefault: '25000', sizeDefault: '512' },
   { type: 'sort', groupLabel: CM => CM.sortBufferAllocLabel, pagesKey: 'sort_buffer_pages', sizeKey: 'sort_buffer_size', pagesDefault: '16', sizeDefault: '2' },
   { type: 'log',  groupLabel: CM => CM.logBufferAllocLabel,  pagesKey: 'log_buffer_pages',  sizeKey: 'log_buffer_size',  pagesDefault: '50', sizeDefault: '4' },
+  { type: 'indexScanOid', groupLabel: CM => CM.indexScanOidBufferAllocLabel, pagesKey: 'index_scan_oid_buffer_pages', sizeKey: 'index_scan_oid_buffer_size', pagesDefault: '4', sizeDefault: '65536' },
 ];
 const BUFFER_UNITS = ['KB', 'MB', 'GB', 'TB'];
 const BUFFER_UNIT_LETTER = { KB: 'K', MB: 'M', GB: 'G', TB: 'T' };
-const DEFAULT_BUFFER_MODE = { data: 'size', sort: 'size', log: 'size' };
-const DEFAULT_BUFFER_UNIT = { data: 'MB', sort: 'MB', log: 'MB' };
+const DEFAULT_BUFFER_MODE = { data: 'size', sort: 'size', log: 'size', indexScanOid: 'size' };
+const DEFAULT_BUFFER_UNIT = { data: 'MB', sort: 'MB', log: 'MB', indexScanOid: 'MB' };
 
 function getEffectiveParams(params, bufferMode, bufferUnit) {
   const effectiveParams = { ...params };
@@ -120,14 +157,19 @@ function getEffectiveParams(params, bufferMode, bufferUnit) {
   return effectiveParams;
 }
 
-const ISOLATION_LEVEL_OPTIONS = ['TRAN_SERIALIZABLE', 'TRAN_REP_CLASS_REP_INSTANCE', 'TRAN_REP_CLASS_COMMIT_INSTANCE', 'TRAN_REP_CLASS_UNCOMMIT_INSTANCE', 'TRAN_COMMIT_CLASS_COMMIT_INSTANCE', 'TRAN_COMMIT_CLASS_UNCOMMIT_INSTANCE'];
+// The real isolation_level_words[] keyword table (system_parameter.c) has 14
+// legal strings collapsing to exactly 3 enum values (TRAN_SERIALIZABLE /
+// TRAN_REPEATABLE_READ / TRAN_READ_COMMITTED); lookup is case-insensitive
+// (intl_mbs_casecmp), so these uppercase spellings match. The previous list
+// had 6 options — half of them (including the old default) don't exist in
+// any branch and were rejected by the engine with PRM_ERR_BAD_VALUE.
+const ISOLATION_LEVEL_OPTIONS = ['TRAN_SERIALIZABLE', 'TRAN_REP_CLASS_REP_INSTANCE', 'TRAN_REP_CLASS_COMMIT_INSTANCE'];
 const YES_NO_OPTIONS = ['yes', 'no'];
 
 // Keys whose value is picked from a fixed option list rather than free text.
 const SELECT_OPTIONS_BY_KEY = {
   isolation_level: ISOLATION_LEVEL_OPTIONS,
   auto_restart_server: YES_NO_OPTIONS,
-  replication: YES_NO_OPTIONS,
 };
 
 /* ─── ParamNameCell — shared "modified" dot + mono key label ─── */
@@ -143,7 +185,7 @@ function ParamNameCell({ label, isModified }) {
 }
 
 /* ─── ParamValueCell — select for fixed-option keys, else free-text input ─── */
-function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, disabledHint }) {
+function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, disabledHint, error }) {
   const options = SELECT_OPTIONS_BY_KEY[paramKey];
   if (options) {
     return (
@@ -160,18 +202,21 @@ function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, dis
     );
   }
   return (
-    <Input
-      size="sm"
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value)}
-      placeholder={defaultValue || '—'}
-      className="w-full max-w-none"
-    />
+    <div className="w-full max-w-none" title={error}>
+      <Input
+        size="sm"
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={defaultValue || '—'}
+        className={`w-full max-w-none ${error ? 'ring-1 ring-rose-500' : ''}`}
+      />
+      {error && <p className="text-11 text-rose-500 mt-0.5">{error}</p>}
+    </div>
   );
 }
 
 /* ─── BufferChoiceGroup — CA's PageSizeChoiceComposite: radio(pages)/radio(size+unit) ─── */
-function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeChange, onUnitChange, onPagesChange, onSizeChange }) {
+function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeChange, onUnitChange, onPagesChange, onSizeChange, pagesError }) {
   const CM = useCM();
   return (
     <div className="rounded-xl border border-slate-100 dark:border-white/6 p-4">
@@ -185,15 +230,18 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
             onChange={() => onModeChange('pages')}
             label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.pagesKey}</span>}
           />
-          <Input
-            size="sm"
-            type="number"
-            value={pagesValue ?? ''}
-            onChange={e => onPagesChange(e.target.value)}
-            placeholder={group.pagesDefault}
-            disabled={mode !== 'pages'}
-            className={`flex-1 max-w-[200px] ${mode !== 'pages' ? 'opacity-40' : ''}`}
-          />
+          <div className="flex-1 max-w-[200px]" title={mode === 'pages' ? pagesError : undefined}>
+            <Input
+              size="sm"
+              type="number"
+              value={pagesValue ?? ''}
+              onChange={e => onPagesChange(e.target.value)}
+              placeholder={group.pagesDefault}
+              disabled={mode !== 'pages'}
+              className={`w-full ${mode !== 'pages' ? 'opacity-40' : ''} ${mode === 'pages' && pagesError ? 'ring-1 ring-rose-500' : ''}`}
+            />
+            {mode === 'pages' && pagesError && <p className="text-11 text-rose-500 mt-0.5">{pagesError}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Radio
@@ -378,12 +426,29 @@ export default function DatabasePropertyModal() {
 
   const handleApply = async () => {
     if (activeSidebar === 'Connection Information') { dispatch(closeDatabasePropertyModal()); return; }
+    // Defense-in-depth: the Apply button is already disabled while
+    // guardErrorCount > 0, but never write a known-invalid value even if
+    // this somehow gets called some other way.
+    if (guardErrorCount > 0) return;
     startAction();
     try {
       // Reconcile the pages/size radio choice per buffer group: only the
       // selected side is written, and the size value gets its unit letter
       // suffixed back on (e.g. 512 + MB -> "512M"), matching cubrid.conf.
-      const saveParams = getEffectiveParams(params, bufferMode, bufferUnit);
+      const effectiveParams = getEffectiveParams(params, bufferMode, bufferUnit);
+      // Only write keys that actually changed from what was loaded —
+      // modifiedKeySet already does this exact diff for the UI's "modified"
+      // dots. Without this filter, any field whose box shows a value (even
+      // the schema's own placeholder default, for a key that was never in
+      // the conf file to begin with) gets promoted to an explicit conf
+      // line the instant its onChange fires, even if the user just retyped
+      // the same default and effectively made no real change. That would
+      // silently turn "let the engine decide" into "pinned to this exact
+      // value forever" for every field a user so much as clicks into.
+      const saveParams = {};
+      for (const key of modifiedKeySet) {
+        if (key in effectiveParams) saveParams[key] = effectiveParams[key];
+      }
 
       const sectionName = selectedDatabase ? `[@${selectedDatabase.toLowerCase()}]` : '[common]';
       let lines = [...rawLines];
@@ -416,15 +481,14 @@ export default function DatabasePropertyModal() {
       await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: nextLines });
       // Stay on the form view showing the values that were just applied,
       // instead of closing the modal — the user asked to keep editing
-      // without having to reopen it. `params`/`bufferMode`/`bufferUnit`
-      // already hold exactly what `saveParams` persisted (`saveParams` is
-      // only their effective on-disk form — pages vs size reconciled, with
-      // the unit letter suffixed back on for cubrid.conf — so reusing it
-      // here would bake that suffix into the raw, unsuffixed state the
-      // buffer inputs expect). Promoting the current values to the
-      // "initial" baseline is what correctly zeroes out modifiedCount and
-      // makes a subsequent "Reset to original" target these just-applied
-      // values instead of the pre-session ones.
+      // without having to reopen it. Re-baseline off `params`/`bufferMode`/
+      // `bufferUnit` directly, not `saveParams` — `saveParams` is now only
+      // the subset that actually changed (and its buffer values carry the
+      // unit letter suffixed back on for cubrid.conf, which would corrupt
+      // the raw, unsuffixed state the buffer inputs expect). Promoting the
+      // full current values to the "initial" baseline is what correctly
+      // zeroes out modifiedCount and makes a subsequent "Reset to original"
+      // target these just-applied values instead of the pre-session ones.
       setRawLines(nextLines);
       setInitialParams({ ...params });
       setInitialBufferMode({ ...bufferMode });
@@ -468,6 +532,15 @@ export default function DatabasePropertyModal() {
   const modifiedKeySet = useMemo(() => new Set(modifiedKeys), [modifiedKeys]);
   const modifiedCount = modifiedKeys.length;
 
+  // Guard validation (see constants/paramGuards.js) runs against the
+  // effective pages/size-reconciled values, same shape as what actually
+  // gets written to cubrid.conf on Apply.
+  const guardErrors = useMemo(
+    () => collectGuardErrors(getEffectiveParams(params, bufferMode, bufferUnit), DATABASE_PARAM_GUARDS),
+    [params, bufferMode, bufferUnit]
+  );
+  const guardErrorCount = Object.keys(guardErrors).length;
+
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
   // server should fail over via HA, not blindly self-restart in place), so
@@ -483,12 +556,13 @@ export default function DatabasePropertyModal() {
     default: GENERAL_PARAMS_SCHEMA[key],
     value: params[key],
     isModified: modifiedKeySet.has(key),
-  })), [params, modifiedKeySet]);
+    error: guardErrors[key],
+  })), [params, modifiedKeySet, guardErrors]);
 
   const advancedRows = useMemo(() => ADVANCED_PARAMS_SCHEMA
     .filter(p => !GENERAL_PARAMS_KEYS.includes(p.key))
-    .map(p => ({ ...p, value: params[p.key] !== undefined ? params[p.key] : p.default, isModified: modifiedKeySet.has(p.key) }))
-  , [params, modifiedKeySet]);
+    .map(p => ({ ...p, value: params[p.key] !== undefined ? params[p.key] : p.default, isModified: modifiedKeySet.has(p.key), error: guardErrors[p.key] }))
+  , [params, modifiedKeySet, guardErrors]);
 
   const navItems = selectedDatabase
     ? [{ id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }, { id: 'Connection Information', icon: 'cable', label: CM.connectionNavLabel }]
@@ -541,6 +615,7 @@ export default function DatabasePropertyModal() {
           onChange={(val) => setParams({ ...params, [row.key]: val })}
           disabled={row.key === 'auto_restart_server' && isHaEnabled}
           disabledHint={CM.autoRestartHaDisabledHint}
+          error={row.error}
         />
       ),
     },
@@ -572,6 +647,13 @@ export default function DatabasePropertyModal() {
         const boolOptions = row.type.includes('on|off') && row.type.includes('yes|no')
           ? (row.type.includes('replica') ? ['on', 'off', 'yes', 'no', 'replica'] : ['on', 'off', 'yes', 'no'])
           : row.type.includes('on|off') ? ['on', 'off'] : ['yes', 'no'];
+        // 'intList' would otherwise false-match the 'int' prefix below and
+        // get forced into a number input, which can't hold comma-separated
+        // values like "-493,-494". 'bigint' is deliberately excluded too —
+        // <input type=number> loses precision on 64-bit values — it falls
+        // through to the plain text input below instead.
+        const isNumberInput = row.type !== 'intList'
+          && ['int', 'short', 'numeric', 'float', 'double'].some(t => row.type.toLowerCase().startsWith(t));
         return hasBoolOptions ? (
           <Select
             size="sm"
@@ -581,13 +663,16 @@ export default function DatabasePropertyModal() {
             className="w-full max-w-none"
           />
         ) : (
-          <Input
-            type={['int', 'short', 'numeric', 'float', 'double'].some(t => row.type.toLowerCase().startsWith(t)) ? 'number' : 'text'}
-            size="sm"
-            value={row.value}
-            onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-none"
-          />
+          <div title={row.error}>
+            <Input
+              type={isNumberInput ? 'number' : 'text'}
+              size="sm"
+              value={row.value}
+              onChange={e => setParams({ ...params, [row.key]: e.target.value })}
+              className={`w-full max-w-none ${row.error ? 'ring-1 ring-rose-500' : ''}`}
+            />
+            {row.error && <p className="text-11 text-rose-500 mt-0.5">{row.error}</p>}
+          </div>
         );
       },
     },
@@ -630,7 +715,7 @@ export default function DatabasePropertyModal() {
               onClick={handleApply}
               icon="save"
               className="min-w-[140px]"
-              disabled={activeSidebar === 'Server Parameter' && modifiedCount === 0}
+              disabled={activeSidebar === 'Server Parameter' && (modifiedCount === 0 || guardErrorCount > 0)}
             >
               {CM.applyChanges}
             </Button>
@@ -697,12 +782,19 @@ export default function DatabasePropertyModal() {
                 onChange={setActiveTab}
                 fullWidth={false}
               />
-              {/* Modified indicator */}
-              {modifiedCount > 0 && (
-                <div data-testid="database-property-modified-count">
-                  <StatusBadge label={`${modifiedCount} modified`} variant="amber" pulse={true} className="rounded-full" />
-                </div>
-              )}
+              {/* Modified / guard-error indicators */}
+              <div className="flex items-center gap-2">
+                {guardErrorCount > 0 && (
+                  <div data-testid="database-property-guard-error-count">
+                    <StatusBadge label={`${guardErrorCount} invalid`} variant="rose" className="rounded-full" />
+                  </div>
+                )}
+                {modifiedCount > 0 && (
+                  <div data-testid="database-property-modified-count">
+                    <StatusBadge label={`${modifiedCount} modified`} variant="amber" pulse={true} className="rounded-full" />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -793,6 +885,7 @@ export default function DatabasePropertyModal() {
                       onUnitChange={(u) => setBufferUnit(prev => ({ ...prev, [group.type]: u }))}
                       onPagesChange={(v) => setParams({ ...params, [group.pagesKey]: v })}
                       onSizeChange={(v) => setParams({ ...params, [group.sizeKey]: v })}
+                      pagesError={guardErrors[group.pagesKey]}
                     />
                   ))}
                 </div>
