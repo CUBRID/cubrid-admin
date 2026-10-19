@@ -3,6 +3,7 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { fetchHostEnv } from '../../host/hostSlice';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -19,7 +20,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { useToast } from '../../../infrastructure/hooks/useToast';
 import { getModifiedKeys } from '../databasePropertyUtils';
-import { DATABASE_PARAM_GUARDS, collectGuardErrors } from '../../../constants/paramGuards';
+import { validateParams } from '@api-interfaces';
 import {
   ModalStatusLoading,
   ModalStatusError
@@ -31,121 +32,52 @@ const VIEW_LOADING = 'loading';
 const VIEW_SUCCESS = 'success';
 const VIEW_ERROR   = 'error';
 
-// Params removed from here, with the source-verified reason (see
-// CUBRID-DATABASE-PROPERTY-PARAM-AUDIT.md for full citations):
-//  - uj_job_timeout: fictional — no PRM_ID/conf-key has ever existed for
-//    this name in any engine branch (git log -S across history: 0 hits).
-//  - lock_timeout_message_type, media_failure_support: PRM_OBSOLETED with
-//    PRM_NO_TYPE (no storage) in all 6 branches — editing has zero effect.
-//  - query_cache_mode: PRM_HIDDEN with upper==lower==default==2 in all 6
-//    branches — structurally frozen, can never be set to anything else.
-//  - compat_numeric_division_scale, max_plan_cache_entries: the only two
-//    cubrid.conf keys in this table whose status/range actually differs
-//    across the 6 supported engine branches (the former gains
-//    DEPRECATED+HIDDEN only on develop; the latter's upper bound only
-//    exists on develop) — pulled rather than guarded with a single
-//    version-unaware rule.
-//  - index_scan_oid_buffer_pages/_size: moved into BUFFER_GROUPS below —
-//    they share one underlying PRM (same dynamic_flag) exactly like the
-//    other three pages/size pairs, so they get the same radio treatment
-//    instead of two independent rows.
-const ADVANCED_PARAMS_SCHEMA = [
-  { key: 'access_ip_control', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'access_ip_control_file', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'async_commit', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  // Added — real, version-common (Section 1 of CUBRID-PARAM-VERSION-MATRIX.md)
-  // cubrid.conf keys that weren't exposed anywhere in this editor, flagged
-  // there as DBA-relevant candidates missing from the UI. (A few other
-  // candidates from that same audit — max_query_per_tran,
-  // ha_sql_log_max_count, ha_sql_log_path, vacuum_ovfp_check_* — were
-  // deliberately left out: they only exist from release/11.3 onward, not
-  // across all 6 supported branches, so they don't meet the
-  // version-common bar this table otherwise holds to.)
-  { key: 'checkpoint_every_npages', type: 'int', default: '10', scope: 'SERVER' },
-  { key: 'data_aout_ratio', type: 'float', default: '0.0', scope: 'SERVER' },
-  { key: 'data_buffer_flush_ratio', type: 'float', default: '0.01', scope: 'SERVER' },
-  // PRM_BIGINT, not PRM_INTEGER — <input type=number> cannot safely round-trip
-  // 64-bit values, so this one gets a plain text input (see valueTypeLabel
-  // handling below) instead of the number input the other int-typed rows use.
-  { key: 'backup_volume_max_size_bytes', type: 'bigint', default: '0', scope: 'SERVER' },
-  { key: 'block_ddl_statement', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'block_nowhere_statement', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  // PRM_INTEGER_LIST, not PRM_STRING — comma-separated integer error codes.
-  { key: 'call_stack_dump_activation_list', type: 'intList', default: '', scope: 'BOTH' },
-  { key: 'call_stack_dump_deactivation_list', type: 'intList', default: '', scope: 'BOTH' },
-  { key: 'call_stack_dump_on_error', type: 'bool(yes|no)', default: 'no', scope: 'BOTH' },
-  { key: 'compactdb_page_reclaim_only', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'compat_primary_key', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'csql_history_num', type: 'int', default: '50', scope: 'CLIENT' },
-  { key: 'db_hosts', type: 'string', default: '', scope: 'CLIENT' },
-  { key: 'dont_reuse_heap_file', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'error_log', type: 'string', default: 'cubrid.err', scope: 'BOTH' },
-  { key: 'file_lock', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
-  { key: 'garbage_collection', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'group_commit_interval_in_msecs', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'ha_mode', type: 'string(on|off|yes|no|replica)', default: 'off', scope: 'SERVER' },
-  { key: 'ha_node_list', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'ha_port_id', type: 'int', default: '', scope: 'SERVER' },
-  { key: 'hostvar_late_binding', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'index_scan_in_oid_order', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'insert_execution_mode', type: 'int', default: '1', scope: 'CLIENT' },
-  { key: 'intl_mbs_support', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'max_query_cache_entries', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'oracle_style_empty_string', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'oracle_style_outerjoin', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'pthread_scope_process', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
-  { key: 'query_cache_size_in_pages', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'single_byte_compare', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'temp_file_max_size_in_pages', type: 'int', default: '-1', scope: 'SERVER' },
-  { key: 'temp_file_memory_size_in_pages', type: 'int', default: '4', scope: 'SERVER' },
-  { key: 'temp_volume_path', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'unfill_factor', type: 'float', default: '0.1', scope: 'SERVER' },
-  { key: 'volume_extension_path', type: 'string', default: '', scope: 'SERVER' }
-];
-
-// General params table schema — excludes the six buffer pages/size keys,
-// which get their own CUBRID Admin-style radio (pages vs size) groups above
-// the table instead of flat rows (see BUFFER_GROUPS / BufferChoiceGroup).
-// replication removed: PRM_OBSOLETED + PRM_NO_TYPE in all 6 branches (no
-// storage at all) — the UI used to show a yes/no toggle that could never
-// have any effect. See CUBRID-DATABASE-PROPERTY-PARAM-AUDIT.md.
-const GENERAL_PARAMS_SCHEMA = {
-  lock_escalation: '100000',
-  lock_timeout_in_secs: '-1',
-  deadlock_detection_interval_in_secs: '1',
-  checkpoint_interval_in_mins: '1000',
-  // TRAN_REP_CLASS_COMMIT_INSTANCE == TRAN_READ_COMMITTED, the engine's own
-  // literal default (system_parameter.c, isolation_level's prm_Def entry).
-  isolation_level: 'TRAN_REP_CLASS_COMMIT_INSTANCE',
-  cubrid_port_id: '1523',
-  max_clients: '100',
-  auto_restart_server: 'no'
+// The param list itself — which keys exist, their category/type/guard/
+// default — no longer lives here. It comes from the connected host's
+// `getEnv` response (`paramSchemas.database`, cached in Redux's
+// `hostEnvs`), already resolved for that host's actual engine version by
+// the server (see libs/api-interfaces/src/param-schema and
+// CmsConfigService.getEnv). This modal only keeps the purely
+// presentational pieces a version-aware server schema has no business
+// owning: i18n label text and the buffer radio groups' fixed 4-pair UI
+// layout (see `BUFFER_GROUP_LABELS` and `useBufferGroups` below).
+const BUFFER_GROUP_LABELS = {
+  data: CM => CM.dataBufferAllocLabel,
+  sort: CM => CM.sortBufferAllocLabel,
+  log: CM => CM.logBufferAllocLabel,
+  indexScanOid: CM => CM.indexScanOidBufferAllocLabel,
 };
-
-const GENERAL_PARAMS_KEYS = Object.keys(GENERAL_PARAMS_SCHEMA);
-
-// Mirrors CA's PageSizeChoiceComposite: one radio picks pages, the other
-// picks size (+ unit); default page-count/size defaults from dbBaseParameters.
-// index_scan_oid_buffer_{pages,size} share one underlying PRM (same
-// dynamic_flag in system_parameter.c) exactly like the other three pairs
-// below, so they get the same pages/size radio treatment instead of two
-// independent rows — unlike the other three, the "pages" side is a float
-// ratio (engine range [0.05, 16.0]), not a page count, but the same
-// pages/size-with-unit-suffix mechanism still applies (PRM_SIZE_UNIT).
-const BUFFER_GROUPS = [
-  { type: 'data', groupLabel: CM => CM.dataBufferAllocLabel, pagesKey: 'data_buffer_pages', sizeKey: 'data_buffer_size', pagesDefault: '25000', sizeDefault: '512' },
-  { type: 'sort', groupLabel: CM => CM.sortBufferAllocLabel, pagesKey: 'sort_buffer_pages', sizeKey: 'sort_buffer_size', pagesDefault: '16', sizeDefault: '2' },
-  { type: 'log',  groupLabel: CM => CM.logBufferAllocLabel,  pagesKey: 'log_buffer_pages',  sizeKey: 'log_buffer_size',  pagesDefault: '50', sizeDefault: '4' },
-  { type: 'indexScanOid', groupLabel: CM => CM.indexScanOidBufferAllocLabel, pagesKey: 'index_scan_oid_buffer_pages', sizeKey: 'index_scan_oid_buffer_size', pagesDefault: '4', sizeDefault: '65536' },
-];
 const BUFFER_UNITS = ['KB', 'MB', 'GB', 'TB'];
 const BUFFER_UNIT_LETTER = { KB: 'K', MB: 'M', GB: 'G', TB: 'T' };
 const DEFAULT_BUFFER_MODE = { data: 'size', sort: 'size', log: 'size', indexScanOid: 'size' };
 const DEFAULT_BUFFER_UNIT = { data: 'MB', sort: 'MB', log: 'MB', indexScanOid: 'MB' };
 
-function getEffectiveParams(params, bufferMode, bufferUnit) {
+/**
+ * Groups the schema's `buffer`-category entries (pages/size pairs) by
+ * `bufferGroup.pairKey`, attaching each pair's display-label function —
+ * `groupLabel` is called as `group.groupLabel(CM)` at render time, same
+ * as the old hardcoded BUFFER_GROUPS did.
+ */
+function buildBufferGroups(databaseParamSchema) {
+  const byPairKey = {};
+  for (const entry of databaseParamSchema) {
+    if (entry.category !== 'buffer' || !entry.bufferGroup) continue;
+    const { pairKey, role } = entry.bufferGroup;
+    byPairKey[pairKey] ??= { type: pairKey, groupLabel: BUFFER_GROUP_LABELS[pairKey] ?? (() => pairKey) };
+    if (role === 'pages') {
+      byPairKey[pairKey].pagesKey = entry.key;
+      byPairKey[pairKey].pagesDefault = entry.default;
+    } else {
+      byPairKey[pairKey].sizeKey = entry.key;
+      byPairKey[pairKey].sizeDefault = entry.default;
+    }
+  }
+  return Object.values(byPairKey);
+}
+
+function getEffectiveParams(params, bufferMode, bufferUnit, bufferGroups) {
   const effectiveParams = { ...params };
-  BUFFER_GROUPS.forEach(({ type, pagesKey, sizeKey }) => {
+  bufferGroups.forEach(({ type, pagesKey, sizeKey }) => {
     if (bufferMode[type] === 'pages') {
       delete effectiveParams[sizeKey];
     } else {
@@ -156,21 +88,6 @@ function getEffectiveParams(params, bufferMode, bufferUnit) {
   });
   return effectiveParams;
 }
-
-// The real isolation_level_words[] keyword table (system_parameter.c) has 14
-// legal strings collapsing to exactly 3 enum values (TRAN_SERIALIZABLE /
-// TRAN_REPEATABLE_READ / TRAN_READ_COMMITTED); lookup is case-insensitive
-// (intl_mbs_casecmp), so these uppercase spellings match. The previous list
-// had 6 options — half of them (including the old default) don't exist in
-// any branch and were rejected by the engine with PRM_ERR_BAD_VALUE.
-const ISOLATION_LEVEL_OPTIONS = ['TRAN_SERIALIZABLE', 'TRAN_REP_CLASS_REP_INSTANCE', 'TRAN_REP_CLASS_COMMIT_INSTANCE'];
-const YES_NO_OPTIONS = ['yes', 'no'];
-
-// Keys whose value is picked from a fixed option list rather than free text.
-const SELECT_OPTIONS_BY_KEY = {
-  isolation_level: ISOLATION_LEVEL_OPTIONS,
-  auto_restart_server: YES_NO_OPTIONS,
-};
 
 /* ─── ParamNameCell — shared "modified" dot + mono key label ─── */
 function ParamNameCell({ label, isModified }) {
@@ -185,8 +102,8 @@ function ParamNameCell({ label, isModified }) {
 }
 
 /* ─── ParamValueCell — select for fixed-option keys, else free-text input ─── */
-function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, disabledHint, error }) {
-  const options = SELECT_OPTIONS_BY_KEY[paramKey];
+function ParamValueCell({ guard, value, defaultValue, onChange, disabled, disabledHint, error }) {
+  const options = guard?.kind === 'enum' ? guard.options : null;
   if (options) {
     return (
       <div className="w-full max-w-none" title={disabled ? disabledHint : undefined}>
@@ -287,6 +204,14 @@ export default function DatabasePropertyModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
+  // Resolved per this host's actual engine version by the server (see
+  // CmsConfigService.getEnv) — populated into `hostEnvs` by whatever
+  // already triggers `fetchHostEnv` on host activation/login. The
+  // defensive dispatch below only matters if this modal somehow opens
+  // before that's happened.
+  const hostEnv = useSelector((state) => state.host.hostEnvs[selectedHostUid]);
+  const databaseParamSchema = useMemo(() => hostEnv?.paramSchemas?.database ?? [], [hostEnv]);
+  const bufferGroups = useMemo(() => buildBufferGroups(databaseParamSchema), [databaseParamSchema]);
   const toast = useToast();
   const {
     error: actionError,
@@ -302,7 +227,6 @@ export default function DatabasePropertyModal() {
   const [fetching, setFetching] = useState(false);
   const [initialParams, setInitialParams] = useState({});
   const [params, setParams] = useState({});
-  const [rawLines, setRawLines] = useState([]);
   const [initialBufferMode, setInitialBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [initialBufferUnit, setInitialBufferUnit] = useState(DEFAULT_BUFFER_UNIT);
@@ -323,11 +247,16 @@ export default function DatabasePropertyModal() {
       setBufferMode(DEFAULT_BUFFER_MODE);
       setInitialBufferUnit(DEFAULT_BUFFER_UNIT);
       setBufferUnit(DEFAULT_BUFFER_UNIT);
-      setRawLines([]);
       setActiveSidebar('Server Parameter');
       fetchedConfigKeyRef.current = null;
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase, resetAction]);
+
+  useEffect(() => {
+    if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && !hostEnv) {
+      dispatch(fetchHostEnv(selectedHostUid));
+    }
+  }, [isDatabasePropertyModalOpen, selectedHostUid, isAuthorized, hostEnv, dispatch]);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized) {
@@ -351,6 +280,7 @@ export default function DatabasePropertyModal() {
     if (
       isDatabasePropertyModalOpen && selectedHostUid && isAuthorized &&
       activeSidebar !== 'Connection Information' &&
+      databaseParamSchema.length > 0 &&
       fetchedConfigKeyRef.current !== configKey
     ) {
       fetchedConfigKeyRef.current = configKey;
@@ -359,7 +289,6 @@ export default function DatabasePropertyModal() {
         try {
           const response = await hostApi.getHostConfig(selectedHostUid, 'cubridconf');
           const lines = response?.conflist?.[0]?.confdata || [];
-          setRawLines(lines);
           let currentSection = '';
           const newParams = {};
           for (const line of lines) {
@@ -379,7 +308,7 @@ export default function DatabasePropertyModal() {
           // pages key if it has a value, else fall back to size (+ unit
           // parsed off the trailing letter, e.g. "512M" -> 512 / MB).
           const nextMode = {}, nextUnit = {};
-          BUFFER_GROUPS.forEach(({ type, pagesKey, sizeKey }) => {
+          bufferGroups.forEach(({ type, pagesKey, sizeKey }) => {
             const pagesVal = newParams[pagesKey];
             const sizeVal = newParams[sizeKey];
             if (pagesVal && pagesVal.trim() !== '') {
@@ -422,7 +351,7 @@ export default function DatabasePropertyModal() {
       };
       fetchParams();
     }
-  }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized]);
+  }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized, databaseParamSchema, bufferGroups]);
 
   const handleApply = async () => {
     if (activeSidebar === 'Connection Information') { dispatch(closeDatabasePropertyModal()); return; }
@@ -435,7 +364,7 @@ export default function DatabasePropertyModal() {
       // Reconcile the pages/size radio choice per buffer group: only the
       // selected side is written, and the size value gets its unit letter
       // suffixed back on (e.g. 512 + MB -> "512M"), matching cubrid.conf.
-      const effectiveParams = getEffectiveParams(params, bufferMode, bufferUnit);
+      const effectiveParams = getEffectiveParams(params, bufferMode, bufferUnit, bufferGroups);
       // Only write keys that actually changed from what was loaded —
       // modifiedKeySet already does this exact diff for the UI's "modified"
       // dots. Without this filter, any field whose box shows a value (even
@@ -450,35 +379,14 @@ export default function DatabasePropertyModal() {
         if (key in effectiveParams) saveParams[key] = effectiveParams[key];
       }
 
-      const sectionName = selectedDatabase ? `[@${selectedDatabase.toLowerCase()}]` : '[common]';
-      let lines = [...rawLines];
-      let sectionStartIndex = -1, sectionEndIndex = -1;
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim().toLowerCase() === sectionName.toLowerCase()) {
-          sectionStartIndex = i;
-          for (let j = i + 1; j < lines.length; j++) {
-            if (lines[j].trim().startsWith('[') && lines[j].trim().endsWith(']')) { sectionEndIndex = j; break; }
-          }
-          if (sectionEndIndex === -1) sectionEndIndex = lines.length;
-          break;
-        }
-      }
-      if (sectionStartIndex === -1) { lines.push(''); lines.push(sectionName); sectionStartIndex = lines.length - 1; sectionEndIndex = lines.length; }
-      const sectionLines = lines.slice(sectionStartIndex + 1, sectionEndIndex);
-      const otherBefore = lines.slice(0, sectionStartIndex + 1);
-      const otherAfter = lines.slice(sectionEndIndex);
-      const updatedSection = [...sectionLines];
-      Object.entries(saveParams).forEach(([key, value]) => {
-        let found = false;
-        for (let i = 0; i < updatedSection.length; i++) {
-          const trimmed = updatedSection[i].trim();
-          if (trimmed.startsWith('#')) continue;
-          if (trimmed.split('=')[0].trim().toLowerCase() === key.toLowerCase()) { updatedSection[i] = `${key}=${value}`; found = true; break; }
-        }
-        if (!found) updatedSection.push(`${key}=${value}`);
+      // The server now owns conf-line construction (section lookup, merge,
+      // duplicate-key handling) via a typed, per-field-validated endpoint —
+      // the client just sends the changed keys. `dbname` omitted writes to
+      // [common], matching the old `sectionName` fallback above.
+      await hostApi.setDatabaseConfigParams(selectedHostUid, {
+        ...(selectedDatabase ? { dbname: selectedDatabase } : {}),
+        ...saveParams,
       });
-      const nextLines = [...otherBefore, ...updatedSection, ...otherAfter];
-      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: nextLines });
       // Stay on the form view showing the values that were just applied,
       // instead of closing the modal — the user asked to keep editing
       // without having to reopen it. Re-baseline off `params`/`bufferMode`/
@@ -489,7 +397,6 @@ export default function DatabasePropertyModal() {
       // full current values to the "initial" baseline is what correctly
       // zeroes out modifiedCount and makes a subsequent "Reset to original"
       // target these just-applied values instead of the pre-session ones.
-      setRawLines(nextLines);
       setInitialParams({ ...params });
       setInitialBufferMode({ ...bufferMode });
       setInitialBufferUnit({ ...bufferUnit });
@@ -524,20 +431,21 @@ export default function DatabasePropertyModal() {
 
   const modifiedKeys = useMemo(
     () => getModifiedKeys(
-      getEffectiveParams(initialParams, initialBufferMode, initialBufferUnit),
-      getEffectiveParams(params, bufferMode, bufferUnit)
+      getEffectiveParams(initialParams, initialBufferMode, initialBufferUnit, bufferGroups),
+      getEffectiveParams(params, bufferMode, bufferUnit, bufferGroups)
     ),
-    [initialParams, params, initialBufferMode, bufferMode, initialBufferUnit, bufferUnit]
+    [initialParams, params, initialBufferMode, bufferMode, initialBufferUnit, bufferUnit, bufferGroups]
   );
   const modifiedKeySet = useMemo(() => new Set(modifiedKeys), [modifiedKeys]);
   const modifiedCount = modifiedKeys.length;
 
-  // Guard validation (see constants/paramGuards.js) runs against the
-  // effective pages/size-reconciled values, same shape as what actually
-  // gets written to cubrid.conf on Apply.
+  // Guard validation runs against the schema this host's own engine
+  // version resolved (see `databaseParamSchema` above), using the exact
+  // pages/size-reconciled values that actually get written to cubrid.conf
+  // on Apply — same `validateParams` the server re-runs before writing.
   const guardErrors = useMemo(
-    () => collectGuardErrors(getEffectiveParams(params, bufferMode, bufferUnit), DATABASE_PARAM_GUARDS),
-    [params, bufferMode, bufferUnit]
+    () => validateParams(databaseParamSchema, getEffectiveParams(params, bufferMode, bufferUnit, bufferGroups)).errors,
+    [databaseParamSchema, params, bufferMode, bufferUnit, bufferGroups]
   );
   const guardErrorCount = Object.keys(guardErrors).length;
 
@@ -551,18 +459,15 @@ export default function DatabasePropertyModal() {
   const isHaEnabled = params.ha_mode !== undefined
     && !HA_MODE_OFF_KEYWORDS.includes(String(params.ha_mode).trim().toLowerCase());
 
-  const generalRows = useMemo(() => GENERAL_PARAMS_KEYS.map(key => ({
-    key,
-    default: GENERAL_PARAMS_SCHEMA[key],
-    value: params[key],
-    isModified: modifiedKeySet.has(key),
-    error: guardErrors[key],
-  })), [params, modifiedKeySet, guardErrors]);
+  const generalRows = useMemo(() => databaseParamSchema
+    .filter(e => e.category === 'general')
+    .map(e => ({ ...e, value: params[e.key], isModified: modifiedKeySet.has(e.key), error: guardErrors[e.key] }))
+  , [databaseParamSchema, params, modifiedKeySet, guardErrors]);
 
-  const advancedRows = useMemo(() => ADVANCED_PARAMS_SCHEMA
-    .filter(p => !GENERAL_PARAMS_KEYS.includes(p.key))
-    .map(p => ({ ...p, value: params[p.key] !== undefined ? params[p.key] : p.default, isModified: modifiedKeySet.has(p.key), error: guardErrors[p.key] }))
-  , [params, modifiedKeySet, guardErrors]);
+  const advancedRows = useMemo(() => databaseParamSchema
+    .filter(e => e.category === 'advanced')
+    .map(e => ({ ...e, value: params[e.key] !== undefined ? params[e.key] : e.default, isModified: modifiedKeySet.has(e.key), error: guardErrors[e.key] }))
+  , [databaseParamSchema, params, modifiedKeySet, guardErrors]);
 
   const navItems = selectedDatabase
     ? [{ id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }, { id: 'Connection Information', icon: 'cable', label: CM.connectionNavLabel }]
@@ -609,7 +514,7 @@ export default function DatabasePropertyModal() {
       header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
       render: (_, row) => (
         <ParamValueCell
-          paramKey={row.key}
+          guard={row.guard}
           value={row.key === 'auto_restart_server' && isHaEnabled ? 'no' : row.value}
           defaultValue={row.default}
           onChange={(val) => setParams({ ...params, [row.key]: val })}
@@ -639,26 +544,20 @@ export default function DatabasePropertyModal() {
         return <span className={`text-11 font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
       },
     },
-    { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{val}</span> },
+    { header: CM.valueTypeLabel, accessor: 'guard', width: '18%', render: (guard) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{guard.kind}</span> },
     {
       header: CM.parameterValueLabel, accessor: 'value', width: '36%', cellClassName: 'w-[36%]', sortable: false,
       render: (_, row) => {
-        const hasBoolOptions = row.type.includes('yes|no') || row.type.includes('on|off');
-        const boolOptions = row.type.includes('on|off') && row.type.includes('yes|no')
-          ? (row.type.includes('replica') ? ['on', 'off', 'yes', 'no', 'replica'] : ['on', 'off', 'yes', 'no'])
-          : row.type.includes('on|off') ? ['on', 'off'] : ['yes', 'no'];
-        // 'intList' would otherwise false-match the 'int' prefix below and
-        // get forced into a number input, which can't hold comma-separated
-        // values like "-493,-494". 'bigint' is deliberately excluded too —
-        // <input type=number> loses precision on 64-bit values — it falls
-        // through to the plain text input below instead.
-        const isNumberInput = row.type !== 'intList'
-          && ['int', 'short', 'numeric', 'float', 'double'].some(t => row.type.toLowerCase().startsWith(t));
-        return hasBoolOptions ? (
+        const options = row.guard.kind === 'enum' ? row.guard.options : null;
+        // 'intList'/'bigint'/'size' fall through to the plain text input —
+        // a number input can't hold comma-separated values, and silently
+        // loses precision on 64-bit values.
+        const isNumberInput = row.guard.kind === 'int' || row.guard.kind === 'float';
+        return options ? (
           <Select
             size="sm"
             value={row.value}
-            options={boolOptions.map(o => ({ value: o, label: o.toUpperCase() }))}
+            options={options.map(o => ({ value: o, label: o.toUpperCase() }))}
             onChange={e => setParams({ ...params, [row.key]: e.target.value })}
             className="w-full max-w-none"
           />
@@ -873,7 +772,7 @@ export default function DatabasePropertyModal() {
               /* ─── GENERAL PARAMETERS ─── */
               <div className="p-6 space-y-6">
                 <div className="flex flex-col gap-3">
-                  {BUFFER_GROUPS.map(group => (
+                  {bufferGroups.map(group => (
                     <BufferChoiceGroup
                       key={group.type}
                       group={group}

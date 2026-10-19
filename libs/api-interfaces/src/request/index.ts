@@ -73,3 +73,5 @@ export * from './set-dbmt-passwd-request';
 export * from './refresh-token-request';
 export * from './logout-request';
 export * from './move-host-request';
+export * from './set-database-config-params-client-request';
+export * from './set-broker-config-params-client-request';

@@ -231,4 +231,62 @@ export class CmsConfigController {
     );
     return await this.cmsConfigService.setBrokerParam(userId, hostUid, body.confdata);
   }
+
+  /**
+   * Set a subset of cubrid.conf parameters for a database (or [common] when
+   * `dbname` is omitted). `params` is validated against this host's own
+   * version-resolved schema (see `CmsConfigService.setDatabaseConfigParams`)
+   * — unlike `set-sys-param`, which accepts arbitrary raw conf text with no
+   * validation at all. Body type is a plain (non-class) object so it
+   * passes through the global `ValidationPipe` untouched — the schema is
+   * dynamic (varies per host's engine version), so there's no fixed field
+   * list a class-validator DTO could declare.
+   *
+   * @route POST /:hostUid/cms-config/database-params
+   * @example
+   * // POST /host-uid/cms-config/database-params
+   * // Body: { "dbname": "demodb", "params": { "csql_history_num": 150 } }
+   */
+  @Post('database-params')
+  async setDatabaseConfigParams(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: { dbname?: string; params: Record<string, string | number> }
+  ): Promise<SetSysParamClientResponse> {
+    const userId = req.user.sub;
+    const { dbname, params } = body;
+
+    this.logger.log(
+      `Setting database config params for host: ${hostUid}, dbname: ${dbname ?? '[common]'}`,
+      'CmsConfigController'
+    );
+    return await this.cmsConfigService.setDatabaseConfigParams(userId, hostUid, dbname, params);
+  }
+
+  /**
+   * Set a subset of broker.conf parameters for one broker. `params` is
+   * validated against this host's own version-resolved schema (see
+   * `CmsConfigService.setBrokerConfigParams`) — unlike `broker-set-param`,
+   * which accepts arbitrary raw conf text with no validation at all.
+   *
+   * @route POST /:hostUid/cms-config/broker-params/:brokerName
+   * @example
+   * // POST /host-uid/cms-config/broker-params/query_editor
+   * // Body: { "params": { "BROKER_PORT": 30000 } }
+   */
+  @Post('broker-params/:brokerName')
+  async setBrokerConfigParams(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('brokerName') brokerName: string,
+    @Body() body: { params: Record<string, string | number> }
+  ): Promise<SetSysParamClientResponse> {
+    const userId = req.user.sub;
+
+    this.logger.log(
+      `Setting broker config params for host: ${hostUid}, broker: ${brokerName}`,
+      'CmsConfigController'
+    );
+    return await this.cmsConfigService.setBrokerConfigParams(userId, hostUid, brokerName, body.params);
+  }
 }

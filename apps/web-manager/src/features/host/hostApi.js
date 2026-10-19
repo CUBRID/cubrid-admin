@@ -40,6 +40,9 @@ export const hostApi = {
   setHostConfig: (hostUid, payload) => {
     return apiClient.post(`/${hostUid}/cms-config/set-sys-param`, payload);
   },
+  setDatabaseConfigParams: (hostUid, payload) => {
+    return apiClient.post(`/${hostUid}/cms-config/database-params`, payload);
+  },
   setHostPassword: (hostUid, payload) => {
     return apiClient.put(`/${hostUid}/cms-user/set-password`, payload);
   },
