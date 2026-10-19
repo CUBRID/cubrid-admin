@@ -245,6 +245,12 @@ const initialState = {
   // render a DIFFERENT, currently-selected host's broker tree. See the same
   // reasoning on `activeHostUid` below and in fetchBrokerList's reducers.
   brokersByHost: {}, // { hostUid: brokers[] }
+  // Navigator-only mirror of brokersByHost — only updated by a
+  // non-background fetchBrokerList (initial load, manual refresh, or an
+  // operation's own refetch), never by MonitoringProvider's interval poll
+  // (isBackground:true). BrokerTree.jsx reads this instead of
+  // brokersByHost, so the sidebar tree doesn't move on every poll tick.
+  navigatorBrokersByHost: {}, // { hostUid: brokers[] }
   // Mirrors state.host.selectedHostUid (via the addMatcher below) so a late
   // response for a host the user is no longer viewing can tell it isn't the
   // active one and skip touching the globally-shared selectedBroker.
@@ -310,8 +316,10 @@ const brokerSlice = createSlice({
       const hostUid = action.payload;
       if (hostUid) {
         delete state.brokersByHost[hostUid];
+        delete state.navigatorBrokersByHost[hostUid];
       } else {
         state.brokersByHost = {};
+        state.navigatorBrokersByHost = {};
       }
       state.selectedBroker = null;
       state.selectedBrokerSubItem = null;
@@ -356,6 +364,12 @@ const brokerSlice = createSlice({
         if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
           state.brokersByHost[hostUid] = newBrokers;
         }
+        // Navigator mirror — skipped for a background (interval) poll, so
+        // the sidebar broker tree only moves on an explicit user action.
+        const isBackground = typeof action.meta.arg === 'object' && !!action.meta.arg?.isBackground;
+        if (!isBackground && JSON.stringify(state.navigatorBrokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
+          state.navigatorBrokersByHost[hostUid] = newBrokers;
+        }
         // Only let the CURRENTLY ACTIVE host's own response affect the
         // shared selectedBroker. Without this, a response for a host the
         // user has since switched away from (still "latest for that host" —
@@ -373,6 +387,11 @@ const brokerSlice = createSlice({
         state.loadingByHost[hostUid] = false;
         state.error = action.payload;
         state.brokersByHost[hostUid] = [];
+        // Same reasoning as the fulfilled case: a background poll failure
+        // is transient and shouldn't blank the navigator's tree.
+        if (!(typeof action.meta.arg === 'object' && action.meta.arg?.isBackground)) {
+          state.navigatorBrokersByHost[hostUid] = [];
+        }
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
         const { brokerName } = action.meta.arg;
@@ -582,6 +601,7 @@ const brokerSlice = createSlice({
           delete state.cmsLogsByHost[hostUid];
           delete state.brokerConfig[hostUid];
           delete state.brokersByHost[hostUid];
+          delete state.navigatorBrokersByHost[hostUid];
           // A fetchBrokerList already in flight for this host when it was
           // deleted/disconnected is still "the latest for its own host" per
           // the per-host dedup above — nothing else for this host will ever

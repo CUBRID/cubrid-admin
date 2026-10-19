@@ -116,7 +116,17 @@ export const deleteDatabaseProfile = createAsyncThunk(
 // shared array, so a response for a host the user has since switched away
 // from can never overwrite the data the UI is now using to render a
 // DIFFERENT, currently-selected host's tree/dashboard.
-const parseDbResponse = (state, payload, hostUid) => {
+//
+// `isBackground` additionally gates the navigator* mirror fields
+// (navigatorDatabasesByHost/navigatorActiveDatabasesByHost), which
+// DatabaseTree.jsx reads instead of databasesByHost/activeDatabasesByHost.
+// Dashboard-driven background polling (MonitoringProvider's interval,
+// tagged isBackground:true) still updates the live fields every consumer
+// other than the navigator reads — it just skips the navigator mirror, so
+// the sidebar tree only moves on an explicit user action (initial load,
+// manual refresh, or an operation's own success/failure refetch — none of
+// which are ever background-tagged) rather than every poll tick.
+const parseDbResponse = (state, payload, hostUid, isBackground = false) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
   const activeFound = payload.activelist?.active;
@@ -128,6 +138,9 @@ const parseDbResponse = (state, payload, hostUid) => {
     newActive = rawActive.map(d => (typeof d === 'string' ? d : d?.dbname)).filter(Boolean);
     if (JSON.stringify(prevActive) !== JSON.stringify(newActive)) {
       state.activeDatabasesByHost[hostUid] = newActive;
+    }
+    if (!isBackground && JSON.stringify(state.navigatorActiveDatabasesByHost[hostUid]) !== JSON.stringify(newActive)) {
+      state.navigatorActiveDatabasesByHost[hostUid] = newActive;
     }
   }
 
@@ -146,6 +159,9 @@ const parseDbResponse = (state, payload, hostUid) => {
       : rawList;
     if (JSON.stringify(state.databasesByHost[hostUid]) !== JSON.stringify(mergedList)) {
       state.databasesByHost[hostUid] = mergedList;
+    }
+    if (!isBackground && JSON.stringify(state.navigatorDatabasesByHost[hostUid]) !== JSON.stringify(mergedList)) {
+      state.navigatorDatabasesByHost[hostUid] = mergedList;
     }
   }
 
@@ -182,6 +198,12 @@ const initialState = {
   // UI is now using to render a DIFFERENT, currently-selected host's tree.
   databasesByHost: {}, // { hostUid: dbs[] }
   activeDatabasesByHost: {}, // { hostUid: dbname[] }
+  // Navigator-only mirror of the two maps above — see parseDbResponse's
+  // header comment. DatabaseTree.jsx reads these instead of
+  // databasesByHost/activeDatabasesByHost, so the sidebar tree doesn't
+  // move on every dashboard-interval poll tick.
+  navigatorDatabasesByHost: {}, // { hostUid: dbs[] }
+  navigatorActiveDatabasesByHost: {}, // { hostUid: dbname[] }
   haDbNamesByHost: {}, // { hostUid: dbname[] }
   // Mirrors state.host.selectedHostUid (via the addMatcher below) so a late
   // response for a host the user is no longer viewing can tell it isn't the
@@ -238,10 +260,14 @@ const databaseCoreSlice = createSlice({
       if (hostUid) {
         delete state.databasesByHost[hostUid];
         delete state.activeDatabasesByHost[hostUid];
+        delete state.navigatorDatabasesByHost[hostUid];
+        delete state.navigatorActiveDatabasesByHost[hostUid];
         delete state.haDbNamesByHost[hostUid];
       } else {
         state.databasesByHost = {};
         state.activeDatabasesByHost = {};
+        state.navigatorDatabasesByHost = {};
+        state.navigatorActiveDatabasesByHost = {};
         state.haDbNamesByHost = {};
       }
       state.selectedDatabase = null;
@@ -293,7 +319,7 @@ const databaseCoreSlice = createSlice({
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         if (action.meta.requestId !== state.latestStartInfoRequestIdByHost[hostUid]) return;
         state.loadingByHost[hostUid] = false;
-        parseDbResponse(state, action.payload, hostUid);
+        parseDbResponse(state, action.payload, hostUid, !!action.meta.arg?.isBackground);
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
@@ -302,6 +328,13 @@ const databaseCoreSlice = createSlice({
         state.error = action.payload;
         state.databasesByHost[hostUid] = [];
         state.activeDatabasesByHost[hostUid] = [];
+        // A background (interval) poll failure is transient and shouldn't
+        // blank the tree the navigator is showing — only an explicit,
+        // user-triggered fetch failure does that.
+        if (!action.meta.arg?.isBackground) {
+          state.navigatorDatabasesByHost[hostUid] = [];
+          state.navigatorActiveDatabasesByHost[hostUid] = [];
+        }
       })
       .addCase(startDatabase.pending, (state) => {
         state.actionLoading = true;
@@ -419,6 +452,8 @@ const databaseCoreSlice = createSlice({
           const hostUid = action.payload;
           delete state.databasesByHost[hostUid];
           delete state.activeDatabasesByHost[hostUid];
+          delete state.navigatorDatabasesByHost[hostUid];
+          delete state.navigatorActiveDatabasesByHost[hostUid];
           delete state.haDbNamesByHost[hostUid];
           // A fetchDatabaseStartInfo already in flight for this host when it
           // was deleted/disconnected is still "the latest for its own host"
