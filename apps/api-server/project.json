@@ -48,7 +48,8 @@
       "dependsOn": ["build"],
       "options": {
         "command": "node dist/apps/api-server/main.js",
-        "cwd": "{workspaceRoot}"
+        "cwd": "{workspaceRoot}",
+        "env": { "ENVIRONMENT": "development" }
       }
     },
     "test": {
