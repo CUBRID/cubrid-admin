@@ -64,6 +64,7 @@ jobs:
     name: "Tier 2: TCP E2E against Ephemeral CUBRID CMS"
     needs: tier-1-fast-checks
     if: >-
+      success() &&
       !cancelled() &&
       github.event.pull_request.draft == false && (
         github.event_name == 'workflow_dispatch' ||
