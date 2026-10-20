@@ -104,17 +104,24 @@ export default function ReconnectHostModal() {
         console.error(e);
       }
 
+      try {
+        const { clearDatabaseLoginsForHost } = await import('../../database/databaseCoreSlice');
+        dispatch(clearDatabaseLoginsForHost(reconnectHostUid));
+      } catch (e) {
+        console.error(e);
+      }
+
       if (selectedHostUid === reconnectHostUid) {
         dispatch(setSelectedHost(null));
         try {
           const { resetDatabaseState } = await import('../../database/databaseCoreSlice');
-          dispatch(resetDatabaseState());
+          dispatch(resetDatabaseState(reconnectHostUid));
         } catch (e) {
           console.error(e);
         }
         try {
           const { resetBrokerState } = await import('../../broker/brokerSlice');
-          dispatch(resetBrokerState());
+          dispatch(resetBrokerState(reconnectHostUid));
         } catch (e) {
           console.error(e);
         }
@@ -142,6 +149,8 @@ export default function ReconnectHostModal() {
       loading={isReconnecting}
       maxWidth="max-w-[440px]"
       testId="reconnect-host"
+      onSubmit={handleReconnect}
+      submitDisabled={isReconnecting}
       footer={
         <>
           <Button

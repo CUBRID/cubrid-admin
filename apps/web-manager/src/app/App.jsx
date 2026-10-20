@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { toggleTheme, toggleSidebar, setIsResizing, setActiveMainTab, closeTab, closeOtherTabs, closeAllTabs, triggerRefreshActiveTab } from '../features/layout/layoutSlice';
 import { openAddHostModal, closeAddHostModal, setSelectedHost } from '../features/host/hostSlice';
+import { stripHaRoleTagFromAlias } from '../features/host/hostGroupUtils';
 import { setSelectedDatabase } from '../features/database/databaseSlice';
 import { closeCreateUserModal, closeEditUserModal } from '../features/user/userSlice';
 import Sidebar from '../features/layout/components/Sidebar';
@@ -57,7 +58,6 @@ import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import RegisterPage from '../features/auth/components/RegisterPage';
-import ForgotPasswordPage from '../features/auth/components/ForgotPasswordPage';
 import StatusModal from '../components/common/StatusModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import LogViewer from '../features/broker/components/LogViewer';
@@ -82,15 +82,17 @@ import ReconnectHostModal from '../features/host/components/ReconnectHostModal';
 
 import { Icon } from '../components/ds/foundation/Icon';
 import { useCM } from '../constants/useCM';
+import { useConfirm } from '../infrastructure/hooks/useConfirm';
 
 function DashboardLayout() {
   const CM = useCM();
+  const confirm = useConfirm();
   const dispatch = useDispatch();
   const { loading: dbCoreLoading } = useSelector((state) => state.database, shallowEqual);
   const { actionLoading: dbUILoading } = useSelector((state) => state.databaseUI, shallowEqual);
   const { operationLoading: dbOpLoading } = useSelector((state) => state.databaseOperation, shallowEqual);
   const dbActionLoading = dbCoreLoading || dbOpLoading || dbUILoading;
-  const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
+  const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, dirtyTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
   const [isFlashing, setIsFlashing] = useState(false);
   const { isAddHostModalOpen, hosts, isServiceOperating, serviceOperationType, serviceProgressMessage } = useSelector((state) => state.host, shallowEqual);
   // isAddDatabaseModalOpen removed
@@ -113,10 +115,16 @@ function DashboardLayout() {
     if (tabId.startsWith('host:')) {
       const uid = tabId.split(':')[1];
       const host = hosts.find(h => h.uid === uid);
-      acc[tabId] = host ? (host.alias || host.id) : CM.unknownHost;
+      acc[tabId] = host ? stripHaRoleTagFromAlias(host.alias || host.id) || host.id : CM.unknownHost;
     } else if (tabId.startsWith('db:')) {
       const parts = tabId.split(':');
-      acc[tabId] = parts.length > 2 ? parts[2] : parts[1];
+      if (parts.length > 2) {
+        const host = hosts.find(h => h.uid === parts[1]);
+        const hostLabel = host ? stripHaRoleTagFromAlias(host.alias || host.id) || host.id : CM.unknownHost;
+        acc[tabId] = `${parts[2]}(${hostLabel})`;
+      } else {
+        acc[tabId] = parts[1];
+      }
     } else if (tabId.startsWith('edit_config:')) {
       acc[tabId] = CM.editConfigTab(tabId.split(':')[2]);
     } else if (tabId.startsWith('broker_config:')) {
@@ -152,6 +160,21 @@ function DashboardLayout() {
     return acc;
   }, {});
 
+  const handleReloadTab = useCallback(async (tabId = activeMainTab) => {
+    if (!tabId) return;
+    if (dirtyTabs.includes(tabId)) {
+      const accepted = await confirm({
+        title: CM.unsavedChangesTitle,
+        description: CM.unsavedReloadDesc(tabLabels[tabId] || tabId),
+        confirmLabel: CM.reloadTab,
+        variant: 'danger',
+      });
+      if (!accepted) return;
+    }
+    dispatch(setActiveMainTab(tabId));
+    dispatch(triggerRefreshActiveTab(tabId));
+  }, [CM, activeMainTab, confirm, dirtyTabs, dispatch, tabLabels]);
+
   // Sync global selection with active tab
   useEffect(() => {
     if (activeMainTab) {
@@ -173,12 +196,12 @@ function DashboardLayout() {
     const handleKeyDown = (e) => {
       if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R'))) {
         e.preventDefault();
-        dispatch(triggerRefreshActiveTab());
+        void handleReloadTab();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch]);
+  }, [handleReloadTab]);
 
   // Construct dynamic loading message
   const getLoadingSubtitle = () => {
@@ -200,7 +223,7 @@ function DashboardLayout() {
         {/* Flash Overlay */}
         <div className={`fixed inset-0 bg-white/20 dark:bg-white/5 pointer-events-none z-[9999] transition-opacity duration-300 ${isFlashing ? 'opacity-100' : 'opacity-0'}`} />
         
-        <SplitPane split="vertical" defaultSize={400} minSize={280} maxSize={640} className="h-full w-full">
+        <SplitPane split="vertical" defaultSize={440} minSize={280} maxSize={640} className="h-full w-full">
           <Sidebar
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => dispatch(toggleSidebar())}
@@ -221,6 +244,7 @@ function DashboardLayout() {
               onCloseTab={(tab) => dispatch(closeTab(tab))}
               onCloseOthers={(tabId) => dispatch(closeOtherTabs(tabId))}
               onCloseAll={() => dispatch(closeAllTabs())}
+              onReload={(tabId) => void handleReloadTab(tabId)}
             />
           </div>
 
@@ -251,7 +275,7 @@ function DashboardLayout() {
 
                   {/* Central badge */}
                   <div className="w-16 h-16 rounded-2xl bg-white dark:bg-white/4 border border-slate-200 dark:border-white/8 shadow-lg flex items-center justify-center">
-                    <Icon name="database" weight={300} size="28px" className="text-amber-500" />
+                    <Icon name="database" weight={300} size="29px" className="text-amber-500" />
                   </div>
 
                   {/* Satellite dot – top right */}
@@ -265,7 +289,7 @@ function DashboardLayout() {
                   <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight uppercase">
                     {CM.appName}
                   </h2>
-                  <p className="text-[12px] text-slate-400 dark:text-slate-500 max-w-[260px] leading-relaxed">
+                  <p className="text-14 text-slate-400 dark:text-slate-500 max-w-[260px] leading-relaxed">
                     {CM.selectHostHint}
                   </p>
                 </div>
@@ -279,8 +303,8 @@ function DashboardLayout() {
                     { icon: 'lock', label: CM.lockInfo },
                   ].map(f => (
                     <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/4 border border-slate-200 dark:border-white/6">
-                      <Icon name={f.icon} size="13px" weight={300} className="text-slate-400 dark:text-slate-500" />
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{f.label}</span>
+                      <Icon name={f.icon} size="14px" weight={300} className="text-slate-400 dark:text-slate-500" />
+                      <span className="text-13 text-slate-500 dark:text-slate-400 font-medium">{f.label}</span>
                     </div>
                   ))}
                 </div>
@@ -288,7 +312,7 @@ function DashboardLayout() {
                 {/* Status bar */}
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-white/6 bg-slate-50 dark:bg-white/2">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase">{CM.systemReady}</span>
+                  <span className="text-12 text-slate-400 font-mono tracking-wider uppercase">{CM.systemReady}</span>
                 </div>
 
               </div>
@@ -521,7 +545,6 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route
         path="/*"
         element={

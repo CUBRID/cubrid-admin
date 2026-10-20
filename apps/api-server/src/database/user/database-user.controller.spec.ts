@@ -17,6 +17,7 @@ describe('DatabaseUserController', () => {
       createUser: jest.fn(),
       deleteUser: jest.fn(),
       loginDatabase: jest.fn(),
+      logoutDatabase: jest.fn(),
       updateUser: jest.fn(),
     };
 
@@ -227,6 +228,17 @@ describe('DatabaseUserController', () => {
 
       expect(service.loginDatabase).toHaveBeenCalledWith('user-123', 'host-uid-1', 'demodb');
       expect(result).toBe(true);
+    });
+  });
+
+  describe('logoutDatabase', () => {
+    it('should call service.logoutDatabase and return success', async () => {
+      service.logoutDatabase.mockResolvedValue(undefined);
+
+      const result = await controller.logoutDatabase(mockReq, 'host-uid-1', 'demodb');
+
+      expect(service.logoutDatabase).toHaveBeenCalledWith('user-123', 'host-uid-1', 'demodb');
+      expect(result).toEqual({ success: true });
     });
   });
 });

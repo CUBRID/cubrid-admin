@@ -49,6 +49,12 @@ const initialState = {
 
   selectedBackupId: null,
   selectedQueryPlanId: null,
+
+  // Bumped whenever a transaction kill succeeds so TransactionInfoModal and
+  // DBLockTransactionSection (which hold their own local/Redux data separate
+  // from this slice) can react and refetch, since KillTransactionModal is a
+  // single global instance with no direct reference back to its opener.
+  transactionKillSignal: 0,
 };
 
 const databaseUISlice = createSlice({
@@ -134,6 +140,9 @@ const databaseUISlice = createSlice({
       state.isKillTransactionModalOpen = false;
       state.killTransactionData = null;
     },
+    notifyTransactionKilled: (state) => {
+      state.transactionKillSignal += 1;
+    },
     
     openDeleteDatabaseModal: (state, action) => { 
       state.isDeleteDatabaseModalOpen = true; 
@@ -211,7 +220,7 @@ export const {
   openLockInformationModal, closeLockInformationModal,
   openUnloadResultModal, closeUnloadResultModal,
   openTransactionInfoModal, closeTransactionInfoModal,
-  openKillTransactionModal, closeKillTransactionModal,
+  openKillTransactionModal, closeKillTransactionModal, notifyTransactionKilled,
   openDeleteDatabaseModal, closeDeleteDatabaseModal,
   openDatabasePropertyModal, closeDatabasePropertyModal,
   openRenameDatabaseModal, closeRenameDatabaseModal,

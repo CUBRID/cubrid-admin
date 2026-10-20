@@ -341,4 +341,47 @@ export class DatabaseError extends AppError {
       additionalData
     );
   }
+
+  /**
+   * loaddb always runs through CMS in SA mode, which internally resets
+   * ha_mode to off for the process — so nothing it writes ever replicates to
+   * an HA peer, even against a database that's genuinely HA-enabled. Block
+   * it outright rather than silently desyncing master/slave.
+   */
+  static LoadNotSupportedForHaDatabase(additionalData?: Record<string, any>) {
+    return new DatabaseError(
+      'DATABASE',
+      DatabaseErrorCode.LOAD_NOT_SUPPORTED_FOR_HA_DATABASE,
+      additionalData
+    );
+  }
+
+  /**
+   * renamedb has no HA awareness at all — it only renames the local
+   * databases.txt entry + volume files. Afterward cubrid_ha.conf's
+   * ha_db_list (and the peer, whose database keeps the old name) no longer
+   * match the renamed local name, breaking HA pairing rather than any
+   * single operation failing cleanly.
+   */
+  static RenameNotSupportedForHaDatabase(additionalData?: Record<string, any>) {
+    return new DatabaseError(
+      'DATABASE',
+      DatabaseErrorCode.RENAME_NOT_SUPPORTED_FOR_HA_DATABASE,
+      additionalData
+    );
+  }
+
+  /**
+   * restoredb never updates ha_apply_info (the slave's replication
+   * apply-position bookmark) — CUBRID's dedicated `restoreslave` utility
+   * resets it to the restored LSA specifically because plain restoredb
+   * leaves it stale, desyncing the HA peer.
+   */
+  static RestoreNotSupportedForHaDatabase(additionalData?: Record<string, any>) {
+    return new DatabaseError(
+      'DATABASE',
+      DatabaseErrorCode.RESTORE_NOT_SUPPORTED_FOR_HA_DATABASE,
+      additionalData
+    );
+  }
 }

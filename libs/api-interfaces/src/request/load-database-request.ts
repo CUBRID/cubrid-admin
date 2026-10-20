@@ -20,17 +20,16 @@ export type LoadDatabaseRequest = {
   period: string;
 
   /**
-   * Database user
-   */
-  user: string;
-
-  /**
-   * CMS loaddb database user id (same as `user` when provided from UI).
+   * CMS loaddb database user id (the -u/--user flag). Always sent, always
+   * from the form — CUBRID's loaddb defaults to PUBLIC (not DBA) if --user
+   * is omitted entirely, which typically can't create classes.
    */
   _DBID: string;
 
   /**
-   * CMS loaddb database password.
+   * CMS loaddb database password (the --password flag). Always sent as-is
+   * from the form (may be an empty string — that's a legitimate password,
+   * not "unset").
    */
   _DBPASSWD: string;
 

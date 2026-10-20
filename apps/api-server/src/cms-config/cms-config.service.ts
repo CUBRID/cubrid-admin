@@ -26,6 +26,7 @@ import { StatdumpCmsResponse } from '@type/cms-response/statdump-cms-response';
 import { LogContentContainer } from '@type/cms-response/view-log-cms-response';
 import { BaseCmsResponse } from '@type/cms-response/base-cms-response';
 import { BaseService, HandleCmsErrors } from '@common';
+import { DatabaseUserService } from '@database/user/database-user.service';
 
 /**
  * Service for managing CMS environment configuration operations.
@@ -40,7 +41,8 @@ import { BaseService, HandleCmsErrors } from '@common';
 export class CmsConfigService extends BaseService {
   constructor(
     protected readonly hostService: HostService,
-    protected readonly cmsClient: CmsHttpsClientService
+    protected readonly cmsClient: CmsHttpsClientService,
+    private readonly databaseUserService: DatabaseUserService
   ) {
     super(hostService, cmsClient);
   }
@@ -85,6 +87,8 @@ export class CmsConfigService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<ParamdumpClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: BaseCmsRequest & { dbname: string; both: 'n' } = {
       task: 'paramdump',
       both: 'n',
@@ -115,6 +119,8 @@ export class CmsConfigService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<StatdumpClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: BaseCmsRequest & { dbname: string } = {
       task: 'statdump',
       dbname,
@@ -142,6 +148,8 @@ export class CmsConfigService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<PlandumpClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: BaseCmsRequest & { dbname: string } = {
       task: 'plandump',
       dbname,

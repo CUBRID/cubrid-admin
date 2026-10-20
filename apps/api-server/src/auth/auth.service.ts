@@ -30,14 +30,18 @@ export class AuthService {
 
   @HandleAuthErrors()
   async login(dto: UserDTO): Promise<AuthTokens> {
+    // Both branches throw the same AuthError.InvalidCredentials (not
+    // UserError.UserNotFound) so the client message doesn't leak whether the
+    // username or the password was wrong ("User not found" reads as if the
+    // username itself doesn't exist, which is misleading for a wrong-password case).
     const user: User | null = await this.usersRepo.loadUserById(dto.id);
     if (!user) {
-      throw UserError.UserNotFound({ userId: dto.id });
+      throw AuthError.InvalidCredentials({ userId: dto.id });
     }
 
     const ok = await this.password.comparePlainAndHash(dto.password, user.password);
     if (!ok) {
-      throw UserError.UserNotFound({ userId: dto.id });
+      throw AuthError.InvalidCredentials({ userId: dto.id });
     }
 
     return this.issueTokenPair(user.id);

@@ -32,6 +32,22 @@ export function buildKillParameter(killType, transaction) {
   }
 }
 
+// copylogdb/applylogdb are the HA replication daemons themselves (copy the
+// log from master to replica, then apply it) — they show up in
+// gettransactioninfo as ordinary-looking transaction rows, but killing one
+// disrupts live HA replication rather than just ending a user's query.
+const HA_REPLICATION_PROCESSES = ['copylogdb', 'applylogdb'];
+
+/**
+ * @param {string|undefined} program - transaction row's program/pname field
+ * @returns {boolean}
+ */
+export function isHaReplicationProcess(program) {
+  if (!program) return false;
+  const base = program.trim().toLowerCase();
+  return HA_REPLICATION_PROCESSES.some((p) => base === p || base.startsWith(`${p}_`));
+}
+
 /**
  * @param {object} response - gettransactioninfo API body (unwrapped)
  * @returns {object[]}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeLoadDatabaseModal } from '../databaseSlice';
+import { dbKey } from '../dbKey';
 import { databaseApi } from '../databaseApi';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
@@ -15,6 +16,7 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
+import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { ModalStatusLoading,
   ModalStatusSuccess,
@@ -25,10 +27,17 @@ export default function LoadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isLoadDatabaseModalOpen: isLoadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
-  const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
+  const isActive = !!selectedDatabase && activeDatabases?.includes(selectedDatabase);
+  // Load only ever targets an offline database, so this can't be satisfied by
+  // logging in right now — it must have happened earlier, while the database
+  // was still online (loggedInDatabases persists across stop, see
+  // databaseCoreSlice's stopDatabase.fulfilled). Enforces the required
+  // sequence: start -> Login Database -> stop -> Load.
+  const isLoggedIn = !!selectedDatabase && loggedInDatabases.includes(dbKey(selectedHostUid, selectedDatabase));
 
   const {
     error: actionError,
@@ -40,7 +49,7 @@ export default function LoadDatabaseModal() {
     isSuccess,
     isError,
   } = useActionState();
-  const { runJob } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
 
   const [unloadList, setUnloadList] = useState([]);
@@ -104,6 +113,8 @@ export default function LoadDatabaseModal() {
         targetDbName: selectedDatabase,
       }));
 
+      if (!isLoggedIn) return;
+
       databaseApi.getUnloadInfo(selectedHostUid).then((res) => {
         const dbs = res.database || [];
         setUnloadList(dbs);
@@ -114,7 +125,7 @@ export default function LoadDatabaseModal() {
         }
       }).catch((err) => console.error('Failed to fetch unload info:', err));
     }
-  }, [isLoadDBModalOpen, selectedDatabase, selectedHostUid, resetAction]);
+  }, [isLoadDBModalOpen, selectedDatabase, selectedHostUid, isLoggedIn, resetAction]);
 
   if (!isLoadDBModalOpen) return null;
 
@@ -217,7 +228,7 @@ export default function LoadDatabaseModal() {
   };
 
   const handleLoadDatabase = async () => {
-    if (!selectedHostUid || !selectedDatabase) return;
+    if (!selectedHostUid || !selectedDatabase || !isLoggedIn) return;
 
     startAction();
     try {
@@ -241,11 +252,19 @@ export default function LoadDatabaseModal() {
       const payload = {
         dbname: selectedDatabase,
         ...loadObject,
-        user: formData.dbUsername,
+        // Sent as-is from the form fields, always — omitting --user entirely
+        // makes CUBRID's loaddb default to PUBLIC (not DBA), which typically
+        // can't create classes, so a visible, always-sent value here is
+        // safer than a clever fallback the user can't see or override.
         _DBID: formData.dbUsername,
-        _DBPASSWD: formData.dbPassword ?? '',
-        oiduse: toYesNo(formData.checkBoxes.oiduse),
-        statisticsuse: toYesNo(formData.checkBoxes.statisticsuse),
+        _DBPASSWD: formData.dbPassword,
+        // Inverted on purpose: the checkboxes are labeled "Don't use OID" /
+        // "Don't update statistics" (checked = disable), but CMS's oiduse/
+        // statisticsuse fields are worded the other way — CMS only adds
+        // --no-oid/--no-statistics when the value is "no", so checked here
+        // must send "no", not "yes".
+        oiduse: formData.checkBoxes.oiduse ? 'no' : 'yes',
+        statisticsuse: formData.checkBoxes.statisticsuse ? 'no' : 'yes',
         nolog: toYesNo(formData.checkBoxes.nolog),
         period: formData.checkBoxes.period ? formData.values.period : 'none',
         estimated: formData.checkBoxes.estimated ? formData.values.estimated : 'none',
@@ -258,9 +277,9 @@ export default function LoadDatabaseModal() {
         () => databaseJobApi.submitLoad(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
-      endSuccess();
+      if (!wasBackgrounded()) endSuccess();
     } catch (err) {
-      endError(typeof err === 'string' ? err : (err.message || CM.failure));
+      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.failure));
     }
   };
 
@@ -329,13 +348,21 @@ export default function LoadDatabaseModal() {
   const validationError = getValidationError();
   const isFormValid = !isActive && !!formData.dbUsername && !validationError;
 
+  // handleLoadDatabase itself doesn't re-check isFormValid (only the footer
+  // button's disabled prop does), so Enter-to-submit needs its own guard to
+  // avoid bypassing that gate.
+  const handleFormSubmit = () => {
+    if (!isFormValid) return;
+    handleLoadDatabase();
+  };
+
   if (isLoading) {
     return (
       <Modal isOpen title={CM.loadDatabase} icon="download" onClose={handleClose} maxWidth="720px">
         <ModalStatusLoading
           title={CM.loadDatabase}
           subtitle={getCmsJobLoadingSubtitle(selectedDatabase, jobStatus, CM)}
-          onBackground={handleClose}
+          onBackground={() => { background(); handleClose(); }}
         />
       </Modal>
     );
@@ -360,9 +387,35 @@ export default function LoadDatabaseModal() {
         <ModalStatusError
           title={CM.failure}
           error={actionError}
+          guidance={CM.loadDbGuidance}
           onRetry={handleLoadDatabase}
           onCancel={resetAction}
           cancelText={CM.close}
+        />
+      </Modal>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <Modal
+        isOpen={isLoadDBModalOpen}
+        onClose={handleClose}
+        title={CM.loadDatabase}
+        icon="download"
+        maxWidth="480px"
+        testId="load-database"
+        footer={
+          <div className="flex justify-end w-full">
+            <Button data-testid="load-database-cancel-btn" variant="secondary" onClick={handleClose}>{CM.close}</Button>
+          </div>
+        }
+      >
+        <EmptyState
+          icon="lock"
+          accent="amber"
+          title={CM.loadDbLoginRequiredTitle}
+          subtitle={CM.loadDbLoginRequiredMsg}
         />
       </Modal>
     );
@@ -376,7 +429,7 @@ export default function LoadDatabaseModal() {
       subtitle={
         validationError ? (
           <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1 font-semibold transition-colors duration-150">
-            <Icon name="error" size="12px" className="shrink-0" />
+            <Icon name="error" size="13px" className="shrink-0" />
             {validationError}
           </span>
         ) : (
@@ -386,6 +439,8 @@ export default function LoadDatabaseModal() {
       icon="download"
       maxWidth="720px"
       testId="load-database"
+      onSubmit={handleFormSubmit}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="load-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>

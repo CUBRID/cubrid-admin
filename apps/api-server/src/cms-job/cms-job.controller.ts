@@ -13,6 +13,11 @@ export class CmsJobController {
     return this.cmsJobService.listActiveJobs(req.user.sub);
   }
 
+  @Get('recent')
+  async listRecent(@Request() req): Promise<CmsJobStatusResponse[]> {
+    return this.cmsJobService.listRecentJobs(req.user.sub);
+  }
+
   @Get(':jobId')
   async getJob(@Request() req, @Param('jobId') jobId: string): Promise<CmsJobStatusResponse> {
     this.logger.log(`Job status: ${jobId}`);

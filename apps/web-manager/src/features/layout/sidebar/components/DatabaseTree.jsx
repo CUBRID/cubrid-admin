@@ -11,20 +11,24 @@ import { setSelectedDatabase,
   setSelectedBackupId,
   openEditQueryPlanModal,
 } from '../../../database/databaseSlice';
-
 import { fetchDatabaseUsers } from '../../../user/userSlice';
 import { openTab } from '../../layoutSlice';
+import { dbKey } from '../../../database/dbKey';
+import { getHaDbServerModes, HA_DB_STATE_CONFIG } from '../../../host/haPeerUtils';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Typography } from '../../../../components/ds/foundation/Typography';
-import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../../constants/useCM';
 
-// Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes
-const selectDatabases = (state) => state.database.databases || [];
-const selectActiveDatabases = (state) => state.database.activeDatabases || [];
-const selectLoading = (state) => state.database.loading;
+// Granular selectors to avoid unnecessary re-renders when dashboard data or other slice state changes.
+// databases/activeDatabases are keyed by hostUid — this tree is remounted
+// per selectedHostUid (see Sidebar.jsx's `key={selectedHostUid}`), so a
+// factory bound to that host keeps a stale fetch for a DIFFERENT host (one
+// the user has since switched away from) from ever being read here.
+const selectDatabases = (hostUid) => (state) => state.database.databasesByHost[hostUid] || [];
+const selectActiveDatabases = (hostUid) => (state) => state.database.activeDatabasesByHost[hostUid] || [];
+const selectLoading = (hostUid) => (state) => state.database.loadingByHost[hostUid] || false;
 const selectSelection = (state) => ({
   selectedDatabase: state.database.selectedDatabase,
   selectedDatabaseSubItem: state.database.selectedDatabaseSubItem
@@ -107,10 +111,12 @@ export default function DatabaseTree({
 
     return names;
   }, [haHeartbeat]);
-  
-  const databases = useSelector(selectDatabases, shallowEqual);
-  const activeDatabases = useSelector(selectActiveDatabases, shallowEqual);
-  const loading = useSelector(selectLoading);
+
+  const haDbServerModes = useMemo(() => getHaDbServerModes(haHeartbeat), [haHeartbeat]);
+
+  const databases = useSelector(selectDatabases(selectedHostUid), shallowEqual);
+  const activeDatabases = useSelector(selectActiveDatabases(selectedHostUid), shallowEqual);
+  const loading = useSelector(selectLoading(selectedHostUid));
   const { selectedDatabase, selectedDatabaseSubItem } = useSelector(selectSelection, shallowEqual);
   const { 
     loggedInDatabases, 
@@ -147,13 +153,14 @@ export default function DatabaseTree({
       // stale right after a stop is enough to fire that first failing call,
       // and any re-render (tree re-toggle, unrelated state update) would
       // otherwise retry it immediately and reproduce the crash.
-      if (!databaseUsers[db.dbname] && !databaseUsersLoading[db.dbname] && !databaseUsersError[db.dbname]) {
+      const key = dbKey(selectedHostUid, db.dbname);
+      if (!databaseUsers[key] && !databaseUsersLoading[key] && !databaseUsersError[key]) {
         dispatch(fetchDatabaseUsers({ hostUid: selectedHostUid, dbname: db.dbname }));
       }
-      if (!backupSchedules[db.dbname] && !backupSchedulesLoading[db.dbname]) {
+      if (!backupSchedules[key] && !backupSchedulesLoading[key]) {
         dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: db.dbname }));
       }
-      if (!queryPlans[db.dbname] && !queryPlansLoading[db.dbname]) {
+      if (!queryPlans[key] && !queryPlansLoading[key]) {
         dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: db.dbname }));
       }
     }, 50);
@@ -198,7 +205,7 @@ export default function DatabaseTree({
                <Skeleton variant="circular" width="16px" height="16px" className="opacity-40" />
                <Skeleton variant="text" width="85%" height="18px" className="rounded-md" />
             </div>
-            <div className="flex items-center gap-2 ml-6 opacity-30">
+            <div className="flex items-center gap-2 ml-6 opacity-60">
                <Skeleton variant="text" width="60%" height="14px" className="rounded-md" />
             </div>
           </div>
@@ -209,11 +216,11 @@ export default function DatabaseTree({
 
   if (!databases || databases.length === 0) {
     return (
-      <div className="px-6 py-12 flex flex-col items-center justify-center text-center space-y-3 opacity-40">
-        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-2">
-          <Icon name="database" size="md" className="text-slate-400" weight={100} />
+      <div className="px-6 py-8 flex flex-col items-center justify-center text-center space-y-2">
+        <div className="w-10 h-10 rounded-xl bg-slate-100/70 dark:bg-white/3 flex items-center justify-center mb-1">
+          <Icon name="database" size="sm" className="text-slate-400 dark:text-slate-500" weight={300} />
         </div>
-        <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-[10px]">
+        <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-12">
           No databases found
         </Typography>
       </div>
@@ -224,18 +231,41 @@ export default function DatabaseTree({
     <div className="space-y-0.5 px-2 py-2" onContextMenu={(e) => onRootContextMenu(e)}>
       {databases.map((db) => {
         const isActive = activeDatabases.includes(db.dbname);
-        const isLoggedIn = loggedInDatabases.includes(db.dbname);
+        const key = dbKey(selectedHostUid, db.dbname);
+        const isLoggedIn = loggedInDatabases.includes(key);
         const isDbSelected = db.dbname === selectedDatabase && !selectedDatabaseSubItem;
 
         const isDbInHa = isHostHA && haDbs.has(db.dbname);
+        const haDbState = isDbInHa ? HA_DB_STATE_CONFIG[haDbServerModes.get(db.dbname)] : null;
         const label = (
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="truncate">{db.dbname}</span>
             {isDbInHa && (
-              <span className="px-0.5 py-[0.5px] text-[7px] font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
+              <span className="px-0.5 py-[0.5px] text-9 font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
                 HA
               </span>
             )}
+            {haDbState && (
+              <span className={`px-0.5 py-[0.5px] text-9 font-black leading-none border rounded-sm scale-90 shrink-0 uppercase ${haDbState.className}`}>
+                {CM[haDbState.cmKey]}
+              </span>
+            )}
+            {db.isProfileExists && (
+              <Icon
+                name="key"
+                size="14px"
+                weight={400}
+                className="text-slate-400 dark:text-slate-500 shrink-0"
+                title={CM.databaseCredentialsSaved}
+              />
+            )}
+            <Icon
+              name={isLoggedIn ? 'lock_open' : 'lock'}
+              size="14px"
+              weight={isLoggedIn ? 500 : 400}
+              className={`shrink-0 ${isLoggedIn ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-700'}`}
+              title={isLoggedIn ? CM.databaseLoggedIn : CM.databaseNotLoggedIn}
+            />
           </span>
         );
 
@@ -248,7 +278,7 @@ export default function DatabaseTree({
             level={1}
             isActive={isDbSelected}
             hasChildren={true}
-            isLoading={loggingInDatabases[db.dbname]}
+            isLoading={loggingInDatabases[key]}
             status={isActive ? 'on' : 'off'}
             onToggle={() => handleDbToggle(db, isActive, isLoggedIn)}
             onSelect={() => {
@@ -266,9 +296,9 @@ export default function DatabaseTree({
               isLoggedIn={isLoggedIn}
               selectedDatabase={selectedDatabase}
               selectedDatabaseSubItem={selectedDatabaseSubItem}
-              users={databaseUsers[db.dbname]}
-              isLoading={databaseUsersLoading[db.dbname]}
-              error={databaseUsersError[db.dbname]}
+              users={databaseUsers[key]}
+              isLoading={databaseUsersLoading[key]}
+              error={databaseUsersError[key]}
               onUsersContextMenu={onUsersContextMenu}
               onUserContextMenu={onUserContextMenu}
               onSelect={handleSelectSubItem}
@@ -281,10 +311,10 @@ export default function DatabaseTree({
               isLoggedIn={isLoggedIn}
               selectedDatabase={selectedDatabase}
               selectedDatabaseSubItem={selectedDatabaseSubItem}
-              backupSchedules={backupSchedules[db.dbname]}
-              backupSchedulesLoading={backupSchedulesLoading[db.dbname]}
-              queryPlans={queryPlans[db.dbname]}
-              queryPlansLoading={queryPlansLoading[db.dbname]}
+              backupSchedules={backupSchedules[key]}
+              backupSchedulesLoading={backupSchedulesLoading[key]}
+              queryPlans={queryPlans[key]}
+              queryPlansLoading={queryPlansLoading[key]}
               onJobAutomationContextMenu={onJobAutomationContextMenu}
               onBackupPlanContextMenu={onBackupPlanContextMenu}
               onQueryPlanContextMenu={onQueryPlanContextMenu}
@@ -300,8 +330,8 @@ export default function DatabaseTree({
               isLoggedIn={isLoggedIn}
               selectedDatabase={selectedDatabase}
               selectedDatabaseSubItem={selectedDatabaseSubItem}
-              spaceInfo={spaceInfo[db.dbname]}
-              spaceInfoLoading={spaceInfoLoading[db.dbname]}
+              spaceInfo={spaceInfo[key]}
+              spaceInfoLoading={spaceInfoLoading[key]}
               onSpaceContextMenu={onSpaceContextMenu}
               onSelect={handleSelectSubItem}
               onTabOpen={handleTabOpen}
@@ -343,9 +373,9 @@ const UsersFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
       onContextMenu={(e) => onUsersContextMenu(e, db.dbname, isActive, isLoggedIn)}
     >
       {!isLoading && users?.length === 0 ? (
-        <div className="px-10 py-3 opacity-30 flex items-center gap-2">
+        <div className="px-10 py-3 opacity-60 flex items-center gap-2">
            <Icon name="block" size="xs" weight={300} />
-           <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-[8px]">{CM.indexEmpty}</Typography>
+           <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
         </div>
       ) : (
         (users || []).map(u => {
@@ -383,7 +413,9 @@ const JobAutomationFolder = React.memo(({ db, isActive, isLoggedIn, selectedData
       isActive={isSelected}
       hasChildren={true}
       onToggle={() => {
-        if (selectedHostUid) {
+        // Same rule as UsersFolder's onToggle — never fetch per-db data
+        // (backup schedules, query plans) before an actual dbmtuserlogin.
+        if (selectedHostUid && isActive && isLoggedIn) {
           if (!backupSchedules && !backupSchedulesLoading) {
             dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: db.dbname }));
           }
@@ -517,8 +549,9 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
       onDoubleClick={() => onTabOpen(`db_space:${selectedHostUid}:${db.dbname}`)}
       onContextMenu={(e) => onSpaceContextMenu(e, db.dbname, isActive, isLoggedIn)}
       onToggle={() => {
-        // Only fetch if we have a host, aren't already loading, AND the data is genuinely missing
-        if (selectedHostUid && !spaceInfoLoading && !spaceInfo) {
+        // Same rule as UsersFolder/JobAutomationFolder's onToggle — never
+        // fetch per-db data (space info) before an actual dbmtuserlogin.
+        if (selectedHostUid && isActive && isLoggedIn && !spaceInfoLoading && !spaceInfo) {
           dispatch(fetchDatabaseSpaceInfo({ hostUid: selectedHostUid, dbname: db.dbname }));
         }
       }}

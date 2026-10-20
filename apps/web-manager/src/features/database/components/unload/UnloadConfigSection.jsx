@@ -16,6 +16,23 @@ export default function UnloadConfigSection({ formData, handleInputChange }) {
           onChange={handleInputChange}
           size="md"
         />
+        <Input
+          label={CM.userName}
+          name="dbUsername"
+          value={formData.dbUsername}
+          onChange={handleInputChange}
+          icon="account_circle"
+          size="md"
+        />
+        <Input
+          label={CM.password}
+          type="password"
+          name="dbPassword"
+          value={formData.dbPassword}
+          onChange={handleInputChange}
+          icon="lock"
+          size="md"
+        />
       </div>
     </div>
   );

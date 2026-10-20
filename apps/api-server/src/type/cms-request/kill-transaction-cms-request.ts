@@ -34,4 +34,10 @@ export type KillTransactionCmsRequest = BaseCmsRequest & {
    * - For type 'h': host name (string, e.g., "lgj1089-3-60")
    */
   parameter?: string;
+
+  /**
+   * DBA password used to authorize the kill. Optional — if omitted, CMS
+   * falls back to the dbmtuserlogin-populated conlist cache on the server.
+   */
+  _DBPASSWD?: string;
 };

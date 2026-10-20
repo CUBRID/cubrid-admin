@@ -22,8 +22,10 @@ export class AddHostDto {
   @IsNotEmpty()
   id: string;
 
+  // Not @IsNotEmpty() — importing hosts from a file always sends '' here by
+  // design (credentials are never exported/imported for security), relying
+  // on the later "add host without password, prompt to fill it in" UX.
   @IsString()
-  @IsNotEmpty()
   password: string;
 
   @IsString()

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeRestoreDatabaseModal, fetchBackupList } from '../databaseSlice';
+import { dbKey } from '../dbKey';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
@@ -102,9 +103,9 @@ const dirnameOf = (filePath) => {
 /* ── helpers ─────────────────────────────────────────────────── */
 const SectionLabel = ({ children, count }) => (
   <div className="flex items-center gap-3 mb-3">
-    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 whitespace-nowrap">{children}</span>
+    <span className="text-11 font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 whitespace-nowrap">{children}</span>
     {count !== undefined && (
-      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-xs bg-amber-500/10 border border-amber-500/20 text-amber-500">{count}</span>
+      <span className="text-11 font-black px-1.5 py-0.5 rounded-xs bg-amber-500/10 border border-amber-500/20 text-amber-500">{count}</span>
     )}
     <div className="flex-1 h-px bg-slate-100 dark:bg-white/5" />
   </div>
@@ -115,12 +116,13 @@ export default function RestoreDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isRestoreDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases } = useSelector((state) => state.database, shallowEqual);
-  const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
+  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const {
     databaseBackups,
   } = useSelector((state) => state.databaseOperation);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
+  const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const {
 
@@ -133,7 +135,7 @@ export default function RestoreDatabaseModal() {
     isSuccess,
     isError
   } = useActionState();
-  const { runJob } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -166,7 +168,7 @@ export default function RestoreDatabaseModal() {
     });
   };
 
-  const backupData = databaseBackups[selectedDatabase] || {};
+  const backupData = databaseBackups[dbKey(selectedHostUid, selectedDatabase)] || {};
   const allBackups = useMemo(() => {
     return [
       ...(Array.isArray(backupData.level0) ? backupData.level0.map(b => ({ ...b, level: 0 })) : parseBackupString(backupData.level0, 0)),
@@ -178,6 +180,8 @@ export default function RestoreDatabaseModal() {
       return tB - tA;
     });
   }, [backupData]);
+
+
 
   useEffect(() => {
     if (isRestoreDatabaseModalOpen && selectedHostUid && selectedDatabase) {
@@ -456,9 +460,9 @@ export default function RestoreDatabaseModal() {
         () => databaseJobApi.submitRestore(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
-      endSuccess(selectedDatabase);
+      if (!wasBackgrounded()) endSuccess(selectedDatabase);
     } catch (error) {
-      endError(typeof error === 'string' ? error : (error.message || CM.restoreErrorFallback));
+      if (!wasBackgrounded()) endError(typeof error === 'string' ? error : (error.message || CM.restoreErrorFallback));
     }
   };
 
@@ -472,7 +476,7 @@ export default function RestoreDatabaseModal() {
           title={CM.reconstructingInstance}
           subtitle={getCmsJobLoadingSubtitle(selectedDatabase, jobStatus, CM)}
           variant="danger"
-          onBackground={handleClose}
+          onBackground={() => { background(); handleClose(); }}
         />
       </Modal>
     );
@@ -496,9 +500,10 @@ export default function RestoreDatabaseModal() {
   if (isError) {
     return (
       <Modal isOpen title={CM.recoveryFailed} icon="restore" iconVariant="danger" onClose={resetAction} maxWidth="900px">
-        <ModalStatusError 
+        <ModalStatusError
           title={CM.transactionDropped}
           error={actionError}
+          guidance={CM.restoreDbGuidance}
           onRetry={handleRestore}
           onCancel={resetAction}
           retryText={CM.retryRecovery}
@@ -518,10 +523,12 @@ export default function RestoreDatabaseModal() {
       icon="settings_backup_restore"
       maxWidth="680px"
       testId="restore-database"
+      onSubmit={handleRestore}
+      submitDisabled={isExecuteDisabled}
       footer={
         <div className="flex items-center justify-between w-full gap-3">
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
-            <Icon name="info" size="12px" weight={300} />
+          <div className="flex items-center gap-2 text-12 text-slate-400 font-medium">
+            <Icon name="info" size="13px" weight={300} />
             <span>{CM.databaseMustBeStopped}</span>
           </div>
           <div className="flex items-center gap-3">
@@ -542,8 +549,8 @@ export default function RestoreDatabaseModal() {
     >
       <div className="space-y-4 pb-2 text-left">
         {validationError && (
-          <div className="mb-2 p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] rounded-xl flex items-center gap-2 animate-in fade-in duration-200">
-            <Icon name="error" size="14px" className="shrink-0" />
+          <div className="mb-2 p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-13 rounded-xl flex items-center gap-2 animate-in fade-in duration-200">
+            <Icon name="error" size="15px" className="shrink-0" />
             <span className="font-medium">{validationError}</span>
           </div>
         )}
@@ -640,7 +647,7 @@ export default function RestoreDatabaseModal() {
                 </div>
                 <div className="space-y-3">
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-                    <Typography variant="label" className={`text-[12px] ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
+                    <Typography variant="label" className={`text-14 ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
                       {CM.level0FileLabel}
                     </Typography>
                     <Input
@@ -652,7 +659,7 @@ export default function RestoreDatabaseModal() {
                     />
                   </div>
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-                    <Typography variant="label" className={`text-[12px] ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
+                    <Typography variant="label" className={`text-14 ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
                       {CM.level1FileLabel}
                     </Typography>
                     <Input
@@ -664,7 +671,7 @@ export default function RestoreDatabaseModal() {
                     />
                   </div>
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-                    <Typography variant="label" className={`text-[12px] ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
+                    <Typography variant="label" className={`text-14 ${formData.selectBackupFilePath ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'}`}>
                       {CM.level2FileLabel}
                     </Typography>
                     <Input

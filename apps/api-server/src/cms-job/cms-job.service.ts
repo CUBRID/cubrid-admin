@@ -17,12 +17,13 @@ import {
   RestoreDbClientRequest,
   UnloadDatabaseRequest,
 } from '@api-interfaces';
-import { extractCmsLongJobFailureMessage, isCmsLongJobFailure } from '@common';
+import { extractCmsLongJobFailureMessage, isCmsLongJobFailure, pollCmsAsyncJob } from '@common';
 import { AppError } from '@error';
 import { DatabaseError } from '@error/database/database-error';
 import { DatabaseManagementService } from '@database/management/database-management.service';
 import { DatabaseLifecycleService } from '@database/lifecycle/database-lifecycle.service';
 import { DatabaseBackupService } from '@database/backup/database-backup.service';
+import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { EncryptionService } from '@security';
 import { HostService } from '@host';
 import { LockService } from '@lock/lock.service';
@@ -34,6 +35,8 @@ import {
 } from './cms-job.types';
 import { CmsJobStore } from './cms-job.store';
 import { CMS_JOB_CLEANUP_INTERVAL_MS, isTerminalJobStatus } from './cms-job.cleanup';
+import { CMS_JOB_RECENT_LIST_LIMIT } from './cms-job.constants';
+import { getMaintenanceResult, getMaintenanceSummary, redactMaintenanceText } from './maintenance-job';
 
 @Injectable()
 export class CmsJobService implements OnModuleInit, OnModuleDestroy {
@@ -52,7 +55,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     private readonly hostService: HostService,
     private readonly managementService: DatabaseManagementService,
     private readonly lifecycleService: DatabaseLifecycleService,
-    private readonly backupService: DatabaseBackupService
+    private readonly backupService: DatabaseBackupService,
+    private readonly cmsClient: CmsHttpsClientService
   ) {}
 
   private userKey(userId: string): string {
@@ -84,8 +88,20 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Restart drops in-process workers; job files may still say queued/running.
-   * Clients would poll GET /jobs/:id forever — fail orphans on startup.
+   * Restart drops in-process workers (and their poll loops) but the job files
+   * may still say queued/running, and CMS itself doesn't know or care that
+   * our process restarted — it keeps a still-running async task alive
+   * independent of us. For any orphan with a persisted `cmsUuid`, try
+   * re-attaching to that real CMS task (same `pollCmsAsyncJob` used by a live
+   * job, just starting from a fresh `gettaskstatus` instead of a fresh
+   * submission) before giving up and marking it failed — a job that actually
+   * finished (or is still going) overnight shouldn't be reported as
+   * "interrupted" just because our own process happened to restart.
+   *
+   * `create` jobs are excluded: their outcome is a composite of createdb plus
+   * several follow-up CMS calls (start/updateUser/setAutoAddVol/setAutoStart)
+   * that `applyCmsOutcome` can't reconstruct from a single gettaskstatus
+   * response, so those still fall back to the plain "interrupted" failure.
    */
   private async recoverOrphanedJobsOnStartup(): Promise<void> {
     if (process.env.CMS_JOB_RECOVER_ON_STARTUP === 'false') {
@@ -93,17 +109,71 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const count = await this.store.failOrphanedActiveJobs({
-        message: 'Job interrupted because the API server restarted.',
-        code: 'JOB_INTERRUPTED',
-      });
-      if (count > 0) {
-        this.logger.warn(`Marked ${count} orphaned CMS job(s) as failed after startup`);
+      const orphans = await this.store.listOrphanedActiveJobs();
+      let reconciled = 0;
+      let failed = 0;
+
+      for (const { userKey, job } of orphans) {
+        if (await this.tryReconcileOrphanedJob(userKey, job)) {
+          reconciled += 1;
+        } else {
+          job.status = 'failed';
+          job.error = {
+            message: 'Job interrupted because the API server restarted.',
+            code: 'JOB_INTERRUPTED',
+          };
+          job.finishedAt = job.finishedAt ?? new Date().toISOString();
+          await this.store.finalizeOrphanedJob(userKey, job);
+          failed += 1;
+        }
+      }
+
+      if (reconciled > 0) {
+        this.logger.warn(`Reconciled ${reconciled} orphaned CMS job(s) against their real CMS outcome after startup`);
+      }
+      if (failed > 0) {
+        this.logger.warn(`Marked ${failed} orphaned CMS job(s) as failed after startup`);
       }
     } catch (err: unknown) {
       this.logger.warn(
         `CMS job orphan recovery failed: ${err instanceof Error ? err.message : err}`
       );
+    }
+  }
+
+  /** Returns true if the job was resolved (success or a real CMS failure) and finalized. */
+  private async tryReconcileOrphanedJob(userKey: string, job: CmsJobRecord): Promise<boolean> {
+    if (!job.cmsUuid || job.type === 'create') {
+      return false;
+    }
+
+    try {
+      const host = await this.hostService.findHostInternal(job.userId, job.hostUid);
+      const url = `https://${host.address}:${host.port}/cm_api`;
+      const initialResponse = await this.cmsClient.postAuthenticated<
+        { task: string; token: string; uuid: string },
+        any
+      >(url, { task: 'gettaskstatus', token: host.token || '', uuid: job.cmsUuid });
+
+      const { response } = await pollCmsAsyncJob(
+        { hostService: this.hostService, cmsClient: this.cmsClient },
+        job.userId,
+        job.hostUid,
+        job.type,
+        initialResponse
+      );
+
+      this.applyCmsOutcome(job, response);
+      job.finishedAt = job.finishedAt ?? new Date().toISOString();
+      await this.store.finalizeOrphanedJob(userKey, job);
+      return true;
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Could not reconcile orphaned job ${job.jobId} (uuid ${job.cmsUuid}) against CMS: ${
+          err instanceof Error ? err.message : err
+        }`
+      );
+      return false;
     }
   }
 
@@ -201,20 +271,18 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   private applyCmsOutcome(job: CmsJobRecord, cmsResponse: unknown): boolean {
     if (job.type === 'create') {
       const res = cmsResponse as CreateDatabaseWithConfigResponse;
-      const ops: Array<{ success: boolean; error?: { message: string; code?: string } }> = [
-        res?.createDatabase,
-        res?.startDatabase,
-        res?.updateUser,
-        res?.setAutoAddVol,
-        res?.setAutoStart,
-      ].filter(Boolean) as any;
 
-      const failed = ops.find((op) => op.success === false);
-      if (failed) {
+      // The database itself is the artifact the job is about — a later
+      // follow-up step failing (auto-start, dba password, auto-add-vol
+      // config) doesn't mean creation failed, it means the database now
+      // exists but needs manual follow-up. Reporting the whole job as
+      // "failed" in that case hid a database that actually got created.
+      // Each step's own success/error is still on job.result either way.
+      if (res?.createDatabase?.success !== true) {
         job.status = 'failed';
         job.error = {
-          message: failed.error?.message || 'Create database failed',
-          code: failed.error?.code,
+          message: res?.createDatabase?.error?.message || 'Create database failed',
+          code: res?.createDatabase?.error?.code,
         };
         job.result = res;
         return false;
@@ -231,6 +299,10 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         message: extractCmsLongJobFailureMessage(cmsResponse),
         cmsStatus: String((cmsResponse as { status?: string }).status ?? ''),
       };
+      if (getMaintenanceSummary(job)) {
+        job.error.message = redactMaintenanceText(job, cmsResponse, job.error.message);
+        job.result = getMaintenanceResult(job, cmsResponse, false);
+      }
       return false;
     }
 
@@ -240,6 +312,9 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   private mapJobResult(job: CmsJobRecord, cmsResponse: unknown): unknown {
+    if (getMaintenanceSummary(job)) {
+      return getMaintenanceResult(job, cmsResponse, true);
+    }
     if (!cmsResponse || typeof cmsResponse !== 'object') {
       return { success: true };
     }
@@ -271,84 +346,105 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     return additional?.response;
   }
 
-  private async executeCmsForJob(job: CmsJobRecord): Promise<unknown> {
+  private async executeCmsForJob(uKey: string, job: CmsJobRecord): Promise<unknown> {
     const { userId, hostUid, type, payload } = job;
+
+    // Persisted as soon as CMS returns it, not just held in the poll loop's
+    // local variable — otherwise a mid-job failure (e.g. the host token
+    // going invalid on a long job) loses it for good, with no way to check
+    // what actually happened to that CMS-side task afterward.
+    const onUuid = async (uuid: string) => {
+      if (job.cmsUuid === uuid) return;
+      job.cmsUuid = uuid;
+      await this.store.saveJob(uKey, job);
+    };
 
     switch (type) {
       case 'create':
         return this.lifecycleService.createDatabase(
           userId,
           hostUid,
-          payload as CreateDatabaseWithConfigRequest
+          payload as CreateDatabaseWithConfigRequest,
+          onUuid
         );
       case 'unload':
         return this.managementService.unloadDatabaseCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as UnloadDatabaseRequest
+          payload as UnloadDatabaseRequest,
+          onUuid
         );
       case 'load':
         return this.managementService.loadDatabaseCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as LoadDatabaseRequest
+          payload as LoadDatabaseRequest,
+          onUuid
         );
       case 'optimize':
         return this.managementService.optimizeDatabaseCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as OptimizeDatabaseRequest
+          payload as OptimizeDatabaseRequest,
+          onUuid
         );
       case 'check':
         return this.managementService.checkDatabaseCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as CheckDatabaseRequest
+          payload as CheckDatabaseRequest,
+          onUuid
         );
       case 'compact':
         return this.managementService.compactDatabaseCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as CompactDatabaseRequest
+          payload as CompactDatabaseRequest,
+          onUuid
         );
       case 'copy':
         return this.managementService.copyDbCmsResponse(
           userId,
           hostUid,
-          payload as CopyDbRequest
+          payload as CopyDbRequest,
+          onUuid
         );
       case 'addvol':
         return this.managementService.addVolDbCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as AddVolDbRequest
+          payload as AddVolDbRequest,
+          onUuid
         );
       case 'rename':
         return this.managementService.renameDatabaseCmsResponse(
           userId,
           hostUid,
           job.dbname,
-          payload as RenameDatabaseRequest
+          payload as RenameDatabaseRequest,
+          onUuid
         );
       case 'backupdb':
         return this.backupService.backupDb(
           userId,
           hostUid,
           job.dbname,
-          payload as BackupDbClientRequest
+          payload as BackupDbClientRequest,
+          onUuid
         );
       case 'restore':
         return this.backupService.restoreDb(
           userId,
           hostUid,
           job.dbname,
-          payload as RestoreDbClientRequest
+          payload as RestoreDbClientRequest,
+          onUuid
         );
       default:
         throw new Error(`Unsupported job type: ${type}`);
@@ -364,7 +460,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     await this.store.saveJob(uKey, job);
 
     try {
-      const cmsResponse = await this.executeCmsForJob(job);
+      const cmsResponse = await this.executeCmsForJob(uKey, job);
       const succeeded = this.applyCmsOutcome(job, cmsResponse);
 
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
@@ -385,6 +481,10 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           job.error = {
             message: this.jobErrorMessage(err, 'CMS operation failed'),
           };
+          if (getMaintenanceSummary(job)) {
+            job.error.message = redactMaintenanceText(job, cmsFromError, job.error.message);
+            job.result = getMaintenanceResult(job, cmsFromError, false);
+          }
         }
       }
     } finally {
@@ -426,7 +526,25 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       .map((j) => this.toStatusResponse(j));
   }
 
+  /**
+   * Active jobs plus recently-finished ones (bounded by the same retention
+   * window `purgeExpiredJobs` enforces), most recent first. Lets a client
+   * reconnecting after a while (browser closed, tab reloaded) learn about a
+   * job that finished while it was gone — `listActiveJobs` alone only shows
+   * jobs still queued/running, so a completed job's result was otherwise
+   * unrecoverable even though its record is still sitting on disk.
+   */
+  async listRecentJobs(userId: string): Promise<CmsJobStatusResponse[]> {
+    const jobs = await this.store.listJobsForUser(this.userKey(userId));
+    return jobs
+      .filter((j) => j.userId === userId)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .slice(0, CMS_JOB_RECENT_LIST_LIMIT)
+      .map((j) => this.toStatusResponse(j));
+  }
+
   private toStatusResponse(record: CmsJobRecord): CmsJobStatusResponse {
+    const maintenanceSummary = getMaintenanceSummary(record);
     return {
       jobId: record.jobId,
       type: record.type,
@@ -436,8 +554,11 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       createdAt: record.createdAt,
       startedAt: record.startedAt,
       finishedAt: record.finishedAt,
+      maintenanceSummary,
       result: record.result,
-      error: record.error,
+      error: maintenanceSummary && record.error
+        ? { ...record.error, message: redactMaintenanceText(record, undefined, record.error.message) }
+        : record.error,
     };
   }
 }

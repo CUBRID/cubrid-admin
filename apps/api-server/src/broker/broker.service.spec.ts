@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BrokerService } from './broker.service';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
+import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
 import { CmsError } from '@error/cms/cms-error';
 
 jest.mock('@common', () => ({
@@ -14,6 +15,7 @@ describe('BrokerService', () => {
   let service: BrokerService;
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
+  let cmsJobLockService: { hasActiveJobForHost: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -33,18 +35,21 @@ describe('BrokerService', () => {
   beforeEach(async () => {
     const mockHostService = { findHostInternal: jest.fn() };
     const mockCmsClient = { postAuthenticated: jest.fn() };
+    const mockCmsJobLockService = { hasActiveJobForHost: jest.fn().mockResolvedValue(null) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BrokerService,
         { provide: HostService, useValue: mockHostService },
         { provide: CmsHttpsClientService, useValue: mockCmsClient },
+        { provide: CmsJobLockService, useValue: mockCmsJobLockService },
       ],
     }).compile();
 
     service = module.get(BrokerService);
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
+    cmsJobLockService = module.get(CmsJobLockService);
 
     hostService.findHostInternal.mockResolvedValue(mockHost);
   });
@@ -78,7 +83,8 @@ describe('BrokerService', () => {
         expect.objectContaining({
           task: 'startbroker',
           token: mockHost.token,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual({ success: true });
     });
@@ -94,6 +100,13 @@ describe('BrokerService', () => {
       await expect(
         service.startAllBrokers(mockUserId, mockHostUid)
       ).rejects.toThrow(CmsError);
+    });
+
+    it('should throw when a CMS job is already running on this host', async () => {
+      cmsJobLockService.hasActiveJobForHost.mockResolvedValue({ jobId: 'job-1', dbname: 'demodb' });
+
+      await expect(service.startAllBrokers(mockUserId, mockHostUid)).rejects.toThrow();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
   });
 
@@ -114,7 +127,8 @@ describe('BrokerService', () => {
         expect.objectContaining({
           task: 'stopbroker',
           token: mockHost.token,
-        })
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual({ success: true });
     });

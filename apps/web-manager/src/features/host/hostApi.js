@@ -19,6 +19,9 @@ export const hostApi = {
   loginToHost: (hostUid) => {
     return apiClient.post(`/${hostUid}/cms-auth/login`);
   },
+  getHaInfo: (hostUid) => {
+    return apiClient.get(`/${hostUid}/cms-auth/ha-info`);
+  },
   getHostEnv: (hostUid) => {
     return apiClient.get(`/${hostUid}/cms-config/env`);
   },

@@ -41,12 +41,12 @@ export default function DBBrokersCASSection({ brokersCAS, pollingProps, onViewSQ
     {
       header: CM.broker,
       accessor: 'broker',
-      render: (val) => <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200 uppercase">{val}</span>
+      render: (val) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200 uppercase">{val}</span>
     },
-    { header: 'CAS', accessor: 'id',  sortAccessor: '_idNum',  render: (val) => <span className="font-mono text-[12px] text-slate-400">{val}</span> },
-    { header: 'PID', accessor: 'pid', sortAccessor: '_pidNum', render: (val) => <span className="font-mono text-[12px] text-slate-400">{val}</span> },
-    { header: CM.qps, accessor: 'qps', sortAccessor: '_qpsNum', render: (val) => <span className="font-mono text-[12px] text-amber-600 dark:text-amber-400 font-semibold">{val}</span> },
-    { header: 'LQS', accessor: 'lqs', sortAccessor: '_lqsNum', render: (val) => <span className="font-mono text-[12px] text-slate-500">{val}</span> },
+    { header: 'CAS', accessor: 'id',  sortAccessor: '_idNum',  render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    { header: 'PID', accessor: 'pid', sortAccessor: '_pidNum', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    { header: CM.qps, accessor: 'qps', sortAccessor: '_qpsNum', render: (val) => <span className="font-mono text-14 text-amber-600 dark:text-amber-400 font-semibold">{val ?? '—'}</span> },
+    { header: 'LQS', accessor: 'lqs', sortAccessor: '_lqsNum', render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
     {
       header: CM.status,
       accessor: 'status',
@@ -61,16 +61,18 @@ export default function DBBrokersCASSection({ brokersCAS, pollingProps, onViewSQ
         );
       }
     },
-    { header: CM.lastConn, accessor: 'lastConn', render: (val) => <span className="font-mono text-[11px] text-slate-400">{val}</span> },
+    { header: CM.lastConn, accessor: 'lastConn', render: (val) => <span className="font-mono text-13 text-slate-400">{val}</span> },
     {
       header: CM.actions,
       accessor: 'actions',
       align: 'center',
       render: (_, row) => (
         <div className="flex items-center gap-1">
-          <button onClick={() => onRestartCAS?.(row)} title={CM.restartCasTitle} className="p-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-amber-500 transition-colors">
-            <Icon name="restart_alt" size="sm" weight={300} />
-          </button>
+          {onRestartCAS && (
+            <button type="button" onClick={() => onRestartCAS(row)} title={CM.restartCasTitle} aria-label={CM.restartCasTitle} className="p-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-amber-500 transition-colors">
+              <Icon name="restart_alt" size="sm" weight={300} />
+            </button>
+          )}
           <button onClick={() => onViewSQLLog?.(row)} title={CM.sqlLogs} className="p-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-sky-500 transition-colors">
             <Icon name="terminal" size="sm" weight={300} />
           </button>

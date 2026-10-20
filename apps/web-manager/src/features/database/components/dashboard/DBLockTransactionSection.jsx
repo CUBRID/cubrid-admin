@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchDashboardLocks,
   setSelectedDatabase,
@@ -37,6 +37,14 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
   const refresh = () => {
     if (hostUid && dbname) dispatch(fetchDashboardLocks({ hostUid, dbname }));
   };
+
+  const transactionKillSignal = useSelector((state) => state.databaseUI.transactionKillSignal);
+  const lastSeenKillSignal = useRef(transactionKillSignal);
+  useEffect(() => {
+    if (lastSeenKillSignal.current === transactionKillSignal) return;
+    lastSeenKillSignal.current = transactionKillSignal;
+    refresh();
+  }, [transactionKillSignal, hostUid, dbname]);
 
   const wasActiveAndExpanded = useRef(isTabActive && !isCollapsed);
   useEffect(() => {
@@ -86,11 +94,11 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
   };
 
   const columns = useMemo(() => [
-    { header: '#', accessor: 'index', render: (val) => <span className="font-mono text-[12px] text-slate-400">{val}</span> },
-    { header: CM.userNameCol, accessor: 'user', render: (val) => <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200">{val}</span> },
-    { header: CM.host, accessor: 'host', render: (val) => <span className="font-mono text-[12px] text-slate-400">{val}</span> },
-    { header: CM.pid, accessor: 'pid', render: (val) => <span className="font-mono text-[12px] text-slate-400">{val}</span> },
-    { header: CM.objectType, accessor: 'obj', render: (val) => <span className="font-mono text-[12px] text-slate-500 max-w-[280px] truncate block" title={val}>{val}</span> },
+    { header: '#', accessor: 'index', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    { header: CM.userNameCol, accessor: 'user', render: (val) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val}</span> },
+    { header: CM.host, accessor: 'host', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    { header: CM.pid, accessor: 'pid', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    { header: CM.objectType, accessor: 'obj', render: (val) => <span className="font-mono text-14 text-slate-500 max-w-[280px] truncate block" title={val}>{val}</span> },
     {
       header: CM.lockMode,
       accessor: 'mode',
@@ -116,7 +124,7 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
             <Icon name="lock" size="sm" weight={300} className="text-amber-500" />
             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{CM.lockAndTransaction}</span>
             {locks.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-sm bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 text-[10px] font-bold">
+              <span className="ml-1 px-1.5 py-0.5 rounded-sm bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 text-12 font-bold">
                 {locks.length}
               </span>
             )}
@@ -136,7 +144,7 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
               icon="verified_user"
               title={CM.lockAndTransaction}
               subtitle={CM.loadingLockAndTransaction}
-              py="py-12"
+              py="py-8"
             />
           }
         />

@@ -33,6 +33,12 @@ export class SaveDatabaseProfileDto {
   password?: string;
 }
 
+export class StartStopAllDatabasesDto {
+  @IsArray()
+  @IsString({ each: true })
+  dbnames: string[];
+}
+
 export class DeleteDatabaseDto {
   @IsIn(['y', 'n'])
   delbackup: 'y' | 'n';

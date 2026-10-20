@@ -4,18 +4,18 @@ import { closeCheckDatabaseModal } from '../databaseSlice';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
+import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
+import { getCmsJobErrorResult } from '../../../infrastructure/cmsJob/cmsJobUtils';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
-import { Input } from '../../../components/ds/forms/Input';
 import { Toggle } from '../../../components/ds/forms/Toggle';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -23,51 +23,63 @@ export default function CheckDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isCheckDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
-  const isActive = selectedDatabase && activeDatabases.includes(selectedDatabase);
 
-  const { error, startAction, endSuccess, endError, resetAction, isLoading, isSuccess, isError } =
+  const { error, startAction, endError, resetAction, isLoading, isError } =
     useActionState();
-  const { runJob } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob({ sharedResult: true });
   const [jobStatus, setJobStatus] = useState(null);
+  const [resultJob, setResultJob] = useState(null);
   const [repair, setRepair] = useState(false);
-  const [dbuser, setDbuser] = useState('dba');
-  const [dbpasswd, setDbpasswd] = useState('');
 
   useEffect(() => {
     if (isCheckDatabaseModalOpen) {
       setRepair(false);
-      setDbuser('dba');
-      setDbpasswd('');
+      setResultJob(null);
+      setJobStatus(null);
       resetAction();
     }
   }, [isCheckDatabaseModalOpen, resetAction]);
 
   if (!isCheckDatabaseModalOpen) return null;
 
+  const previewJob = {
+    type: 'check',
+    dbname: selectedDatabase,
+    maintenanceSummary: {
+      operation: 'consistency-check',
+      scope: 'entire-database',
+      repairRequested: repair,
+    },
+  };
+
   const handleCheck = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
-    // CMS authorizes checkdb against a per-connection credential cache
-    // populated by dbmtuserlogin — required whenever the database is
-    // online (see database-management.service.ts's loginIfCredentialsProvided).
-    if (isActive && !dbuser.trim()) {
-      endError(CM.dbUserRequiredWhileOnlineMsg);
-      return;
-    }
     startAction();
+    setJobStatus(null);
+    setResultJob(previewJob);
+    let lastJob = previewJob;
     try {
       await runJob(
         () =>
           databaseJobApi.submitCheck(selectedHostUid, selectedDatabase, {
             repairdb: repair ? 'y' : 'n',
-            ...(isActive && { dbuser: dbuser.trim(), dbpasswd }),
           }),
-        { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
+        { initialJob: { ...previewJob, jobStatus: 'queued' }, onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
-      endSuccess();
+      if (!wasBackgrounded()) {
+        handleClose();
+      }
     } catch (err) {
-      endError(typeof err === 'string' ? err : err.message || CM.failure);
+      if (!wasBackgrounded()) {
+        if (err?.job || err?.jobId || lastJob?.jobId || err?.cancelled) {
+          handleClose();
+          return;
+        }
+        setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
+        endError(typeof err === 'string' ? err : err.message || CM.failure);
+      }
     }
   };
 
@@ -82,21 +94,9 @@ export default function CheckDatabaseModal() {
         <ModalStatusLoading
           title={CM.checkDatabase}
           subtitle={getCmsJobLoadingSubtitle(selectedDatabase, jobStatus, CM)}
-          onBackground={handleClose}
+          onBackground={() => { background(); handleClose(); }}
         />
-      </Modal>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.checkDatabase} icon="verified" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess
-          title={CM.success}
-          message={CM.jobCompletedSuccess(CM.checkDatabase)}
-          onConfirm={handleClose}
-          confirmText={CM.ok}
-        />
+        <MaintenanceDetails job={resultJob || previewJob} preview />
       </Modal>
     );
   }
@@ -105,12 +105,16 @@ export default function CheckDatabaseModal() {
     return (
       <Modal isOpen title={CM.checkDatabase} icon="verified" iconVariant="danger" onClose={resetAction} maxWidth="480px">
         <ModalStatusError
-          title={CM.failure}
+          title={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknown : CM.failure}
+          message={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
           error={error}
-          onRetry={handleCheck}
+          guidance={resultJob?.outcomeUnknown ? undefined : CM.checkDbGuidance}
+          onRetry={resultJob?.outcomeUnknown ? undefined : handleCheck}
           onCancel={resetAction}
           cancelText={CM.close}
-        />
+        >
+          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
+        </ModalStatusError>
       </Modal>
     );
   }
@@ -123,6 +127,7 @@ export default function CheckDatabaseModal() {
       icon="verified"
       maxWidth="480px"
       testId="check-database"
+      onSubmit={handleCheck}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="check-database-cancel-btn" variant="secondary" onClick={handleClose}>{CM.cancel}</Button>
@@ -136,16 +141,16 @@ export default function CheckDatabaseModal() {
             <Icon name="database" size="sm" weight={300} className="text-amber-500" />
           </div>
           <div className="min-w-0">
-            <Typography variant="caption" className="text-slate-400 text-[10px] uppercase font-semibold">
+            <Typography variant="caption" className="text-slate-400 text-12 uppercase font-semibold">
               {CM.databaseName}
             </Typography>
-            <Typography variant="p" className="font-bold text-[13px] text-slate-900 dark:text-white font-mono truncate">
+            <Typography variant="p" className="font-bold text-15 text-slate-900 dark:text-white font-mono truncate">
               {selectedDatabase}
             </Typography>
           </div>
         </div>
 
-        <Typography variant="p" className="text-[12px] text-slate-600 dark:text-slate-400 leading-relaxed">
+        <Typography variant="p" className="text-14 text-slate-600 dark:text-slate-400 leading-relaxed">
           {CM.checkDatabaseDesc}
         </Typography>
 
@@ -158,20 +163,14 @@ export default function CheckDatabaseModal() {
           onClick={() => setRepair(!repair)}
         >
           <Icon name="build" size="sm" weight={300} className={repair ? 'text-amber-500' : 'text-slate-400'} />
-          <Typography variant="p" className={`flex-1 text-[12px] font-medium ${repair ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}`}>
+          <Typography variant="p" className={`flex-1 text-14 font-medium ${repair ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}`}>
             {CM.repairWhenInconsistency}
           </Typography>
           <div onClick={(e) => e.stopPropagation()}>
             <Toggle checked={repair} onChange={setRepair} />
           </div>
         </div>
-
-        {isActive && (
-          <div className="grid grid-cols-2 gap-3">
-            <Input data-testid="check-database-dbuser-input" label={CM.userName} value={dbuser} onChange={(e) => setDbuser(e.target.value)} icon="account_circle" size="sm" />
-            <Input data-testid="check-database-dbpasswd-input" type="password" label={CM.password} value={dbpasswd} onChange={(e) => setDbpasswd(e.target.value)} icon="password" size="sm" placeholder={CM.emptyAllowedPlaceholder} />
-          </div>
-        )}
+        <MaintenanceDetails job={previewJob} preview />
       </div>
     </Modal>
   );

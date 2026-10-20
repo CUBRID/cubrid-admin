@@ -13,6 +13,8 @@ import { FileModule } from '@file/file.module';
 import { SecurityModule } from '@security';
 import { UserRepositoryModule } from '@repository';
 import { HaModule } from '@ha';
+import { BrokerModule } from '@broker';
+import { CmsJobLockModule } from './cms-job-lock.module';
 import { CmsJobController } from './cms-job.controller';
 import { CmsJobService } from './cms-job.service';
 import { CmsJobStore } from './cms-job.store';
@@ -28,6 +30,11 @@ import { CmsJobStore } from './cms-job.store';
     HaModule,
     LockModule,
     SecurityModule,
+    BrokerModule,
+    // DatabaseLifecycleService below is CmsJobModule's own separate copy
+    // (see its class doc — duplicated here to avoid a real cycle with
+    // DatabaseModule) and now needs CmsJobLockService itself.
+    CmsJobLockModule,
   ],
   controllers: [CmsJobController],
   providers: [

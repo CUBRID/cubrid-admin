@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDispatch } from 'react-redux';
-import { setSelectedGroup, openAddHostModal, moveHost } from '../../../host/hostSlice';
+import { setSelectedGroup, moveHost } from '../../../host/hostSlice';
 import { orderedGroupEntries, sortHostUidsByHaRole, UNGROUPED_GROUP_ID, HOST_DRAG_MIME } from '../../../host/hostGroupUtils';
 import ServerListItem from './ServerListItem';
-import { Icon } from '../../../../components/ds/foundation/Icon';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { useCM } from '../../../../constants/useCM';
 
@@ -16,6 +15,8 @@ export default function HostGroupTree({
   onContextMenu,
   onGroupContextMenu,
   onHostActivate,
+  selectedHostUids,
+  onSelectedHostUidsChange,
 }) {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -24,6 +25,10 @@ export default function HostGroupTree({
   const [draggedHost, setDraggedHost] = useState(null);
   const [dropTargetGroupId, setDropTargetGroupId] = useState(null);
   const draggedHostRef = useRef(null);
+  // Anchor for shift-click range selection — the last host clicked WITHOUT
+  // shift (plain or cmd/ctrl click). Not reset by shift-clicks themselves,
+  // matching standard file-manager range-select behavior.
+  const lastClickedHostUidRef = useRef(null);
 
   // External activation (or host deletion) should bring list focus back in
   // sync. Merely focusing another row does not change selectedHostUid.
@@ -84,7 +89,30 @@ export default function HostGroupTree({
 
     clearDragState();
 
-    if (!payload?.hostUid || payload.sourceGroupId === groupId) {
+    if (!payload?.hostUid) {
+      return;
+    }
+
+    // Dragging a host that's part of the current multi-selection moves every
+    // selected host, not just the one under the cursor — matching how
+    // multi-select drags work in a normal file manager.
+    const hostUidsToMove =
+      selectedHostUids?.size > 1 && selectedHostUids.has(payload.hostUid)
+        ? [...selectedHostUids]
+        : [payload.hostUid];
+
+    // Each host may currently live in a different group when moving a
+    // multi-selection, so look up each one's own current group instead of
+    // relying on the single dragged host's sourceGroupId.
+    const currentGroupIdByHostUid = new Map();
+    for (const [gid, group] of Object.entries(hostGroups || {})) {
+      for (const uid of Object.keys(group.hosts || {})) {
+        currentGroupIdByHostUid.set(uid, gid);
+      }
+    }
+
+    const targets = hostUidsToMove.filter((uid) => currentGroupIdByHostUid.get(uid) !== groupId);
+    if (targets.length === 0) {
       return;
     }
 
@@ -94,8 +122,10 @@ export default function HostGroupTree({
       return next;
     });
 
-    await dispatch(moveHost({ hostUid: payload.hostUid, targetGroupId: groupId }));
-  }, [clearDragState, dispatch]);
+    for (const hostUid of targets) {
+      await dispatch(moveHost({ hostUid, targetGroupId: groupId }));
+    }
+  }, [clearDragState, dispatch, selectedHostUids, hostGroups]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((prev) => {
@@ -118,6 +148,58 @@ export default function HostGroupTree({
   const ungroupedHostsMap = ungroupedEntry?.[1]?.hosts || {};
   const ungroupedHostUids = sortHostUidsByHaRole(Object.keys(ungroupedHostsMap), ungroupedHostsMap, haInfo);
   const isUngroupedDropTarget = dropTargetGroupId === UNGROUPED_GROUP_ID && draggedHost?.sourceGroupId !== UNGROUPED_GROUP_ID;
+
+  // Flattened top-to-bottom host order (regardless of group collapse state)
+  // for shift-click range selection — must match the order rendered below.
+  const flattenedHostUids = [
+    ...groupEntries.flatMap(([, group]) => {
+      const hostsMap = group.hosts || {};
+      return sortHostUidsByHaRole(Object.keys(hostsMap), hostsMap, haInfo);
+    }),
+    ...ungroupedHostUids,
+  ];
+
+  const handleMultiSelect = useCallback((e, uid) => {
+    if (!onSelectedHostUidsChange) return;
+
+    if (e.shiftKey && lastClickedHostUidRef.current) {
+      const startIdx = flattenedHostUids.indexOf(lastClickedHostUidRef.current);
+      const endIdx = flattenedHostUids.indexOf(uid);
+      if (startIdx !== -1 && endIdx !== -1) {
+        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+        onSelectedHostUidsChange(new Set(flattenedHostUids.slice(from, to + 1)));
+        return;
+      }
+    }
+
+    if (e.metaKey || e.ctrlKey) {
+      onSelectedHostUidsChange((prev) => {
+        const next = new Set(prev);
+        if (next.has(uid)) next.delete(uid);
+        else next.add(uid);
+        return next;
+      });
+      lastClickedHostUidRef.current = uid;
+      return;
+    }
+
+    // Plain click on a host that's already part of the current
+    // multi-selection: leave the selection alone instead of collapsing it.
+    // A drag can start from the exact same mousedown that produced this
+    // click (browsers don't always suppress click cleanly once a drag
+    // begins), so clearing here was intermittently wiping the selection
+    // out from under a multi-host drag before handleGroupDrop ever saw it.
+    if (selectedHostUids?.has(uid)) {
+      lastClickedHostUidRef.current = uid;
+      return;
+    }
+
+    // Plain click on a host outside the current selection — clear
+    // multi-select, ServerListItem still runs its own normal
+    // single-select/activate-tab logic for this case.
+    onSelectedHostUidsChange(new Set());
+    lastClickedHostUidRef.current = uid;
+  }, [flattenedHostUids, onSelectedHostUidsChange, selectedHostUids]);
 
   return (
     <div className="py-1">
@@ -160,6 +242,8 @@ export default function HostGroupTree({
                     <ServerListItem
                       host={host}
                       isSelected={focusedHostUid === uid}
+                      isMultiSelected={selectedHostUids?.has(uid)}
+                      onMultiSelect={handleMultiSelect}
                       isAuthorized={authorizedHosts.includes(uid)}
                       haInfo={haInfo[uid]}
                       onContextMenu={onContextMenu}
@@ -175,16 +259,6 @@ export default function HostGroupTree({
                 );
               })}
             </TreeNode>
-            {isGroupSelected && (
-              <button
-                type="button"
-                onClick={() => dispatch(openAddHostModal({ groupId, alias: '', address: '', port: '8001', id: 'admin', password: '' }))}
-                className="ml-8 mb-1 flex items-center gap-1 px-2 py-0.5 text-[10px] text-slate-400 hover:text-amber-500 transition-colors"
-              >
-                <Icon name="add" size="12px" />
-                {CM.addNodeToGroup}
-              </button>
-            )}
           </div>
         );
       })}
@@ -205,6 +279,8 @@ export default function HostGroupTree({
               key={uid}
               host={host}
               isSelected={focusedHostUid === uid}
+              isMultiSelected={selectedHostUids?.has(uid)}
+              onMultiSelect={handleMultiSelect}
               isAuthorized={authorizedHosts.includes(uid)}
               haInfo={haInfo[uid]}
               onContextMenu={onContextMenu}

@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeOptimizeDatabaseModal } from '../databaseSlice';
+import { dbKey } from '../dbKey';
 import { databaseApi } from '../databaseApi';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
+import { MaintenanceDetails } from '../../../infrastructure/cmsJob/MaintenanceDetails';
+import { getCmsJobErrorResult } from '../../../infrastructure/cmsJob/cmsJobUtils';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -18,7 +21,6 @@ import { useCM } from '../../../constants/useCM';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
 import {
@@ -109,7 +111,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
             weight={300} 
             className={value ? 'text-amber-500' : 'text-slate-400'} 
           />
-          <span className={`text-[13px] font-medium truncate ${value ? 'text-slate-900 dark:text-slate-200' : 'text-slate-400'}`}>
+          <span className={`text-15 font-medium truncate ${value ? 'text-slate-900 dark:text-slate-200' : 'text-slate-400'}`}>
             {value ? value : CM.allTables}
           </span>
         </div>
@@ -147,12 +149,12 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
                 }`}
               >
                 <div className={`w-2 h-2 rounded-full transition-all ${value === '' ? 'bg-amber-500 scale-125 shadow-[0_0_8px_rgba(255,188,4,0.6)]' : 'bg-slate-300 dark:bg-slate-700 group-hover:bg-amber-500/40'}`}></div>
-                <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${value === '' ? 'text-amber-500' : 'text-slate-500 dark:text-slate-400'}`}>{CM.allTables}</span>
+                <span className={`text-12 font-black uppercase tracking-[0.15em] ${value === '' ? 'text-amber-500' : 'text-slate-500 dark:text-slate-400'}`}>{CM.allTables}</span>
               </button>
             )}
 
             {!hasResults && !isLoading && (
-              <div className="py-8">
+              <div className="py-2">
                 <EmptyState
                   icon="search_off"
                   title={CM.noMatches}
@@ -164,7 +166,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
             {isLoading && (
               <div className="py-12 text-center space-y-4">
                 <Spinner size="md" className="mx-auto" />
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em]">{CM.processing}</p>
+                <p className="text-12 text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em]">{CM.processing}</p>
               </div>
             )}
 
@@ -182,7 +184,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
                     }`}
                   >
                     <Icon name="table" size="sm" weight={300} className={value === cls.classname ? 'text-status-dark' : 'text-slate-400 group-hover:text-amber-500'} />
-                    <span className="text-[12px] font-medium truncate leading-none select-none flex-1 lowercase">{cls.classname}</span>
+                    <span className="text-14 font-medium truncate leading-none select-none flex-1 lowercase">{cls.classname}</span>
                   </button>
                 ))}
               </div>
@@ -199,22 +201,22 @@ export default function OptimizeDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isOptimizeDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
-  
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
+
   const {
     error,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError,
   } = useActionState();
-  const { runJob } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob({ sharedResult: true });
   const [selectedClassName, setSelectedClassName] = useState('');
   const [jobStatus, setJobStatus] = useState(null);
+  const [resultJob, setResultJob] = useState(null);
   const [dbuser, setDbuser] = useState('dba');
   const [dbpasswd, setDbpasswd] = useState('');
 
@@ -223,7 +225,11 @@ export default function OptimizeDatabaseModal() {
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
 
   const isActive = selectedDatabase && activeDatabases.includes(selectedDatabase);
-  
+  // optimizedb only needs credentials while online, and only to satisfy CMS's
+  // per-connection login cache — if a prior "Login Database" already
+  // populated that cache for this db, there's nothing new to authenticate.
+  const alreadyLoggedIn = isActive && loggedInDatabases.includes(dbKey(selectedHostUid, selectedDatabase));
+
   const fetchClasses = useCallback(async () => {
     if (!selectedHostUid || !selectedDatabase) return;
     setIsLoadingClasses(true);
@@ -246,41 +252,69 @@ export default function OptimizeDatabaseModal() {
   useEffect(() => {
     if (isOptimizeDatabaseModalOpen && selectedDatabase) {
       setSelectedClassName('');
-      setDbuser('dba');
+      setResultJob(null);
+      setJobStatus(null);
+      // Blank when a prior login already covers this db — leaving it blank
+      // tells the backend to reuse that cache instead of logging in again.
+      setDbuser(alreadyLoggedIn ? '' : 'dba');
       setDbpasswd('');
       resetAction();
       fetchClasses();
     }
-  }, [isOptimizeDatabaseModalOpen, selectedDatabase, fetchClasses, resetAction]);
+  }, [isOptimizeDatabaseModalOpen, selectedDatabase, alreadyLoggedIn, fetchClasses, resetAction]);
 
   if (!isOptimizeDatabaseModalOpen) return null;
+
+  const previewJob = {
+    type: 'optimize',
+    dbname: selectedDatabase,
+    maintenanceSummary: {
+      operation: 'statistics-update',
+      scope: selectedClassName ? 'selected-class' : 'all-classes',
+      ...(selectedClassName ? { className: selectedClassName } : {}),
+      scanMethod: 'unknown',
+    },
+  };
 
   const handleOptimize = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
 
     // CMS authorizes optimizedb against a per-connection credential cache
     // populated by dbmtuserlogin — required whenever the database is
-    // online (see database-management.service.ts's loginIfCredentialsProvided).
-    if (isActive && !dbuser.trim()) {
+    // online (see database-management.service.ts's loginIfCredentialsProvided),
+    // unless a prior Login Database already populated that cache.
+    if (isActive && !alreadyLoggedIn && !dbuser.trim()) {
       endError(CM.dbUserRequiredWhileOnlineMsg);
       return;
     }
 
     startAction();
+    setJobStatus(null);
+    setResultJob(previewJob);
+    let lastJob = previewJob;
     try {
       const payload = {
         ...(selectedClassName && { classname: selectedClassName }),
-        ...(isActive && { dbuser: dbuser.trim(), dbpasswd }),
+        ...(isActive && dbuser.trim() && { dbuser: dbuser.trim(), dbpasswd }),
       };
 
       await runJob(
         () => databaseJobApi.submitOptimize(selectedHostUid, selectedDatabase, payload),
-        { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
+        { initialJob: { ...previewJob, jobStatus: 'queued' }, onProgress: (j) => { lastJob = j; setJobStatus(j.jobStatus ?? j.status); } }
       );
 
-      endSuccess();
+      if (!wasBackgrounded()) {
+        handleClose();
+      }
     } catch (err) {
-      endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
+      if (!wasBackgrounded()) {
+        if (err?.job || err?.jobId || lastJob?.jobId || err?.cancelled) {
+          handleClose();
+          return;
+        }
+        setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
+        endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
+      }
     }
   };
 
@@ -296,22 +330,9 @@ export default function OptimizeDatabaseModal() {
         <ModalStatusLoading
           title={CM.regeneratingStatistics}
           subtitle={getCmsJobLoadingSubtitle(selectedClassName || selectedDatabase, jobStatus, CM)}
-          onBackground={handleClose}
+          onBackground={() => { background(); handleClose(); }}
         />
-      </Modal>
-    );
-  }
-
-  /* ─── SUCCESS view ─── */
-  if (isSuccess) {
-    return (
-      <Modal isOpen title={CM.optimizeDatabase} icon="auto_fix_high" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess
-          title={CM.optimizationSuccess}
-          message={selectedClassName || selectedDatabase}
-          onConfirm={handleClose}
-          confirmText={CM.close}
-        />
+        <MaintenanceDetails job={resultJob || previewJob} preview />
       </Modal>
     );
   }
@@ -321,13 +342,17 @@ export default function OptimizeDatabaseModal() {
     return (
       <Modal isOpen title={CM.optimizeDatabase} icon="auto_fix_high" iconVariant="danger" onClose={handleClose} maxWidth="480px">
         <ModalStatusError
-          title={CM.optimizationFailed}
+          title={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknown : CM.optimizationFailed}
+          message={resultJob?.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
           error={error}
-          onRetry={handleOptimize}
+          guidance={resultJob?.outcomeUnknown ? undefined : CM.optimizeDbGuidance}
+          onRetry={resultJob?.outcomeUnknown ? undefined : handleOptimize}
           onCancel={handleClose}
           retryText={CM.retryOptimization}
           cancelText={CM.dismiss}
-        />
+        >
+          <MaintenanceDetails key={resultJob?.jobId} job={resultJob} />
+        </ModalStatusError>
       </Modal>
     );
   }
@@ -342,6 +367,8 @@ export default function OptimizeDatabaseModal() {
       icon="auto_fix_high"
       maxWidth="480px"
       testId="optimize-database"
+      onSubmit={handleOptimize}
+      submitDisabled={isActive || isLoadingClasses}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="optimize-database-cancel-btn" variant="secondary" onClick={handleClose}>
@@ -388,10 +415,11 @@ export default function OptimizeDatabaseModal() {
         </CaDialogGroup>
 
         <CaDialogGroup title={CM.grpOptimizeDesc}>
-          <Typography variant="p" className="text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
+          <Typography variant="p" className="text-14 leading-relaxed text-slate-600 dark:text-slate-400">
             {CM.lblOptimizeDesc}
           </Typography>
         </CaDialogGroup>
+        <MaintenanceDetails job={previewJob} preview />
       </div>
     </Modal>
   );

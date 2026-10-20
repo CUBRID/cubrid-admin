@@ -27,3 +27,4 @@ export { LoggingInterceptor } from './interceptors/logging.interceptor';
 
 // Export base service
 export { BaseService } from './base.service';
+export { pollCmsAsyncJob } from './poll-cms-async-job';

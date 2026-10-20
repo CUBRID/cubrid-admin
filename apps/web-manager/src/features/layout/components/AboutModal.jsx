@@ -42,42 +42,21 @@ export default function AboutModal() {
           {/* Main Info */}
           <div className="flex flex-col items-center text-center w-full">
             <SectionHeader title={CM.cubridWebManager} icon="verified" className="justify-center" />
-            <Typography variant="p" className="text-slate-500 dark:text-slate-400 text-[13px] mt-1">
+            <Typography variant="p" className="text-slate-500 dark:text-slate-400 text-15 mt-1">
               {CM.aboutTagline}
             </Typography>
           </div>
 
-          {/* Details Section */}
-          <div className="w-full">
-            <SectionHeader title={CM.systemDetails} icon="settings_suggest" />
-            <div className="space-y-0.5 pt-2">
-              {[
-                { label: CM.coreVersion, value: '12.4.0-STABLE' },
-                { label: CM.webBridgeLabel, value: 'v1.1.2-ALPHA' },
-                { label: CM.stackLabel, value: 'React · NestJS · Nx' },
-                { label: CM.status, value: CM.certifiedStable, isStatus: true }
-              ].map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center py-2 border-b border-slate-50 dark:border-white/5 last:border-0">
-                  <Typography variant="caption" className="text-slate-400 font-medium">{item.label}</Typography>
-                  <div className="flex items-center gap-1.5">
-                    {item.isStatus && (
-                      <span className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse"></span>
-                    )}
-                    <Typography 
-                      variant="caption" 
-                      className={`font-mono text-[12px] font-bold ${item.isStatus ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-200'}`}
-                    >
-                      {item.value}
-                    </Typography>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {/* Version */}
+          <div className="flex flex-col items-center pt-2 pb-2">
+            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-18">
+              0.0.1 Alpha
+            </Typography>
           </div>
 
           {/* Copyright Section */}
           <div className="pt-4 border-t border-slate-50 dark:border-white/5 text-center">
-            <Typography variant="caption" className="text-slate-400 dark:text-slate-500 text-[10px] tracking-widest uppercase">
+            <Typography variant="caption" className="text-slate-400 dark:text-slate-500 text-12 tracking-widest uppercase">
               {CM.copyrightNotice}
             </Typography>
           </div>

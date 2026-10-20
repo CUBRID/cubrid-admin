@@ -19,7 +19,7 @@ export default function HeaderMenu() {
   };
 
   const MenuLabel = ({ children }) => (
-    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 tracking-wide group-hover:text-amber-500 transition-colors">
+    <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 tracking-wide group-hover:text-amber-500 transition-colors">
       {children}
     </span>
   );
@@ -34,7 +34,7 @@ export default function HeaderMenu() {
         />
         <MenuItem
           icon="edit"
-          label={CM.changeHost}
+          label={CM.editHost}
           disabled={!selectedHostUid}
           onClick={() => dispatch(openEditHostModal(selectedHostUid))}
         />

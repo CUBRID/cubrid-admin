@@ -12,11 +12,15 @@ import { fetchHosts,
   openCmsUserManagementModal,
   startService,
   stopService,
-  moveHost
+  moveHost,
+  deleteHost,
+  refreshServerList
 } from '../../host/hostSlice';
-import { fetchDatabaseStartInfo, startDatabase, stopDatabase,
-  setSelectedDatabase, resetDatabaseState
+import {
+  fetchDatabaseStartInfo, startDatabase, stopDatabase, loginDatabase, logoutDatabase, deleteDatabaseProfile,
+  setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
+import { dbKey } from '../../database/dbKey';
 
 import { fetchDatabaseSpaceInfo
 } from '../../database/databaseMonitoringSlice';
@@ -83,7 +87,7 @@ import SidebarEmptyState from '../sidebar/components/SidebarEmptyState';
 import CMSUserManagementModal from '../../host/components/CMSUserManagementModal';
 import EditCMSUserModal from '../../host/components/EditCMSUserModal';
 import { openCreateGroupModal, openDeleteGroupModal, openRenameGroupModal, openAddHostModal, openManageGroupMembersModal } from '../../host/hostSlice';
-import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME } from '../../host/hostGroupUtils';
+import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME, orderedGroupEntries } from '../../host/hostGroupUtils';
 import { useHostActivation } from '../../host/useHostActivation';
 
 export default function Sidebar({ isCollapsed, onAddHost }) {
@@ -99,6 +103,13 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const sidebarRef = useRef(null);
   const hostSectionRef = useRef(null);
   const [activeTab, setActiveTab] = useState('db');
+  // Cmd/Ctrl+click and Shift+click multi-selection in the host tree — see
+  // HostGroupTree/ServerListItem. Separate from selectedHostUid, which drives
+  // which host's dashboard/tree content is shown.
+  const [selectedHostUids, setSelectedHostUids] = useState(() => new Set());
+  const [bulkHostContextMenu, setBulkHostContextMenu] = useState(null);
+  const [bulkDeleteHostConfirm, setBulkDeleteHostConfirm] = useState(null);
+  const [serverToolbarMenu, setServerToolbarMenu] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [groupContextMenu, setGroupContextMenu] = useState(null);
   const [dbContextMenu, setDbContextMenu] = useState(null);
@@ -139,10 +150,49 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     hostUid: null,
     serverName: '',
   });
+  // Generic gate for a risky action (db/broker start/stop, single or bulk) —
+  // set { title, description, confirmLabel, variant, run } to show the
+  // dialog; onConfirm calls run() and clears this, onCancel just clears it.
+  const [pendingActionConfirm, setPendingActionConfirm] = useState(null);
+  const requestActionConfirm = (config) => setPendingActionConfirm(config);
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
-  const { databases, activeDatabases, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
-  const { brokers } = useSelector((state) => state.broker, shallowEqual);
+  const { databasesByHost, activeDatabasesByHost, loggedInDatabases, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { brokersByHost } = useSelector((state) => state.broker, shallowEqual);
+  // Sidebar's BrokerTree/DatabaseTree are keyed by selectedHostUid (fully
+  // remounted on host switch) and every list here is scoped to whichever
+  // host is currently selected — read straight out of the per-host maps so
+  // a still in-flight response for a host the user has since switched away
+  // from can never be mistaken for this host's own data.
+  const databases = databasesByHost[selectedHostUid] || [];
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
+  const haDbNames = haDbNamesByHost[selectedHostUid] || [];
+  const brokers = brokersByHost[selectedHostUid] || [];
+
+  // Some Manage Database operations are unsafe (or outright break HA
+  // pairing) when run against a database that's a live HA member — block
+  // them at the menu instead of letting master/slave silently diverge:
+  //  - Load Database: loaddb always forces SA mode via CMS, which internally
+  //    resets ha_mode to off for the duration of the load, so nothing it
+  //    writes replicates to the HA peer (see known_issues.rst).
+  //  - Rename Database: renamedb has no HA awareness at all — it only
+  //    renames the local databases.txt entry + volume files, so afterward
+  //    cubrid_ha.conf's ha_db_list (and the peer, whose db keeps the old
+  //    name) no longer match the renamed local name, breaking HA pairing.
+  //  - Delete Database: removes this node's copy of an HA-paired database
+  //    outright — there is no way that leaves HA working correctly.
+  //  - Restore Database: restoredb never touches the ha_apply_info catalog
+  //    (the slave's replication-resume bookmark) — CUBRID ships a dedicated
+  //    `restoreslave` utility that resets it to the restored LSA specifically
+  //    because plain restoredb leaves it stale, which webmanager never uses.
+  //
+  // Gated on haDbNames (static cubrid_ha.conf ha_db_list membership, carried
+  // on start-info — see StartInfoClientResponse), NOT live heartbeat
+  // presence: a genuinely-disconnected/mid-recovery HA pair can report no
+  // live heartbeat at all, which would wrongly read as "not HA" and silently
+  // re-enable exactly the operations that are dangerous in that state.
+  const isSelectedDbInHa = haDbNames.includes(dbContextMenu?.db);
+
 
   useEffect(() => {
     dispatch(fetchHosts());
@@ -150,6 +200,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   const closeAllContextMenus = useCallback(() => {
     setContextMenu(null);
+    setServerToolbarMenu(null);
+    setBulkHostContextMenu(null);
     setGroupContextMenu(null);
     setDbContextMenu(null);
     setBrokerContextMenu(null);
@@ -189,7 +241,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       .then(({ successCount, failed }) => {
         let message = CM.connectedHostsMsg(successCount);
         if (failed.length > 0) {
-          message += CM.failedListSuffix(failed.join(', '));
+          message += CM.failedListSuffix(failed.map((f) => `${f.name} (${f.reason})`).join(', '));
         }
         dispatch(showStatusModal({
           type: failed.length > 0 && successCount === 0 ? 'error' : 'success',
@@ -237,8 +289,88 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   const handleContextMenu = (e, serverName, hostUid, alias) => {
     e.preventDefault();
+    // Right-clicking a host that's part of the current multi-selection acts
+    // on the whole selection; right-clicking outside it replaces the
+    // selection with just this host and falls through to the normal menu.
+    if (selectedHostUids.size > 1 && selectedHostUids.has(hostUid)) {
+      closeAllContextMenus();
+      setBulkHostContextMenu({ mouseX: e.clientX, mouseY: e.clientY, hostUids: Array.from(selectedHostUids) });
+      return;
+    }
+    setSelectedHostUids(new Set());
     closeAllContextMenus();
     setContextMenu({ mouseX: e.clientX, mouseY: e.clientY, server: serverName, hostUid, alias });
+  };
+
+  const handleBulkLoginSelected = () => {
+    const uids = (bulkHostContextMenu?.hostUids || []).filter((uid) => !authorizedHosts.includes(uid));
+    setBulkHostContextMenu(null);
+    if (uids.length === 0) return;
+
+    dispatch(loginHostsBatch(uids))
+      .unwrap()
+      .then(({ successCount, failed }) => {
+        let message = CM.connectedHostsMsg(successCount);
+        if (failed.length > 0) {
+          message += CM.failedListSuffix(failed.map((f) => `${f.name} (${f.reason})`).join(', '));
+        }
+        dispatch(showStatusModal({
+          type: failed.length > 0 && successCount === 0 ? 'error' : 'success',
+          title: CM.loginSelectedHosts,
+          message,
+        }));
+      })
+      .catch(() => {
+        dispatch(showStatusModal({
+          type: 'error',
+          title: CM.loginSelectedHosts,
+          message: CM.loginToHostsFailedMsg,
+        }));
+      });
+  };
+
+  const handleBulkMoveSelected = async (targetGroupId) => {
+    const uids = bulkHostContextMenu?.hostUids || [];
+    setBulkHostContextMenu(null);
+    setSelectedHostUids(new Set());
+    // Sequential, not Promise.all: each move's response is a full host_groups
+    // snapshot that overwrites Redux state, so parallel requests can resolve
+    // out of order and have a stale (pre-other-move) snapshot clobber the
+    // up-to-date one, making it look like only one host moved.
+    for (const hostUid of uids) {
+      await dispatch(moveHost({ hostUid, targetGroupId }));
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    const uids = bulkDeleteHostConfirm?.hostUids || [];
+    setBulkDeleteHostConfirm(null);
+    let successCount = 0;
+    const failedUids = [];
+    for (const hostUid of uids) {
+      try {
+        await dispatch(deleteHost(hostUid)).unwrap();
+        dispatch(closeHostTabs(hostUid));
+        dispatch(clearHostSummary(hostUid));
+        dispatch(clearDatabaseLoginsForHost(hostUid));
+        if (selectedHostUid === hostUid) {
+          dispatch(setSelectedHost(null));
+          dispatch(resetDatabaseState(hostUid));
+          dispatch(resetBrokerState(hostUid));
+        }
+        successCount += 1;
+      } catch {
+        failedUids.push(hostUid);
+      }
+    }
+    setSelectedHostUids(new Set());
+    dispatch(showStatusModal({
+      type: failedUids.length > 0 && successCount === 0 ? 'error' : 'success',
+      title: CM.deleteSelectedHosts,
+      message: failedUids.length > 0
+        ? CM.bulkDeleteHostsPartialMsg(successCount, failedUids.length)
+        : CM.bulkDeleteHostsSuccessMsg(successCount),
+    }));
   };
 
   const handleGroupContextMenu = (e, groupId, groupName) => {
@@ -408,7 +540,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   useEffect(() => {
     const handleOutsideAction = (e) => {
-      const isInsideMenu = e.target.closest('.context-menu-container');
+      const isInsideMenu = e.target.closest('.context-menu-container, .context-menu-trigger');
       if (!isInsideMenu) {
         closeAllContextMenus();
       }
@@ -442,7 +574,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   return (
     <>
-      <aside ref={sidebarRef} className={`w-full h-full bg-white dark:bg-bk-side flex flex-col ${isCollapsed ? 'hidden' : ''}`} id="sidebar">
+      <aside ref={sidebarRef} className={`sidebar-responsive-container w-full h-full bg-white dark:bg-bk-side flex flex-col ${isCollapsed ? 'hidden' : ''}`} id="sidebar">
 
         <SidebarHeader />
 
@@ -457,14 +589,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
         >
           <div className="h-full flex flex-col overflow-hidden bg-white dark:bg-bk-side">
             <div
-              className={`flex-none px-4 py-2 border-b border-slate-200 dark:border-white/5 flex items-center justify-between cursor-pointer transition-all duration-300 group/host-header
+              className={`server-list-header flex-none px-4 py-2 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-2 cursor-pointer transition-all duration-300 group/host-header
                 ${!isServerListCollapsed
                   ? 'bg-white dark:bg-bk-side'
                   : 'bg-slate-50 dark:bg-white/2 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               onClick={toggleServerListCollapse}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all duration-200
                   ${!isServerListCollapsed ? 'text-amber-500' : 'text-slate-400 group-hover/host-header:text-amber-500'}`}>
                   <Icon
@@ -474,13 +606,13 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     weight={300}
                   />
                 </div>
-                <Typography variant="caption" className={`font-bold text-[12px] uppercase tracking-widest transition-colors
+                <Typography variant="caption" className={`server-list-header-title whitespace-nowrap font-bold text-14 uppercase tracking-widest transition-colors
                   ${!isServerListCollapsed ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500 group-hover/host-header:text-amber-500'}`}>
                   {CM.serverListHeader}
                 </Typography>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="server-list-header-actions flex items-center gap-2 shrink-0">
                 {isServerListCollapsed && (
                   <StatusBadge 
                     label={hosts.length.toString()} 
@@ -491,28 +623,33 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 )}
                 {!isServerListCollapsed && (
                   <button
+                    type="button"
                     data-testid="add-host-toolbar-btn"
                     onClick={(e) => { e.stopPropagation(); onAddHost(); }}
-                    className="flex items-center gap-1 h-6 px-2 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
+                    className="server-toolbar-action flex items-center justify-center gap-1 h-7 px-2 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
                     title={CM.addHost}
+                    aria-label={CM.addHost}
                   >
-                    <Icon name="add" size="12px" weight={400} />
-                    <span className="text-[10px] font-semibold tracking-wide">{CM.add}</span>
+                    <Icon name="add" size="13px" weight={400} />
+                    <span className="server-toolbar-label text-12 font-semibold tracking-wide whitespace-nowrap">{CM.add}</span>
                   </button>
                 )}
                 {!isServerListCollapsed && (
                   <button
+                    type="button"
                     data-testid="new-group-toolbar-btn"
                     onClick={(e) => { e.stopPropagation(); dispatch(openCreateGroupModal()); }}
-                    className="flex items-center gap-1 h-6 px-2 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
+                    className="server-toolbar-action server-toolbar-secondary-action flex items-center justify-center gap-1 h-7 px-2 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
                     title={CM.newGroup}
+                    aria-label={CM.newGroup}
                   >
-                    <Icon name="create_new_folder" size="12px" weight={400} />
-                    <span className="text-[10px] font-semibold tracking-wide">{CM.newGroup}</span>
+                    <Icon name="create_new_folder" size="13px" weight={400} />
+                    <span className="server-toolbar-label text-12 font-semibold tracking-wide whitespace-nowrap">{CM.newGroup}</span>
                   </button>
                 )}
                 {!isServerListCollapsed && hosts.length > 0 && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (pendingLoginCount === 0) {
@@ -526,11 +663,51 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       handleLoginAll(null);
                     }}
                     disabled={isLoggingIntoHost}
-                    className="flex items-center gap-1 h-6 px-2 rounded-sm border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
+                    className="server-toolbar-action server-toolbar-login-action flex items-center justify-center gap-1 h-7 px-2 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
                     title={CM.loginAll}
+                    aria-label={CM.loginAll}
                   >
-                    <Icon name="login" size="12px" weight={400} />
-                    <span className="text-[10px] font-semibold tracking-wide">{CM.loginAll}</span>
+                    <Icon name="login" size="13px" weight={400} />
+                    <span className="server-toolbar-label text-12 font-semibold tracking-wide whitespace-nowrap">{CM.loginAll}</span>
+                  </button>
+                )}
+                {!isServerListCollapsed && (
+                  <button
+                    type="button"
+                    data-testid="refresh-server-list-toolbar-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dispatch(refreshServerList());
+                    }}
+                    disabled={hostsLoading}
+                    className="server-toolbar-action flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs disabled:opacity-50 disabled:pointer-events-none"
+                    title={CM.refresh}
+                    aria-label={CM.refresh}
+                  >
+                    <Icon name="refresh" size="13px" weight={400} className={hostsLoading ? 'animate-spin' : ''} />
+                  </button>
+                )}
+                {!isServerListCollapsed && (
+                  <button
+                    type="button"
+                    data-testid="server-toolbar-more-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (serverToolbarMenu) {
+                        setServerToolbarMenu(null);
+                        return;
+                      }
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      closeAllContextMenus();
+                      setServerToolbarMenu({ mouseX: rect.right, mouseY: rect.bottom + 4 });
+                    }}
+                    className="context-menu-trigger server-toolbar-action server-toolbar-overflow-action items-center justify-center h-7 w-7 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/4 text-slate-400 hover:text-amber-500 hover:border-amber-400/50 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all active:scale-95 shadow-xs"
+                    title={CM.moreActions}
+                    aria-label={CM.moreActions}
+                    aria-haspopup="menu"
+                    aria-expanded={Boolean(serverToolbarMenu)}
+                  >
+                    <Icon name="more_horiz" size="14px" weight={400} />
                   </button>
                 )}
               </div>
@@ -543,6 +720,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               className={`flex-1 overflow-y-auto py-1 bg-slate-50/50 dark:bg-black/20 transition-opacity duration-200 ${isServerListCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'} ${isServerListDropTarget ? 'bg-amber-500/8' : ''}`}
               id="host-section"
               onContextMenu={handleHostRootContextMenu}
+              onClick={(e) => {
+                // Clicking empty space (not bubbled from a host/group row)
+                // clears a shift/cmd-click multi-selection, instead of
+                // requiring each host to be cmd/ctrl-clicked off one by one.
+                if (e.target === e.currentTarget && selectedHostUids.size > 0) {
+                  setSelectedHostUids(new Set());
+                }
+              }}
               onDragOver={(e) => {
                 if (!e.dataTransfer.types.includes(HOST_DRAG_MIME)) return;
                 e.preventDefault();
@@ -553,15 +738,35 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setIsServerListDropTarget(false);
                 }
               }}
-              onDrop={(e) => {
+              onDrop={async (e) => {
                 e.preventDefault();
                 setIsServerListDropTarget(false);
                 const raw = e.dataTransfer.getData(HOST_DRAG_MIME);
                 if (!raw) return;
                 try {
-                  const { hostUid, sourceGroupId } = JSON.parse(raw);
-                  if (hostUid && sourceGroupId !== UNGROUPED_GROUP_ID) {
-                    dispatch(moveHost({ hostUid, targetGroupId: UNGROUPED_GROUP_ID }));
+                  const { hostUid } = JSON.parse(raw);
+                  if (!hostUid) return;
+
+                  // Dragging a host that's part of the current multi-selection
+                  // ungroups every selected host, not just the one under the
+                  // cursor — same rule as HostGroupTree's own drop zones.
+                  const hostUidsToMove =
+                    selectedHostUids?.size > 1 && selectedHostUids.has(hostUid)
+                      ? [...selectedHostUids]
+                      : [hostUid];
+
+                  const currentGroupIdByHostUid = new Map();
+                  for (const [gid, group] of Object.entries(hostGroups || {})) {
+                    for (const uid of Object.keys(group.hosts || {})) {
+                      currentGroupIdByHostUid.set(uid, gid);
+                    }
+                  }
+
+                  const targets = hostUidsToMove.filter(
+                    (uid) => currentGroupIdByHostUid.get(uid) !== UNGROUPED_GROUP_ID
+                  );
+                  for (const uid of targets) {
+                    await dispatch(moveHost({ hostUid: uid, targetGroupId: UNGROUPED_GROUP_ID }));
                   }
                 } catch {
                   // ignore malformed drag payload
@@ -575,11 +780,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     className="w-full mt-1 flex flex-col items-center justify-center gap-2 py-6 px-3 rounded-lg border border-dashed border-slate-300 dark:border-white/10 bg-white dark:bg-white/2 hover:border-amber-400/60 hover:bg-amber-500/5 dark:hover:bg-amber-500/10 transition-all group/add-host cursor-pointer"
                   >
                     <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center group-hover/add-host:bg-amber-500/10 group-hover/add-host:border-amber-400/40 transition-all">
-                      <Icon name="add" size="16px" weight={300} className="text-slate-400 group-hover/add-host:text-amber-500 transition-colors" />
+                      <Icon name="add" size="17px" weight={300} className="text-slate-400 group-hover/add-host:text-amber-500 transition-colors" />
                     </div>
                     <div className="text-center">
-                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 group-hover/add-host:text-slate-700 dark:group-hover/add-host:text-slate-300 transition-colors">{CM.addFirstHostTitle}</p>
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{CM.addFirstHostMsg}</p>
+                      <p className="text-13 font-semibold text-slate-500 dark:text-slate-400 group-hover/add-host:text-slate-700 dark:group-hover/add-host:text-slate-300 transition-colors">{CM.addFirstHostTitle}</p>
+                      <p className="text-12 text-slate-400 dark:text-slate-500 mt-0.5">{CM.addFirstHostMsg}</p>
                     </div>
                   </button>
                 ) : (
@@ -596,6 +801,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       onContextMenu={handleContextMenu}
                       onGroupContextMenu={handleGroupContextMenu}
                       onHostActivate={handleHostLogin}
+                      selectedHostUids={selectedHostUids}
+                      onSelectedHostUidsChange={setSelectedHostUids}
                     />
                   </div>
                 )
@@ -624,7 +831,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                         weight={300}
                       />
                     </div>
-                    <Typography variant="caption" className={`font-bold text-[11px] uppercase tracking-widest transition-colors
+                    <Typography variant="caption" className={`font-bold text-13 uppercase tracking-widest transition-colors
                       ${!isTreeCollapsed ? 'text-slate-600 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500 group-hover/tree-header:text-amber-500'}`}>
                       {CM.resourcesHeader}
                     </Typography>
@@ -634,11 +841,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 animate-in fade-in zoom-in-95 duration-200">
                         <Icon
                           name={activeTab === 'db' ? 'database' : activeTab === 'broker' ? 'hub' : 'description'}
-                          size="11px"
+                          size="12px"
                           className="text-amber-500"
                           weight={400}
                         />
-                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-tight">
+                        <span className="text-11 font-bold text-amber-600 dark:text-amber-500 uppercase tracking-tight">
                           {activeTab === 'db' ? 'DB' : activeTab === 'broker' ? CM.broker : CM.log}
                         </span>
                       </div>
@@ -697,7 +904,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       </div>
                       <Typography variant="p" className="text-sm font-bold text-rose-500 mb-1">{CM.connectionFailed}</Typography>
                       <Typography variant="caption" className="text-slate-500 dark:text-slate-400 mb-6 px-4">{hostAuthErrors[selectedHostUid]}</Typography>
-                      <Button variant="primary" size="sm" onClick={() => handleHostLogin(selectedHostUid)} className="px-8 h-9 shadow-[0_4px_12px_rgba(255,193,7,0.3)] text-[13px] font-medium">{CM.tryAgain}</Button>
+                      <Button variant="primary" size="sm" onClick={() => handleHostLogin(selectedHostUid)} className="px-8 h-9 shadow-[0_4px_12px_rgba(255,193,7,0.3)] text-15 font-medium">{CM.tryAgain}</Button>
                     </div>
                   )}
 
@@ -763,10 +970,39 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       </aside>
 
       {/* Context Menus */}
+      {serverToolbarMenu && (
+        <ContextMenuWrapper
+          x={serverToolbarMenu.mouseX}
+          y={serverToolbarMenu.mouseY}
+          onClose={() => setServerToolbarMenu(null)}
+          width="w-48"
+        >
+          <MenuItem
+            icon="create_new_folder"
+            label={CM.newGroup}
+            onClick={() => {
+              dispatch(openCreateGroupModal());
+              setServerToolbarMenu(null);
+            }}
+          />
+          {hosts.length > 0 && (
+            <MenuItem
+              icon="login"
+              label={CM.loginAll}
+              disabled={isLoggingIntoHost || pendingLoginCount === 0}
+              onClick={() => {
+                handleLoginAll(null);
+                setServerToolbarMenu(null);
+              }}
+            />
+          )}
+        </ContextMenuWrapper>
+      )}
+
       {contextMenu && (
         <ContextMenuWrapper x={contextMenu.mouseX} y={contextMenu.mouseY} onClose={() => setContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.serverColon(contextMenu.server)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.server}: <span className="normal-case">{contextMenu.server}</span></Typography>
             <Icon name="dns" size="xs" className="opacity-30" weight={300} />
           </div>
           {authorizedHosts.includes(contextMenu.hostUid) ? (
@@ -775,15 +1011,24 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               label={CM.disconnect}
               onClick={() => {
                 const hostUid = contextMenu.hostUid;
-                dispatch(revokeHostLogin(hostUid));
-                dispatch(closeHostTabs(hostUid));
-                if (selectedHostUid === hostUid) {
-                  dispatch(setSelectedHost(null));
-                  dispatch(resetDatabaseState());
-                  dispatch(resetBrokerState());
-                }
-                dispatch(clearHostSummary(hostUid));
+                const alias = contextMenu.alias;
                 setContextMenu(null);
+                requestActionConfirm({
+                  title: CM.confirmDisconnectHostTitle,
+                  description: CM.confirmDisconnectHostDesc(alias),
+                  confirmLabel: CM.disconnect,
+                  variant: 'danger',
+                  run: () => {
+                    dispatch(revokeHostLogin(hostUid));
+                    dispatch(closeHostTabs(hostUid));
+                    if (selectedHostUid === hostUid) {
+                      dispatch(setSelectedHost(null));
+                      dispatch(resetDatabaseState(hostUid));
+                      dispatch(resetBrokerState(hostUid));
+                    }
+                    dispatch(clearHostSummary(hostUid));
+                  },
+                });
               }}
             />
           ) : (
@@ -797,6 +1042,15 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               }}
             />
           )}
+          <MenuItem
+            icon="space_dashboard"
+            label={CM.openDashboard}
+            onClick={() => {
+              const hostUid = contextMenu.hostUid;
+              setContextMenu(null);
+              handleHostLogin(hostUid);
+            }}
+          />
           <MenuDivider />
           <MenuItem
             icon="play_arrow"
@@ -840,14 +1094,53 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
         </ContextMenuWrapper>
       )}
 
+      {bulkHostContextMenu && (
+        <ContextMenuWrapper x={bulkHostContextMenu.mouseX} y={bulkHostContextMenu.mouseY} onClose={() => setBulkHostContextMenu(null)}>
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">
+              {CM.selectedHostsCountLabel(bulkHostContextMenu.hostUids.length)}
+            </Typography>
+            <Icon name="dns" size="xs" className="opacity-30" weight={300} />
+          </div>
+          <MenuItem icon="login" label={CM.loginSelectedHosts} onClick={handleBulkLoginSelected} />
+          <SubMenu icon="drive_file_move" label={CM.moveToGroupMenu}>
+            <MenuItem icon="folder_off" label={CM.ungroupedHosts} onClick={() => handleBulkMoveSelected(UNGROUPED_GROUP_ID)} />
+            {orderedGroupEntries(hostGroups)
+              .filter(([groupId]) => groupId !== UNGROUPED_GROUP_ID)
+              .map(([groupId, group]) => (
+                <MenuItem key={groupId} icon="folder" label={group.name} onClick={() => handleBulkMoveSelected(groupId)} />
+              ))}
+          </SubMenu>
+          <MenuDivider />
+          <MenuItem
+            icon="delete"
+            label={CM.deleteSelectedHosts}
+            onClick={() => {
+              const uids = bulkHostContextMenu.hostUids;
+              setBulkHostContextMenu(null);
+              setBulkDeleteHostConfirm({ hostUids: uids });
+            }}
+          />
+        </ContextMenuWrapper>
+      )}
+
       {groupContextMenu && (
         <ContextMenuWrapper x={groupContextMenu.mouseX} y={groupContextMenu.mouseY} onClose={() => setGroupContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">
               {CM.groupColonLabel(groupContextMenu.groupName)}
             </Typography>
             <Icon name="folder" size="xs" className="opacity-30" weight={300} />
           </div>
+          <MenuItem
+            icon="refresh"
+            label={CM.refresh}
+            onClick={() => {
+              dispatch(refreshServerList());
+              setGroupContextMenu(null);
+            }}
+          />
+          <MenuDivider />
           <MenuItem
             icon="create_new_folder"
             label={CM.newGroup}
@@ -882,6 +1175,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           {groupContextMenu.groupId && (
             <>
             <MenuItem
+              icon="add_link"
+              label={CM.addNodeToGroup}
+              onClick={() => {
+                dispatch(openAddHostModal({ groupId: groupContextMenu.groupId, alias: '', address: '', port: '8001', id: 'admin', password: '' }));
+                setGroupContextMenu(null);
+              }}
+            />
+            <MenuItem
               icon="login"
               label={CM.loginAll}
               disabled={
@@ -893,15 +1194,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 setGroupContextMenu(null);
               }}
             />
-            <MenuDivider />
-            <MenuItem
-            icon="add_link"
-            label={CM.addNode}
-            onClick={() => {
-              dispatch(openAddHostModal({ groupId: groupContextMenu.groupId, alias: '', address: '', port: '8001', id: 'admin', password: '' }));
-              setGroupContextMenu(null);
-            }}
-          />
+          <MenuDivider />
           {groupContextMenu.groupId !== UNGROUPED_GROUP_ID && (
             <>
           <MenuItem
@@ -940,127 +1233,283 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {dbContextMenu && (
         <ContextMenuWrapper x={dbContextMenu.mouseX} y={dbContextMenu.mouseY} onClose={() => setDbContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.databaseColon(dbContextMenu.db)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.database}: <span className="normal-case">{dbContextMenu.db}</span></Typography>
             <Icon name="database" size="xs" className="opacity-30" weight={300} />
           </div>
           {dbContextMenu.isActive ? (
             <MenuItem
               icon="stop"
               label={CM.stopDatabase}
-              onClick={async () => {
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => {
                 const dbName = dbContextMenu.db;
                 setDbContextMenu(null);
-                setLoadingText(`${CM.stoppingDbNamed(dbName)} ...`);
-                startAction();
-                try {
-                  await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname: dbName })).unwrap();
-                  dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                  resetAction();
-                } catch (err) {
-                  // CMS stopdb may time out even when DB has actually stopped.
-                  // Always re-sync so the tree reflects the real state.
-                  dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                  endError(err);
-                }
+                requestActionConfirm({
+                  title: CM.confirmStopDatabaseTitle,
+                  description: CM.confirmStopDatabaseDesc(dbName),
+                  confirmLabel: CM.stopDatabase,
+                  variant: 'danger',
+                  run: async () => {
+                    setLoadingText(`${CM.stoppingDbNamed(dbName)} ...`);
+                    startAction();
+                    try {
+                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname: dbName })).unwrap();
+                      dispatch(fetchDatabaseStartInfo(selectedHostUid));
+                      resetAction();
+                    } catch (err) {
+                      // CMS stopdb may time out even when DB has actually stopped.
+                      // Always re-sync so the tree reflects the real state.
+                      dispatch(fetchDatabaseStartInfo(selectedHostUid));
+                      endError(err);
+                    }
+                  },
+                });
               }}
             />
           ) : (
             <MenuItem
               icon="play_arrow"
               label={CM.startDatabase}
-              onClick={async () => {
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => {
                 const dbName = dbContextMenu.db;
                 setDbContextMenu(null);
-                setLoadingText(`${CM.startingDbNamed(dbName)} ...`);
-                startAction();
-                try {
-                  await dispatch(startDatabase({ hostUid: selectedHostUid, dbname: dbName })).unwrap();
-                  dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                  resetAction();
-                } catch (err) {
-                  endError(err);
-                }
+                requestActionConfirm({
+                  title: CM.confirmStartDatabaseTitle,
+                  description: CM.confirmStartDatabaseDesc(dbName),
+                  confirmLabel: CM.startDatabase,
+                  variant: 'primary',
+                  run: async () => {
+                    setLoadingText(`${CM.startingDbNamed(dbName)} ...`);
+                    startAction();
+                    try {
+                      await dispatch(startDatabase({ hostUid: selectedHostUid, dbname: dbName })).unwrap();
+                      dispatch(fetchDatabaseStartInfo(selectedHostUid));
+                      resetAction();
+                    } catch (err) {
+                      endError(err);
+                    }
+                  },
+                });
               }}
             />
           )}
-          {dbContextMenu.isActive && !loggedInDatabases.includes(dbContextMenu.db) && (
+          {!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) && (
             <MenuItem
               icon="login"
               label={CM.loginDatabase}
               onClick={() => {
-                dispatch(setSelectedDatabase(dbContextMenu.db));
-                dispatch(openLoginDatabaseModal(dbContextMenu.db));
+                const dbname = dbContextMenu.db;
                 setDbContextMenu(null);
+                // Same rule DatabaseTree's double-click activation uses: a
+                // saved profile logs in without asking for the password
+                // again — but still visibly, with a loading state and a
+                // completion confirmation, not silently in the background.
+                // The modal (full manual entry) is only for when there's
+                // nothing saved to log in with yet.
+                if (databases.find((d) => d.dbname === dbname)?.isProfileExists) {
+                  setLoadingText(`${CM.loggingInto(dbname)} ...`);
+                  startAction();
+                  dispatch(loginDatabase({ hostUid: selectedHostUid, dbname }))
+                    .unwrap()
+                    .then(() => {
+                      resetAction();
+                      dispatch(showStatusModal({
+                        type: 'success',
+                        title: CM.loginDatabase,
+                        message: CM.connectionSuccessful,
+                      }));
+                    })
+                    .catch((err) => endError(err));
+                } else {
+                  dispatch(setSelectedDatabase(dbname));
+                  dispatch(openLoginDatabaseModal(dbname));
+                }
               }}
             />
+          )}
+          {loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) && (
+            <MenuItem
+              icon="logout"
+              label={CM.logoutDatabase}
+              onClick={() => {
+                const dbname = dbContextMenu.db;
+                setDbContextMenu(null);
+                requestActionConfirm({
+                  title: CM.confirmLogoutDatabaseTitle,
+                  description: CM.confirmLogoutDatabaseDesc(dbname),
+                  confirmLabel: CM.logoutDatabase,
+                  variant: 'primary',
+                  run: async () => {
+                    setLoadingText(CM.processing);
+                    startAction();
+                    try {
+                      await dispatch(logoutDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
+                      resetAction();
+                      dispatch(showStatusModal({
+                        type: 'success',
+                        title: CM.logoutDatabase,
+                        message: CM.logoutDatabaseSuccessMsg(dbname),
+                      }));
+                    } catch (err) {
+                      endError(err);
+                    }
+                  },
+                });
+              }}
+            />
+          )}
+          {databases.find((d) => d.dbname === dbContextMenu.db)?.isProfileExists && (
+            <>
+              <MenuItem
+                icon="key"
+                label={CM.updateDatabaseCredentials}
+                onClick={() => {
+                  dispatch(setSelectedDatabase(dbContextMenu.db));
+                  dispatch(openLoginDatabaseModal(dbContextMenu.db));
+                  setDbContextMenu(null);
+                }}
+              />
+              <MenuItem
+                icon="key_off"
+                label={CM.forgetDatabaseCredentials}
+                onClick={() => {
+                  const dbname = dbContextMenu.db;
+                  setDbContextMenu(null);
+                  requestActionConfirm({
+                    title: CM.confirmForgetCredentialsTitle,
+                    description: CM.confirmForgetCredentialsDesc(dbname),
+                    confirmLabel: CM.forgetDatabaseCredentials,
+                    variant: 'danger',
+                    run: async () => {
+                      setLoadingText(CM.processing);
+                      startAction();
+                      try {
+                        await dispatch(deleteDatabaseProfile({ hostUid: selectedHostUid, dbname })).unwrap();
+                        resetAction();
+                      } catch (err) {
+                        endError(err);
+                      }
+                    },
+                  });
+                }}
+              />
+            </>
           )}
           <MenuDivider />
           <SubMenu icon="settings" label={CM.manageDatabase}>
             <MenuItem
               icon="upload"
               label={CM.manageDatabaseMenu.unload}
-              disabled={!loggedInDatabases.includes(dbContextMenu.db)}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openUnloadDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="download"
               label={CM.manageDatabaseMenu.load}
-              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbContextMenu.db)}
+              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openLoadDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
-            <MenuItem icon="check_circle" label={CM.manageDatabaseMenu.check} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCheckDatabaseModal()); setDbContextMenu(null); }} />
-            <MenuItem icon="compress" label={CM.manageDatabaseMenu.compact} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCompactDatabaseModal()); setDbContextMenu(null); }} />
+            <MenuItem
+              icon="check_circle"
+              label={CM.manageDatabaseMenu.check}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCheckDatabaseModal()); setDbContextMenu(null); }}
+            />
+            <MenuItem
+              icon="compress"
+              label={CM.manageDatabaseMenu.compact}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCompactDatabaseModal()); setDbContextMenu(null); }}
+            />
+            <MenuItem
+              icon="add_to_drive"
+              label={CM.manageDatabaseMenu.addVol}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openAddVolumeModal()); setDbContextMenu(null); }}
+            />
             <MenuItem
               icon="auto_fix_high"
               label={CM.manageDatabaseMenu.optimize}
-              disabled={dbContextMenu.isActive}
+              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openOptimizeDatabaseModal()); setDbContextMenu(null); }}
             />
-            <MenuItem icon="content_copy" label={CM.manageDatabaseMenu.copy} disabled={dbContextMenu.isActive} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCopyDatabaseModal()); setDbContextMenu(null); }} />
+            <MenuItem
+              icon="content_copy"
+              label={CM.manageDatabaseMenu.copy}
+              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCopyDatabaseModal()); setDbContextMenu(null); }}
+            />
             <MenuDivider />
-            <MenuItem icon="drive_file_rename_outline" label={CM.manageDatabaseMenu.rename} disabled={dbContextMenu.isActive} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRenameDatabaseModal()); setDbContextMenu(null); }} />
-            <MenuItem icon="restore" label={CM.manageDatabaseMenu.restore} disabled={dbContextMenu.isActive} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRestoreDatabaseModal()); setDbContextMenu(null); }} />
-            <MenuItem icon="backup" label={CM.manageDatabaseMenu.backup} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openBackupDatabaseModal()); setDbContextMenu(null); }} />
+            <MenuItem
+              icon="drive_file_rename_outline"
+              label={CM.manageDatabaseMenu.rename}
+              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRenameDatabaseModal()); setDbContextMenu(null); }}
+            />
+            <MenuItem
+              icon="restore"
+              label={CM.manageDatabaseMenu.restore}
+              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRestoreDatabaseModal()); setDbContextMenu(null); }}
+            />
+            <MenuItem
+              icon="backup"
+              label={CM.manageDatabaseMenu.backup}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openBackupDatabaseModal()); setDbContextMenu(null); }}
+            />
             <MenuDivider />
-            <MenuItem icon="delete" label={CM.manageDatabaseMenu.delete} disabled={dbContextMenu.isActive} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDeleteDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }} />
+            <MenuItem
+              icon="delete"
+              label={CM.manageDatabaseMenu.delete}
+              disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDeleteDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
+            />
           </SubMenu>
 
           <SubMenu icon="info" label={CM.databaseInfoMenu} width="w-52">
             <MenuItem
               icon="lock_open"
               label={`${CM.lockingInformation}...`}
-              disabled={!dbContextMenu.isActive}
+              disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openLockInformationModal()); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="swap_horiz"
               label={`${CM.transactionInformation}...`}
-              disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbContextMenu.db)}
+              disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openTransactionInfoModal()); setDbContextMenu(null); }}
             />
-            <MenuItem 
-              icon="data_object" 
-              label={`${CM.paramDump}`} 
-              onClick={() => { 
-                dispatch(setSelectedDatabase(dbContextMenu.db)); 
-                dispatch(openDatabaseInfoModal()); 
-                setDbContextMenu(null); 
-              }} 
+            <MenuItem
+              icon="data_object"
+              label={`${CM.paramDump}`}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => {
+                dispatch(setSelectedDatabase(dbContextMenu.db));
+                dispatch(openDatabaseInfoModal());
+                setDbContextMenu(null);
+              }}
             />
-            <MenuItem 
-              icon="schema" 
-              label={`${CM.planDump}`} 
-              disabled={!dbContextMenu.isActive}
-              onClick={() => { 
-                dispatch(setSelectedDatabase(dbContextMenu.db)); 
-                dispatch(openPlanDumpModal()); 
-                setDbContextMenu(null); 
-              }} 
+            <MenuItem
+              icon="schema"
+              label={`${CM.planDump}`}
+              disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => {
+                dispatch(setSelectedDatabase(dbContextMenu.db));
+                dispatch(openPlanDumpModal());
+                setDbContextMenu(null);
+              }}
             />
           </SubMenu>
-          
+
           <MenuDivider />
-          <MenuItem icon="tune" label={CM.properties} onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDatabasePropertyModal()); setDbContextMenu(null); }} />
+          <MenuItem
+            icon="tune"
+            label={CM.properties}
+            disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+            onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDatabasePropertyModal()); setDbContextMenu(null); }}
+          />
           <MenuDivider />
           <MenuItem
             icon="refresh"
@@ -1076,67 +1525,91 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {dbRootContextMenu && (
         <ContextMenuWrapper x={dbRootContextMenu.mouseX} y={dbRootContextMenu.mouseY} onClose={() => setDbRootContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.allDatabases}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.allDatabases}</Typography>
             <Icon name="database" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
             icon="play_circle"
             label={CM.startAllDatabases}
-            onClick={async () => {
+            onClick={() => {
               setDbRootContextMenu(null);
-              setLoadingText(CM.startingAllDatabasesMsg);
-              startAction();
-              try {
-                for (const db of databases) {
-                  if (!activeDatabases.includes(db.dbname)) {
-                    await dispatch(startDatabase({ hostUid: selectedHostUid, dbname: db.dbname })).unwrap();
+              requestActionConfirm({
+                title: CM.confirmStartAllDatabasesTitle,
+                description: CM.confirmStartAllDatabasesDesc,
+                confirmLabel: CM.startAllDatabases,
+                variant: 'primary',
+                run: async () => {
+                  setLoadingText(CM.startingAllDatabasesMsg);
+                  startAction();
+                  try {
+                    for (const db of databases) {
+                      if (!activeDatabases.includes(db.dbname)) {
+                        await dispatch(startDatabase({ hostUid: selectedHostUid, dbname: db.dbname })).unwrap();
+                      }
+                    }
+                    dispatch(fetchDatabaseStartInfo(selectedHostUid));
+                    resetAction();
+                  } catch (err) {
+                    endError(err);
                   }
-                }
-                dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                resetAction();
-              } catch (err) {
-                endError(err);
-              }
+                },
+              });
             }}
           />
           <MenuItem
             icon="stop_circle"
             label={CM.stopAllDatabases}
-            onClick={async () => {
+            onClick={() => {
               setDbRootContextMenu(null);
-              setLoadingText(CM.stoppingAllDatabasesMsg);
-              startAction();
-              try {
-                for (const dbname of activeDatabases) {
-                  await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                }
-                dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                resetAction();
-              } catch (err) {
-                endError(err);
-              }
+              requestActionConfirm({
+                title: CM.confirmStopAllDatabasesTitle,
+                description: CM.confirmStopAllDatabasesDesc,
+                confirmLabel: CM.stopAllDatabases,
+                variant: 'danger',
+                run: async () => {
+                  setLoadingText(CM.stoppingAllDatabasesMsg);
+                  startAction();
+                  try {
+                    for (const dbname of activeDatabases) {
+                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
+                    }
+                    dispatch(fetchDatabaseStartInfo(selectedHostUid));
+                    resetAction();
+                  } catch (err) {
+                    endError(err);
+                  }
+                },
+              });
             }}
           />
           <MenuItem
             icon="restart_alt"
             label={CM.restartAllDatabases}
-            onClick={async () => {
+            onClick={() => {
               setDbRootContextMenu(null);
-              setLoadingText(CM.restartingAllDatabasesMsg);
-              startAction();
-              try {
-                const currentActive = [...activeDatabases];
-                for (const dbname of currentActive) {
-                  await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                }
-                for (const dbname of currentActive) {
-                  await dispatch(startDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                }
-                dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                resetAction();
-              } catch (err) {
-                endError(err);
-              }
+              requestActionConfirm({
+                title: CM.confirmRestartAllDatabasesTitle,
+                description: CM.confirmRestartAllDatabasesDesc,
+                confirmLabel: CM.restartAllDatabases,
+                variant: 'danger',
+                run: async () => {
+                  setLoadingText(CM.restartingAllDatabasesMsg);
+                  startAction();
+                  try {
+                    const currentActive = [...activeDatabases];
+                    for (const dbname of currentActive) {
+                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
+                    }
+                    for (const dbname of currentActive) {
+                      await dispatch(startDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
+                    }
+                    dispatch(fetchDatabaseStartInfo(selectedHostUid));
+                    resetAction();
+                  } catch (err) {
+                    endError(err);
+                  }
+                },
+              });
             }}
           />
           <MenuDivider />
@@ -1164,53 +1637,77 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {brokerRootContextMenu && (
         <ContextMenuWrapper x={brokerRootContextMenu.mouseX} y={brokerRootContextMenu.mouseY} onClose={() => setBrokerRootContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.allBrokers}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.allBrokers}</Typography>
             <Icon name="hub" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
             icon="play_circle"
             label={CM.startAllBrokers}
-            onClick={async () => {
+            onClick={() => {
               setBrokerRootContextMenu(null);
-              setLoadingText(CM.startingAllBrokersMsg);
-              startAction();
-              try {
-                await dispatch(startAllBrokers(selectedHostUid)).unwrap();
-                resetAction();
-              } catch (err) {
-                endError(err);
-              }
+              requestActionConfirm({
+                title: CM.confirmStartAllBrokersTitle,
+                description: CM.confirmStartAllBrokersDesc,
+                confirmLabel: CM.startAllBrokers,
+                variant: 'primary',
+                run: async () => {
+                  setLoadingText(CM.startingAllBrokersMsg);
+                  startAction();
+                  try {
+                    await dispatch(startAllBrokers(selectedHostUid)).unwrap();
+                    resetAction();
+                  } catch (err) {
+                    endError(err);
+                  }
+                },
+              });
             }}
           />
           <MenuItem
             icon="stop_circle"
             label={CM.stopAllBrokers}
-            onClick={async () => {
+            onClick={() => {
               setBrokerRootContextMenu(null);
-              setLoadingText(CM.stoppingAllBrokersMsg);
-              startAction();
-              try {
-                await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
-                resetAction();
-              } catch (err) {
-                endError(err);
-              }
+              requestActionConfirm({
+                title: CM.confirmStopAllBrokersTitle,
+                description: CM.confirmStopAllBrokersDesc,
+                confirmLabel: CM.stopAllBrokers,
+                variant: 'danger',
+                run: async () => {
+                  setLoadingText(CM.stoppingAllBrokersMsg);
+                  startAction();
+                  try {
+                    await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
+                    resetAction();
+                  } catch (err) {
+                    endError(err);
+                  }
+                },
+              });
             }}
           />
           <MenuItem
             icon="restart_alt"
             label={CM.restartAllBrokers}
-            onClick={async () => {
+            onClick={() => {
               setBrokerRootContextMenu(null);
-              setLoadingText(CM.restartingAllBrokersMsg);
-              startAction();
-              try {
-                await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
-                await dispatch(startAllBrokers(selectedHostUid)).unwrap();
-                resetAction();
-              } catch (err) {
-                endError(err);
-              }
+              requestActionConfirm({
+                title: CM.confirmRestartAllBrokersTitle,
+                description: CM.confirmRestartAllBrokersDesc,
+                confirmLabel: CM.restartAllBrokers,
+                variant: 'danger',
+                run: async () => {
+                  setLoadingText(CM.restartingAllBrokersMsg);
+                  startAction();
+                  try {
+                    await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
+                    await dispatch(startAllBrokers(selectedHostUid)).unwrap();
+                    resetAction();
+                  } catch (err) {
+                    endError(err);
+                  }
+                },
+              });
             }}
           />
           <MenuDivider />
@@ -1251,43 +1748,59 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {brokerContextMenu && (
         <ContextMenuWrapper x={brokerContextMenu.mouseX} y={brokerContextMenu.mouseY} onClose={() => setBrokerContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.brokerColon(brokerContextMenu.broker)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.broker}: <span className="normal-case">{brokerContextMenu.broker}</span></Typography>
             <Icon name="hub" size="xs" className="opacity-30" weight={300} />
           </div>
           {brokerContextMenu.state === 'ON' ? (
             <MenuItem
               icon="stop"
               label={CM.stopBroker}
-              onClick={async () => {
+              onClick={() => {
                 const bName = brokerContextMenu.broker;
                 setBrokerContextMenu(null);
-                setLoadingText(`${CM.stoppingBrokerNamed(bName)} ...`);
-                startAction();
-                try {
-                  await dispatch(stopBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
-                  dispatch(fetchBrokerList(selectedHostUid));
-                  resetAction();
-                } catch (err) {
-                  endError(err);
-                }
+                requestActionConfirm({
+                  title: CM.confirmStopBrokerTitle,
+                  description: CM.confirmStopBrokerDesc(bName),
+                  confirmLabel: CM.stopBroker,
+                  variant: 'danger',
+                  run: async () => {
+                    setLoadingText(`${CM.stoppingBrokerNamed(bName)} ...`);
+                    startAction();
+                    try {
+                      await dispatch(stopBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
+                      dispatch(fetchBrokerList(selectedHostUid));
+                      resetAction();
+                    } catch (err) {
+                      endError(err);
+                    }
+                  },
+                });
               }}
             />
           ) : (
             <MenuItem
               icon="play_arrow"
               label={CM.startBroker}
-              onClick={async () => {
+              onClick={() => {
                 const bName = brokerContextMenu.broker;
                 setBrokerContextMenu(null);
-                setLoadingText(`${CM.startingBrokerNamed(bName)} ...`);
-                startAction();
-                try {
-                  await dispatch(startBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
-                  dispatch(fetchBrokerList(selectedHostUid));
-                  resetAction();
-                } catch (err) {
-                  endError(err);
-                }
+                requestActionConfirm({
+                  title: CM.confirmStartBrokerTitle,
+                  description: CM.confirmStartBrokerDesc(bName),
+                  confirmLabel: CM.startBroker,
+                  variant: 'primary',
+                  run: async () => {
+                    setLoadingText(`${CM.startingBrokerNamed(bName)} ...`);
+                    startAction();
+                    try {
+                      await dispatch(startBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
+                      dispatch(fetchBrokerList(selectedHostUid));
+                      resetAction();
+                    } catch (err) {
+                      endError(err);
+                    }
+                  },
+                });
               }}
             />
           )}
@@ -1327,7 +1840,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {sqlLogContextMenu && (
         <ContextMenuWrapper x={sqlLogContextMenu.mouseX} y={sqlLogContextMenu.mouseY} onClose={() => setSqlLogContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.sqlLogsColonLabel(sqlLogContextMenu.broker)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.sqlLogs}: <span className="normal-case">{sqlLogContextMenu.broker}</span></Typography>
             <Icon name="history_edu" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1346,7 +1859,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {dbLogContextMenu && (
         <ContextMenuWrapper x={dbLogContextMenu.mouseX} y={dbLogContextMenu.mouseY} onClose={() => setDbLogContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.serverLogsColonLabel(dbLogContextMenu.db)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.serverLogs}: <span className="normal-case">{dbLogContextMenu.db}</span></Typography>
             <Icon name="dns" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1376,7 +1889,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {brokerLogRootContextMenu && (
         <ContextMenuWrapper x={brokerLogRootContextMenu.mouseX} y={brokerLogRootContextMenu.mouseY} onClose={() => setBrokerLogRootContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.brokerLogs}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.brokerLogs}</Typography>
             <Icon name="hub" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1396,7 +1909,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {brokerErrorLogContextMenu && (
         <ContextMenuWrapper x={brokerErrorLogContextMenu.mouseX} y={brokerErrorLogContextMenu.mouseY} onClose={() => setBrokerErrorLogContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.errorLogs}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.errorLogs}</Typography>
             <Icon name="report" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1415,7 +1928,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {adminLogContextMenu && (
         <ContextMenuWrapper x={adminLogContextMenu.mouseX} y={adminLogContextMenu.mouseY} onClose={() => setAdminLogContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.adminLogs}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.adminLogs}</Typography>
             <Icon name="admin_panel_settings" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1432,7 +1945,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {managerLogContextMenu && (
         <ContextMenuWrapper x={managerLogContextMenu.mouseX} y={managerLogContextMenu.mouseY} onClose={() => setManagerLogContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.managerLogs}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.managerLogs}</Typography>
             <Icon name="manage_accounts" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1449,7 +1962,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {serverLogRootContextMenu && (
         <ContextMenuWrapper x={serverLogRootContextMenu.mouseX} y={serverLogRootContextMenu.mouseY} onClose={() => setServerLogRootContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.serverLogs}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.serverLogs}</Typography>
             <Icon name="dns" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1468,7 +1981,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {logTabContextMenu && (
         <ContextMenuWrapper x={logTabContextMenu.mouseX} y={logTabContextMenu.mouseY} onClose={() => setLogTabContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.log}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.log}</Typography>
             <Icon name="receipt_long" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1486,7 +1999,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {usersContextMenu && (
         <ContextMenuWrapper x={usersContextMenu.mouseX} y={usersContextMenu.mouseY} onClose={() => setUsersContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-             <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.usersColonLabel(usersContextMenu.db)}</Typography>
+             <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.users}: <span className="normal-case">{usersContextMenu.db}</span></Typography>
              <Icon name="groups" size="xs" className="opacity-30"  weight={300} />
           </div>
           <MenuItem
@@ -1501,6 +2014,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!usersContextMenu.isLoggedIn}
             onClick={() => {
               dispatch(fetchDatabaseUsers({ hostUid: selectedHostUid, dbname: usersContextMenu.db }));
               setUsersContextMenu(null);
@@ -1512,7 +2026,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {userContextMenu && (
         <ContextMenuWrapper x={userContextMenu.mouseX} y={userContextMenu.mouseY} onClose={() => setUserContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-bold text-slate-700 dark:text-slate-200 uppercase tracking-widest text-[9px]">{userContextMenu.user}</Typography>
+            <Typography variant="caption" className="font-bold text-slate-700 dark:text-slate-200 tracking-widest text-11">{userContextMenu.user}</Typography>
             <Icon name="person" size="xs" className="opacity-30"  weight={300} />
           </div>
           <MenuItem
@@ -1537,6 +2051,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!userContextMenu.isLoggedIn}
             onClick={() => {
               dispatch(fetchDatabaseUsers({ hostUid: selectedHostUid, dbname: userContextMenu.db }));
               setUserContextMenu(null);
@@ -1547,7 +2062,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {backupPlanContextMenu && (
         <ContextMenuWrapper x={backupPlanContextMenu.mouseX} y={backupPlanContextMenu.mouseY} onClose={() => setBackupPlanContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.backupPlanLabel}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.backupPlanLabel}</Typography>
             <Icon name="backup" size="xs" className="opacity-30"  weight={300} />
           </div>
           <MenuItem
@@ -1573,6 +2088,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!backupPlanContextMenu.isLoggedIn}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: backupPlanContextMenu.db }));
@@ -1585,7 +2101,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {spaceContextMenu && (
         <ContextMenuWrapper x={spaceContextMenu.mouseX} y={spaceContextMenu.mouseY} onClose={() => setSpaceContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.spaceColonLabel(spaceContextMenu.db)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.space}: <span className="normal-case">{spaceContextMenu.db}</span></Typography>
             <Icon name="donut_small" size="xs" className="opacity-30"  weight={300} />
           </div>
           <MenuItem
@@ -1630,6 +2146,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!spaceContextMenu.isLoggedIn}
             onClick={() => {
               dispatch(fetchDatabaseSpaceInfo({ hostUid: selectedHostUid, dbname: spaceContextMenu.db }));
               setSpaceContextMenu(null);
@@ -1641,7 +2158,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {backupItemContextMenu && (
         <ContextMenuWrapper x={backupItemContextMenu.mouseX} y={backupItemContextMenu.mouseY} onClose={() => setBackupItemContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.backupColonLabel(backupItemContextMenu.planId)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.backup}: <span className="normal-case">{backupItemContextMenu.planId}</span></Typography>
             <Icon name="event_note" size="xs" className="opacity-30"  weight={300} />
           </div>
 
@@ -1671,6 +2188,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!backupItemContextMenu.isLoggedIn}
             onClick={() => {
               dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: backupItemContextMenu.db }));
               setBackupItemContextMenu(null);
@@ -1682,7 +2200,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {queryPlanContextMenu && (
         <ContextMenuWrapper x={queryPlanContextMenu.mouseX} y={queryPlanContextMenu.mouseY} onClose={() => setQueryPlanContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.queryPlanColonLabel(queryPlanContextMenu.db)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.queryPlan}: <span className="normal-case">{queryPlanContextMenu.db}</span></Typography>
             <Icon name="bolt" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1708,6 +2226,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!queryPlanContextMenu.isLoggedIn}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: queryPlanContextMenu.db }));
@@ -1721,7 +2240,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {queryItemContextMenu && (
         <ContextMenuWrapper x={queryItemContextMenu.mouseX} y={queryItemContextMenu.mouseY} onClose={() => setQueryItemContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between">
-            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[9px]">{CM.queryPlanItemColonLabel(queryItemContextMenu.qId)}</Typography>
+            <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">{CM.queryPlanItem}: <span className="normal-case">{queryItemContextMenu.qId}</span></Typography>
             <Icon name="bolt" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
@@ -1748,6 +2267,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!queryItemContextMenu.isLoggedIn}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: queryItemContextMenu.db }));
@@ -1772,6 +2292,28 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           handleServiceAction(hostUid, 'stop');
         }}
         onCancel={closeStopServiceConfirm}
+      />
+      <ConfirmDialog
+        isOpen={!!bulkDeleteHostConfirm}
+        title={CM.bulkDeleteHostsConfirmTitle}
+        description={CM.bulkDeleteHostsConfirmDesc(bulkDeleteHostConfirm?.hostUids?.length || 0)}
+        confirmLabel={CM.deleteSelectedHosts}
+        variant="danger"
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setBulkDeleteHostConfirm(null)}
+      />
+      <ConfirmDialog
+        isOpen={!!pendingActionConfirm}
+        title={pendingActionConfirm?.title}
+        description={pendingActionConfirm?.description}
+        confirmLabel={pendingActionConfirm?.confirmLabel || CM.confirm}
+        variant={pendingActionConfirm?.variant || 'danger'}
+        onConfirm={() => {
+          const run = pendingActionConfirm?.run;
+          setPendingActionConfirm(null);
+          run?.();
+        }}
+        onCancel={() => setPendingActionConfirm(null)}
       />
       {isSidebarActionError && (
         <Modal isOpen title={CM.actionFailed} icon="error" iconVariant="danger" onClose={resetAction} maxWidth="400px">

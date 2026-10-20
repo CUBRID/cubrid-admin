@@ -10,11 +10,33 @@ import { databaseJobApi } from '../../features/database/databaseJobApi';
 import { runCmsJobInBackground, isCmsJobPolling, cancelAllCmsJobPolls } from '../services/cmsJobRunner';
 import { JobResultModal } from '../cmsJob/JobResultModal';
 import { isTerminalCmsJobStatus } from '../cmsJob/cmsJobLabels';
-import { normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
+import { enqueueUniqueJobResult, getCmsJobErrorResult, normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
 
 import { CmsJobContext } from './cmsJobContextValue';
 
 const MAX_TRACKED = 50;
+const MAX_DISMISSED = 200;
+const DISMISSED_STORAGE_KEY = 'cubrid.dismissedCmsJobIds';
+
+function readDismissedJobIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DISMISSED_STORAGE_KEY) || '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((id) => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDismissedJobIds(ids) {
+  try {
+    const bounded = [...ids].slice(-MAX_DISMISSED);
+    localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(bounded));
+    return new Set(bounded);
+  } catch {
+    return ids;
+  }
+}
+
 
 function sortJobs(a, b) {
   const ta = a.createdAt || '';
@@ -28,6 +50,11 @@ export function CmsJobProvider({ children }) {
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [jobResults, setJobResults] = useState([]);
   const trackingRef = useRef(new Set());
+  // The API intentionally returns recently-finished jobs after reconnect so
+  // users can see work that completed while the browser was closed. Keep the
+  // user's explicit X/Clear choice separately so those jobs are not restored
+  // into the tray on every reload.
+  const dismissedJobIdsRef = useRef(readDismissedJobIds());
   // Incremented on logout so in-flight continuations that already have a terminal
   // result cannot enqueue a JobResultModal for the next session.
   const sessionRef = useRef(0);
@@ -38,7 +65,7 @@ export function CmsJobProvider({ children }) {
       const next =
         idx >= 0
           ? { ...prev[idx], ...patch, jobId }
-          : { jobId, dismissed: false, ...patch };
+          : { jobId, dismissed: dismissedJobIdsRef.current.has(jobId), ...patch };
       const list = idx >= 0 ? prev.map((j, i) => (i === idx ? next : j)) : [next, ...prev];
       return list.sort(sortJobs).slice(0, MAX_TRACKED);
     });
@@ -47,22 +74,42 @@ export function CmsJobProvider({ children }) {
   const notifyTerminal = useCallback(
     (job, { notify, successMessage, errorMessage }, session) => {
       if (notify === false) return;
-      if (job.jobStatus !== 'succeeded' && job.jobStatus !== 'failed') return;
+      if (job.jobStatus !== 'succeeded' && job.jobStatus !== 'failed' && !job.outcomeUnknown) return;
       if (session !== sessionRef.current) return;
-      setJobResults((prev) => [
-        ...prev,
-        {
-          type: job.type,
-          dbname: job.dbname,
-          status: job.jobStatus,
-          error: job.error,
-          successMessage,
-          errorMessage,
-        },
-      ]);
+      const result = {
+        jobId: job.jobId,
+        type: job.type,
+        dbname: job.dbname,
+        status: job.jobStatus,
+        outcomeUnknown: job.outcomeUnknown,
+        error: job.error,
+        maintenanceSummary: job.maintenanceSummary,
+        result: job.result,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        successMessage,
+        errorMessage,
+      };
+      setJobResults((prev) => {
+        // A failed poll can reach this notification path more than once
+        // (notably when React replays a state updater in development).
+        // Keep one result per job so dismissing the modal never reveals an
+        // identical modal underneath it.
+        return enqueueUniqueJobResult(prev, result);
+      });
     },
     []
   );
+
+  // Lets a caller that's still mounted and showing its own result (via
+  // useCmsJob's runJob) suppress the global toast for that same job, so the
+  // two don't both appear for one completion. If the caller already
+  // unmounted (e.g. user clicked "continue in background"), this never gets
+  // called and the global toast remains the only notification.
+  const dismissJobResult = useCallback((jobId) => {
+    if (!jobId) return;
+    setJobResults((prev) => prev.filter((r) => r.jobId !== jobId));
+  }, []);
 
   const startTracking = useCallback(
     async (jobId, options = {}) => {
@@ -103,7 +150,7 @@ export function CmsJobProvider({ children }) {
       };
 
       if (initialJob) {
-        onUpdate(initialJob);
+        onUpdate({ ...initialJob, jobId });
       } else {
         try {
           const snapshot = await databaseJobApi.getJob(jobId);
@@ -128,12 +175,12 @@ export function CmsJobProvider({ children }) {
         }
         setJobs((prev) => {
           const cur = prev.find((j) => j.jobId === jobId);
-          const failed = normalizeTrackedJob(
-            { ...(cur || {}), jobId, jobStatus: 'failed', error: { message: err?.message } },
+          const interrupted = normalizeTrackedJob(
+            getCmsJobErrorResult(err, { ...cur, jobId }),
             cur || {}
           );
-          notifyTerminal(failed, { notify, successMessage, errorMessage }, session);
-          return prev.map((j) => (j.jobId === jobId ? { ...j, ...failed } : j));
+          notifyTerminal(interrupted, { notify, successMessage, errorMessage }, session);
+          return prev.map((j) => (j.jobId === jobId ? { ...j, ...interrupted } : j));
         });
         throw err;
       } finally {
@@ -161,13 +208,30 @@ export function CmsJobProvider({ children }) {
   );
 
   const dismissJob = useCallback((jobId) => {
-    setJobs((prev) =>
-      prev.map((j) => (j.jobId === jobId ? { ...j, dismissed: true } : j))
-    );
+    dismissedJobIdsRef.current.add(jobId);
+    dismissedJobIdsRef.current = persistDismissedJobIds(dismissedJobIdsRef.current);
+    setJobs((prev) => prev.flatMap((job) => {
+      if (job.jobId !== jobId) return [job];
+      // Finished jobs no longer need to occupy the bounded live-tracking list.
+      // Keep only the persisted dismissal id so a recent-history restore does
+      // not bring the item back after a reload.
+      if (isTerminalCmsJobStatus(job.jobStatus)) return [];
+      return [{ ...job, dismissed: true }];
+    }));
   }, []);
 
   const clearCompleted = useCallback(() => {
-    setJobs((prev) => prev.filter((j) => !isTerminalCmsJobStatus(j.jobStatus)));
+    setJobs((prev) => {
+      for (const job of prev) {
+        if (isTerminalCmsJobStatus(job.jobStatus)) {
+          dismissedJobIdsRef.current.add(job.jobId);
+        }
+      }
+      dismissedJobIdsRef.current = persistDismissedJobIds(dismissedJobIdsRef.current);
+      // Removing terminal rows prevents dismissed history from consuming the
+      // MAX_TRACKED allowance and displacing a still-running older job.
+      return prev.filter((job) => !isTerminalCmsJobStatus(job.jobStatus));
+    });
   }, []);
 
   useEffect(() => {
@@ -183,20 +247,23 @@ export function CmsJobProvider({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        const active = await databaseJobApi.listActive();
+        // Restore recent history so users can see work that finished while the
+        // browser was closed. Explicitly dismissed ids remain hidden.
+        const recent = await databaseJobApi.listRecent();
         if (cancelled) return;
-        for (const job of active) {
-          const status = normalizeTrackedJob(job).jobStatus;
-          if (!isTerminalCmsJobStatus(status)) {
-            upsertJob(job.jobId, normalizeTrackedJob(job));
+        for (const job of recent) {
+          if (dismissedJobIdsRef.current.has(job.jobId)) continue;
+          const normalized = normalizeTrackedJob(job);
+          upsertJob(job.jobId, normalized);
+          if (!isTerminalCmsJobStatus(normalized.jobStatus)) {
             startTracking(job.jobId, {
               notify: true,
               initialJob: job,
-            }).catch(() => {});
+            }).catch(() => undefined);
           }
         }
       } catch {
-        // ignore — user may not have active jobs endpoint yet
+        // ignore — user may not have the jobs endpoint yet
       }
     })();
 
@@ -213,7 +280,7 @@ export function CmsJobProvider({ children }) {
   const activeCount = useMemo(
     () =>
       visibleJobs.filter(
-        (j) => j.jobStatus === 'queued' || j.jobStatus === 'running'
+        (j) => !j.outcomeUnknown && (j.jobStatus === 'queued' || j.jobStatus === 'running')
       ).length,
     [visibleJobs]
   );
@@ -234,6 +301,7 @@ export function CmsJobProvider({ children }) {
       runJob,
       trackJob,
       dismissJob,
+      dismissJobResult,
       clearCompleted,
     }),
     [
@@ -244,6 +312,7 @@ export function CmsJobProvider({ children }) {
       runJob,
       trackJob,
       dismissJob,
+      dismissJobResult,
       clearCompleted,
     ]
   );

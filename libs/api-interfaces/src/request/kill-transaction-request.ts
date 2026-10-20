@@ -22,4 +22,11 @@ export type KillTransactionRequest = {
    * - For type 'h': host name (string, e.g., "lgj1089-3-60")
    */
   parameter?: string;
+
+  /**
+   * DBA password used to authorize the kill. Optional — if omitted, CMS
+   * falls back to whatever credentials a prior "Login Database" cached on
+   * the server side, which may be stale or absent.
+   */
+  dbpasswd?: string;
 };

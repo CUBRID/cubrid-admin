@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeEditQueryPlanModal, updateAutoExecQueryPlan, fetchQueryPlan } from '../databaseSlice';
+import { dbKey } from '../dbKey';
 import Editor from '@monaco-editor/react';
 import { useCM } from '../../../constants/useCM';
+import { hasLineCommentAcrossLines, normalizeQueryForCms } from '../queryPlanUtils';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -11,7 +13,6 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
-import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
@@ -19,12 +20,6 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-
-// view states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
 
 export default function EditQueryPlanModal() {
   const CM = useCM();
@@ -36,7 +31,6 @@ export default function EditQueryPlanModal() {
   const { queryPlans } = useSelector((state) => state.databaseOperation, shallowEqual);
   
   const { 
-
     error: actionError, 
     startAction, 
     endSuccess, 
@@ -67,8 +61,8 @@ export default function EditQueryPlanModal() {
   // Initialization
   useEffect(() => {
     if (isEditQueryPlanModalOpen && selectedDatabase && selectedQueryPlanId && !isLoading && !isSuccess && !isError) {
-      const plans = queryPlans[selectedDatabase] || [];
-      let plan = plans.find(p => p.query_id === selectedQueryPlanId);
+      const plans = queryPlans[dbKey(selectedHostUid, selectedDatabase)] || [];
+      const plan = plans.find(p => p.query_id === selectedQueryPlanId);
       
       if (!plan) {
         dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: selectedDatabase }));
@@ -76,8 +70,8 @@ export default function EditQueryPlanModal() {
       
       if (plan) {
         const ABBR_TO_NUM = { MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6, SUN: 7 };
-        let periodType = plan.period || 'DAY';
-        let detailStr = plan.detail || '';
+        const periodType = plan.period || 'DAY';
+        const detailStr = plan.detail || '';
         let time = '12:00';
         let periodDetail = [];
 
@@ -149,8 +143,12 @@ export default function EditQueryPlanModal() {
       endError(CM.sqlStatementRequired);
       return;
     }
-    const queryString = formData.queryString.trim();
-    
+    if (hasLineCommentAcrossLines(formData.queryString)) {
+      endError(CM.multilineQueryLineCommentError);
+      return;
+    }
+    const queryString = normalizeQueryForCms(formData.queryString);
+
     startAction();
 
     const WEEK_ABBRS = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT', 7: 'SUN' };
@@ -226,6 +224,7 @@ export default function EditQueryPlanModal() {
         <ModalStatusError
           title={CM.operationInterrupted}
           error={actionError}
+          guidance={CM.queryPlanGuidance}
           onRetry={handleSave}
           onCancel={resetAction}
           retryText={CM.retry}
@@ -245,6 +244,7 @@ export default function EditQueryPlanModal() {
       icon="edit"
       maxWidth="max-w-[720px]"
       testId="edit-query-plan"
+      onSubmit={handleSave}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="edit-query-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -252,7 +252,7 @@ export default function EditQueryPlanModal() {
         </div>
       }
     >
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
+      <div className="space-y-8 animate-in fade-in duration-200">
         {/* Identifier */}
         <div className="space-y-4">
           <SectionHeader title={CM.objectIdentification} icon="fingerprint" />
@@ -268,7 +268,7 @@ export default function EditQueryPlanModal() {
         {/* Security */}
         <div className="space-y-4">
           <SectionHeader title={CM.secureContextSection} icon="lock" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label={CM.databaseUsernameLabel}
               value={formData.username}
@@ -289,7 +289,7 @@ export default function EditQueryPlanModal() {
         {/* Schedule */}
         <div className="space-y-4">
           <SectionHeader title={CM.executionSchedule} icon="schedule" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
               label={CM.recurrenceFrequency}
               icon="event_repeat"
@@ -311,19 +311,21 @@ export default function EditQueryPlanModal() {
           </div>
         </div>
 
-        <div className="mt-[-10px] animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="animate-in fade-in duration-200">
           {formData.periodType === 'WEEK' && (
             <div className="grid grid-cols-7 gap-2">
               {CM.weekdaysShort.map((day, ix) => {
                 const isSel = formData.periodDetail.includes(ix + 1);
                 return (
-                  <button 
-                    key={day} 
-                    onClick={() => toggleDetail(ix + 1)} 
-                    className={`h-10 rounded-xl border text-[11px] font-black transition-all cursor-pointer 
-                      ${isSel 
-                        ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/30 text-amber-600 dark:text-amber-400' 
-                        : 'bg-white dark:bg-white/2 border-slate-100 dark:border-white/5 text-slate-400 hover:border-amber-500/30'}`}
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDetail(ix + 1)}
+                    aria-pressed={isSel}
+                    className={`h-9 rounded-lg border text-13 font-medium transition-colors cursor-pointer
+                      ${isSel
+                        ? 'bg-amber-500 border-amber-500 text-slate-900'
+                        : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}
                   >
                     {day}
                   </button>
@@ -332,17 +334,19 @@ export default function EditQueryPlanModal() {
             </div>
           )}
           {formData.periodType === 'MONTH' && (
-            <div className="grid grid-cols-8 gap-1.5 p-3.5 bg-slate-50/50 dark:bg-white/1 border border-slate-100 dark:border-white/5 rounded-2xl">
+            <div className="grid grid-cols-7 sm:grid-cols-8 gap-1.5 p-3 bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/10 rounded-xl">
               {Array.from({ length: 31 }, (_, i) => i + 1).map(d => {
                 const isSel = formData.periodDetail.includes(d);
                 return (
-                  <button 
-                    key={d} 
-                    onClick={() => toggleDetail(d)} 
-                    className={`h-8 rounded-lg border text-[10px] font-black font-mono transition-all cursor-pointer 
-                      ${isSel 
-                        ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/30 text-amber-600 dark:text-amber-400' 
-                        : 'bg-white dark:bg-white/4 border-transparent text-slate-400 hover:border-amber-500/30'}`}
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => toggleDetail(d)}
+                    aria-pressed={isSel}
+                    className={`h-8 rounded-lg border text-12 font-medium transition-colors cursor-pointer
+                      ${isSel
+                        ? 'bg-amber-500 border-amber-500 text-slate-900'
+                        : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}
                   >
                     {d}
                   </button>
@@ -352,6 +356,7 @@ export default function EditQueryPlanModal() {
           )}
           {formData.periodType === 'DATE' && (
             <DatePicker 
+              label={CM.date}
               value={formData.periodDetail}
               onChange={e => handleInputChange('periodDetail', e.target.value)}
               icon="calendar_month"
@@ -365,7 +370,7 @@ export default function EditQueryPlanModal() {
             title={CM.sqlStatementSection}
             icon="code"
           />
-          <div className="relative group rounded-3xl overflow-hidden border border-slate-200 dark:border-white/8 bg-white dark:bg-[#1e1e1e] shadow-inner transition-all focus-within:ring-4 focus-within:ring-amber-500/5 focus-within:border-amber-500/40">
+          <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e1e1e] transition-all focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-500/60">
             <div className="absolute top-4 left-4 z-10 opacity-40 group-focus-within:opacity-100 transition-opacity pointer-events-none">
               <Icon name="terminal" size="sm" weight={300} className="text-amber-500" />
             </div>
@@ -401,6 +406,9 @@ export default function EditQueryPlanModal() {
           </div>
           <InfoBanner>
             {CM.systemComplianceNote}
+          </InfoBanner>
+          <InfoBanner variant="warning" icon="info">
+            {CM.multilineQueryCollapseNote}
           </InfoBanner>
         </div>
       </div>

@@ -41,6 +41,13 @@ export class HostError extends AppError {
   }
 
   /**
+   * Creates an error indicating the alias (friendly name) is already used by another host.
+   */
+  static DuplicatedAlias(additionalData?: Record<string, any>, originalError?: Error) {
+    return new HostError('RESOURCE', HostErrorCode.DUPLICATED_ALIAS, additionalData, originalError);
+  }
+
+  /**
    * Creates an error indicating that no such host was found.
    */
   static NoSuchHost(additionalData?: Record<string, any>, originalError?: Error) {

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { brokerApi } from '../../broker/brokerApi';
 import { showStatusModal, setTabDirty } from '../../layout/layoutSlice';
+import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
 
@@ -15,6 +15,7 @@ export default function BrokerConfigEditor({ hostUid }) {
   const tabId = `broker_config:${hostUid}`;
   const dispatch = useDispatch();
   const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
 
@@ -23,8 +24,8 @@ export default function BrokerConfigEditor({ hostUid }) {
   
   // Source View State
   const originalRawContentRef = useRef('');
+  const lastRefreshCounterRef = useRef(refreshCounter);
   const [rawContent, setRawContent] = useState('');
-  const [, setOriginalRawContent] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
 
   const fetchConfig = useCallback(async () => {
@@ -36,7 +37,6 @@ export default function BrokerConfigEditor({ hostUid }) {
       const content = lines.join('\n');
       originalRawContentRef.current = content;
       setRawContent(content);
-      setOriginalRawContent(content);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
     } catch (err) {
@@ -44,7 +44,9 @@ export default function BrokerConfigEditor({ hostUid }) {
       dispatch(showStatusModal({
         type: 'error',
         title: CM.fetchFailed,
-        message: CM.brokerConfigRetrieveError
+        message: CM.brokerConfigRetrieveError,
+        guidance: CM.brokerOperationGuidance,
+        detail: err?.response?.data?.note || err?.message,
       }));
     } finally {
       setLoading(false);
@@ -54,6 +56,12 @@ export default function BrokerConfigEditor({ hostUid }) {
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  useEffect(() => {
+    if (refreshCounter <= lastRefreshCounterRef.current) return;
+    lastRefreshCounterRef.current = refreshCounter;
+    if (refreshTabId === tabId) fetchConfig();
+  }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
   const handleSourceChange = (e) => {
     setRawContent(e.target.value);
@@ -76,7 +84,6 @@ export default function BrokerConfigEditor({ hostUid }) {
       await brokerApi.updateBrokerConfig(hostUid, confdata);
       
       originalRawContentRef.current = rawContent;
-      setOriginalRawContent(rawContent);
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
       dispatch(showStatusModal({
@@ -84,11 +91,14 @@ export default function BrokerConfigEditor({ hostUid }) {
         title: CM.configSaved,
         message: CM.brokerConfigSaveSuccess
       }));
-    } catch {
+    } catch (err) {
+      if (isAmbiguousFailure(err)) fetchConfig();
       dispatch(showStatusModal({
         type: 'error',
         title: CM.saveFailed,
-        message: CM.brokerConfigSaveError
+        message: CM.brokerConfigSaveError,
+        guidance: CM.brokerOperationGuidance,
+        detail: err?.response?.data?.note || err?.message,
       }));
     } finally {
       setSaving(false);

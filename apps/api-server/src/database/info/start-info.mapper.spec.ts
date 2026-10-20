@@ -12,13 +12,16 @@ describe('mapStartInfoToClientResponse', () => {
       activelist: [{ active: [{ dbname: 'demodb' }] }],
     } as StartInfoCmsResponse;
 
-    const result = mapStartInfoToClientResponse(cmsStart, {
-      demodb: { id: 'dba', password: 'pw' },
-    });
+    const result = mapStartInfoToClientResponse(
+      cmsStart,
+      { demodb: { id: 'dba', password: 'pw' } },
+      ['demodb']
+    );
 
     expect(result).toEqual({
       activelist: { active: [{ dbname: 'demodb' }] },
       dblist: { dbs: [{ dbname: 'demodb', dbdir: '/db/demodb', isProfileExists: true }] },
+      haDbNames: ['demodb'],
     });
   });
 
@@ -37,6 +40,7 @@ describe('mapStartInfoToClientResponse', () => {
     expect(result).toEqual({
       activelist: { active: [] },
       dblist: { dbs: [] },
+      haDbNames: [],
     });
   });
 });

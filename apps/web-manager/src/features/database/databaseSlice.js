@@ -11,7 +11,8 @@
 
 // Re-export all thunks and actions from new modular slices explicitly
 export {
-  fetchDatabaseStartInfo, startDatabase, stopDatabase, loginDatabase, registerDatabase,
+  fetchDatabaseStartInfo, startDatabase, stopDatabase, loginDatabase, logoutDatabase, registerDatabase,
+  deleteDatabaseProfile,
   setSelectedDatabase, setSelectedDatabaseSubItem, clearDatabaseError
 } from './databaseCoreSlice';
 
@@ -37,7 +38,7 @@ export {
   openAddBackupPlanModal, closeAddBackupPlanModal, openEditBackupPlanModal, closeEditBackupPlanModal,
   openDeleteBackupPlanModal, closeDeleteBackupPlanModal, openAutoBackupLogModal, closeAutoBackupLogModal,
   openLockInformationModal, closeLockInformationModal, openUnloadResultModal, closeUnloadResultModal,
-  openTransactionInfoModal, closeTransactionInfoModal, openKillTransactionModal, closeKillTransactionModal,
+  openTransactionInfoModal, closeTransactionInfoModal, openKillTransactionModal, closeKillTransactionModal, notifyTransactionKilled,
   openDeleteDatabaseModal, closeDeleteDatabaseModal, openDatabasePropertyModal, closeDatabasePropertyModal,
   openRenameDatabaseModal, closeRenameDatabaseModal, openAddVolumeModal, closeAddVolumeModal,
   openDatabaseInfoModal, closeDatabaseInfoModal, openPlanDumpModal, closePlanDumpModal,

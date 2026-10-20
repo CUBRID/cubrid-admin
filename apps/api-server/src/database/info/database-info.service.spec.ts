@@ -131,12 +131,17 @@ describe('DatabaseInfoService', () => {
 
       const result = await service.startInfo(mockUserId, mockHostUid);
 
-      expect(cmsConfigService.getAllSystemParam).not.toHaveBeenCalled();
+      expect(cmsConfigService.getAllSystemParam).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        CMS_CONFNAME_HACONF
+      );
       expect(result).toEqual({
         activelist: { active: [{ dbname: 'testdb' }] },
         dblist: {
           dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false }],
         },
+        haDbNames: [],
       });
     });
   });

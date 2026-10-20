@@ -1,5 +1,7 @@
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { BaseService, HandleCmsErrors } from '@common';
+import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
+import { DatabaseError } from '@error/database/database-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
 import {
@@ -44,9 +46,27 @@ import {
 export class BrokerService extends BaseService {
   constructor(
     protected readonly hostService: HostService,
-    protected readonly cmsClient: CmsHttpsClientService
+    protected readonly cmsClient: CmsHttpsClientService,
+    private readonly cmsJobLockService: CmsJobLockService
   ) {
     super(hostService, cmsClient);
+  }
+
+  /**
+   * Deliberate policy, not a CMS/engine requirement: block every broker
+   * start/stop while any CMS job (load/unload/backup/etc.) is actively
+   * running anywhere on this host — restarting brokers underneath a job
+   * that's mid-write risks corrupting whatever it's in the middle of.
+   */
+  private async assertNoActiveJob(userId: string, hostUid: string): Promise<void> {
+    const active = await this.cmsJobLockService.hasActiveJobForHost(userId, hostUid);
+    if (active) {
+      throw DatabaseError.OperationInProgress({
+        hostUid,
+        dbname: active.dbname,
+        existingJobId: active.jobId,
+      });
+    }
   }
 
   /**
@@ -129,12 +149,14 @@ export class BrokerService extends BaseService {
     hostUid: string,
     bname: string
   ): Promise<BrokerStartStopClientResponse> {
+    await this.assertNoActiveJob(userId, hostUid);
+
     const cmsRequest: HandleBrokerCmsRequest = {
       task: 'broker_stop',
       bname: bname,
     };
 
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       HandleBrokerCmsRequest,
       BaseCmsResponse
     >(userId, hostUid, cmsRequest);
@@ -148,12 +170,14 @@ export class BrokerService extends BaseService {
     hostUid: string,
     bname: string
   ): Promise<BrokerStartStopClientResponse> {
+    await this.assertNoActiveJob(userId, hostUid);
+
     const cmsRequest: HandleBrokerCmsRequest = {
       task: 'broker_start',
       bname: bname,
     };
 
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       HandleBrokerCmsRequest,
       BaseCmsResponse
     >(userId, hostUid, cmsRequest);
@@ -195,10 +219,12 @@ export class BrokerService extends BaseService {
     userId: string,
     hostUid: string
   ): Promise<StopAllBrokersClientResponse> {
+    await this.assertNoActiveJob(userId, hostUid);
+
     const cmsRequest: StopAllBrokersCmsRequest = {
       task: 'stopbroker',
     };
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       StopAllBrokersCmsRequest,
       StopAllBrokersCmsResponse
     >(userId, hostUid, cmsRequest);
@@ -211,10 +237,12 @@ export class BrokerService extends BaseService {
     userId: string,
     hostUid: string
   ): Promise<StartAllBrokersClientResponse> {
+    await this.assertNoActiveJob(userId, hostUid);
+
     const cmsRequest: StartAllBrokersCmsRequest = {
       task: 'startbroker',
     };
-    await this.executeCmsRequest<
+    await this.executeAsyncCmsJobRequest<
       StartAllBrokersCmsRequest,
       StartAllBrokersCmsResponse
     >(userId, hostUid, cmsRequest);

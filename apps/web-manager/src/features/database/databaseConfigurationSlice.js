@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
+import { dbKey } from './dbKey';
 
 export const fetchDatabaseParamDump = createAsyncThunk(
   'database/fetchParamDump',
@@ -112,9 +113,10 @@ const databaseConfigurationSlice = createSlice({
         state.databaseInfoError = null;
       })
       .addCase(fetchDatabaseParamDump.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, data } = action.payload;
         state.databaseInfoLoading = false;
-        state.databaseInfoData[dbname] = data;
+        state.databaseInfoData[dbKey(hostUid, dbname)] = data;
       })
       .addCase(fetchDatabaseParamDump.rejected, (state, action) => {
         state.databaseInfoLoading = false;
@@ -125,9 +127,10 @@ const databaseConfigurationSlice = createSlice({
         state.planDumpError = null;
       })
       .addCase(fetchDatabasePlanDump.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, data } = action.payload;
         state.planDumpLoading = false;
-        state.planDumpData[dbname] = data;
+        state.planDumpData[dbKey(hostUid, dbname)] = data;
       })
       .addCase(fetchDatabasePlanDump.rejected, (state, action) => {
         state.planDumpLoading = false;
@@ -151,9 +154,10 @@ const databaseConfigurationSlice = createSlice({
         state.autoVolumeError = null;
       })
       .addCase(fetchAutoVolumeConfig.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, config } = action.payload;
         state.autoVolumeLoading = false;
-        state.autoVolumeConfigs[dbname] = config;
+        state.autoVolumeConfigs[dbKey(hostUid, dbname)] = config;
       })
       .addCase(fetchAutoVolumeConfig.rejected, (state, action) => {
         state.autoVolumeLoading = false;

@@ -27,6 +27,21 @@ export const fetchMonitoringData = createAsyncThunk(
   }
 );
 
+// Lightweight companion to fetchMonitoringData — used to poll just the HA
+// heartbeat during a suspected failover (see ServerContent's fast-poll
+// effect), instead of re-fetching hostStat/brokers too at a 1s cadence.
+export const fetchHaHeartbeatOnly = createAsyncThunk(
+  'monitoring/fetchHaHeartbeatOnly',
+  async (hostUid, { rejectWithValue }) => {
+    try {
+      const haHeartbeat = await monitoringApi.getHaHeartbeatList(hostUid);
+      return { haHeartbeat };
+    } catch (error) {
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  }
+);
+
 const initialState = {
   hostsData: {}, // { [hostUid]: { currentStatus, averages, history, prevHostStat, loading, error } }
 };
@@ -160,6 +175,15 @@ const monitoringSlice = createSlice({
         if (state.hostsData[hostUid]) {
           state.hostsData[hostUid].loading = false;
           state.hostsData[hostUid].error = action.payload;
+        }
+      })
+      .addCase(fetchHaHeartbeatOnly.fulfilled, (state, action) => {
+        const hostUid = action.meta.arg;
+        const hostData = state.hostsData[hostUid];
+        if (!hostData) return;
+        const { haHeartbeat } = action.payload;
+        if (haHeartbeat) {
+          hostData.haHeartbeat = haHeartbeat;
         }
       });
   }

@@ -37,8 +37,10 @@ export class BackupScheduleDto {
   @IsNotEmpty()
   period_type: string;
 
+  // Empty on purpose for period_type 'Daily' — CMS itself does no validation
+  // on period_date for that type (cm_job_task.cpp's "period_date: Daily"
+  // branch is a no-op), so it must stay allowed to be empty here too.
   @IsString()
-  @IsNotEmpty()
   period_date: string;
 
   @IsString()

@@ -1,10 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { getStoredLocale, setStoredLocale } from '../../constants/useCM';
 import { userApi } from './userApi';
+import { dbKey } from '../database/dbKey';
 
 export const DEFAULT_PREFERENCES = {
-  dashboardInterval: 0,
-  brokerStatusInterval: 0,
+  dashboardInterval: 3,
+  brokerStatusInterval: 3,
   uiLocale: 'en',
 };
 
@@ -112,7 +113,13 @@ export const dropDatabaseUser = createAsyncThunk(
   }
 );
 
-const initialState = {
+// A plain object here would only ever read getStoredLocale() once, at module
+// load. redux-toolkit calls a function initialState fresh every time the
+// slice is reset to "no state" (e.g. host/revokeHostLogin's selective
+// reset in store.js, which drops the whole user slice on host disconnect) —
+// without that, a locale switched mid-session would silently revert to
+// whatever locale was in localStorage back at app boot.
+const buildInitialState = () => ({
   isProfileOpen: false,
   profile: {
     fullName: 'Admin User',
@@ -126,9 +133,9 @@ const initialState = {
     ...DEFAULT_PREFERENCES,
     uiLocale: getStoredLocale(),
   },
-  databaseUsers: {}, // { [dbname]: [] }
-  databaseUsersLoading: {}, // { [dbname]: boolean }
-  databaseUsersError: {}, // { [dbname]: string }
+  databaseUsers: {}, // { [hostUid:dbname]: [] } — see dbKey.js
+  databaseUsersLoading: {}, // { [hostUid:dbname]: boolean }
+  databaseUsersError: {}, // { [hostUid:dbname]: string }
   isCreateUserModalOpen: false,
   isEditUserModalOpen: false,
   isDropUserModalOpen: false,
@@ -138,11 +145,11 @@ const initialState = {
   preferencesLoading: false,
   actionLoading: false,
   error: null,
-};
+});
 
 const userSlice = createSlice({
   name: 'user',
-  initialState,
+  initialState: buildInitialState,
   reducers: {
     openProfileModal: (state) => {
       state.isProfileOpen = true;
@@ -217,19 +224,24 @@ const userSlice = createSlice({
         state.error = action.payload;
       })
       .addCase(fetchDatabaseUsers.pending, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.databaseUsersLoading[dbname] = true;
-        delete state.databaseUsersError[dbname];
+        const { hostUid, dbname } = action.meta.arg;
+        const key = dbKey(hostUid, dbname);
+        state.databaseUsersLoading[key] = true;
+        delete state.databaseUsersError[key];
       })
       .addCase(fetchDatabaseUsers.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, users } = action.payload;
-        state.databaseUsersLoading[dbname] = false;
-        state.databaseUsers[dbname] = users;
+        const key = dbKey(hostUid, dbname);
+        state.databaseUsersLoading[key] = false;
+        state.databaseUsers[key] = users;
       })
       .addCase(fetchDatabaseUsers.rejected, (state, action) => {
-        const { dbname, error } = action.payload || action.meta.arg;
-        state.databaseUsersLoading[dbname] = false;
-        state.databaseUsersError[dbname] = error;
+        const { hostUid, dbname: argDbname } = action.meta.arg;
+        const { dbname = argDbname, error } = action.payload || {};
+        const key = dbKey(hostUid, dbname);
+        state.databaseUsersLoading[key] = false;
+        state.databaseUsersError[key] = error;
       })
       // Create user
       .addCase(createDatabaseUser.pending, (state) => {
@@ -263,9 +275,11 @@ const userSlice = createSlice({
       })
       .addCase(dropDatabaseUser.fulfilled, (state, action) => {
         state.actionLoading = false;
+        const { hostUid } = action.meta.arg;
         const { dbname, userName } = action.payload;
-        if (state.databaseUsers[dbname]) {
-          state.databaseUsers[dbname] = state.databaseUsers[dbname].filter(u => {
+        const key = dbKey(hostUid, dbname);
+        if (state.databaseUsers[key]) {
+          state.databaseUsers[key] = state.databaseUsers[key].filter(u => {
             const currentName = typeof u === 'string' ? u : (u.name || u['@name']);
             return currentName !== userName;
           });
@@ -274,7 +288,20 @@ const userSlice = createSlice({
       .addCase(dropDatabaseUser.rejected, (state, action) => {
         state.actionLoading = false;
         state.error = action.payload;
-      });
+      })
+      // Drop cached database users once a database's dbmt login is gone
+      // (explicit logout or forgetting its saved credentials) — otherwise
+      // the stale list from the old login stays visible after logout.
+      .addMatcher(
+        (action) => action.type === 'database/logoutDatabase/fulfilled' || action.type === 'database/deleteDatabaseProfile/fulfilled',
+        (state, action) => {
+          const { hostUid, dbname } = action.meta.arg;
+          const key = dbKey(hostUid, dbname);
+          delete state.databaseUsers[key];
+          delete state.databaseUsersLoading[key];
+          delete state.databaseUsersError[key];
+        }
+      );
   },
 });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeBackupDatabaseModal, fetchBackupDbInfo, setPendingBackupJob, clearPendingBackupJob } from '../databaseSlice';
+import { dbKey } from '../dbKey';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJobs } from '../../../infrastructure/hooks/useCmsJobs';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
@@ -63,6 +64,16 @@ export default function BackupDatabaseModal() {
   } = useActionState();
   const { trackJob } = useCmsJobs();
   const [jobStatus, setJobStatus] = useState(null);
+  // Identifies the most recent handleBackup() call. This modal has no
+  // runJob()/background() concept (unlike the other CMS-job modals) — its
+  // own "background" button just closes the modal while `trackJob` keeps
+  // polling underneath, and it's a singleton reused for the next database
+  // the user opens it for. Without this, an older backup's trackJob() call
+  // (for e.g. "demodb") can still resolve after the user has reopened the
+  // modal and started a second backup (for "test2"), and would flip the
+  // modal to its success view using whatever database is *currently*
+  // selected — not the one that backup actually ran against.
+  const latestBackupTokenRef = useRef(null);
 
   const [formData, setFormData] = useState({
     backupLevel: '0',
@@ -75,7 +86,7 @@ export default function BackupDatabaseModal() {
   const [activeTab, setActiveTab] = useState(TAB_INFO);
   const [backupInfoFetchError, setBackupInfoFetchError] = useState(false);
 
-  const backupInfo = selectedDatabase ? databaseBackupInfo[selectedDatabase] : null;
+  const backupInfo = selectedDatabase ? databaseBackupInfo[dbKey(selectedHostUid, selectedDatabase)] : null;
 
   // Keep a ref so the modal-open effect can read the latest backupInfo
   // synchronously without adding it to its own dependency array.
@@ -183,6 +194,8 @@ export default function BackupDatabaseModal() {
     }
 
     startAction();
+    const invocationToken = {};
+    latestBackupTokenRef.current = invocationToken;
     const progressOpts = { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) };
     try {
       const payload = {
@@ -214,9 +227,11 @@ export default function BackupDatabaseModal() {
       }
 
       await trackJob(jobId, progressOpts);
+      if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
       dispatch(clearPendingBackupJob());
       endSuccess(CM.databaseBackedUpMsg(selectedDatabase, formData.backupDir));
     } catch (err) {
+      if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
       if (!err?.cancelled) {
         // Terminal job failure on the server — clear pending so retry submits a new backup.
         // Transient polling failures keep pendingBackupJob to allow reconnect on retry.
@@ -272,7 +287,7 @@ export default function BackupDatabaseModal() {
 
       {existingBackupAtLevel && (
         <CaDialogField fullWidth>
-          <InfoBanner variant="warning" title={CM.warning} icon="warning">
+          <InfoBanner variant="danger" title={CM.warning} icon="warning">
             {CM.existingBackupWarningMsg(formData.backupLevel)}
           </InfoBanner>
         </CaDialogField>
@@ -303,7 +318,7 @@ export default function BackupDatabaseModal() {
 
   const backupHistoryContent = (
     <div className="space-y-3">
-      <Typography variant="p" className="text-[12px] text-slate-600 dark:text-slate-400">
+      <Typography variant="p" className="text-14 text-slate-600 dark:text-slate-400">
         {CM.backupHistoryListHint}
       </Typography>
       <CaDialogTable
@@ -347,9 +362,10 @@ export default function BackupDatabaseModal() {
   if (isError) {
     return (
       <Modal isOpen title={CM.backupFailed} icon="backup" iconVariant="danger" onClose={resetAction} maxWidth="720px">
-        <ModalStatusError 
+        <ModalStatusError
           title={CM.operationInterrupted}
           error={error}
+          guidance={CM.backupDbGuidance}
           onRetry={handleBackup}
           onCancel={resetAction}
           retryText={CM.retryBackup}
@@ -367,6 +383,7 @@ export default function BackupDatabaseModal() {
       icon="backup"
       maxWidth="720px"
       testId="backup-database"
+      onSubmit={handleBackup}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="backup-database-cancel-btn" variant="secondary" onClick={handleClose}>{CM.cancel}</Button>

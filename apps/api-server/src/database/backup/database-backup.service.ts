@@ -24,6 +24,9 @@ import {
 } from '@common';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
+import { DatabaseUserService } from '@database/user/database-user.service';
+import { DatabaseInfoService } from '@database/info/database-info.service';
+import { DatabaseError } from '@error/database/database-error';
 import {
   AddBackupInfoCmsRequest,
   DeleteBackupInfoCmsRequest,
@@ -59,7 +62,9 @@ import {
 export class DatabaseBackupService extends BaseService {
   constructor(
     protected readonly hostService: HostService,
-    protected readonly cmsClient: CmsHttpsClientService
+    protected readonly cmsClient: CmsHttpsClientService,
+    private readonly databaseUserService: DatabaseUserService,
+    private readonly databaseInfoService: DatabaseInfoService
   ) {
     super(hostService, cmsClient);
   }
@@ -82,6 +87,8 @@ export class DatabaseBackupService extends BaseService {
     dbname: string,
     backupInfo: AddBackupInfoClientRequest
   ): Promise<AddBackupInfoClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: AddBackupInfoCmsRequest = {
       task: 'addbackupinfo',
       dbname: dbname,
@@ -128,6 +135,8 @@ export class DatabaseBackupService extends BaseService {
     dbname: string,
     backupInfo: SetBackupInfoClientRequest
   ): Promise<SetBackupInfoClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: SetBackupInfoCmsRequest = {
       task: 'setbackupinfo',
       dbname: dbname,
@@ -174,6 +183,8 @@ export class DatabaseBackupService extends BaseService {
     dbname: string,
     backupInfo: DeleteBackupInfoClientRequest
   ): Promise<DeleteBackupInfoClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: DeleteBackupInfoCmsRequest = {
       task: 'deletebackupinfo',
       dbname: dbname,
@@ -205,6 +216,8 @@ export class DatabaseBackupService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<GetBackupInfoClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: GetBackupInfoCmsRequest = {
       task: 'getbackupinfo',
       dbname: dbname,
@@ -245,6 +258,8 @@ export class DatabaseBackupService extends BaseService {
     hostUid: string,
     request: BackupDbInfoClientRequest
   ): Promise<BackupDbInfoClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
+
     const cmsRequest: BackupDbInfoCmsRequest = {
       task: 'backupdbinfo',
       dbname: request.dbname,
@@ -282,6 +297,8 @@ export class DatabaseBackupService extends BaseService {
     hostUid: string,
     request: BackupDbListClientRequest
   ): Promise<BackupDbListClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
+
     const cmsRequest: GetBackupListCmsRequest = {
       task: 'getbackuplist',
       dbname: request.dbname,
@@ -316,8 +333,11 @@ export class DatabaseBackupService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: BackupDbClientRequest
+    request: BackupDbClientRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<BackupDbClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: BackupDbCmsRequest = {
       task: 'backupdb',
       dbname,
@@ -341,10 +361,11 @@ export class DatabaseBackupService extends BaseService {
 
     this.logger.debug(`Executing backup for database: ${dbname} level: ${request.level}`);
 
-    await this.executeCmsRequest<BackupDbCmsRequest, BackupDbCmsResponse>(
+    await this.executeAsyncCmsJobRequest<BackupDbCmsRequest, BackupDbCmsResponse>(
       userId,
       hostUid,
-      cmsRequest
+      cmsRequest,
+      { onUuid }
     );
 
     return { success: true };
@@ -366,8 +387,20 @@ export class DatabaseBackupService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: RestoreDbClientRequest
+    request: RestoreDbClientRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<RestoreDbClientResponse> {
+    // restoredb never touches the ha_apply_info catalog (the replication
+    // apply-position bookmark) — CUBRID ships a dedicated `restoreslave`
+    // utility specifically because plain restoredb leaves that catalog
+    // stale after restoring, which desyncs the HA peer's replication apply
+    // position. Webmanager only ever invokes restoredb, never restoreslave.
+    if (await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname)) {
+      throw DatabaseError.RestoreNotSupportedForHaDatabase({ dbname });
+    }
+
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: RestoreDbCmsRequest = {
       task: 'restoredb',
       dbname,
@@ -380,10 +413,11 @@ export class DatabaseBackupService extends BaseService {
 
     this.logger.debug(`Restoring database: ${dbname} on host: ${hostUid}`);
 
-    await this.executeCmsRequest<RestoreDbCmsRequest, RestoreDbCmsResponse>(
+    await this.executeAsyncCmsJobRequest<RestoreDbCmsRequest, RestoreDbCmsResponse>(
       userId,
       hostUid,
-      cmsRequest
+      cmsRequest,
+      { onUuid }
     );
 
     return { success: true };

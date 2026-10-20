@@ -40,6 +40,12 @@ export type CmsJobRecord = {
   payload: CmsJobPayload;
   result?: unknown;
   error?: { message: string; code?: string; cmsStatus?: string };
+  // CMS's own uuid for this async job, persisted as soon as CMS returns it —
+  // previously only held in a poll-loop local variable, so a mid-job failure
+  // (e.g. the host token going invalid) lost it permanently with no way to
+  // reconcile the job against CMS's actual (possibly still-running or
+  // already-finished) task afterward.
+  cmsUuid?: string;
 };
 
 // Deliberately NOT keyed by userId or hostUid — both are per-account values

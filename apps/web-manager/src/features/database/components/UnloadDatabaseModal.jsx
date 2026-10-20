@@ -46,8 +46,10 @@ export default function UnloadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isUnloadDatabaseModalOpen: isUnloadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const currentDb = databases.find((db) => db.dbname === selectedDatabase);
 
@@ -59,7 +61,7 @@ export default function UnloadDatabaseModal() {
     isLoading,
     isError,
   } = useActionState();
-  const { runJob } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
 
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
@@ -173,7 +175,14 @@ export default function UnloadDatabaseModal() {
         dbpasswd: formData.dbPassword || '',
         usehash: formData.useFileForHash ? 'yes' : 'no',
         hashdir: formData.useFileForHash ? formData.fileForHash : '',
-        class: (formData.schemaScope === 'all' && formData.selectedTables.length === dynamicTables.length)
+        // "all" always means unfiltered (empty class list), regardless of
+        // whether selectedTables/dynamicTables happen to match in length —
+        // comparing counts here raced against fetchTables() re-populating
+        // both on refetch, and any mismatch sent a stale/partial class
+        // filter instead of the "everything" the user actually asked for,
+        // which could unload zero classes if that stale list didn't line
+        // up with the database's real schema.
+        class: formData.schemaScope === 'all'
           ? []
           : formData.selectedTables.map((t) => ({ classname: t })),
         ref: (formData.schemaScope === 'selected' && formData.includeReferencedTables) ? 'yes' : 'no',
@@ -189,11 +198,13 @@ export default function UnloadDatabaseModal() {
         () => databaseJobApi.submitUnload(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
-      resetAction();
-      dispatch(closeUnloadDatabaseModal());
-      dispatch(openUnloadResultModal(job.result ?? {}));
+      if (!wasBackgrounded()) {
+        resetAction();
+        dispatch(closeUnloadDatabaseModal());
+        dispatch(openUnloadResultModal(job.result ?? {}));
+      }
     } catch (err) {
-      endError(typeof err === 'string' ? err : (err.message || CM.failure));
+      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.failure));
     }
   };
 
@@ -210,7 +221,7 @@ export default function UnloadDatabaseModal() {
         <ModalStatusLoading
           title={CM.unloadDatabase}
           subtitle={getCmsJobLoadingSubtitle(selectedDatabase, jobStatus, CM)}
-          onBackground={handleClose}
+          onBackground={() => { background(); handleClose(); }}
         />
       </Modal>
     );
@@ -222,6 +233,7 @@ export default function UnloadDatabaseModal() {
         <ModalStatusError
           title={CM.failure}
           error={actionError}
+          guidance={CM.unloadDbGuidance}
           onRetry={handleUnloadDatabase}
           onCancel={resetAction}
           cancelText={CM.close}
@@ -239,6 +251,8 @@ export default function UnloadDatabaseModal() {
       icon="upload"
       maxWidth="740px"
       testId="unload-database"
+      onSubmit={handleUnloadDatabase}
+      submitDisabled={!isFormValid}
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="unload-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>

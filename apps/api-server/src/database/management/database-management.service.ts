@@ -84,12 +84,14 @@ export class DatabaseManagementService extends BaseService {
   }
 
   /**
-   * CMS authorizes tasks like optimizedb/checkdb/compactdb against a
-   * per-connection credential cache ("conlist") on the CMS host, populated
-   * only by a prior dbmtuserlogin call — not from these tasks' own request
-   * fields. Log in first so the cache is populated before running the
-   * operation. Skipped when dbuser isn't provided (offline databases run
-   * through a CLI path on the CMS side that doesn't need this).
+   * optimizedb, when the target database is online, calls CMS's `_op_db_login`
+   * which does a real db_login against a per-connection credential cache
+   * ("conlist") on the CMS host, populated only by a prior dbmtuserlogin call —
+   * not from optimizedb's own request fields. Log in first so the cache is
+   * populated before running the operation. Skipped when dbuser isn't provided
+   * (offline databases run through a CLI path on the CMS side that doesn't
+   * need this). checkdb/compactdb never consult this cache in any mode
+   * (pure CLI wrappers), so this must only be called for optimizedb.
    */
   private async loginIfCredentialsProvided(
     userId: string,
@@ -125,8 +127,11 @@ export class DatabaseManagementService extends BaseService {
   async copyDbCmsResponse(
     userId: string,
     hostUid: string,
-    request: CopyDbRequest
+    request: CopyDbRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CopyDbCmsResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.srcdbname);
+
     const cmsRequest: CopyDbCmsRequest = {
       task: 'copydb',
       srcdbname: request.srcdbname,
@@ -144,11 +149,11 @@ export class DatabaseManagementService extends BaseService {
       }
     }
 
-    return this.executeLongRunningCmsRequest<CopyDbCmsRequest, CopyDbCmsResponse>(
+    return this.executeAsyncCmsJobRequest<CopyDbCmsRequest, CopyDbCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -186,8 +191,11 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: UnloadDatabaseRequest
+    request: UnloadDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<UnloadDatabaseCmsResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     let target: 'schema' | 'object' | 'both';
 
     if (request.isSchemaIncluded && request.isDataIncluded) {
@@ -228,11 +236,11 @@ export class DatabaseManagementService extends BaseService {
       lofile: request.lofile,
     };
 
-    return this.executeLongRunningCmsRequest<UnloadDatabaseCmsRequest, UnloadDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<UnloadDatabaseCmsRequest, UnloadDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -296,16 +304,29 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: LoadDatabaseRequest
+    request: LoadDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<LoadDatabaseCmsResponse> {
+    // loaddb always runs through CMS in SA mode (see cm_job_task.cpp's
+    // ts_loaddb — it rejects the request outright unless the database is
+    // fully stopped), and SA-mode processes reset ha_mode to off internally
+    // at startup (system_parameter.c's prm_tune_parameters). So even when
+    // this database is a genuine HA member, whatever loaddb writes here
+    // never replicates to its peer. Block it rather than let master/slave
+    // silently diverge.
+    if (await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname)) {
+      throw DatabaseError.LoadNotSupportedForHaDatabase({ dbname });
+    }
+
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: LoadDatabaseCmsRequest = {
       task: 'loaddb',
       dbname: dbname,
       checkoption: request.checkoption,
       period: request.period,
-      user: request.user,
-      _DBID: request._DBID ?? request.user,
-      _DBPASSWD: request._DBPASSWD ?? '',
+      _DBID: request._DBID,
+      _DBPASSWD: request._DBPASSWD,
       estimated: request.estimated,
       oiduse: request.oiduse,
       statisticsuse: request.statisticsuse,
@@ -317,11 +338,11 @@ export class DatabaseManagementService extends BaseService {
       ignoreclassfile: request.ignoreclassfile,
     };
 
-    return this.executeLongRunningCmsRequest<LoadDatabaseCmsRequest, LoadDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<LoadDatabaseCmsRequest, LoadDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -352,8 +373,10 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: OptimizeDatabaseRequest
+    request: OptimizeDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<OptimizeDatabaseCmsResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
     await this.loginIfCredentialsProvided(userId, hostUid, dbname, request.dbuser, request.dbpasswd);
 
     const cmsRequest: OptimizeDatabaseCmsRequest = {
@@ -362,11 +385,11 @@ export class DatabaseManagementService extends BaseService {
       ...(request.classname && { classname: request.classname }),
     };
 
-    return this.executeLongRunningCmsRequest<OptimizeDatabaseCmsRequest, OptimizeDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<OptimizeDatabaseCmsRequest, OptimizeDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -397,9 +420,10 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: CheckDatabaseRequest
+    request: CheckDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CheckDatabaseCmsResponse> {
-    await this.loginIfCredentialsProvided(userId, hostUid, dbname, request.dbuser, request.dbpasswd);
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     const cmsRequest: CheckDatabaseCmsRequest = {
       task: 'checkdb',
@@ -407,11 +431,11 @@ export class DatabaseManagementService extends BaseService {
       repairdb: request.repairdb,
     };
 
-    return this.executeLongRunningCmsRequest<CheckDatabaseCmsRequest, CheckDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<CheckDatabaseCmsRequest, CheckDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -445,9 +469,10 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: CompactDatabaseRequest
+    request: CompactDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CompactDatabaseCmsResponse> {
-    await this.loginIfCredentialsProvided(userId, hostUid, dbname, request.dbuser, request.dbpasswd);
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     const cmsRequest: CompactDatabaseCmsRequest = {
       task: 'compactdb',
@@ -455,11 +480,11 @@ export class DatabaseManagementService extends BaseService {
       verbose: request.verbose,
     };
 
-    return this.executeLongRunningCmsRequest<CompactDatabaseCmsRequest, CompactDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<CompactDatabaseCmsRequest, CompactDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -490,8 +515,19 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: RenameDatabaseRequest
+    request: RenameDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<RenameDatabaseCmsResponse> {
+    // renamedb only renames the local databases.txt entry + volume files —
+    // it has no concept of cubrid_ha.conf's ha_db_list or the HA peer, so
+    // renaming an HA member here would leave the peer (and HA config) still
+    // referencing the old name, breaking HA pairing.
+    if (await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname)) {
+      throw DatabaseError.RenameNotSupportedForHaDatabase({ dbname });
+    }
+
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: RenameDatabaseCmsRequest = {
       task: 'renamedb',
       dbname: dbname,
@@ -509,11 +545,11 @@ export class DatabaseManagementService extends BaseService {
       cmsRequest.volume = [volumeMapping];
     }
 
-    return this.executeLongRunningCmsRequest<RenameDatabaseCmsRequest, RenameDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<RenameDatabaseCmsRequest, RenameDatabaseCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -533,6 +569,8 @@ export class DatabaseManagementService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<GetAddVolStatusResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: GetAddVolStatusCmsRequest = {
       task: 'getaddvolstatus',
       dbname: dbname,
@@ -579,8 +617,11 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    request: AddVolDbRequest
+    request: AddVolDbRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<AddVolDbCmsResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: AddVolDbCmsRequest = {
       task: 'addvoldb',
       dbname: dbname,
@@ -591,11 +632,11 @@ export class DatabaseManagementService extends BaseService {
       size_need_mb: request.size_need_mb,
     };
 
-    return this.executeLongRunningCmsRequest<AddVolDbCmsRequest, AddVolDbCmsResponse>(
+    return this.executeAsyncCmsJobRequest<AddVolDbCmsRequest, AddVolDbCmsResponse>(
       userId,
       hostUid,
       cmsRequest,
-      { skipStatusCheck: true }
+      { skipStatusCheck: true, onUuid }
     );
   }
 
@@ -617,6 +658,10 @@ export class DatabaseManagementService extends BaseService {
     dbname: string,
     _request: LockDatabaseRequest
   ): Promise<LockDatabaseResponse> {
+    // lockdb takes no dbuser/dbpasswd of its own — it relies entirely on the
+    // conlist cache a prior dbmtuserlogin populated.
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: LockDatabaseCmsRequest = {
       task: 'lockdb',
       dbname: dbname,
@@ -653,6 +698,11 @@ export class DatabaseManagementService extends BaseService {
     dbname: string,
     request: GetTransactionInfoRequest
   ): Promise<GetTransactionInfoResponse> {
+    // gettransactioninfo only reads its own dbuser/dbpasswd fields on CUBRID
+    // < 11 (ts_get_tran_info) — on 11+ it relies on the conlist cache same
+    // as lockdb/killtransaction, regardless of what's sent here.
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: GetTransactionInfoCmsRequest = {
       task: 'gettransactioninfo',
       dbname: dbname,
@@ -712,12 +762,24 @@ export class DatabaseManagementService extends BaseService {
       );
     }
 
+    // Only guard when the client didn't supply its own password — that
+    // password overrides conlist outright (see comment below), so there's
+    // nothing for a prior dbmtuserlogin to need to have established.
+    if (!request.dbpasswd) {
+      await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+    }
+
     // Build CMS request from client request
     const cmsRequest: KillTransactionCmsRequest = {
       task: 'killtransaction',
       dbname: dbname,
       type: request.type,
       ...(request.type !== 'd' && request.parameter && { parameter: request.parameter }),
+      // CMS's own conlist auto-fill runs first for any request carrying
+      // dbname, then this request's own _DBPASSWD (parsed earlier and thus
+      // searched first) wins — so sending it here takes priority over
+      // whatever a prior dbmtuserlogin cached server-side.
+      ...(request.dbpasswd && { _DBPASSWD: request.dbpasswd }),
     };
 
     this.logger.debug(

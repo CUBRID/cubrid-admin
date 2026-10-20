@@ -9,6 +9,8 @@ import {
   RestoreDbClientRequest,
 } from '@api-interfaces';
 import { DatabaseError } from '@error/database/database-error';
+import { DatabaseUserService } from '@database/user/database-user.service';
+import { DatabaseInfoService } from '@database/info/database-info.service';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 
@@ -43,6 +45,14 @@ describe('DatabaseBackupService', () => {
       postAuthenticated: jest.fn(),
     };
 
+    const mockDatabaseUserService = {
+      ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+    };
+
+    const mockDatabaseInfoService = {
+      effectiveHaDbForDbname: jest.fn().mockResolvedValue(false),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseBackupService,
@@ -53,6 +63,14 @@ describe('DatabaseBackupService', () => {
         {
           provide: CmsHttpsClientService,
           useValue: mockCmsClient,
+        },
+        {
+          provide: DatabaseUserService,
+          useValue: mockDatabaseUserService,
+        },
+        {
+          provide: DatabaseInfoService,
+          useValue: mockDatabaseInfoService,
         },
       ],
     }).compile();
@@ -391,7 +409,9 @@ describe('DatabaseBackupService', () => {
           mt: '2',
           zip: 'y',
           safereplication: 'n',
-        })
+          async: 'yes',
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual({ success: true });
     });
@@ -421,7 +441,9 @@ describe('DatabaseBackupService', () => {
           mt: '0',
           zip: 'n',
           safereplication: 'n',
-        })
+          async: 'yes',
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
   });
@@ -464,7 +486,9 @@ describe('DatabaseBackupService', () => {
           partial: mockRequest.partial,
           pathname: mockRequest.pathname,
           recoverypath: mockRequest.recoverypath,
-        })
+          async: 'yes',
+        }),
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
 
       expect(result).toEqual({ success: true });

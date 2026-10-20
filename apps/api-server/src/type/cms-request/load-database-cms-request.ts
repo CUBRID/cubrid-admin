@@ -30,17 +30,12 @@ export type LoadDatabaseCmsRequest = BaseCmsRequest & {
   period: string;
 
   /**
-   * Database user
-   */
-  user: string;
-
-  /**
-   * CMS loaddb database user id.
+   * CMS loaddb database user id. Always sent as-is — see LoadDatabaseRequest._DBID.
    */
   _DBID: string;
 
   /**
-   * CMS loaddb database password.
+   * CMS loaddb database password. Always sent as-is — see LoadDatabaseRequest._DBPASSWD.
    */
   _DBPASSWD: string;
 

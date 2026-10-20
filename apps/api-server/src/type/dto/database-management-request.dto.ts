@@ -146,10 +146,6 @@ export class LoadDatabaseDto {
 
   @IsString()
   @IsNotEmpty()
-  user: string;
-
-  @IsString()
-  @IsNotEmpty()
   _DBID: string;
 
   @IsString()
@@ -292,4 +288,8 @@ export class KillTransactionDto {
   @IsString()
   @IsNotEmpty()
   parameter?: string;
+
+  @IsOptional()
+  @IsString()
+  dbpasswd?: string;
 }

@@ -171,6 +171,8 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'Invalid host information format.';
       case HostErrorCode.DUPLICATED_HOST:
         return 'This host is already registered.';
+      case HostErrorCode.DUPLICATED_ALIAS:
+        return 'This name is already used by another host. Choose a different name.';
       case HostErrorCode.INTERNAL_ERROR:
       case HostErrorCode.UNKNOWN:
         return 'A host operation failed.';
@@ -231,6 +233,30 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'Invalid volume information.';
       case DatabaseErrorCode.DUPLICATED_FILE:
         return 'File already exists.';
+      case DatabaseErrorCode.OPERATION_IN_PROGRESS: {
+        const dbname = additionalData?.dbname;
+        return dbname
+          ? `A background job is already running on "${dbname}". Try again once it finishes.`
+          : 'A background job is already running on this host. Try again once it finishes.';
+      }
+      case DatabaseErrorCode.LOAD_NOT_SUPPORTED_FOR_HA_DATABASE: {
+        const dbname = additionalData?.dbname;
+        return dbname
+          ? `"${dbname}" is an HA database — Load Database always runs offline and its changes will not replicate to the HA peer, so it is not supported here.`
+          : 'Load Database is not supported for HA databases — its changes would not replicate to the HA peer.';
+      }
+      case DatabaseErrorCode.RENAME_NOT_SUPPORTED_FOR_HA_DATABASE: {
+        const dbname = additionalData?.dbname;
+        return dbname
+          ? `"${dbname}" is an HA database — renaming it would break HA pairing with its peer, so it is not supported here.`
+          : 'Rename Database is not supported for HA databases — it would break HA pairing with the peer.';
+      }
+      case DatabaseErrorCode.RESTORE_NOT_SUPPORTED_FOR_HA_DATABASE: {
+        const dbname = additionalData?.dbname;
+        return dbname
+          ? `"${dbname}" is an HA database — Restore Database would desync its replication apply position from the HA peer, so it is not supported here.`
+          : 'Restore Database is not supported for HA databases — it would desync replication with the HA peer.';
+      }
       case DatabaseErrorCode.INTERNAL_ERROR:
       case DatabaseErrorCode.UNKNOWN:
       default:

@@ -31,6 +31,7 @@ import {
 import { ConfigError } from '@error/config/config-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
+import { DatabaseUserService } from '@database/user/database-user.service';
 import {
   GetAutoExecQueryCmsRequest,
   SetAutoExecQueryCmsRequest,
@@ -67,7 +68,8 @@ export class DatabaseConfigService extends BaseService {
   constructor(
     protected readonly hostService: HostService,
     protected readonly cmsClient: CmsHttpsClientService,
-    private readonly cmsConfigService: CmsConfigService
+    private readonly cmsConfigService: CmsConfigService,
+    private readonly databaseUserService: DatabaseUserService
   ) {
     super(hostService, cmsClient);
   }
@@ -107,6 +109,8 @@ export class DatabaseConfigService extends BaseService {
     dbname: string,
     autoExecQuery: SetAutoExecQueryClientRequest
   ): Promise<SetAutoExecQueryClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: SetAutoExecQueryCmsRequest = {
       task: 'setautoexecquery',
       dbname: dbname,
@@ -138,6 +142,8 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<GetAutoExecQueryClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: GetAutoExecQueryCmsRequest = {
       task: 'getautoexecquery',
       dbname: dbname,
@@ -200,6 +206,8 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: SetAutoStartRequest
   ): Promise<SetAutoStartResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
+
     const confname = CMS_CONFNAME_CUBRID;
 
     // Get current configuration from cubridconf
@@ -299,6 +307,86 @@ export class DatabaseConfigService extends BaseService {
   }
 
   /**
+   * Ensure a database has an explicit `ha_mode=off` under its own
+   * `[@dbname]` section in cubridconf, so it stays out of the host's HA
+   * replication set even though the host itself is HA-configured (e.g. a
+   * one-off database created on an HA host that should never be replicated).
+   *
+   * Section tracking (via parseConfigParams) already ignores blank lines, so
+   * a section written as `[@dbname]` followed by a blank line before
+   * `ha_mode=off` is still recognized as already configured. This only ever
+   * adds the key when it is genuinely absent from the section — an existing
+   * `ha_mode` value, on or off, is left untouched rather than overwritten.
+   *
+   * @param userId User ID from JWT
+   * @param hostUid Host UID
+   * @param dbname Database name whose `[@dbname]` section should be checked
+   * @throws ConfigError If the configuration file cannot be read or the write fails
+   */
+  @HandleCmsErrors()
+  async ensureDbHaModeOff(userId: string, hostUid: string, dbname: string): Promise<void> {
+    // Two databases created concurrently on the SAME host would otherwise
+    // both read the same cubridconf conflist and each write back a full
+    // file — the second write clobbers the first write's `ha_mode=off`
+    // addition for the other database, since neither read reflects the
+    // other's write. Serialize the whole read-modify-write per host (not
+    // per dbname, unlike withQueryPlanMutex above) so concurrent callers on
+    // the same host queue instead of racing.
+    return this.withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
+  }
+
+  private async ensureDbHaModeOffUnlocked(userId: string, hostUid: string, dbname: string): Promise<void> {
+    const confname = CMS_CONFNAME_CUBRID;
+
+    const currentConfig = await this.cmsConfigService.getAllSystemParam(userId, hostUid, confname);
+
+    if (!currentConfig.conflist || currentConfig.conflist.length === 0) {
+      throw ConfigError.NoConflistData(confname);
+    }
+
+    const confdata = currentConfig.conflist[0].confdata;
+    if (!confdata || confdata.length === 0) {
+      throw ConfigError.NoConfdata(confname);
+    }
+
+    const targetSection = `@${dbname}`;
+    const params = parseConfigParams(currentConfig as GetAllSysParamCmsResponse);
+    const hasHaMode = params.some(
+      (param) => param.section === targetSection && param.key === 'ha_mode'
+    );
+    if (hasHaMode) {
+      this.logger.debug(
+        `ha_mode already set under [${targetSection}] in ${confname}, leaving it as-is`
+      );
+      return;
+    }
+
+    const sectionHeaderIndex = confdata.findIndex((line) => line.trim() === `[${targetSection}]`);
+
+    let updatedConfdata: string[];
+    if (sectionHeaderIndex === -1) {
+      // Section doesn't exist yet — append a new one at the end of the file.
+      updatedConfdata = [...confdata, '', `[${targetSection}]`, 'ha_mode=off'];
+      this.logger.debug(
+        `[${targetSection}] section not found in ${confname}, appending it with ha_mode=off`
+      );
+    } else {
+      // Section exists but has no ha_mode key yet — insert right after its header.
+      const insertIndex = sectionHeaderIndex + 1;
+      updatedConfdata = [
+        ...confdata.slice(0, insertIndex),
+        'ha_mode=off',
+        ...confdata.slice(insertIndex),
+      ];
+      this.logger.debug(
+        `Adding ha_mode=off under existing [${targetSection}] section in ${confname} at line ${insertIndex + 1}`
+      );
+    }
+
+    await this.cmsConfigService.setSystemParam(userId, hostUid, confname, updatedConfdata);
+  }
+
+  /**
    * Disable auto-start for a database.
    * Removes database name from the server parameter in cubridconf configuration file.
    * The confname field in the request is ignored - the system always uses 'cubridconf'.
@@ -315,6 +403,8 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: RemoveAutoStartRequest
   ): Promise<RemoveAutoStartResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
+
     const confname = CMS_CONFNAME_CUBRID;
 
     // Get current configuration from cubridconf
@@ -394,6 +484,8 @@ export class DatabaseConfigService extends BaseService {
     dbname: string,
     request: SetAutoAddVolRequest
   ): Promise<SetAutoAddVolResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: SetAutoAddVolCmsRequest = {
       task: 'setautoaddvol',
       dbname: dbname,
@@ -429,6 +521,8 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<GetDbSizeClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: GetDbSizeCmsRequest = {
       task: 'getdbsize',
       dbname,
@@ -458,6 +552,8 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<GetAutoAddVolClientResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: GetAutoAddVolCmsRequest = {
       task: 'getautoaddvol',
       dbname,
@@ -497,6 +593,8 @@ export class DatabaseConfigService extends BaseService {
     dbname: string,
     request: ClassInfoRequest
   ): Promise<ClassInfoResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+
     const cmsRequest: ClassInfoCmsRequest = {
       task: 'classinfo',
       dbname: dbname,
@@ -699,6 +797,27 @@ export class DatabaseConfigService extends BaseService {
     }
   }
 
+  // Serializes concurrent cubridconf read-modify-write operations per hostUid
+  // (not per dbname — unlike queryPlanMutex, two different databases on the
+  // same host still share one physical conflist and must not interleave).
+  private readonly hostConfigMutex = new Map<string, Promise<void>>();
+
+  private async withHostConfigMutex<T>(hostUid: string, fn: () => Promise<T>): Promise<T> {
+    const pending = this.hostConfigMutex.get(hostUid) ?? Promise.resolve();
+    let resolve!: () => void;
+    const next = new Promise<void>((r) => (resolve = r));
+    this.hostConfigMutex.set(hostUid, next);
+    try {
+      await pending;
+      return await fn();
+    } finally {
+      resolve();
+      if (this.hostConfigMutex.get(hostUid) === next) {
+        this.hostConfigMutex.delete(hostUid);
+      }
+    }
+  }
+
   private resolveAutoAddVolLogRange(request: GetAutoAddVolLogRequest): {
     start_time: string;
     end_time: string;
@@ -716,9 +835,13 @@ export class DatabaseConfigService extends BaseService {
   }
 
   private formatCmsLogDateTime(date: Date): string {
+    // CMS (tsGetAutoaddvolLog in cm_job_task.cpp) filters log lines with a plain strcmp
+    // against this string, and its own log lines are written with unpadded numbers
+    // (e.g. "2026-9-22,10:4:57"). Zero-padding here would make the lexicographic
+    // comparison wrong for any single-digit month/day/hour/minute/second.
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const seconds = date.getSeconds();

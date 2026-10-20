@@ -57,13 +57,13 @@ export const InfoBanner = ({
   return (
     <div className={`flex items-start gap-4 p-4 ${theme.bg} border ${theme.border} rounded-2xl shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-300 ${className}`}>
       <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-sm ${theme.iconBoxBg}`}>
-        <Icon name={activeIcon} size="sm" weight={300} className={theme.iconColor} />
+        <Icon name={activeIcon} size="md" weight={300} className={theme.iconColor} />
       </div>
-      <div className="space-y-0.5">
-        <Typography variant="p" className="text-[11px] font-black text-slate-700 dark:text-slate-200 tracking-tight capitalize">
+      <div className="space-y-1">
+        <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-200 tracking-tight capitalize">
           {title}
         </Typography>
-        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic block">
+        <div className="text-14 text-slate-500 dark:text-slate-400 font-medium leading-relaxed block">
           {children}
         </div>
       </div>

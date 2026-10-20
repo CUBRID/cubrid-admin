@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
@@ -17,9 +17,10 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
+import { useToast } from '../../../infrastructure/hooks/useToast';
+import { getModifiedKeys } from '../databasePropertyUtils';
 import {
   ModalStatusLoading,
-  ModalStatusSuccess,
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 
@@ -102,6 +103,22 @@ const BUFFER_GROUPS = [
 ];
 const BUFFER_UNITS = ['KB', 'MB', 'GB', 'TB'];
 const BUFFER_UNIT_LETTER = { KB: 'K', MB: 'M', GB: 'G', TB: 'T' };
+const DEFAULT_BUFFER_MODE = { data: 'size', sort: 'size', log: 'size' };
+const DEFAULT_BUFFER_UNIT = { data: 'MB', sort: 'MB', log: 'MB' };
+
+function getEffectiveParams(params, bufferMode, bufferUnit) {
+  const effectiveParams = { ...params };
+  BUFFER_GROUPS.forEach(({ type, pagesKey, sizeKey }) => {
+    if (bufferMode[type] === 'pages') {
+      delete effectiveParams[sizeKey];
+    } else {
+      const value = params[sizeKey];
+      if (value) effectiveParams[sizeKey] = `${value}${BUFFER_UNIT_LETTER[bufferUnit[type]]}`;
+      delete effectiveParams[pagesKey];
+    }
+  });
+  return effectiveParams;
+}
 
 const ISOLATION_LEVEL_OPTIONS = ['TRAN_SERIALIZABLE', 'TRAN_REP_CLASS_REP_INSTANCE', 'TRAN_REP_CLASS_COMMIT_INSTANCE', 'TRAN_REP_CLASS_UNCOMMIT_INSTANCE', 'TRAN_COMMIT_CLASS_COMMIT_INSTANCE', 'TRAN_COMMIT_CLASS_UNCOMMIT_INSTANCE'];
 const YES_NO_OPTIONS = ['yes', 'no'];
@@ -118,7 +135,7 @@ function ParamNameCell({ label, isModified }) {
   return (
     <div className="flex items-center gap-1.5">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
-      <span className={`text-[11px] font-mono truncate ${isModified ? 'text-amber-500 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
+      <span className={`text-13 font-mono truncate ${isModified ? 'text-amber-500 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
         {label}
       </span>
     </div>
@@ -126,17 +143,20 @@ function ParamNameCell({ label, isModified }) {
 }
 
 /* ─── ParamValueCell — select for fixed-option keys, else free-text input ─── */
-function ParamValueCell({ paramKey, value, defaultValue, onChange }) {
+function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, disabledHint }) {
   const options = SELECT_OPTIONS_BY_KEY[paramKey];
   if (options) {
     return (
-      <Select
-        size="sm"
-        value={value ?? defaultValue}
-        options={options.map(o => ({ value: o, label: o }))}
-        onChange={e => onChange(e.target.value)}
-        className="w-full max-w-[260px]"
-      />
+      <div className="w-full max-w-none" title={disabled ? disabledHint : undefined}>
+        <Select
+          size="sm"
+          value={value ?? defaultValue}
+          options={options.map(o => ({ value: o, label: o }))}
+          onChange={e => onChange(e.target.value)}
+          className="w-full max-w-none"
+          disabled={disabled}
+        />
+      </div>
     );
   }
   return (
@@ -145,7 +165,7 @@ function ParamValueCell({ paramKey, value, defaultValue, onChange }) {
       value={value ?? ''}
       onChange={e => onChange(e.target.value)}
       placeholder={defaultValue || '—'}
-      className="w-full max-w-[260px]"
+      className="w-full max-w-none"
     />
   );
 }
@@ -155,7 +175,7 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
   const CM = useCM();
   return (
     <div className="rounded-xl border border-slate-100 dark:border-white/6 p-4">
-      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">{group.groupLabel(CM)}</p>
+      <p className="text-11 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">{group.groupLabel(CM)}</p>
       <div className="space-y-2.5">
         <div className="flex items-center gap-3">
           <Radio
@@ -163,7 +183,7 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
             value="pages"
             checked={mode === 'pages'}
             onChange={() => onModeChange('pages')}
-            label={<span className="text-[10.5px] font-mono w-[140px] shrink-0 inline-block">{group.pagesKey}</span>}
+            label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.pagesKey}</span>}
           />
           <Input
             size="sm"
@@ -181,7 +201,7 @@ function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeCha
             value="size"
             checked={mode === 'size'}
             onChange={() => onModeChange('size')}
-            label={<span className="text-[10.5px] font-mono w-[140px] shrink-0 inline-block">{group.sizeKey}</span>}
+            label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.sizeKey}</span>}
           />
           <Input
             size="sm"
@@ -219,33 +239,45 @@ export default function DatabasePropertyModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
+  const toast = useToast();
   const {
     error: actionError,
     startAction,
-    endSuccess,
     endError,
     resetAction,
     isLoading,
-    isSuccess,
     isError
   } = useActionState();
 
   const [activeTab, setActiveTab] = useState('General');
   const [activeSidebar, setActiveSidebar] = useState('Server Parameter');
   const [fetching, setFetching] = useState(false);
+  const [initialParams, setInitialParams] = useState({});
   const [params, setParams] = useState({});
   const [rawLines, setRawLines] = useState([]);
-  const [bufferMode, setBufferMode] = useState({ data: 'size', sort: 'size', log: 'size' });
-  const [bufferUnit, setBufferUnit] = useState({ data: 'MB', sort: 'MB', log: 'MB' });
+  const [initialBufferMode, setInitialBufferMode] = useState(DEFAULT_BUFFER_MODE);
+  const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
+  const [initialBufferUnit, setInitialBufferUnit] = useState(DEFAULT_BUFFER_UNIT);
+  const [bufferUnit, setBufferUnit] = useState(DEFAULT_BUFFER_UNIT);
   const [brokers, setBrokers] = useState([]);
   const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
+  // Tracks which (host, database) the Server Parameter config has already
+  // been fetched for, so switching to Connection Information and back
+  // doesn't re-fetch and clobber unsaved edits — see the fetch effect below.
+  const fetchedConfigKeyRef = useRef(null);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
       resetAction();
+      setInitialParams({});
       setParams({});
+      setInitialBufferMode(DEFAULT_BUFFER_MODE);
+      setBufferMode(DEFAULT_BUFFER_MODE);
+      setInitialBufferUnit(DEFAULT_BUFFER_UNIT);
+      setBufferUnit(DEFAULT_BUFFER_UNIT);
       setRawLines([]);
-      setActiveSidebar(selectedDatabase ? 'Connection Information' : 'Server Parameter');
+      setActiveSidebar('Server Parameter');
+      fetchedConfigKeyRef.current = null;
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase, resetAction]);
 
@@ -267,7 +299,13 @@ export default function DatabasePropertyModal() {
   }, [isDatabasePropertyModalOpen, selectedHostUid, isAuthorized]);
 
   useEffect(() => {
-    if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && activeSidebar !== 'Connection Information') {
+    const configKey = `${selectedHostUid}:${selectedDatabase || ''}`;
+    if (
+      isDatabasePropertyModalOpen && selectedHostUid && isAuthorized &&
+      activeSidebar !== 'Connection Information' &&
+      fetchedConfigKeyRef.current !== configKey
+    ) {
+      fetchedConfigKeyRef.current = configKey;
       const fetchParams = async () => {
         setFetching(true);
         try {
@@ -310,10 +348,28 @@ export default function DatabasePropertyModal() {
               nextMode[type] = 'size';
             }
           });
-          setBufferMode(prev => ({ ...prev, ...nextMode }));
-          setBufferUnit(prev => ({ ...prev, ...nextUnit }));
-          setParams(newParams);
-        } catch (err) { console.error('Failed to fetch config:', err); }
+          const loadedBufferMode = { ...DEFAULT_BUFFER_MODE, ...nextMode };
+          const loadedBufferUnit = { ...DEFAULT_BUFFER_UNIT, ...nextUnit };
+          setInitialBufferMode(loadedBufferMode);
+          setBufferMode(loadedBufferMode);
+          setInitialBufferUnit(loadedBufferUnit);
+          setBufferUnit(loadedBufferUnit);
+          setInitialParams({ ...newParams });
+          setParams({ ...newParams });
+        } catch (err) {
+          console.error('Failed to fetch config:', err);
+          // Allow a retry on the next tab switch instead of permanently
+          // marking this (host, database) as "fetched" — but only if this
+          // request is still the current one. A stale request for an
+          // earlier (host, database) can still be in flight and reject
+          // after a newer request for a different target already
+          // succeeded; clearing the ref unconditionally here would wipe
+          // out that newer success and trigger a pointless re-fetch (and
+          // possible edit-clobbering) on the next tab switch.
+          if (fetchedConfigKeyRef.current === configKey) {
+            fetchedConfigKeyRef.current = null;
+          }
+        }
         finally { setFetching(false); }
       };
       fetchParams();
@@ -327,16 +383,7 @@ export default function DatabasePropertyModal() {
       // Reconcile the pages/size radio choice per buffer group: only the
       // selected side is written, and the size value gets its unit letter
       // suffixed back on (e.g. 512 + MB -> "512M"), matching cubrid.conf.
-      const saveParams = { ...params };
-      BUFFER_GROUPS.forEach(({ type, pagesKey, sizeKey }) => {
-        if (bufferMode[type] === 'pages') {
-          delete saveParams[sizeKey];
-        } else {
-          const val = params[sizeKey];
-          if (val) saveParams[sizeKey] = `${val}${BUFFER_UNIT_LETTER[bufferUnit[type]]}`;
-          delete saveParams[pagesKey];
-        }
-      });
+      const saveParams = getEffectiveParams(params, bufferMode, bufferUnit);
 
       const sectionName = selectedDatabase ? `[@${selectedDatabase.toLowerCase()}]` : '[common]';
       let lines = [...rawLines];
@@ -365,8 +412,25 @@ export default function DatabasePropertyModal() {
         }
         if (!found) updatedSection.push(`${key}=${value}`);
       });
-      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: [...otherBefore, ...updatedSection, ...otherAfter] });
-      endSuccess(CM.configurationAppliedMsg(selectedDatabase));
+      const nextLines = [...otherBefore, ...updatedSection, ...otherAfter];
+      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: nextLines });
+      // Stay on the form view showing the values that were just applied,
+      // instead of closing the modal — the user asked to keep editing
+      // without having to reopen it. `params`/`bufferMode`/`bufferUnit`
+      // already hold exactly what `saveParams` persisted (`saveParams` is
+      // only their effective on-disk form — pages vs size reconciled, with
+      // the unit letter suffixed back on for cubrid.conf — so reusing it
+      // here would bake that suffix into the raw, unsuffixed state the
+      // buffer inputs expect). Promoting the current values to the
+      // "initial" baseline is what correctly zeroes out modifiedCount and
+      // makes a subsequent "Reset to original" target these just-applied
+      // values instead of the pre-session ones.
+      setRawLines(nextLines);
+      setInitialParams({ ...params });
+      setInitialBufferMode({ ...bufferMode });
+      setInitialBufferUnit({ ...bufferUnit });
+      resetAction();
+      toast.success(CM.configurationAppliedMsg(selectedDatabase));
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.configPatchRejectedMsg));
     }
@@ -380,27 +444,54 @@ export default function DatabasePropertyModal() {
 
   const handleClose = () => {
     dispatch(closeDatabasePropertyModal());
+    setInitialParams({});
     setParams({});
+    setInitialBufferMode(DEFAULT_BUFFER_MODE);
+    setBufferMode(DEFAULT_BUFFER_MODE);
+    setInitialBufferUnit(DEFAULT_BUFFER_UNIT);
+    setBufferUnit(DEFAULT_BUFFER_UNIT);
   };
 
   const handleReset = () => {
-    setParams({});
+    setParams({ ...initialParams });
+    setBufferMode({ ...initialBufferMode });
+    setBufferUnit({ ...initialBufferUnit });
   };
+
+  const modifiedKeys = useMemo(
+    () => getModifiedKeys(
+      getEffectiveParams(initialParams, initialBufferMode, initialBufferUnit),
+      getEffectiveParams(params, bufferMode, bufferUnit)
+    ),
+    [initialParams, params, initialBufferMode, bufferMode, initialBufferUnit, bufferUnit]
+  );
+  const modifiedKeySet = useMemo(() => new Set(modifiedKeys), [modifiedKeys]);
+  const modifiedCount = modifiedKeys.length;
+
+  // CUBRID forces auto_restart_server off in-process whenever HA is enabled
+  // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
+  // server should fail over via HA, not blindly self-restart in place), so
+  // leaving this editable here would show a "yes" that the running server
+  // silently ignores. Mirrors the off-keyword set system_parameter.c itself
+  // recognizes for ha_mode (only "on" would previously have been detected).
+  const HA_MODE_OFF_KEYWORDS = ['off', 'no', 'n', '0', 'false'];
+  const isHaEnabled = params.ha_mode !== undefined
+    && !HA_MODE_OFF_KEYWORDS.includes(String(params.ha_mode).trim().toLowerCase());
 
   const generalRows = useMemo(() => GENERAL_PARAMS_KEYS.map(key => ({
     key,
     default: GENERAL_PARAMS_SCHEMA[key],
     value: params[key],
-    isModified: params[key] !== undefined,
-  })), [params]);
+    isModified: modifiedKeySet.has(key),
+  })), [params, modifiedKeySet]);
 
   const advancedRows = useMemo(() => ADVANCED_PARAMS_SCHEMA
     .filter(p => !GENERAL_PARAMS_KEYS.includes(p.key))
-    .map(p => ({ ...p, value: params[p.key] !== undefined ? params[p.key] : p.default, isModified: params[p.key] !== undefined }))
-  , [params]);
+    .map(p => ({ ...p, value: params[p.key] !== undefined ? params[p.key] : p.default, isModified: modifiedKeySet.has(p.key) }))
+  , [params, modifiedKeySet]);
 
   const navItems = selectedDatabase
-    ? [{ id: 'Connection Information', icon: 'cable', label: CM.connectionNavLabel }, { id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }]
+    ? [{ id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }, { id: 'Connection Information', icon: 'cable', label: CM.connectionNavLabel }]
     : [{ id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }];
 
   const SERVER_TABS = [
@@ -420,24 +511,13 @@ export default function DatabasePropertyModal() {
     </Modal>
   );
 
-  /* ─── SUCCESS VIEW ─── */
-  if (isSuccess) return (
-    <Modal isOpen title={CM.updateSuccessful} icon="check_circle" iconVariant="success" onClose={handleClose} maxWidth="900px">
-      <ModalStatusSuccess
-        title={CM.configurationReIndexed}
-        message={CM.configurationAppliedMsg(selectedDatabase)}
-        onConfirm={handleClose}
-        confirmText={CM.confirmReturn}
-      />
-    </Modal>
-  );
-
   /* ─── ERROR VIEW ─── */
   if (isError) return (
     <Modal isOpen title={CM.updateRejected} icon="error" iconVariant="danger" onClose={resetAction} maxWidth="900px">
       <ModalStatusError
         title={CM.applyFailedTitle}
         error={actionError}
+        guidance={CM.databasePropertyGuidance}
         onRetry={handleApply}
         onCancel={resetAction}
         retryText={CM.retryPatch}
@@ -452,13 +532,15 @@ export default function DatabasePropertyModal() {
   const generalColumns = [
     { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} /> },
     {
-      header: CM.value, accessor: 'value', width: '55%', sortable: false,
+      header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
       render: (_, row) => (
         <ParamValueCell
           paramKey={row.key}
-          value={row.value}
+          value={row.key === 'auto_restart_server' && isHaEnabled ? 'no' : row.value}
           defaultValue={row.default}
           onChange={(val) => setParams({ ...params, [row.key]: val })}
+          disabled={row.key === 'auto_restart_server' && isHaEnabled}
+          disabledHint={CM.autoRestartHaDisabledHint}
         />
       ),
     },
@@ -479,12 +561,12 @@ export default function DatabasePropertyModal() {
           CLIENT: 'text-violet-500 bg-violet-500/8 border-violet-500/20',
           BOTH: 'text-emerald-500 bg-emerald-500/8 border-emerald-500/20',
         };
-        return <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
+        return <span className={`text-11 font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
       },
     },
-    { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{val}</span> },
+    { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{val}</span> },
     {
-      header: CM.parameterValueLabel, accessor: 'value', width: '36%', sortable: false,
+      header: CM.parameterValueLabel, accessor: 'value', width: '36%', cellClassName: 'w-[36%]', sortable: false,
       render: (_, row) => {
         const hasBoolOptions = row.type.includes('yes|no') || row.type.includes('on|off');
         const boolOptions = row.type.includes('on|off') && row.type.includes('yes|no')
@@ -496,7 +578,7 @@ export default function DatabasePropertyModal() {
             value={row.value}
             options={boolOptions.map(o => ({ value: o, label: o.toUpperCase() }))}
             onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-[220px]"
+            className="w-full max-w-none"
           />
         ) : (
           <Input
@@ -504,7 +586,7 @@ export default function DatabasePropertyModal() {
             size="sm"
             value={row.value}
             onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-[220px]"
+            className="w-full max-w-none"
           />
         );
       },
@@ -523,13 +605,14 @@ export default function DatabasePropertyModal() {
         ? CM.brokerCharsetConfigDesc
         : CM.deepSystemConfigDesc}
       icon={activeSidebar === 'Connection Information' ? 'cable' : 'tune'}
-      maxWidth="960px"
+      maxWidth="1200px"
       testId="database-property"
       footer={
         <div className="flex justify-between items-center w-full">
           <div>
-            {Object.keys(params).length > 0 && (
+            {activeSidebar === 'Server Parameter' && modifiedCount > 0 && (
               <Button
+                data-testid="database-property-reset-btn"
                 variant="ghost"
                 icon="restart_alt"
                 onClick={handleReset}
@@ -541,17 +624,33 @@ export default function DatabasePropertyModal() {
           </div>
           <div className="flex gap-2.5">
             <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-            <Button data-testid="database-property-apply-btn" variant="primary" onClick={handleApply} icon="save" className="min-w-[140px]">{CM.applyChanges}</Button>
+            <Button
+              data-testid="database-property-apply-btn"
+              variant="primary"
+              onClick={handleApply}
+              icon="save"
+              className="min-w-[140px]"
+              disabled={activeSidebar === 'Server Parameter' && modifiedCount === 0}
+            >
+              {CM.applyChanges}
+            </Button>
           </div>
         </div>
       }
     >
-      <div className="flex h-[600px] -m-5 overflow-hidden">
+      <div className="flex h-[min(720px,calc(90vh-146px))] min-h-[360px] -m-5 overflow-hidden">
 
         {/* ─── Sidebar ─── */}
-        <div className="w-[180px] bg-slate-900/60 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
+        {/* Deliberately dark in both themes (nav items below use light-on-dark
+            text/hover colors with no `dark:` variants of their own). Must be
+            opaque in light mode — a translucent bg-slate-900/60 blends toward
+            a medium gray against this panel's white background, landing
+            close enough to the inactive label's text-slate-500 to be
+            unreadable until hover. dark:bg-black/40 stays translucent since
+            it only ever blends with the panel's own dark background. */}
+        <div className="w-[180px] bg-slate-900 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
           <div className="px-4 py-4 border-b border-white/5">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
+            <p className="text-11 font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
           </div>
           <div className="py-2 flex-1">
             {navItems.map(({ id, icon, label }) => (
@@ -569,19 +668,19 @@ export default function DatabasePropertyModal() {
                 )}
                 <Icon
                   name={icon}
-                  size="15px"
+                  size="16px"
                   weight={activeSidebar === id ? 500 : 300}
                   className={activeSidebar === id ? 'text-amber-500' : 'text-slate-600 group-hover:text-slate-400'}
                 />
-                <span className="text-[10.5px] font-black uppercase tracking-widest">{label}</span>
+                <span className="text-12 font-black uppercase tracking-widest">{label}</span>
               </button>
             ))}
           </div>
           {/* Bottom context info */}
           {selectedDatabase && (
             <div className="px-4 py-3 border-t border-white/5">
-              <p className="text-[8.5px] uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
-              <p className="text-[10px] font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
+              <p className="text-10 uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
+              <p className="text-12 font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
             </div>
           )}
         </div>
@@ -599,8 +698,10 @@ export default function DatabasePropertyModal() {
                 fullWidth={false}
               />
               {/* Modified indicator */}
-              {Object.keys(params).length > 0 && (
-                <StatusBadge label={`${Object.keys(params).length} modified`} variant="amber" pulse={true} className="rounded-full" />
+              {modifiedCount > 0 && (
+                <div data-testid="database-property-modified-count">
+                  <StatusBadge label={`${modifiedCount} modified`} variant="amber" pulse={true} className="rounded-full" />
+                </div>
               )}
             </div>
           )}
@@ -611,8 +712,8 @@ export default function DatabasePropertyModal() {
               <div className="h-full flex flex-col items-center justify-center gap-5">
                 <div className="w-10 h-10 border-2 border-amber-500/10 border-t-amber-500 rounded-full animate-spin" />
                 <div className="text-center">
-                  <p className="text-[9.5px] uppercase tracking-[0.2em] text-slate-400 font-black mb-1">{CM.loadingLabel}</p>
-                  <p className="text-[10.5px] text-slate-400 dark:text-slate-500 italic font-medium">{CM.queryingHostRegistry}</p>
+                  <p className="text-11 uppercase tracking-[0.2em] text-slate-400 font-black mb-1">{CM.loadingLabel}</p>
+                  <p className="text-12 text-slate-400 dark:text-slate-500 italic font-medium">{CM.queryingHostRegistry}</p>
                 </div>
               </div>
 
@@ -627,8 +728,8 @@ export default function DatabasePropertyModal() {
                 <div className="space-y-3 p-5 bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/6 rounded-xl">
                   <div className="flex items-center gap-4">
                     <div className="w-[140px] shrink-0">
-                      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.brokerIp}</p>
-                      <p className="text-[8.5px] font-mono text-slate-400 dark:text-slate-600">{CM.publicAddress}</p>
+                      <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.brokerIp}</p>
+                      <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.publicAddress}</p>
                     </div>
                     <div className="flex-1">
                       <Input
@@ -642,8 +743,8 @@ export default function DatabasePropertyModal() {
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
                     <div className="w-[140px] shrink-0">
-                      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.servicePort}</p>
-                      <p className="text-[8.5px] font-mono text-slate-400 dark:text-slate-600">{CM.activeBroker}</p>
+                      <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.servicePort}</p>
+                      <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.activeBroker}</p>
                     </div>
                     <div className="flex-1">
                       <Select
@@ -657,8 +758,8 @@ export default function DatabasePropertyModal() {
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
                     <div className="w-[140px] shrink-0">
-                      <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
-                      <p className="text-[8.5px] font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
+                      <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
+                      <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
                     </div>
                     <div className="flex-1">
                       <Select
@@ -698,7 +799,7 @@ export default function DatabasePropertyModal() {
 
                 <div className="space-y-3">
                   <SectionHeader title={CM.standardParameters} icon="settings" />
-                  <Table columns={generalColumns} data={generalRows} zebra bordered />
+                  <Table columns={generalColumns} data={generalRows} zebra bordered showEmptyStateAsRow />
                 </div>
               </div>
 
@@ -711,7 +812,7 @@ export default function DatabasePropertyModal() {
                   </InfoBanner>
                 </div>
                 <div className="px-6 pb-6">
-                  <Table columns={advancedColumns} data={advancedRows} zebra bordered />
+                  <Table columns={advancedColumns} data={advancedRows} zebra bordered showEmptyStateAsRow />
                 </div>
               </div>
             )}

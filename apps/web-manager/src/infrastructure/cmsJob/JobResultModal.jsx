@@ -2,14 +2,15 @@ import React from 'react';
 import { Modal } from '../../components/ds/layout/Modal';
 import { ModalStatusSuccess, ModalStatusError } from '../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../constants/useCM';
-import { getCmsJobTypeLabel } from './cmsJobLabels';
+import { getCmsJobTypeLabel, getCmsJobGuidance } from './cmsJobLabels';
+import { MaintenanceDetails } from './MaintenanceDetails';
 
 export function JobResultModal({ result, onClose }) {
   const CM = useCM();
   const op = getCmsJobTypeLabel(result.type, CM);
   const db = result.dbname || '—';
 
-  if (result.status === 'succeeded') {
+  if (result.status === 'succeeded' && !result.outcomeUnknown) {
     return (
       <Modal
         isOpen
@@ -26,7 +27,9 @@ export function JobResultModal({ result, onClose }) {
           message={db !== '—' ? `"${db}"` : undefined}
           onConfirm={onClose}
           confirmText={CM.ok}
-        />
+        >
+          <MaintenanceDetails key={result.jobId} job={result} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
@@ -44,11 +47,15 @@ export function JobResultModal({ result, onClose }) {
       testId="job-result"
     >
       <ModalStatusError
-        title={CM.jobNotifyFailed(op, db)}
+        title={result.outcomeUnknown ? CM.jobOutcomeUnknown : CM.jobNotifyFailed(op, db)}
+        message={result.outcomeUnknown ? CM.jobOutcomeUnknownMessage : undefined}
         error={errMsg}
+        guidance={result.outcomeUnknown ? undefined : getCmsJobGuidance(result.type, CM)}
         onCancel={onClose}
         cancelText={CM.dismiss}
-      />
+      >
+        <MaintenanceDetails key={result.jobId} job={result} />
+      </ModalStatusError>
     </Modal>
   );
 }

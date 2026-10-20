@@ -12,6 +12,7 @@ import type { CmsHostLoginClientResponse } from '@api-interfaces';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import {
   flattenHanodelist,
+  formatAuditLog,
   isHostHaModeOnFromCubridConf,
   resolveCurrentNodeRole,
 } from '@util';
@@ -26,6 +27,8 @@ import {
  */
 @Injectable()
 export class CmsAuthService {
+  private readonly logger = new Logger(CmsAuthService.name);
+
   constructor(
     private readonly client: CmsHttpsClientService,
     private readonly repository: UserRepositoryService,
@@ -61,7 +64,31 @@ export class CmsAuthService {
       clientver: '11.4', // Request-shaped only; arbitrary string, no CMS behavior impact
     };
 
+    this.logger.log(
+      formatAuditLog('cms_request', {
+        user: userId,
+        method: 'POST',
+        address: url,
+        hostUid: uid,
+        task: request.task,
+        body: request,
+      })
+    );
+
     const response = await this.client.postPublic<LoginCmsRequest, LoginCmsResponse>(url, request);
+
+    this.logger.log(
+      formatAuditLog('cms_response', {
+        user: userId,
+        method: 'POST',
+        address: url,
+        hostUid: uid,
+        task: request.task,
+        status: response?.status ?? 'unknown',
+        execTime: response?.__EXEC_TIME,
+        payload: response,
+      })
+    );
 
     checkCmsStatusError(response, 'CMS login failed');
     if (!response.token) {
@@ -82,10 +109,20 @@ export class CmsAuthService {
       return user;
     });
 
-    return this.buildHaLoginPayload(userId, uid);
+    return this.getHaInfo(userId, uid);
   }
 
-  private async buildHaLoginPayload(userId: string, uid: string): Promise<CmsHostLoginClientResponse> {
+  /**
+   * Re-derives the same HA role/peer payload `login` returns, without
+   * re-authenticating — for refreshing a host's HA badge after something
+   * that can change its role (e.g. Service Start/Stop's `ha_start`/`ha_stop`)
+   * without the client having to log in again.
+   *
+   * @param userId User ID from JWT
+   * @param uid Host UID
+   * @returns HA-aware payload (`isHA` false has no extra fields; true includes node role and peers)
+   */
+  public async getHaInfo(userId: string, uid: string): Promise<CmsHostLoginClientResponse> {
     const conf = await this.cmsConfigService.getAllSystemParam(userId, uid, CMS_CONFNAME_CUBRID);
     if (!isHostHaModeOnFromCubridConf(conf)) {
       return { success: true, isHA: false };
@@ -124,9 +161,29 @@ export class CmsAuthService {
       clientver: '13.23', // Same as login: request placeholder, no behavioral effect
     };
 
+    this.logger.log(
+      formatAuditLog('cms_request', {
+        method: 'POST',
+        address: url,
+        task: requestData.task,
+        body: requestData,
+      })
+    );
+
     const response = await this.client.postPublic<LoginCmsRequest, LoginCmsResponse>(
       url,
       requestData
+    );
+
+    this.logger.log(
+      formatAuditLog('cms_response', {
+        method: 'POST',
+        address: url,
+        task: requestData.task,
+        status: response?.status ?? 'unknown',
+        execTime: response?.__EXEC_TIME,
+        payload: response,
+      })
     );
 
     checkCmsStatusError(response, 'CMS login failed');

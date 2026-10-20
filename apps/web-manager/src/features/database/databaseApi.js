@@ -13,6 +13,18 @@ export const databaseApi = {
   stopDatabase: (hostUid, dbname) => {
     return apiClient.post(`/${hostUid}/database/stop/${encodeURIComponent(dbname)}`, {});
   },
+  startAllDatabases: (hostUid, dbnames) => {
+    return apiClient.post(`/${hostUid}/database/start-all`, { dbnames });
+  },
+  stopAllDatabases: (hostUid, dbnames) => {
+    return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames });
+  },
+  startWholeService: (hostUid) => {
+    return apiClient.post(`/${hostUid}/database/service/start`, {});
+  },
+  stopWholeService: (hostUid) => {
+    return apiClient.post(`/${hostUid}/database/service/stop`, {});
+  },
   getVolumeInfo: (hostUid, dbname) => {
     const url = `/${hostUid}/database/volume-info/${encodeURIComponent(dbname)}`;
     // Do not share a response across login sessions.
@@ -66,8 +78,14 @@ export const databaseApi = {
   loginDatabaseWithProfile: (hostUid, dbname) => {
     return apiClient.post(`/${hostUid}/database/users/login-with-profile/${encodeURIComponent(dbname)}`, {});
   },
+  logoutDatabase: (hostUid, dbname) => {
+    return apiClient.post(`/${hostUid}/database/users/logout/${encodeURIComponent(dbname)}`, {});
+  },
   registerDatabase: (hostUid, dbname, payload) => {
     return apiClient.post(`/${hostUid}/database/register/${encodeURIComponent(dbname)}`, payload);
+  },
+  deleteDatabaseProfile: (hostUid, dbname) => {
+    return apiClient.delete(`/${hostUid}/database/register/${encodeURIComponent(dbname)}`);
   },
   addBackupSchedule: (hostUid, dbname, payload) => {
     return apiClient.post(`/${hostUid}/database/backup-schedule/${dbname}`, payload);

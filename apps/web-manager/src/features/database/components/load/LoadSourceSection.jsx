@@ -47,7 +47,7 @@ const DraggablePath = ({ value }) => {
       onMouseMove={handleMouseMove}
       onMouseUp={stopDrag}
       onMouseLeave={stopDrag}
-      className="font-mono text-[11px] text-slate-500 dark:text-slate-400 block max-w-[260px] overflow-x-auto whitespace-nowrap cursor-grab active:cursor-grabbing select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="font-mono text-13 text-slate-500 dark:text-slate-400 block max-w-[260px] overflow-x-auto whitespace-nowrap cursor-grab active:cursor-grabbing select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {value}
     </span>
@@ -57,9 +57,9 @@ const DraggablePath = ({ value }) => {
 const TypeBadge = ({ value }) => (
   <div className="flex items-center gap-2">
     <div className="w-5 h-5 rounded-md bg-amber-500/10 flex items-center justify-center shrink-0">
-      <Icon name={typeIcon[value] || 'description'} size="11px" weight={500} className="text-amber-500" />
+      <Icon name={typeIcon[value] || 'description'} size="12px" weight={500} className="text-amber-500" />
     </div>
-    <Typography variant="caption" className="font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[10px]">
+    <Typography variant="caption" className="font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-12">
       {value}
     </Typography>
   </div>
@@ -106,7 +106,7 @@ export default function LoadSourceSection({
       width: '175px',
       align: 'right',
       render: (value) => (
-        <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500 tabular-nums whitespace-nowrap">
+        <span className="font-mono text-13 text-slate-400 dark:text-slate-500 tabular-nums whitespace-nowrap">
           {value}
         </span>
       )
@@ -148,8 +148,8 @@ export default function LoadSourceSection({
             />
 
             {radio === 0 && dataSource.length > 0 && (
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1.5 mt-2 pl-1">
-                <Icon name="check_box_outline_blank" size="11px" className="text-amber-500/60" />
+              <p className="text-12 text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1.5 mt-2 pl-1">
+                <Icon name="check_box_outline_blank" size="12px" className="text-amber-500/60" />
                 {dataSource.filter(d => d.checked).length} of {dataSource.length} volumes selected
               </p>
             )}

@@ -1,4 +1,4 @@
-import React, {  useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDeleteBackupPlanModal, deleteBackupSchedule, fetchBackupSchedule } from '../databaseSlice';
 import { useCM } from '../../../constants/useCM';
@@ -14,12 +14,6 @@ import { ModalStatusLoading,
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 
-// view states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
-
 export default function DeleteBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -28,7 +22,6 @@ export default function DeleteBackupPlanModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   
   const { 
-
     error: actionError, 
     startAction, 
     endSuccess, 
@@ -62,10 +55,6 @@ export default function DeleteBackupPlanModal() {
       endSuccess(CM.backupPlanRemovedMsg(selectedBackupId));
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: selectedDatabase }));
 
-      // Auto close after brief success
-      setTimeout(() => {
-        dispatch(closeDeleteBackupPlanModal());
-      }, 1500);
     } catch (err) {
       endError(typeof err === 'string' ? err : (err.message || CM.deleteBackupPlanRejectedMsg));
     }
@@ -108,6 +97,7 @@ export default function DeleteBackupPlanModal() {
         <ModalStatusError
           title={CM.operationInterrupted}
           error={actionError}
+          guidance={CM.deleteBackupPlanGuidance}
           onRetry={handleDelete}
           onCancel={resetAction}
           retryText={CM.retryDeletion}
@@ -140,8 +130,8 @@ export default function DeleteBackupPlanModal() {
         </div>
 
         <div className="space-y-2">
-          <Typography variant="h4" className="text-[16px] font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteBackupPlanPrompt}</Typography>
-          <Typography variant="p" className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
+          <Typography variant="h4" className="text-18 font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteBackupPlanPrompt}</Typography>
+          <Typography variant="p" className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
             <span className="text-rose-500 font-black">"{selectedBackupId}"</span> — <span className="font-bold text-slate-900 dark:text-white">{selectedDatabase}</span>
           </Typography>
         </div>

@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeTransactionInfoModal, openKillTransactionModal } from '../databaseSlice';
 import { databaseApi } from '../databaseApi';
-import { extractTransactionList } from '../transactionUtils';
-import { Input } from '../../../components/ds/forms/Input';
+import { extractTransactionList, isHaReplicationProcess } from '../transactionUtils';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { EmptyState } from '../../../components/ds/feedback/EmptyState';
+import { Table } from '../../../components/ds/layout/Table';
 import { ModalStatusLoading } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 
@@ -19,9 +18,10 @@ const VIEW_ERROR = 'error';
 export default function TransactionInfoModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isTransactionInfoModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { isTransactionInfoModalOpen, transactionKillSignal } = useSelector((state) => state.databaseUI, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
 
   const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
 
@@ -29,18 +29,15 @@ export default function TransactionInfoModal() {
   const [transactions, setTransactions] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedTranIndex, setSelectedTranIndex] = useState(null);
-  const [dbuser, setDbuser] = useState('dba');
-  const [dbpasswd, setDbpasswd] = useState('');
 
+  // killtransaction/gettransactioninfo (CUBRID 11+) don't take dbuser/dbpasswd —
+  // they run under the already-authenticated CMS session, so there's nothing
+  // for a user to log into here. Kept as fixed defaults purely for CMS's
+  // pre-11 legacy branch, which does still read them.
   const fetchTransactionInfo = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
     if (!isActive) {
       setErrorMsg('Database is stopped. Transaction information is only available when the database is running.');
-      setView(VIEW_ERROR);
-      return;
-    }
-    if (!dbuser.trim()) {
-      setErrorMsg(CM.dbUserRequiredForDiagnosticsMsg);
       setView(VIEW_ERROR);
       return;
     }
@@ -50,8 +47,8 @@ export default function TransactionInfoModal() {
 
     try {
       const response = await databaseApi.getTransactionInfo(selectedHostUid, selectedDatabase, {
-        dbuser: dbuser.trim(),
-        dbpasswd,
+        dbuser: 'dba',
+        dbpasswd: '',
       });
       setTransactions(extractTransactionList(response));
       setView(VIEW_SUCCESS);
@@ -68,6 +65,17 @@ export default function TransactionInfoModal() {
     }
   }, [isTransactionInfoModalOpen, selectedHostUid, selectedDatabase]);
 
+  // A kill only ever happens from a transaction list this modal already fetched,
+  // so the credentials are known-good — safe to silently refetch instead of
+  // dropping the user back to the auth screen.
+  const lastSeenKillSignal = useRef(transactionKillSignal);
+  useEffect(() => {
+    if (!isTransactionInfoModalOpen || view !== VIEW_SUCCESS) return;
+    if (lastSeenKillSignal.current === transactionKillSignal) return;
+    lastSeenKillSignal.current = transactionKillSignal;
+    fetchTransactionInfo();
+  }, [transactionKillSignal]);
+
   if (!isTransactionInfoModalOpen) return null;
 
   const handleClose = () => dispatch(closeTransactionInfoModal());
@@ -76,6 +84,28 @@ export default function TransactionInfoModal() {
     const selectedTran = transactions.find((t) => String(t.tranindex) === String(selectedTranIndex));
     if (selectedTran) dispatch(openKillTransactionModal(selectedTran));
   };
+
+  const columns = [
+    { accessor: 'tranindex', header: CM.tranIndex, sortable: true, cellClassName: 'font-mono' },
+    { accessor: '@user', header: CM.userNameCol, render: (value) => value || '-' },
+    { accessor: 'host', header: CM.host, render: (value) => value || '-', cellClassName: 'font-mono' },
+    { accessor: 'pid', header: CM.processId, render: (value) => value || '-', cellClassName: 'font-mono' },
+    {
+      accessor: 'program',
+      header: CM.programName,
+      render: (value, row) => (
+        <span className="inline-flex items-center gap-1">
+          {isHaReplicationProcess(row.program) && (
+            <Icon name="warning" size="12px" weight={400} className="text-amber-500" title={CM.haReplicationProcessWarning} />
+          )}
+          {value || '-'}
+        </span>
+      ),
+    },
+    { accessor: 'query_time', header: CM.queryTime, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'tran_time', header: CM.tranTime, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+    { accessor: 'wait_for_lock_holder', header: CM.waitHolder, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
+  ];
 
   if (view === VIEW_LOADING) {
     return (
@@ -89,7 +119,7 @@ export default function TransactionInfoModal() {
     return (
       <Modal isOpen title={CM.transactionInformation} icon="error" iconVariant="danger" onClose={handleClose} maxWidth="540px" testId="transaction-info">
         <div className="py-8 space-y-4 text-center">
-          <Typography variant="p" className="text-[13px] text-slate-600 dark:text-slate-300">
+          <Typography variant="p" className="text-15 text-slate-600 dark:text-slate-300">
             {CM.error}
           </Typography>
           <Typography variant="caption" className="text-rose-500 font-mono block break-words px-4">
@@ -126,17 +156,13 @@ export default function TransactionInfoModal() {
       }
     >
       <div className="flex flex-col h-[540px] animate-in fade-in slide-in-from-bottom-4 duration-400">
-        <div className="mb-4 grid grid-cols-2 gap-3 shrink-0">
-          <Input data-testid="transaction-info-dbuser-input" label={CM.userName} value={dbuser} onChange={(e) => setDbuser(e.target.value)} icon="account_circle" size="sm" />
-          <Input data-testid="transaction-info-dbpasswd-input" type="password" label={CM.password} value={dbpasswd} onChange={(e) => setDbpasswd(e.target.value)} icon="password" size="sm" placeholder={CM.emptyAllowedPlaceholder} />
-        </div>
         <div className="mb-4 flex items-center justify-between bg-slate-50/80 dark:bg-black/20 border border-slate-200 dark:border-white/8 rounded-xl px-4 py-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
               <Icon name="sensors" size="sm" weight={300} />
             </div>
             <div className="min-w-0">
-              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-[10px] block leading-none">
+              <Typography variant="label" className="text-slate-400 uppercase tracking-widest font-bold text-13 block leading-none">
                 {CM.activeTransactionsOf} <span className="text-emerald-500 ml-1">{transactions.length}</span>
               </Typography>
             </div>
@@ -144,46 +170,17 @@ export default function TransactionInfoModal() {
         </div>
 
         <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden flex-1 overflow-y-auto min-h-0">
-          {transactions.length === 0 ? (
-            <EmptyState icon="info" title={CM.transactionInformation} subtitle={CM.activeTransactionsOf} py="py-12" />
-          ) : (
-            <table className="w-full text-left text-[12px]">
-              <thead className="bg-slate-50 dark:bg-white/5 text-[10px] uppercase text-slate-500 sticky top-0">
-                <tr>
-                  <th className="px-4 py-2">{CM.tranIndex}</th>
-                  <th className="px-4 py-2">{CM.userNameCol}</th>
-                  <th className="px-4 py-2">{CM.host}</th>
-                  <th className="px-4 py-2">{CM.processId}</th>
-                  <th className="px-4 py-2">{CM.programName}</th>
-                  <th className="px-4 py-2 text-right">{CM.queryTime}</th>
-                  <th className="px-4 py-2 text-right">{CM.tranTime}</th>
-                  <th className="px-4 py-2 text-right">{CM.waitHolder}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {transactions.map((tran, idx) => {
-                  const tranIndex = tran.tranindex;
-                  const isSelected = String(selectedTranIndex) === String(tranIndex);
-                  return (
-                    <tr
-                      key={idx}
-                      className={`cursor-pointer ${isSelected ? 'bg-amber-500/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
-                      onClick={() => setSelectedTranIndex(tranIndex)}
-                    >
-                      <td className="px-4 py-2 font-mono">{tranIndex}</td>
-                      <td className="px-4 py-2">{tran['@user'] || '-'}</td>
-                      <td className="px-4 py-2 font-mono">{tran.host || '-'}</td>
-                      <td className="px-4 py-2 font-mono">{tran.pid || '-'}</td>
-                      <td className="px-4 py-2">{tran.program || '-'}</td>
-                      <td className="px-4 py-2 text-right font-mono">{tran.query_time ?? '-'}</td>
-                      <td className="px-4 py-2 text-right font-mono">{tran.tran_time ?? '-'}</td>
-                      <td className="px-4 py-2 text-right font-mono">{tran.wait_for_lock_holder ?? '-'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          <Table
+            columns={columns}
+            data={transactions}
+            emptyMessage={CM.activeTransactionsOf}
+            onRowClick={(tran) => setSelectedTranIndex(tran.tranindex)}
+            isRowSelected={(tran) => String(selectedTranIndex) === String(tran.tranindex)}
+            getRowAriaLabel={(tran) => `${CM.tranIndex} ${tran.tranindex}`}
+            stickyHeader
+            selectable
+            showEmptyStateAsRow
+          />
         </div>
       </div>
     </Modal>

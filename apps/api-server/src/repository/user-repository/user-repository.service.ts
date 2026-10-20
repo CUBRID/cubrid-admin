@@ -67,7 +67,7 @@ export class UserRepositoryService {
       host_groups: {},
       ha_mon_list: {},
       resource_mon_list: {},
-      user_preference: { dashboardInterval: 0, brokerStatusInterval: 0 },
+      user_preference: { dashboardInterval: 3, brokerStatusInterval: 0 },
     };
     await this.storageService.createAndWrite(
       hashedId,

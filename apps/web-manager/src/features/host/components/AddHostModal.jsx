@@ -11,7 +11,7 @@ import { addHost,
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
-import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection } from '../hostGroupUtils';
+import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
@@ -70,7 +70,12 @@ export default function AddHostModal({ isOpen, onClose }) {
 
   const validate = () => {
     const errs = {};
-    if (!formData.alias.trim()) errs.alias = CM.hostNameRequired;
+    const trimmedAlias = formData.alias.trim();
+    if (!trimmedAlias) {
+      errs.alias = CM.hostNameRequired;
+    } else if (flattenHostsFromGroups(hostGroups).some((h) => h.alias?.trim() === trimmedAlias)) {
+      errs.alias = CM.hostNameDuplicate;
+    }
     if (!formData.address.trim()) errs.address = CM.addressRequired;
     if (!formData.port.trim()) errs.port = CM.portRequired;
     if (!formData.id.trim()) errs.id = CM.usernameRequired;
@@ -155,6 +160,7 @@ export default function AddHostModal({ isOpen, onClose }) {
       isOpen={isOpen}
       onClose={handleClose}
       onSubmit={handleSave}
+      submitDisabled={loading}
       title={CM.newConnection}
       icon="add_link"
       maxWidth="max-w-[500px]"
@@ -194,12 +200,12 @@ export default function AddHostModal({ isOpen, onClose }) {
         {apiError && (
           <div className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
             <Icon name="error_outline" size="sm" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
-            <p className="text-[11.5px] text-rose-500 font-medium flex-1 leading-relaxed">{apiError}</p>
+            <p className="text-13 text-rose-500 font-medium flex-1 leading-relaxed">{apiError}</p>
             <button
               onClick={() => dispatch(clearHostError())}
               className="text-rose-400 hover:text-rose-600 transition-colors shrink-0"
             >
-              <Icon name="close" size="16px" weight={300} />
+              <Icon name="close" size="17px" weight={300} />
             </button>
           </div>
         )}
@@ -235,8 +241,8 @@ export default function AddHostModal({ isOpen, onClose }) {
           className="mt-8"
         />
         <div className="px-1">
-          <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="sm:col-span-3">
               <Input
                 label={CM.ipAddressDomain}
                 name="address"
@@ -249,7 +255,7 @@ export default function AddHostModal({ isOpen, onClose }) {
                 required
               />
             </div>
-            <div className="col-span-1">
+            <div className="sm:col-span-1">
               <Input
                 label={CM.port}
                 name="port"
@@ -268,7 +274,7 @@ export default function AddHostModal({ isOpen, onClose }) {
         {/* Section 3: Credentials */}
         <SectionHeader title={CM.credentials} icon="lock" className="mt-8" />
         <div className="px-1">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={CM.username}
               name="id"

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { closeKillTransactionModal } from '../databaseSlice';
+import { closeKillTransactionModal, notifyTransactionKilled } from '../databaseSlice';
+import { dbKey } from '../dbKey';
 import { databaseApi } from '../databaseApi';
-import { buildKillParameter } from '../transactionUtils';
+import { buildKillParameter, isHaReplicationProcess } from '../transactionUtils';
 import { useCM } from '../../../constants/useCM';
 
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -10,15 +11,22 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
 import { Typography } from '../../../components/ds/foundation/Typography';
+import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { ModalStatusLoading, ModalStatusSuccess, ModalStatusError } from '../../../components/ds/feedback/ActionStatus';
 
-export default function KillTransactionModal({ onTransactionKilled }) {
+export default function KillTransactionModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isKillTransactionModalOpen, killTransactionData } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+
+  // killtransaction only needs the DBA password (no username) to authorize
+  // killing another user's transaction. CMS otherwise falls back to whatever
+  // a prior "Login Database" cached server-side, which may be stale or
+  // absent — sending it directly here takes priority over that cache.
+  const alreadyLoggedIn = !!selectedDatabase && loggedInDatabases.includes(dbKey(selectedHostUid, selectedDatabase));
 
   const {
     error: actionError,
@@ -32,11 +40,13 @@ export default function KillTransactionModal({ onTransactionKilled }) {
   } = useActionState();
 
   const [killType, setKillType] = useState('i');
+  const [dbpasswd, setDbpasswd] = useState('');
 
   useEffect(() => {
     if (isKillTransactionModalOpen) {
       resetAction();
       setKillType('i');
+      setDbpasswd('');
     }
   }, [isKillTransactionModalOpen, resetAction]);
 
@@ -54,17 +64,21 @@ export default function KillTransactionModal({ onTransactionKilled }) {
         return;
       }
 
-      await databaseApi.killTransaction(selectedHostUid, selectedDatabase, { type: killType, parameter });
+      await databaseApi.killTransaction(selectedHostUid, selectedDatabase, {
+        type: killType,
+        parameter,
+        ...(dbpasswd && { dbpasswd }),
+      });
       endSuccess();
-      onTransactionKilled?.();
-
-      setTimeout(() => dispatch(closeKillTransactionModal()), 800);
+      dispatch(notifyTransactionKilled());
     } catch (err) {
       endError(err?.response?.data?.note || err?.message || CM.error);
     }
   };
 
   const handleClose = () => dispatch(closeKillTransactionModal());
+
+  const isHaTarget = isHaReplicationProcess(killTransactionData?.program || killTransactionData?.pname);
 
   if (isLoading) {
     return (
@@ -93,6 +107,7 @@ export default function KillTransactionModal({ onTransactionKilled }) {
         <ModalStatusError
           title={CM.failure}
           error={actionError}
+          guidance={CM.killTransactionGuidance}
           onRetry={handleKill}
           onCancel={resetAction}
           cancelText={CM.close}
@@ -109,6 +124,7 @@ export default function KillTransactionModal({ onTransactionKilled }) {
       subtitle={selectedDatabase ? `${CM.databaseName}: ${selectedDatabase}` : undefined}
       icon="cancel"
       maxWidth="520px"
+      onSubmit={handleKill}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -119,6 +135,12 @@ export default function KillTransactionModal({ onTransactionKilled }) {
       }
     >
       <div className="space-y-6">
+        {isHaTarget && (
+          <InfoBanner variant="danger" title={CM.haReplicationProcessTitle}>
+            {CM.haReplicationProcessWarning}
+          </InfoBanner>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <Typography variant="caption" className="text-slate-500 ml-1">{CM.userNameCol}</Typography>
@@ -148,6 +170,17 @@ export default function KillTransactionModal({ onTransactionKilled }) {
               { value: 'h', label: CM.killSameHost },
               { value: 'p', label: CM.killSameProgram },
             ]}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Typography variant="caption" className="text-slate-500 ml-1">{CM.dbaPassword}</Typography>
+          <Input
+            type="password"
+            value={dbpasswd}
+            onChange={(e) => setDbpasswd(e.target.value)}
+            icon="password"
+            placeholder={alreadyLoggedIn ? CM.alreadyLoggedInPlaceholder : CM.emptyAllowedPlaceholder}
           />
         </div>
       </div>

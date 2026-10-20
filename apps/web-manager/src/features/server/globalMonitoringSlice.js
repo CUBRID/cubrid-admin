@@ -30,7 +30,7 @@ export const fetchHostSummary = createAsyncThunk(
 
       // 3. Process Volume Aggregation (Legacy Logic)
       let totalPagePerm = 0, freePagePerm = 0;
-      let totalPagePermTemp = 0;
+      let totalPagePermTemp = 0, freePagePermTemp = 0;
       let totalPageTempTemp = 0, freePageTempTemp = 0;
       let freespaceOnStorage = 0;
 
@@ -40,22 +40,32 @@ export const fetchHostSummary = createAsyncThunk(
         vol.spaceinfo.forEach(s => {
           const type = (s.type || '').toUpperCase();
           const purpose = (s.purpose || '').toUpperCase();
-          
+          // CMS returns totalpage/freepage as strings (e.g. "8192"), and some
+          // volume rows (e.g. log volumes) return a blank/space value. Summing
+          // those directly with += on a numeric accumulator silently degrades
+          // into string concatenation the moment one value is a string, which
+          // then yields NaN downstream once a non-digit sneaks into the mix —
+          // parseInt(...) || 0 keeps every accumulation strictly numeric.
+          const totalPage = parseInt(s.totalpage) || 0;
+          const freePage = parseInt(s.freepage) || 0;
+
           if (type === 'DATA' || type === 'INDEX' || type === 'GENERIC') {
-            totalPagePerm += s.totalpage || 0;
-            freePagePerm += s.freepage || 0;
+            totalPagePerm += totalPage;
+            freePagePerm += freePage;
           } else if (type === 'TEMP') {
-            totalPagePermTemp += s.totalpage || 0;
+            totalPagePermTemp += totalPage;
+            freePagePermTemp += freePage;
           } else if (type === 'PERMANENT') {
             if (purpose === 'PERMANENT') {
-              totalPagePerm += s.totalpage || 0;
-              freePagePerm += s.freepage || 0;
+              totalPagePerm += totalPage;
+              freePagePerm += freePage;
             } else {
-              totalPagePermTemp += s.totalpage || 0;
+              totalPagePermTemp += totalPage;
+              freePagePermTemp += freePage;
             }
           } else if (type === 'TEMPORARY') {
-            totalPageTempTemp += s.totalpage || 0;
-            freePageTempTemp += s.freepage || 0;
+            totalPageTempTemp += totalPage;
+            freePageTempTemp += freePage;
           }
         });
       });
@@ -111,7 +121,7 @@ export const fetchHostSummary = createAsyncThunk(
           version: envInfo?.os_info || envInfo?.os || 'Unknown',
           brokerPorts: brokerPorts.join(', '),
           permFree: totalPagePerm > 0 ? Math.round((freePagePerm * 100) / totalPagePerm) : -1,
-          permTempFree: totalPagePermTemp > 0 ? Math.round((freePageTempTemp * 100) / totalPagePermTemp) : -1,
+          permTempFree: totalPagePermTemp > 0 ? Math.round((freePagePermTemp * 100) / totalPagePermTemp) : -1,
           tempTempFree: totalPageTempTemp > 0 ? Math.round((freePageTempTemp * 100) / totalPageTempTemp) : -1,
         }
       };

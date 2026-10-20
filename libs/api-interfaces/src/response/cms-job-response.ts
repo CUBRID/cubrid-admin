@@ -20,6 +20,26 @@ export type CreateCmsJobResponse = {
   jobId: string;
 };
 
+/** Allowlisted execution options; never includes database credentials. */
+export type MaintenanceSummary =
+  | {
+      operation: 'statistics-update';
+      scope: 'all-classes' | 'selected-class';
+      className?: string;
+      scanMethod: 'unknown' | 'sampling' | 'fullscan';
+    }
+  | {
+      operation: 'consistency-check';
+      scope: 'entire-database';
+      repairRequested: boolean;
+    };
+
+export type MaintenanceResult = {
+  success: boolean;
+  /** Utility text only, with request secrets redacted; absent when CMS returns no detail. */
+  output?: string;
+};
+
 /**
  * Job status polled by the client until terminal state.
  */
@@ -33,6 +53,7 @@ export type CmsJobStatusResponse = {
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
+  maintenanceSummary?: MaintenanceSummary;
   result?: unknown;
   error?: { message: string; code?: string; cmsStatus?: string };
 };

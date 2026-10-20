@@ -98,6 +98,24 @@ function hasSameDefinedAlias(a: string | undefined, b: string | undefined): bool
   return left !== '' && right !== '' && left === right;
 }
 
+/** Alias is a user-facing nickname, not a connection identity, so it's checked
+ * separately from findDuplicateHost — two different physical hosts can't share
+ * one, even though their address/port/id are all different. */
+export function findDuplicateAlias(
+  user: User,
+  alias: string,
+  excludeHostUid?: string
+): HostInfo | undefined {
+  let found: HostInfo | undefined;
+  forEachHost(user, ({ host }) => {
+    if (found || (excludeHostUid && host.uid === excludeHostUid)) return;
+    if (hasSameDefinedAlias(host.alias, alias)) {
+      found = host;
+    }
+  });
+  return found;
+}
+
 export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
   const out: SafeHostGroupsMap = {};
   for (const [groupId, group] of Object.entries(readHostGroups(user))) {
@@ -113,6 +131,18 @@ export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
     out[UNGROUPED_GROUP_ID] = { name: 'Ungrouped', hosts: {} };
   }
   return out;
+}
+
+/**
+ * Group names are display strings only, never the map key groups are stored
+ * under (a real group's key is always a generated uuid — see createEmptyGroup
+ * — and UNGROUPED_GROUP_ID is a fixed literal in that same key namespace, not
+ * derived from any name). So a user naming a group "__ungrouped__" can't
+ * actually collide with the reserved bucket. This guard exists purely so
+ * group names don't read like an internal/reserved token in the sidebar.
+ */
+export function isValidGroupNameStart(name: string): boolean {
+  return /^[\p{L}\p{N}]/u.test(name);
 }
 
 export function createEmptyGroup(user: User, name: string): string {
@@ -149,6 +179,9 @@ export function updateGroup(
     const trimmed = String(patch.name ?? '').trim();
     if (!trimmed) {
       throw new Error('BLANK_GROUP_NAME_NOT_ALLOWED');
+    }
+    if (!isValidGroupNameStart(trimmed)) {
+      throw new Error('GROUP_NAME_INVALID_START');
     }
     group.name = trimmed;
   }

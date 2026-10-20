@@ -8,7 +8,8 @@ type DbProfilesLike = Record<string, unknown> | null | undefined;
  */
 export function mapStartInfoToClientResponse(
   cmsStart: StartInfoCmsResponse,
-  dbProfiles: DbProfilesLike
+  dbProfiles: DbProfilesLike,
+  haDbNames: Iterable<string> = []
 ): StartInfoClientResponse {
   const profileMap = dbProfiles ?? {};
   const dbs = cmsStart.dblist?.[0]?.dbs ?? [];
@@ -22,5 +23,6 @@ export function mapStartInfoToClientResponse(
         isProfileExists: !!profileMap[db.dbname],
       })),
     },
+    haDbNames: [...haDbNames],
   };
 }

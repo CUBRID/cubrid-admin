@@ -7,6 +7,17 @@ export const hostActions = {
   clearReconnectingHost: null,
 };
 
+// Plain action-type objects (not imported slice creators) to avoid a
+// circular import — most feature slices import this module, so this module
+// can't import back from databaseCoreSlice. Must stay in sync with that
+// slice's name ('databaseCore') and action name (clearDatabaseLogin).
+export const databaseActions = {
+  clearDatabaseLogin: ({ hostUid, dbname }) => ({
+    type: 'databaseCore/clearDatabaseLogin',
+    payload: { hostUid, dbname },
+  }),
+};
+
 export const registerLoginToHost = (fn) => {
   hostActions.loginToHost = fn;
 };
@@ -18,6 +29,14 @@ export const registerClearReconnectingHost = (fn) => {
 // Tracks hosts currently awaiting a user reconnect decision.
 // Suppresses duplicate 401 modal triggers while the modal is visible.
 const reconnectingHosts = new Set();
+
+// Timestamp of each host's last successful CMS (re)login. A request issued
+// just before a password-change relogin can still be in flight when CMS
+// invalidates its (now superseded) token, so its 401 lands after the fresh
+// login already succeeded — without this, that stale rejection alone pops a
+// confusing reconnect prompt for a host the user just finished reconnecting.
+const lastLoginSuccessAt = new Map();
+const STALE_TOKEN_GRACE_MS = 5000;
 
 // Directly export so ReconnectHostModal can clear the guard on close.
 export const clearReconnectingHost = (hostUid) => {
@@ -84,6 +103,19 @@ if (initialToken) {
 }
 
 const refreshingHosts = new Map();
+// Circuit breaker for the silent "session expired -> revoke, re-login,
+// retry" path below: each cycle is one dispatch(revokeHostLogin) +
+// dispatch(loginToHost) + one retried request. If the underlying CMS
+// session can't actually be restored (host unreachable, stale creds that
+// "succeed" but still don't authenticate, etc.), every poll tick and every
+// in-flight request independently re-triggers this same cycle with no
+// timer gating it — each retry's own 401 fires it again, spinning as fast
+// as the promises resolve (seen live: ~10 requests/sec). After
+// AUTO_RELOGIN_MAX_ATTEMPTS failures for a host within the window, stop
+// silently retrying and fall back to the reconnect modal instead.
+const hostAutoReloginFailures = new Map();
+const AUTO_RELOGIN_MAX_ATTEMPTS = 3;
+const AUTO_RELOGIN_WINDOW_MS = 15000;
 let isHandlingSystemSessionExpiry = false;
 let isRefreshingAccessToken = false;
 /** @type {Array<{ resolve: (token: string) => void, reject: (err: Error) => void }>} */
@@ -189,6 +221,17 @@ const getHostUidFromUrl = (url) => {
 
 apiClient.interceptors.response.use(
   (response) => {
+    if (response.config?.url?.includes('/cms-auth/login')) {
+      const hostUid = getHostUidFromUrl(response.config.url);
+      if (hostUid) lastLoginSuccessAt.set(hostUid, Date.now());
+    }
+
+    // Any successful response for a host means its session is genuinely
+    // fine again — reset the circuit breaker so a future real disconnect
+    // gets its own fresh attempts instead of inheriting an old count.
+    const successHostUid = getHostUidFromUrl(response.config?.url);
+    if (successHostUid) hostAutoReloginFailures.delete(successHostUid);
+
     const rawData = response.data;
     if (rawData && typeof rawData === 'object' && Object.prototype.hasOwnProperty.call(rawData, 'data')) {
       if (rawData.data === false || rawData.data === null || rawData.data === 0) {
@@ -259,6 +302,19 @@ apiClient.interceptors.response.use(
           return Promise.reject(error);
         }
 
+        // Once the reconnect modal is already up for this host, every branch
+        // below (INVALID_TOKEN and the generic-401 counter) must stay quiet —
+        // otherwise the generic-401 branch's own 15s window resets on its
+        // own schedule and, unaware the modal is already open, walks back
+        // through up to AUTO_RELOGIN_MAX_ATTEMPTS more full revoke+re-login+
+        // retry cycles every time it lapses, as long as polling keeps firing
+        // new requests against a host that never actually reconnected —
+        // reproducing the exact "~10 requests/sec" storm this file already
+        // has a breaker for, just on a ~15s duty cycle instead of instantly.
+        if (reconnectingHosts.has(hostUid)) {
+          return Promise.reject(error);
+        }
+
         // If the server explicitly signals an invalid/stolen token (CMS session takeover),
         // do NOT silently re-login — show the Reconnect modal so the user can decide.
         // We keep the host in authorizedHosts so all UI state stays intact.
@@ -266,8 +322,12 @@ apiClient.interceptors.response.use(
         const isInvalidTokenError = errorCode === 'INVALID_TOKEN';
 
         if (isInvalidTokenError) {
-          // If we're already waiting for the user to reconnect, silently drop this 401.
-          if (reconnectingHosts.has(hostUid)) {
+          // (Already-reconnecting hosts are dropped by the guard above.)
+          // A request in flight before a fresh (re)login can still land its 401
+          // after that login already succeeded — that's a stale race, not an
+          // actual takeover, so don't second-guess the session that's already valid.
+          const sinceLogin = Date.now() - (lastLoginSuccessAt.get(hostUid) || 0);
+          if (sinceLogin < STALE_TOKEN_GRACE_MS) {
             return Promise.reject(error);
           }
           console.warn(`Host token for ${hostUid} was invalidated (session taken over). Showing reconnect modal.`);
@@ -279,6 +339,31 @@ apiClient.interceptors.response.use(
           } catch (e) {
             reconnectingHosts.delete(hostUid);
             console.error('Failed to dispatch reconnect modal:', e);
+          }
+          return Promise.reject(error);
+        }
+
+        const failureEntry = hostAutoReloginFailures.get(hostUid);
+        const now = Date.now();
+        if (failureEntry && now - failureEntry.windowStart < AUTO_RELOGIN_WINDOW_MS) {
+          failureEntry.count += 1;
+        } else {
+          hostAutoReloginFailures.set(hostUid, { count: 1, windowStart: now });
+        }
+
+        if (hostAutoReloginFailures.get(hostUid).count > AUTO_RELOGIN_MAX_ATTEMPTS) {
+          console.warn(
+            `Host ${hostUid} exceeded ${AUTO_RELOGIN_MAX_ATTEMPTS} silent re-login attempts within ${AUTO_RELOGIN_WINDOW_MS}ms — its session can't actually be restored, stopping the retry loop and showing the reconnect modal instead.`
+          );
+          if (!reconnectingHosts.has(hostUid)) {
+            reconnectingHosts.add(hostUid);
+            try {
+              const { store } = await import('../app/store');
+              store.dispatch(hostActions.openReconnectModal(hostUid));
+            } catch (e) {
+              reconnectingHosts.delete(hostUid);
+              console.error('Failed to dispatch openReconnectModal:', e);
+            }
           }
           return Promise.reject(error);
         }
@@ -358,6 +443,28 @@ apiClient.interceptors.response.use(
       }
 
       await handleSystemSessionExpired();
+      return Promise.reject(error);
+    }
+
+    // ensureDbLogin (api-server) grants access via a short-lived session
+    // cache or a saved db-login profile — never both indefinitely. A login
+    // made without "Save Password" only lives in that cache, so once it
+    // expires (or the host token rotates) with no profile to fall back on,
+    // the *next* database action fails here even though nothing the user
+    // did looks like a logout. Bring the UI in line with that: this db no
+    // longer has a usable session, whatever the tree's padlock icon (driven
+    // by loggedInDatabases, set only at explicit login/logout) still shows.
+    if (statusCode === 400 && (apiData?.data?.code || apiData?.code) === 'MISSING_DB_CREDENTIALS') {
+      const hostUid = getHostUidFromUrl(requestUrl);
+      const dbname = apiData?.data?.dbname || apiData?.dbname;
+      if (hostUid && dbname) {
+        try {
+          const { store } = await import('../app/store');
+          store.dispatch(databaseActions.clearDatabaseLogin({ hostUid, dbname }));
+        } catch (e) {
+          console.error('Failed to dispatch clearDatabaseLogin:', e);
+        }
+      }
       return Promise.reject(error);
     }
 

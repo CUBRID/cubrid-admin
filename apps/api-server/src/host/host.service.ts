@@ -13,9 +13,11 @@ import {
   deleteGroup,
   ensureHostGroupsWritable,
   ensureUngroupedGroup,
+  findDuplicateAlias,
   findDuplicateHost,
   findHostRef,
   getHost,
+  isValidGroupNameStart,
   moveHostToGroup,
   removeHostFromUser,
   sanitizeHostGroups,
@@ -68,6 +70,11 @@ export class HostService {
         throw HostError.DuplicatedHost({ duplicatedHostId: duplicate.uid });
       }
 
+      const duplicateAlias = findDuplicateAlias(user, alias);
+      if (duplicateAlias) {
+        throw HostError.DuplicatedAlias({ duplicatedHostId: duplicateAlias.uid, alias });
+      }
+
       const newHost: HostInfo = {
         uid: uuidv4(),
         id: hostInfo.id,
@@ -104,6 +111,9 @@ export class HostService {
       if (!trimmed) {
         throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED' });
       }
+      if (!isValidGroupNameStart(trimmed)) {
+        throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START' });
+      }
       createEmptyGroup(user, trimmed);
       return user;
     });
@@ -126,6 +136,9 @@ export class HostService {
         const code = String(e?.message || '');
         if (code === 'BLANK_GROUP_NAME_NOT_ALLOWED') {
           throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED' });
+        }
+        if (code === 'GROUP_NAME_INVALID_START') {
+          throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START' });
         }
         if (code === 'DEFAULT_HOST_NOT_IN_GROUP') {
           throw HostError.InvalidFormat({ field: 'defaultHostUid', reason: 'DEFAULT_HOST_NOT_IN_GROUP' });
@@ -186,6 +199,11 @@ export class HostService {
       );
       if (duplicate) {
         throw HostError.DuplicatedHost({ duplicatedHostId: duplicate.uid });
+      }
+
+      const duplicateAlias = findDuplicateAlias(user, proposedAlias, hostUid);
+      if (duplicateAlias) {
+        throw HostError.DuplicatedAlias({ duplicatedHostId: duplicateAlias.uid, alias: proposedAlias });
       }
 
       ref.group.hosts[hostUid] = {

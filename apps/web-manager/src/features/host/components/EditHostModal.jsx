@@ -1,20 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { editHost, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
+import { editHost, moveHost, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
+import { findGroupIdForHost, orderedGroupEntries, UNGROUPED_GROUP_ID } from '../hostGroupUtils';
 import { useCM } from '../../../constants/useCM';
 
 export default function EditHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isEditHostModalOpen, hostToEditUid, hosts, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  const { isEditHostModalOpen, hostToEditUid, hosts, hostGroups, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  const isCredentialError = /password/i.test(apiError || '');
 
   const [formData, setFormData] = useState({
     id: '',
@@ -22,8 +25,14 @@ export default function EditHostModal() {
     port: '8001',
     password: '',
     alias: '',
+    groupId: UNGROUPED_GROUP_ID,
   });
   const [errors, setErrors] = useState({});
+
+  const groupOptions = useMemo(() => orderedGroupEntries(hostGroups).map(([groupId, group]) => ({
+    value: groupId,
+    label: groupId === UNGROUPED_GROUP_ID ? CM.noGroupOption : group.name,
+  })), [hostGroups, CM]);
 
   useEffect(() => {
     // Only re-populate when the modal opens (or targets a different host) —
@@ -38,11 +47,11 @@ export default function EditHostModal() {
           port: hostToEdit.port ? String(hostToEdit.port) : '8001',
           password: '',
           alias: hostToEdit.alias || '',
+          groupId: findGroupIdForHost(hostGroups, hostToEditUid) || UNGROUPED_GROUP_ID,
         });
       }
       setErrors({});
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditHostModalOpen, hostToEditUid]);
 
   if (!isEditHostModalOpen) return null;
@@ -56,7 +65,12 @@ export default function EditHostModal() {
 
   const validate = () => {
     const errs = {};
-    if (!formData.alias.trim()) errs.alias = CM.hostNameRequired;
+    const trimmedAlias = formData.alias.trim();
+    if (!trimmedAlias) {
+      errs.alias = CM.hostNameRequired;
+    } else if (hosts.some((h) => h.uid !== hostToEditUid && h.alias?.trim() === trimmedAlias)) {
+      errs.alias = CM.hostNameDuplicate;
+    }
     if (!formData.address.trim()) errs.address = CM.addressRequired;
     if (!formData.port.trim()) errs.port = CM.portRequired;
     if (!formData.id.trim()) errs.id = CM.usernameRequired;
@@ -76,6 +90,14 @@ export default function EditHostModal() {
     return payload;
   };
 
+  const persistHostChanges = async (targetUid) => {
+    await dispatch(editHost({ hostUid: targetUid, payload: buildPayload() })).unwrap();
+    const currentGroupId = findGroupIdForHost(hostGroups, targetUid) || UNGROUPED_GROUP_ID;
+    if (formData.groupId !== currentGroupId) {
+      await dispatch(moveHost({ hostUid: targetUid, targetGroupId: formData.groupId })).unwrap();
+    }
+  };
+
   // Save only — persists changes without attempting a CMS login.
   const handleSave = async () => {
     const errs = validate();
@@ -85,7 +107,7 @@ export default function EditHostModal() {
     }
 
     try {
-      await dispatch(editHost({ hostUid: hostToEditUid, payload: buildPayload() })).unwrap();
+      await persistHostChanges(hostToEditUid);
       dispatch(closeEditHostModal());
       dispatch(clearHostError());
     } catch {
@@ -106,7 +128,7 @@ export default function EditHostModal() {
     const targetUid = hostToEditUid;
 
     try {
-      await dispatch(editHost({ hostUid: targetUid, payload: buildPayload() })).unwrap();
+      await persistHostChanges(targetUid);
     } catch {
       return; // Edit failed: modal stays open, error shown via state.host.error
     }
@@ -135,6 +157,7 @@ export default function EditHostModal() {
       isOpen={isEditHostModalOpen}
       onClose={handleClose}
       onSubmit={handleSave}
+      submitDisabled={loading}
       title={CM.modifyHost}
       icon="settings_input_component"
       loading={loading}
@@ -170,23 +193,25 @@ export default function EditHostModal() {
     >
       <div className="space-y-4 p-1">
 
-        {/* API Error Banner */}
-        {apiError && (
+        {/* API Error Banner — credential failures show inline under the
+            password field instead (see Section 3) for consistency with
+            client-side validation errors. */}
+        {apiError && !isCredentialError && (
           <div className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
             <Icon name="error_outline" size="sm" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
-            <p className="text-[11.5px] text-rose-500 font-medium flex-1 leading-relaxed">{apiError}</p>
+            <p className="text-13 text-rose-500 font-medium flex-1 leading-relaxed">{apiError}</p>
             <button
               onClick={() => dispatch(clearHostError())}
               className="text-rose-400 hover:text-rose-600 transition-colors shrink-0"
             >
-              <Icon name="close" size="16px" weight={300} />
+              <Icon name="close" size="17px" weight={300} />
             </button>
           </div>
         )}
 
         {/* Section 1: Identity */}
         <SectionHeader title={CM.identity} icon="badge" />
-        <div className="px-1">
+        <div className="px-1 space-y-4">
           <Input
             label={CM.friendlyName}
             name="alias"
@@ -198,6 +223,14 @@ export default function EditHostModal() {
             disabled={loading}
             required
           />
+          <Select
+            label={CM.groupLabel}
+            value={formData.groupId}
+            onChange={(e) => handleChange({ target: { name: 'groupId', value: e.target.value } })}
+            options={groupOptions}
+            icon="folder"
+            disabled={loading}
+          />
         </div>
 
         {/* Section 2: Host Connection */}
@@ -207,8 +240,8 @@ export default function EditHostModal() {
           className="mt-8"
         />
         <div className="px-1">
-          <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="sm:col-span-3">
               <Input
                 label={CM.ipAddressDomain}
                 name="address"
@@ -221,7 +254,7 @@ export default function EditHostModal() {
                 required
               />
             </div>
-            <div className="col-span-1">
+            <div className="sm:col-span-1">
               <Input
                 label={CM.port}
                 name="port"
@@ -240,7 +273,7 @@ export default function EditHostModal() {
         {/* Section 3: Credentials */}
         <SectionHeader title={CM.credentials} icon="lock" className="mt-8" />
         <div className="px-1">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={CM.username}
               name="id"
@@ -253,13 +286,13 @@ export default function EditHostModal() {
               required
             />
             <Input
-              label={CM.newPassword}
+              label={CM.password}
               labelExtra="(optional)"
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
-              error={errors.password}
+              error={errors.password || (isCredentialError ? apiError : undefined)}
               placeholder={CM.leaveBlankToKeep}
               icon="key"
               disabled={loading}

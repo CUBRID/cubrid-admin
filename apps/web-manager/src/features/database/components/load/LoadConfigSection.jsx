@@ -20,7 +20,7 @@ export default function LoadConfigSection({ formData, handleInputChange }) {
             icon="database"
           />
         </CaDialogField>
-        
+
         <CaDialogField label={CM.userName}>
           <Input
             name="dbUsername"

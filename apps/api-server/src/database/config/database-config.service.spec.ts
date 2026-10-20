@@ -3,6 +3,7 @@ import { DatabaseConfigService } from './database-config.service';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { CmsConfigService } from '@cms-config/cms-config.service';
+import { DatabaseUserService } from '@database/user/database-user.service';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 
@@ -42,6 +43,10 @@ describe('DatabaseConfigService', () => {
       setSystemParam: jest.fn(),
     };
 
+    const mockDatabaseUserService = {
+      ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseConfigService,
@@ -56,6 +61,10 @@ describe('DatabaseConfigService', () => {
         {
           provide: CmsConfigService,
           useValue: mockCmsConfigService,
+        },
+        {
+          provide: DatabaseUserService,
+          useValue: mockDatabaseUserService,
         },
       ],
     }).compile();
@@ -544,6 +553,126 @@ describe('DatabaseConfigService', () => {
         })
       );
       expect(result).toEqual(mockSuccessResponse.log);
+    });
+  });
+
+  describe('ensureDbHaModeOff', () => {
+    const confname = 'cubridconf';
+
+    function mockConfig(confdata: string[]) {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata }],
+      } as never);
+    }
+
+    it('appends a new [@dbname] section with ha_mode=off when the section does not exist at all', async () => {
+      mockConfig(['[common]', 'ha_mode=on', '[service]', 'server=other_db']);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as never);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        confname,
+        ['[common]', 'ha_mode=on', '[service]', 'server=other_db', '', `[@${mockDbname}]`, 'ha_mode=off']
+      );
+    });
+
+    it('inserts ha_mode=off right after an existing [@dbname] header with no ha_mode key yet', async () => {
+      mockConfig(['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'some_other_param=1']);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as never);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        confname,
+        ['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=off', 'some_other_param=1']
+      );
+    });
+
+    it('treats a blank line between the section header and ha_mode=off as already configured', async () => {
+      mockConfig(['[common]', 'ha_mode=on', `[@${mockDbname}]`, '', 'ha_mode=off']);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('leaves an existing ha_mode value untouched instead of overwriting it', async () => {
+      mockConfig(['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=on']);
+
+      await service.ensureDbHaModeOff(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('serializes concurrent calls for the same host so neither write clobbers the other', async () => {
+      // Simulates two different databases created concurrently on the same
+      // HA host: both would read the same conflist and, without a host-level
+      // lock, each write back a full file — the second write would clobber
+      // the first write's [@dbname] addition. `storedConfdata` here plays
+      // the role of the real cubridconf file CMS holds, updated by whichever
+      // setSystemParam call runs.
+      //
+      // The first call's WRITE is held open behind `firstWriteGate` until
+      // the test explicitly releases it, after the second call has had a
+      // chance to read+write on its own. Without host-level serialization,
+      // call2 reads the pre-call1-write conflist and writes its own addition
+      // immediately, which call1's later (delayed) write then clobbers —
+      // losing call2's section. With serialization, call2's read/write
+      // cannot even start until call1 (holding the lock) has fully finished,
+      // so call2 reads call1's already-written conflist and both additions
+      // survive.
+      let storedConfdata = ['[common]', 'ha_mode=on'];
+      let writeCount = 0;
+      let releaseFirstWrite!: () => void;
+      const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+      });
+
+      cmsConfigService.getAllSystemParam.mockImplementation(async () => {
+        return { conflist: [{ confdata: [...storedConfdata] }] } as never;
+      });
+      cmsConfigService.setSystemParam.mockImplementation(async (_u, _h, _c, updatedConfdata) => {
+        writeCount += 1;
+        if (writeCount === 1) {
+          await firstWriteGate;
+        }
+        storedConfdata = updatedConfdata as string[];
+        return { success: true } as never;
+      });
+
+      const call1 = service.ensureDbHaModeOff(mockUserId, mockHostUid, 'db1');
+      // Give call1 a chance to read and reach (and block on) its gated write.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      const call2 = service.ensureDbHaModeOff(mockUserId, mockHostUid, 'db2');
+      // Give call2 a chance to read+write on its own, if nothing serializes it.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      releaseFirstWrite();
+
+      await Promise.all([call1, call2]);
+
+      expect(storedConfdata).toEqual(expect.arrayContaining(['[@db1]', '[@db2]']));
+      expect(storedConfdata.filter((line) => line === 'ha_mode=off')).toHaveLength(2);
+    });
+
+    it('does not serialize calls for different hosts', async () => {
+      mockConfig(['[common]', 'ha_mode=on']);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as never);
+
+      await Promise.all([
+        service.ensureDbHaModeOff(mockUserId, 'host-uid-1', 'db1'),
+        service.ensureDbHaModeOff(mockUserId, 'host-uid-2', 'db2'),
+      ]);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -77,7 +77,7 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange }) {
               onChange={handleInputChange}
               disabled={!formData[field.useName]}
               size="md"
-              className="w-full font-mono text-[12px]"
+              className="w-full font-mono text-14"
             />
           </div>
         ))}

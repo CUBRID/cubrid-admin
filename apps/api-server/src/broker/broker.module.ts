@@ -3,6 +3,7 @@ import { BrokerController } from './broker.controller';
 import { BrokerService } from './broker.service';
 import { HostModule } from '@host';
 import { CmsHttpsClientModule } from '@cms-https-client/cms-https-client.module';
+import { CmsJobLockModule } from '@cms-job/cms-job-lock.module';
 
 /**
  * Module for managing broker-related functionalities.
@@ -14,7 +15,7 @@ import { CmsHttpsClientModule } from '@cms-https-client/cms-https-client.module'
 @Module({
   controllers: [BrokerController],
   providers: [BrokerService],
-  imports: [HostModule, CmsHttpsClientModule],
+  imports: [HostModule, CmsHttpsClientModule, CmsJobLockModule],
   exports: [BrokerService],
 })
 export class BrokerModule {}

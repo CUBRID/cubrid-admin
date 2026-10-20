@@ -9,23 +9,21 @@
  * @returns {string}
  */
 export const formatSize = (bytes, decimals = 2) => {
-  if (bytes === null || bytes === undefined) return '0 B';
-  if (typeof bytes === 'string') {
-    const trimmed = bytes.trim();
-    if (trimmed === '') return bytes;
-    if (trimmed === '0') return '0 B';
-    const num = Number(trimmed);
-    if (isNaN(num)) {
-      return bytes;
-    }
-    bytes = num;
-  }
-  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B';
+  // CMS numeric fields (dbinfo.used_size/free_size/total_size, etc.) arrive as
+  // JSON strings, e.g. "0". `!"0"` and `"0" === 0` are both false, so the old
+  // falsy/zero guard let string "0" slip through into Math.log(0) = -Infinity,
+  // cascading to NaN. Coerce first so the guard actually sees the real value.
+  //
+  // (upstream/develop's independent fix for the same bug declared `num` only
+  // inside the string branch, then referenced it unconditionally below —
+  // ReferenceError for any plain-number input. Kept this version instead.)
+  const num = typeof bytes === 'string' ? parseFloat(bytes) : bytes;
+  if (!num || isNaN(num) || num <= 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  const i = Math.floor(Math.log(num) / Math.log(k));
+  return `${parseFloat((num / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
 /**

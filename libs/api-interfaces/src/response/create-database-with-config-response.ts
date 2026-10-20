@@ -58,6 +58,13 @@ export type CreateDatabaseWithConfigResponse = {
   startDatabase?: OperationResult<StartInfoClientResponse>;
 
   /**
+   * Result from opting the new database out of the host's HA replication set
+   * (writing `ha_mode=off` under its own `[@dbname]` section). Only present
+   * when the host is HA-configured.
+   */
+  haModeConfig?: OperationResult;
+
+  /**
    * Result from user update (if requested)
    */
   updateUser?: OperationResult;

@@ -5,9 +5,10 @@ import {
   GetCreatedbInfoClientResponse,
   StartInfoClientResponse,
 } from '@api-interfaces';
-import { SaveDatabaseProfileDto, DeleteDatabaseDto, CreateDatabaseWithConfigDto } from '@type/index';
+import { SaveDatabaseProfileDto, DeleteDatabaseDto, CreateDatabaseWithConfigDto, StartStopAllDatabasesDto } from '@type/index';
 import { DatabaseLifecycleService } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
+import { assertValidGeneralVolumeSize } from './database-volume-size';
 
 /**
  * Controller for handling database lifecycle operations.
@@ -149,6 +150,102 @@ export class DatabaseLifecycleController {
   }
 
   /**
+   * Start every database in the request body on a host, as one whole-service
+   * operation rather than N independent per-database calls — HA-configured
+   * databases are started together via a single bulk `ha_start`.
+   *
+   * @route POST /:hostUid/database/start-all
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @param body Database names to start
+   * @returns Per-database succeeded/failed outcome
+   * @example
+   * // POST /host-uid/database/start-all
+   * // Body: { "dbnames": ["demodb", "testdb"] }
+   */
+  @Post('start-all')
+  async startAllDatabases(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: StartStopAllDatabasesDto
+  ): Promise<{ succeeded: string[]; failed: Array<{ dbname: string; error: string }> }> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Starting all databases (${body.dbnames.join(', ')}) on host: ${hostUid}`);
+    return await this.lifecycleService.startAllDatabases(userId, hostUid, body.dbnames);
+  }
+
+  /**
+   * Stop every database in the request body on a host, as one whole-service
+   * operation — see startAllDatabases for why HA databases are stopped
+   * together via a single bulk `ha_stop`.
+   *
+   * @route POST /:hostUid/database/stop-all
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @param body Database names to stop
+   * @returns Per-database succeeded/failed outcome
+   * @example
+   * // POST /host-uid/database/stop-all
+   * // Body: { "dbnames": ["demodb", "testdb"] }
+   */
+  @Post('stop-all')
+  async stopAllDatabases(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: StartStopAllDatabasesDto
+  ): Promise<{ succeeded: string[]; failed: Array<{ dbname: string; error: string }> }> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Stopping all databases (${body.dbnames.join(', ')}) on host: ${hostUid}`);
+    return await this.lifecycleService.stopAllDatabases(userId, hostUid, body.dbnames);
+  }
+
+  /**
+   * Start the whole service on a host in one call: brokers, then databases
+   * (auto-start list + bulk `ha_start` for HA), matching `cubrid service start`.
+   *
+   * @route POST /:hostUid/database/service/start
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @returns Failures across brokers and databases
+   * @example
+   * // POST /host-uid/database/service/start
+   */
+  @Post('service/start')
+  async startWholeService(
+    @Request() req,
+    @Param('hostUid') hostUid: string
+  ): Promise<{ failed: Array<{ name: string; error: string }> }> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Starting whole service on host: ${hostUid}`);
+    return await this.lifecycleService.startWholeService(userId, hostUid);
+  }
+
+  /**
+   * Stop the whole service on a host in one call: databases (bulk `ha_stop`
+   * for HA), then brokers, matching `cubrid service stop`.
+   *
+   * @route POST /:hostUid/database/service/stop
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @returns Failures across databases and brokers
+   * @example
+   * // POST /host-uid/database/service/stop
+   */
+  @Post('service/stop')
+  async stopWholeService(
+    @Request() req,
+    @Param('hostUid') hostUid: string
+  ): Promise<{ failed: Array<{ name: string; error: string }> }> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Stopping whole service on host: ${hostUid}`);
+    return await this.lifecycleService.stopWholeService(userId, hostUid);
+  }
+
+  /**
    * Create or update a database profile for a host (same route for first save and credential refresh).
    * Returns latest start info on success (isProfileExists is updated).
    *
@@ -181,6 +278,29 @@ export class DatabaseLifecycleController {
   }
 
   /**
+   * Forget a database's stored login profile (saved id/password).
+   * Returns latest start info on success (isProfileExists is updated).
+   *
+   * @route DELETE /:hostUid/database/register/:dbname
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @param dbname Database name from path parameter
+   * @returns StartInfoClientResponse Latest database start information
+   * @example
+   * // DELETE /host-uid/database/register/demodb
+   */
+  @Delete('register/:dbname')
+  async deleteDatabaseProfile(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('dbname') dbname: string
+  ): Promise<StartInfoClientResponse> {
+    const userId = req.user.sub;
+
+    return await this.lifecycleService.deleteDatabaseProfile(userId, hostUid, dbname);
+  }
+
+  /**
    * Create a new database with optional configuration.
    * Executes database creation, user update, auto-add volume, and auto-start in sequence.
    * Returns results from all executed operations.
@@ -208,6 +328,7 @@ export class DatabaseLifecycleController {
   ): Promise<CreateCmsJobResponse> {
     const userId = req.user.sub;
 
+    assertValidGeneralVolumeSize(body.numpage, body.pagesize);
     this.logger.log(`Enqueue create database job: ${body.dbname} on host: ${hostUid}`);
     return await this.cmsJobService.createJob(userId, hostUid, 'create', body.dbname, body);
   }

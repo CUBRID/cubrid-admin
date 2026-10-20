@@ -191,6 +191,35 @@ export class CmsJobStore {
     return failed;
   }
 
+  /**
+   * Same candidates `failOrphanedActiveJobs` would fail outright, but returned
+   * as-is (not mutated) so the caller can first try to reconcile each one
+   * against CMS's real state (via its persisted `cmsUuid`) before giving up.
+   */
+  async listOrphanedActiveJobs(): Promise<Array<{ userKey: string; job: CmsJobRecord }>> {
+    const orphans: Array<{ userKey: string; job: CmsJobRecord }> = [];
+    for (const userKey of await this.listUserJobKeys()) {
+      const jobs = await this.listJobsForUser(userKey);
+      for (const job of jobs) {
+        if (job.status === 'queued' || job.status === 'running') {
+          orphans.push({ userKey, job });
+        }
+      }
+    }
+    return orphans;
+  }
+
+  /**
+   * Persists an orphaned job's resolved outcome (however the caller decided
+   * it — reconciled against CMS's real state, or given up on) and releases
+   * its operation lock, exactly like the tail end of a normal job run would.
+   */
+  async finalizeOrphanedJob(userKey: string, job: CmsJobRecord): Promise<void> {
+    await this.saveJob(userKey, job);
+    await this.removeJobIdFromOperations(userKey, job.jobId);
+    await this.removeJobIdFromGlobalOperations(job.jobId);
+  }
+
   private async removeJobIdFromOperations(userKey: string, jobId: string): Promise<void> {
     const ops = await this.readOperations(userKey);
     let changed = false;

@@ -195,6 +195,31 @@ export class DatabaseUserController {
   }
 
   /**
+   * Log out of a database — forgets the server-side belief that this
+   * (host, db) has a live dbmtuserlogin, without touching any stored
+   * profile. The next database action will re-authenticate (via the
+   * profile if one is still stored, or a manual login otherwise).
+   *
+   * @route POST /:hostUid/database/users/logout/:dbname
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @param dbname Database name from path parameter
+   * @example
+   * // POST /host-uid/database/users/logout/demodb
+   */
+  @Post('logout/:dbname')
+  async logoutDatabase(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('dbname') dbname: string
+  ): Promise<{ success: true }> {
+    const userId = req.user.sub;
+    this.logger.log(`Logging out of database: ${dbname} on host: ${hostUid}`);
+    await this.databaseUserService.logoutDatabase(userId, hostUid, dbname);
+    return { success: true };
+  }
+
+  /**
    * Update a database user.
    * Returns empty object on success.
    *

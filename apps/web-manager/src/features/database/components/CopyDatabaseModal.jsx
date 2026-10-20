@@ -8,6 +8,7 @@ import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobU
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
+import { Table } from '../../../components/ds/layout/Table';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
@@ -34,8 +35,9 @@ export default function CopyDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isCopyDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
@@ -48,7 +50,7 @@ export default function CopyDatabaseModal() {
     isSuccess,
     isError
   } = useActionState();
-  const { runJob } = useCmsJob();
+  const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -219,6 +221,59 @@ export default function CopyDatabaseModal() {
     });
   };
 
+  const volumeColumns = [
+    {
+      header: CM.tblColumnCurrentVolName || 'Current volume name',
+      accessor: 'fullPath',
+      width: '40%',
+      className: 'font-semibold!',
+      cellClassName: 'min-w-[180px] max-w-[260px] font-mono truncate',
+      render: (fullPath) => <span title={fullPath}>{fullPath}</span>,
+    },
+    {
+      header: CM.tblColumnCopyNewVolName || 'New volume name',
+      accessor: 'newVolumeName',
+      width: '30%',
+      className: 'font-semibold!',
+      cellClassName: 'min-w-[160px] p-1.5!',
+      render: (value, volume) => (
+        <Input
+          size="sm"
+          disabled={!formData.copyIndividual}
+          value={value}
+          aria-label={`${CM.tblColumnCopyNewVolName || 'New volume name'}: ${volume.fullPath}`}
+          onChange={event => handleVolumeChange(volume.volumeIndex, 'newVolumeName', event.target.value)}
+        />
+      ),
+    },
+    {
+      header: CM.tblColumnCopyNewDirPath || 'New directory path',
+      accessor: 'newLocation',
+      width: '30%',
+      className: 'font-semibold!',
+      cellClassName: 'min-w-[180px] p-1.5!',
+      render: (value, volume) => (
+        <Input
+          size="sm"
+          disabled={!formData.copyIndividual}
+          value={value}
+          aria-label={`${CM.tblColumnCopyNewDirPath || 'New directory path'}: ${volume.fullPath}`}
+          inputClassName="font-mono"
+          onChange={event => handleVolumeChange(volume.volumeIndex, 'newLocation', event.target.value)}
+        />
+      ),
+    },
+  ];
+
+  const volumeRows = volumes.map((volume, volumeIndex) => ({
+    ...volume,
+    rowKey: `${volume.location || ''}/${volume.spacename || volumeIndex}`,
+    volumeIndex,
+    fullPath: volume.location
+      ? `${volume.location.endsWith('/') || volume.location.endsWith('\\') ? volume.location : `${volume.location}/`}${volume.spacename}`
+      : volume.spacename,
+  }));
+
   const handleCopy = async () => {
     if (!formData.destName.trim()) return;
 
@@ -265,10 +320,12 @@ export default function CopyDatabaseModal() {
         () => databaseJobApi.submitCopy(selectedHostUid, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
-      dispatch(fetchDatabaseStartInfo(selectedHostUid));
-      endSuccess(`${CM.copyCompleted}: ${formData.destName}`);
+      if (!wasBackgrounded()) {
+        dispatch(fetchDatabaseStartInfo(selectedHostUid));
+        endSuccess(`${CM.copyCompleted}: ${formData.destName}`);
+      }
     } catch (err) {
-      endError(typeof err === 'string' ? err : (err.message || CM.operationFailed));
+      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.operationFailed));
     }
   };
 
@@ -284,7 +341,7 @@ export default function CopyDatabaseModal() {
         <ModalStatusLoading
           title={CM.synchronizingVolumes}
           subtitle={getCmsJobLoadingSubtitle(formData.destName, jobStatus, CM)}
-          onBackground={handleClose}
+          onBackground={() => { background(); handleClose(); }}
         />
       </Modal>
     );
@@ -308,9 +365,10 @@ export default function CopyDatabaseModal() {
   if (isError) {
     return (
       <Modal isOpen title={CM.cloningFailed} icon="content_copy" iconVariant="danger" onClose={resetAction} maxWidth="640px">
-        <ModalStatusError 
+        <ModalStatusError
           title={CM.operationInterrupted}
           error={error}
+          guidance={CM.copyDbGuidance}
           onRetry={handleCopy}
           onCancel={resetAction}
           retryText={CM.retryClone}
@@ -330,6 +388,8 @@ export default function CopyDatabaseModal() {
       icon="content_copy"
       maxWidth="820px"
       testId="copy-database"
+      onSubmit={handleCopy}
+      submitDisabled={!formData.destName.trim()}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="copy-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -352,7 +412,7 @@ export default function CopyDatabaseModal() {
           <SectionHeader title={CM.grpDbSourceName || 'Source database'} icon="database" />
           <div className="bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/8 rounded-xl p-3.5 space-y-3">
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblSrcDbName || 'Database name:'}
               </label>
               <div className="col-span-2">
@@ -360,13 +420,13 @@ export default function CopyDatabaseModal() {
                   value={selectedDatabase}
                   disabled
                   size="md"
-                  className="font-bold text-[13px]"
+                  className="font-bold text-15"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblSrcDbPathName || 'Database path:'}
               </label>
               <div className="col-span-2">
@@ -374,13 +434,13 @@ export default function CopyDatabaseModal() {
                   value={currentDb?.dbdir || '-'}
                   disabled
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblSrcLogPathName || 'Log file path:'}
               </label>
               <div className="col-span-2">
@@ -388,7 +448,7 @@ export default function CopyDatabaseModal() {
                   value={srcLogDir || currentDb?.dbdir || '-'}
                   disabled
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
@@ -400,7 +460,7 @@ export default function CopyDatabaseModal() {
           <SectionHeader title={CM.grpDbDestName || 'Destination database'} icon="move_to_inbox" />
           <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/8 rounded-xl p-3.5 space-y-3">
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblDescDbName || 'Database name:'}
               </label>
               <div className="col-span-2">
@@ -416,7 +476,7 @@ export default function CopyDatabaseModal() {
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblDescDbPathName || 'Database path:'}
               </label>
               <div className="col-span-2">
@@ -425,13 +485,13 @@ export default function CopyDatabaseModal() {
                   onChange={e => handleInputChange('destPath', e.target.value)}
                   disabled={formData.copyIndividual}
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblVolumePathName || 'Extend volume path:'}
               </label>
               <div className="col-span-2">
@@ -440,13 +500,13 @@ export default function CopyDatabaseModal() {
                   onChange={e => handleInputChange('extPath', e.target.value)}
                   disabled={formData.copyIndividual}
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 items-center">
-              <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+              <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
                 {CM.lblDescLogPathName || 'Log file path:'}
               </label>
               <div className="col-span-2">
@@ -454,7 +514,7 @@ export default function CopyDatabaseModal() {
                   value={formData.logPath}
                   onChange={e => handleInputChange('logPath', e.target.value)}
                   size="md"
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-14"
                 />
               </div>
             </div>
@@ -462,7 +522,7 @@ export default function CopyDatabaseModal() {
         </div>
 
         {/* Disk Space Indicator */}
-        <div className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[11.5px] text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-13 text-slate-600 dark:text-slate-300">
           <Icon name="sd_card" size="xs" className="text-amber-500" />
           <span>{typeof CM.lblCopyFreeDiskSize === 'function' ? CM.lblCopyFreeDiskSize(diskInfo.freeSpace) : `Free disk space: ${diskInfo.freeSpace}`}</span>
         </div>
@@ -482,53 +542,18 @@ export default function CopyDatabaseModal() {
             !formData.copyIndividual ? 'opacity-50 pointer-events-none select-none bg-slate-50/50 dark:bg-white/[0.01]' : ''
           }`}>
             {volInfoLoading ? (
-              <div className="p-4 text-center text-slate-400 text-[12px]">Loading volumes...</div>
-            ) : volumes.length === 0 ? (
-              <div className="p-4 text-center text-slate-400 text-[12px]">No volume information available</div>
+              <div className="p-4 text-center text-slate-400 text-14">{CM.loadingLabel}</div>
             ) : (
-              <div className="max-h-[180px] overflow-y-auto">
-                <table className="w-full text-[11px] text-left">
-                  <thead className="bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 uppercase sticky top-0 border-b border-slate-200 dark:border-white/10">
-                    <tr>
-                      <th className="px-3 py-2 font-semibold w-2/5">{CM.tblColumnCurrentVolName || 'Current volume name'}</th>
-                      <th className="px-3 py-2 font-semibold w-3/10">{CM.tblColumnCopyNewVolName || 'New volume name'}</th>
-                      <th className="px-3 py-2 font-semibold w-3/10">{CM.tblColumnCopyNewDirPath || 'New directory path'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                    {volumes.map((vol, idx) => {
-                      const fullVolPath = vol.location 
-                        ? `${vol.location.endsWith('/') || vol.location.endsWith('\\') ? vol.location : vol.location + '/'}${vol.spacename}`
-                        : vol.spacename;
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/4">
-                          <td className="px-3 py-1.5 font-medium font-mono text-[11.5px] text-slate-700 dark:text-slate-300 truncate max-w-[200px]" title={fullVolPath}>
-                            {fullVolPath}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="text"
-                              disabled={!formData.copyIndividual}
-                              value={vol.newVolumeName}
-                              onChange={e => handleVolumeChange(idx, 'newVolumeName', e.target.value)}
-                              className="w-full h-8 px-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 disabled:bg-slate-100 dark:disabled:bg-white/2"
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="text"
-                              disabled={!formData.copyIndividual}
-                              value={vol.newLocation}
-                              onChange={e => handleVolumeChange(idx, 'newLocation', e.target.value)}
-                              className="w-full h-8 px-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg font-mono text-[12px] text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500 disabled:bg-slate-100 dark:disabled:bg-white/2"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <Table
+                columns={volumeColumns}
+                data={volumeRows}
+                emptyMessage={CM.noVolumesDetected}
+                showEmptyStateAsRow
+                bordered
+                stickyHeader
+                selectable
+                className="max-h-[180px] overflow-auto"
+              />
             )}
           </div>
         </div>

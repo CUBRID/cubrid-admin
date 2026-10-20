@@ -10,6 +10,7 @@ export default function TabItem({
   isDirty,
   label,
   icon,
+  closeLabel,
   onClick,
   onClose,
   onContextMenu
@@ -24,6 +25,16 @@ export default function TabItem({
       }`}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role="tab"
+      tabIndex={isActive ? 0 : -1}
+      aria-selected={isActive}
     >
       {/* Active indicator bar */}
       {isActive && (
@@ -34,7 +45,7 @@ export default function TabItem({
       <div className="relative flex items-center justify-center shrink-0">
         <Icon 
            name={icon || 'description'} 
-           size="16px" 
+           size="17px"
            className={isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-600'} 
            weight={isActive ? 400 : 300}
         />
@@ -46,14 +57,16 @@ export default function TabItem({
       {/* Label */}
       <Typography 
         variant="caption" 
-        className={`truncate flex-1 text-[12px] font-semibold tracking-tight leading-none ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'}`}
+        className={`truncate flex-1 text-14 font-semibold tracking-tight leading-none ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'}`}
       >
         {label}
       </Typography>
 
       {/* Close button */}
-      <div
+      <button
+        type="button"
         data-testid={`tab-${tabId}-close`}
+        aria-label={closeLabel}
         className={`flex items-center justify-center w-5 h-5 rounded-sm hover:bg-slate-200 dark:hover:bg-white/10 transition-all shrink-0 ${isActive ? 'opacity-60 hover:opacity-100' : 'opacity-0 group-hover:opacity-60 hover:opacity-100!'}`}
         onClick={(e) => {
           e.stopPropagation();
@@ -61,7 +74,7 @@ export default function TabItem({
         }}
       >
         <Icon name="close" size="14px" weight={400} className="text-slate-500 dark:text-slate-400" />
-      </div>
+      </button>
     </div>
   );
 }

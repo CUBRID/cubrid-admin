@@ -3,6 +3,7 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeAddQueryPlanModal, appendAutoExecQueryPlan, fetchQueryPlan } from '../databaseSlice';
 import Editor from '@monaco-editor/react';
 import { useCM } from '../../../constants/useCM';
+import { hasLineCommentAcrossLines, normalizeQueryForCms } from '../queryPlanUtils';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -11,7 +12,6 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
-import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
@@ -19,14 +19,6 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-
-// view states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
-
-
 
 export default function AddQueryPlanModal() {
   const CM = useCM();
@@ -37,7 +29,6 @@ export default function AddQueryPlanModal() {
   const { theme } = useSelector((state) => state.layout, shallowEqual);
   
   const { 
-
     error: actionError, 
     startAction, 
     endSuccess, 
@@ -105,8 +96,12 @@ export default function AddQueryPlanModal() {
       endError(CM.sqlStatementRequired);
       return;
     }
-    const queryString = formData.queryString.trim();
-    
+    if (hasLineCommentAcrossLines(formData.queryString)) {
+      endError(CM.multilineQueryLineCommentError);
+      return;
+    }
+    const queryString = normalizeQueryForCms(formData.queryString);
+
     startAction();
 
     const WEEK_ABBRS = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT', 7: 'SUN' };
@@ -182,6 +177,7 @@ export default function AddQueryPlanModal() {
         <ModalStatusError
           title={CM.operationInterrupted}
           error={actionError}
+          guidance={CM.queryPlanGuidance}
           onRetry={handleSave}
           onCancel={resetAction}
           retryText={CM.retry}
@@ -201,6 +197,7 @@ export default function AddQueryPlanModal() {
       icon="bolt"
       maxWidth="max-w-[720px]"
       testId="add-query-plan"
+      onSubmit={handleSave}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="add-query-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -216,30 +213,7 @@ export default function AddQueryPlanModal() {
         </div>
       }
     >
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
-        
-        {/* Source Instance Banner */}
-        <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-linear-to-r from-amber-500/8 to-transparent p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                <Icon name="database" size="md" weight={300} className="text-amber-500" />
-              </div>
-              <div className="min-w-0">
-                <Typography variant="caption" className="font-bold text-amber-600/70 mb-0.5">{CM.automatingDatabase}</Typography>
-                <Typography variant="h4" className="text-[14px] font-black text-amber-700 dark:text-amber-400 font-mono truncate">
-                   {selectedDatabase}
-                </Typography>
-              </div>
-            </div>
-            <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-xs">
-              <Icon name="bolt" size="sm" className="text-amber-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{CM.sqlStatementSection}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-8">
+      <div className="space-y-8 animate-in fade-in duration-200">
           {/* Identity */}
           <div className="space-y-4">
             <SectionHeader title={CM.objectIdentification} icon="fingerprint" />
@@ -254,7 +228,7 @@ export default function AddQueryPlanModal() {
 
           <div className="space-y-4">
             <SectionHeader title={CM.secureContextSection} icon="lock" />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label={CM.databaseUsernameLabel}
                 value={formData.username}
@@ -275,7 +249,7 @@ export default function AddQueryPlanModal() {
           {/* Schedule Configuration */}
           <div className="space-y-4">
             <SectionHeader title={CM.executionSchedule} icon="schedule" />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Select
                 label={CM.recurrenceFrequency}
                 icon="event_repeat"
@@ -298,7 +272,7 @@ export default function AddQueryPlanModal() {
           </div>
 
           {/* Schedule Detail Grids */}
-          <div className="mt-[-10px] animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="animate-in fade-in duration-200">
             {formData.periodType === 'WEEK' && (
             <div className="grid grid-cols-7 gap-2">
               {CM.weekdaysShort.map((day, ix) => {
@@ -306,11 +280,13 @@ export default function AddQueryPlanModal() {
                 return (
                   <button 
                     key={day} 
-                    onClick={() => toggleDetail(ix + 1)} 
-                    className={`h-10 rounded-xl border text-[11px] font-black transition-all cursor-pointer 
-                      ${isSel 
-                        ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/30 text-amber-600 dark:text-amber-400' 
-                        : 'bg-white dark:bg-white/2 border-slate-100 dark:border-white/5 text-slate-400 hover:border-amber-500/30'}`}
+                    type="button"
+                    onClick={() => toggleDetail(ix + 1)}
+                    aria-pressed={isSel}
+                    className={`h-9 rounded-lg border text-13 font-medium transition-colors cursor-pointer
+                      ${isSel
+                        ? 'bg-amber-500 border-amber-500 text-slate-900'
+                        : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}
                   >
                     {day}
                   </button>
@@ -320,17 +296,19 @@ export default function AddQueryPlanModal() {
           )}
 
             {formData.periodType === 'MONTH' && (
-            <div className="grid grid-cols-8 gap-1.5 p-3.5 bg-slate-50/50 dark:bg-white/1 border border-slate-100 dark:border-white/5 rounded-2xl">
+            <div className="grid grid-cols-7 sm:grid-cols-8 gap-1.5 p-3 bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/10 rounded-xl">
               {Array.from({ length: 31 }, (_, i) => i + 1).map(d => {
                 const isSel = formData.periodDetail.includes(d);
                 return (
                   <button 
                     key={d} 
-                    onClick={() => toggleDetail(d)} 
-                    className={`h-8 rounded-lg border text-[10px] font-black font-mono transition-all cursor-pointer 
-                      ${isSel 
-                        ? 'bg-amber-500/15 dark:bg-amber-500/25 border-amber-500/20 text-amber-600 dark:text-amber-400' 
-                        : 'bg-white dark:bg-white/4 border-transparent text-slate-400 hover:border-amber-500/30'}`}
+                    type="button"
+                    onClick={() => toggleDetail(d)}
+                    aria-pressed={isSel}
+                    className={`h-8 rounded-lg border text-13 font-medium transition-colors cursor-pointer
+                      ${isSel
+                        ? 'bg-amber-500 border-amber-500 text-slate-900'
+                        : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-amber-500/40'}`}
                   >
                     {d}
                   </button>
@@ -341,6 +319,7 @@ export default function AddQueryPlanModal() {
 
             {formData.periodType === 'DATE' && (
               <DatePicker 
+                label={CM.date}
                 value={formData.periodDetail}
                 onChange={e => handleInputChange('periodDetail', e.target.value)}
                 icon="calendar_month"
@@ -354,7 +333,7 @@ export default function AddQueryPlanModal() {
               title={CM.sqlStatementSection}
               icon="code"
             />
-            <div className="relative group rounded-3xl overflow-hidden border border-slate-200 dark:border-white/8 bg-white dark:bg-[#1e1e1e] shadow-inner transition-all focus-within:ring-4 focus-within:ring-amber-500/5 focus-within:border-amber-500/40">
+            <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e1e1e] transition-all focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-500/60">
               <div className="absolute top-4 left-4 z-10 opacity-40 group-focus-within:opacity-100 transition-opacity pointer-events-none">
                 <Icon name="terminal" size="sm" weight={300} className="text-amber-500" />
               </div>
@@ -391,8 +370,10 @@ export default function AddQueryPlanModal() {
             <InfoBanner>
               {CM.systemComplianceNote}
             </InfoBanner>
+            <InfoBanner variant="warning" icon="info">
+              {CM.multilineQueryCollapseNote}
+            </InfoBanner>
           </div>
-        </div>
       </div>
     </Modal>
   );

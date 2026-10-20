@@ -1,14 +1,18 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
+import { fetchDatabaseStartInfo } from './databaseCoreSlice';
+import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
+import { dbKey } from './dbKey';
 
 // Lifecycle Operations
 export const createDatabase = createAsyncThunk(
   'database/createDatabase',
-  async ({ hostUid, payload }, { rejectWithValue }) => {
+  async ({ hostUid, payload }, { rejectWithValue, dispatch }) => {
     try {
       const response = await databaseApi.createDatabase(hostUid, payload);
       return response;
     } catch (err) {
+      if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
       return rejectWithValue(err.response?.data?.message || 'Failed to create database');
     }
   }
@@ -16,11 +20,12 @@ export const createDatabase = createAsyncThunk(
 
 export const copyDatabase = createAsyncThunk(
   'database/copyDatabase',
-  async ({ hostUid, payload }, { rejectWithValue }) => {
+  async ({ hostUid, payload }, { rejectWithValue, dispatch }) => {
     try {
       const response = await databaseApi.copyDatabase(hostUid, payload);
       return response;
     } catch (err) {
+      if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
       return rejectWithValue(err.response?.data?.message || 'Failed to copy database');
     }
   }
@@ -28,11 +33,12 @@ export const copyDatabase = createAsyncThunk(
 
 export const deleteDatabase = createAsyncThunk(
   'database/deleteDatabase',
-  async ({ hostUid, dbname, payload }, { rejectWithValue }) => {
+  async ({ hostUid, dbname, payload }, { rejectWithValue, dispatch }) => {
     try {
       const response = await databaseApi.deleteDatabase(hostUid, dbname, payload);
       return { dbname, response };
     } catch (err) {
+      if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
       return rejectWithValue(err.response?.data?.message || `Failed to delete database ${dbname}`);
     }
   }
@@ -40,11 +46,12 @@ export const deleteDatabase = createAsyncThunk(
 
 export const renameDatabase = createAsyncThunk(
   'database/renameDatabase',
-  async ({ hostUid, dbname, payload }, { rejectWithValue }) => {
+  async ({ hostUid, dbname, payload }, { rejectWithValue, dispatch }) => {
     try {
       const response = await databaseApi.renameDatabase(hostUid, dbname, payload);
       return { dbname, newName: payload.newName, response };
     } catch (err) {
+      if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
       return rejectWithValue(err.response?.data?.message || `Failed to rename database ${dbname}`);
     }
   }
@@ -156,7 +163,7 @@ export const fetchAutoBackupLog = createAsyncThunk(
   async ({ hostUid }, { rejectWithValue }) => {
     try {
       const response = await databaseApi.getAutoBackupLog(hostUid);
-      return response.log || [];
+      return response.error || [];
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch auto backup log');
     }
@@ -394,33 +401,39 @@ const databaseOperationSlice = createSlice({
       .addCase(addVolume.rejected, (state, action) => { state.actionLoading = false; state.error = action.payload; })
 
       .addCase(fetchBackupSchedule.pending, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.backupSchedulesLoading[dbname] = true;
+        const { hostUid, dbname } = action.meta.arg;
+        state.backupSchedulesLoading[dbKey(hostUid, dbname)] = true;
       })
       .addCase(fetchBackupSchedule.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, schedules } = action.payload;
-        state.backupSchedulesLoading[dbname] = false;
-        state.backupSchedules[dbname] = schedules;
+        const key = dbKey(hostUid, dbname);
+        state.backupSchedulesLoading[key] = false;
+        state.backupSchedules[key] = schedules;
       })
 
       .addCase(fetchBackupList.pending, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.databaseBackupsLoading[dbname] = true;
+        const { hostUid, dbname } = action.meta.arg;
+        state.databaseBackupsLoading[dbKey(hostUid, dbname)] = true;
       })
       .addCase(fetchBackupList.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, backups } = action.payload;
-        state.databaseBackupsLoading[dbname] = false;
-        state.databaseBackups[dbname] = backups;
+        const key = dbKey(hostUid, dbname);
+        state.databaseBackupsLoading[key] = false;
+        state.databaseBackups[key] = backups;
       })
 
       .addCase(fetchBackupDbInfo.pending, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.backupDbInfoLoading[dbname] = true;
+        const { hostUid, dbname } = action.meta.arg;
+        state.backupDbInfoLoading[dbKey(hostUid, dbname)] = true;
       })
       .addCase(fetchBackupDbInfo.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, info } = action.payload;
-        state.backupDbInfoLoading[dbname] = false;
-        state.backupDbInfo[dbname] = info;
+        const key = dbKey(hostUid, dbname);
+        state.backupDbInfoLoading[key] = false;
+        state.backupDbInfo[key] = info;
       })
 
       .addCase(fetchAutoBackupLog.pending, (state) => {
@@ -437,13 +450,15 @@ const databaseOperationSlice = createSlice({
       })
 
       .addCase(fetchQueryPlan.pending, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.queryPlansLoading[dbname] = true;
+        const { hostUid, dbname } = action.meta.arg;
+        state.queryPlansLoading[dbKey(hostUid, dbname)] = true;
       })
       .addCase(fetchQueryPlan.fulfilled, (state, action) => {
+        const { hostUid } = action.meta.arg;
         const { dbname, plan } = action.payload;
-        state.queryPlansLoading[dbname] = false;
-        state.queryPlans[dbname] = plan;
+        const key = dbKey(hostUid, dbname);
+        state.queryPlansLoading[key] = false;
+        state.queryPlans[key] = plan;
       })
       .addCase(fetchLockInfo.fulfilled, (state, action) => {
         const { dbname, info } = action.payload;
@@ -477,8 +492,8 @@ const databaseOperationSlice = createSlice({
 
       
       .addCase(fetchQueryPlan.rejected, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.queryPlansLoading[dbname] = false;
+        const { hostUid, dbname } = action.meta.arg;
+        state.queryPlansLoading[dbKey(hostUid, dbname)] = false;
         state.error = action.payload;
       })
       
@@ -493,7 +508,21 @@ const databaseOperationSlice = createSlice({
       .addCase(fetchQueryPlanLog.rejected, (state, action) => {
         state.logsLoading = false;
         state.logsError = action.payload;
-      });
+      })
+      // Drop cached backup schedules/query plans once a database's dbmt
+      // login is gone (explicit logout or forgetting its saved credentials)
+      // — otherwise the stale list from the old login stays visible.
+      .addMatcher(
+        (action) => action.type === 'database/logoutDatabase/fulfilled' || action.type === 'database/deleteDatabaseProfile/fulfilled',
+        (state, action) => {
+          const { hostUid, dbname } = action.meta.arg;
+          const key = dbKey(hostUid, dbname);
+          delete state.backupSchedules[key];
+          delete state.backupSchedulesLoading[key];
+          delete state.queryPlans[key];
+          delete state.queryPlansLoading[key];
+        }
+      );
   }
 });
 

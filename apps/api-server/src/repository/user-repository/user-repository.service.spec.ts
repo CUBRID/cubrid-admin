@@ -154,7 +154,7 @@ describe('UserRepositoryService', () => {
       expect(userJson.ha_mon_list).toEqual({});
       expect(userJson.resource_mon_list).toEqual({});
       expect(userJson.user_preference).toEqual({
-        dashboardInterval: 0,
+        dashboardInterval: 3,
         brokerStatusInterval: 0,
       });
       expect(userJson.uuid).toBeDefined();
