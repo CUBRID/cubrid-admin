@@ -35,7 +35,7 @@ export default function Header({ theme, toggleTheme }) {
 
   return (
     <>
-      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center justify-center px-6 z-40 shrink-0 select-none relative">
+      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center justify-center px-6 z-40 shrink-0 select-none relative overflow-hidden">
         <div className="w-full flex items-center justify-between">
           {/* ── Left: logo + menus ── */}
           <div className="flex items-center gap-1">
@@ -90,12 +90,12 @@ export default function Header({ theme, toggleTheme }) {
 
             {/* Logout */}
             <button
-              className="h-8 flex items-center justify-center rounded-sm border transition-all active:scale-[0.98] gap-2 px-4 bg-rose-500/5 border-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
+              className="h-8 flex items-center justify-center rounded-sm border transition-all active:scale-[0.98] gap-2 px-4 shrink-0 bg-rose-500/5 border-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
               onClick={handleLogout}
               title={CM.logout}
             >
               <Icon name="logout" size="19px" weight={400} />
-              <span className="text-15 font-bold tracking-tight">{CM.logout}</span>
+              <span className="text-15 font-bold tracking-tight whitespace-nowrap">{CM.logout}</span>
             </button>
           </div>
         </div>
