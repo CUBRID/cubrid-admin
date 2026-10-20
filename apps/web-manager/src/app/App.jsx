@@ -231,13 +231,18 @@ function DashboardLayout() {
             onAddHost={() => dispatch(openAddHostModal())}
           />
 
-          {/* overflow-x-auto (not hidden): the header row is deliberately
-              non-shrinking (Header.jsx) and shows its own min-content width
-              via min-w-fit — once the window is too narrow for that, this
-              is the scroll container that picks it up, so the header, tab
-              bar, and dashboard body all scroll together as one unit
-              instead of the header's content getting clipped or squished. */}
-          <main className="w-full h-full flex flex-col bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
+          {/* overflow-x-auto (not hidden): min-w-fit on the inner wrapper
+              makes its floor width exactly whatever Header actually needs
+              (Header.jsx's own min-w-fit) — not a guessed pixel number. The
+              tab bar and dashboard body stretch to fill that same width
+              (flex-col default is align-items:stretch), so they're never
+              asked to render narrower than the point where the header
+              itself would start overflowing. Below that width, main is the
+              scroll container that picks up the difference, so header, tab
+              bar, and dashboard body scroll together as one unit instead of
+              wrapping/squishing internally. */}
+          <main className="w-full h-full bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
+          <div className="h-full min-w-fit flex flex-col">
 
             <Header theme={theme} toggleTheme={() => dispatch(toggleTheme())} />
           <div className="shrink-0 bg-slate-50 dark:bg-bk-main">
@@ -427,6 +432,7 @@ function DashboardLayout() {
           )}
 
           <Footer />
+          </div>
           </main>
         </SplitPane>
 
