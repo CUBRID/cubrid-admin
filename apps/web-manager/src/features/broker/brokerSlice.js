@@ -278,6 +278,12 @@ const initialState = {
   dbLogsLoading: false,
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
   latestBrokerListRequestIdByHost: {}, // { hostUid: requestId }
+  // Tracks only the latest NON-background fetchBrokerList request per host
+  // — separate from latestBrokerListRequestIdByHost above, so a background
+  // poll starting while this one is still in flight can't make this one
+  // look stale for the navigator mirror once it resolves. See
+  // fetchBrokerList.fulfilled's own comment.
+  latestNavigatorBrokerListRequestIdByHost: {}, // { hostUid: requestId }
   propertyModal: {
     isOpen: false,
     brokerName: null,
@@ -350,24 +356,35 @@ const brokerSlice = createSlice({
         // from multiple hosts/tabs, that could discard every response for a
         // given host indefinitely, not just an actually-superseded one.
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+        const isBackground = !!action.meta.arg?.isBackground;
         state.latestBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
-        if (!action.meta.arg?.isBackground) {
+        if (!isBackground) {
           state.loadingByHost[hostUid] = true;
+          state.latestNavigatorBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
         }
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
-        state.loadingByHost[hostUid] = false;
+        const isBackground = typeof action.meta.arg === 'object' && !!action.meta.arg?.isBackground;
+        const requestId = action.meta.requestId;
+        // Two INDEPENDENT staleness checks, not one gating the other — a
+        // background poll starting while a foreground (navigator-relevant)
+        // request is still in flight must not make that foreground
+        // response's eventual navigator update look stale just because the
+        // background one now owns the general per-host staleness slot. See
+        // databaseCoreSlice.js's identical fix for the full reasoning.
+        const isLatestLive = requestId === state.latestBrokerListRequestIdByHost[hostUid];
+        const isLatestNavigator = !isBackground && requestId === state.latestNavigatorBrokerListRequestIdByHost[hostUid];
+        if (!isLatestLive && !isLatestNavigator) return;
         const newBrokers = action.payload;
-        if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
+        if (isLatestNavigator) state.loadingByHost[hostUid] = false;
+        if (isLatestLive && JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
           state.brokersByHost[hostUid] = newBrokers;
         }
         // Navigator mirror — skipped for a background (interval) poll, so
         // the sidebar broker tree only moves on an explicit user action.
-        const isBackground = typeof action.meta.arg === 'object' && !!action.meta.arg?.isBackground;
-        if (!isBackground && JSON.stringify(state.navigatorBrokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
+        if (isLatestNavigator && JSON.stringify(state.navigatorBrokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
           state.navigatorBrokersByHost[hostUid] = newBrokers;
         }
         // Only let the CURRENTLY ACTIVE host's own response affect the
@@ -376,21 +393,27 @@ const brokerSlice = createSlice({
         // nothing else for it superseded this request) could find its own
         // list doesn't contain whatever broker is selected in the NEW host
         // and wrongly null out that unrelated, still-valid selection.
-        if (hostUid === state.activeHostUid) {
+        if (isLatestLive && hostUid === state.activeHostUid) {
           const exists = (state.brokersByHost[hostUid] || []).find(b => b.name === state.selectedBroker);
           if (!exists) state.selectedBroker = null;
         }
       })
       .addCase(fetchBrokerList.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
-        state.loadingByHost[hostUid] = false;
-        state.error = action.payload;
-        state.brokersByHost[hostUid] = [];
+        const isBackground = typeof action.meta.arg === 'object' && !!action.meta.arg?.isBackground;
+        const requestId = action.meta.requestId;
+        const isLatestLive = requestId === state.latestBrokerListRequestIdByHost[hostUid];
+        const isLatestNavigator = !isBackground && requestId === state.latestNavigatorBrokerListRequestIdByHost[hostUid];
+        if (!isLatestLive && !isLatestNavigator) return;
         // Same reasoning as the fulfilled case: a background poll failure
         // is transient and shouldn't blank the navigator's tree.
-        if (!(typeof action.meta.arg === 'object' && action.meta.arg?.isBackground)) {
+        if (isLatestNavigator) {
+          state.loadingByHost[hostUid] = false;
+          state.error = action.payload;
           state.navigatorBrokersByHost[hostUid] = [];
+        }
+        if (isLatestLive) {
+          state.brokersByHost[hostUid] = [];
         }
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
@@ -621,6 +644,7 @@ const brokerSlice = createSlice({
           // host A here would also hide host B's own, still-legitimate
           // in-flight loading indicator.
           delete state.latestBrokerListRequestIdByHost[hostUid];
+          delete state.latestNavigatorBrokerListRequestIdByHost[hostUid];
           delete state.loadingByHost[hostUid];
         }
       );
