@@ -176,7 +176,7 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
   }, []);
 
   return (
-    <div className="relative font-sans" onMouseEnter={handleEnter} onMouseLeave={handleLeave} onKeyDown={(event) => {
+    <div className="relative font-sans shrink-0 whitespace-nowrap" onMouseEnter={handleEnter} onMouseLeave={handleLeave} onKeyDown={(event) => {
       if (event.key === 'Escape') closeMenu();
     }}>
       <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => open ? closeMenu() : setOpen(true)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-15 font-medium tracking-wide transition-all duration-200
