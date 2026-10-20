@@ -17,7 +17,7 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   const dispatch = useDispatch();
   
   // We use shallowEqual in your app, but for these simple primitive states, normal selector is fine.
-  const { authorizedHosts } = useSelector((state) => state.host);
+  const { authorizedHosts, reconnectQueue } = useSelector((state) => state.host);
   const { refreshCounter, activeMainTab } = useSelector((state) => state.layout);
 
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -46,6 +46,13 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
     // Only attempt to fetch if the host is authorized, or if it's the global dashboard
     const isAuthorized = hostUid === 'global' || (hostUid && authorizedHosts.includes(hostUid));
     if (!isAuthorized) return;
+    // A host sitting in reconnectQueue is waiting on the user to resolve a
+    // CMS session takeover via ReconnectHostModal — authorizedHosts is left
+    // untouched during that wait (see apiClient.js) so the UI state stays
+    // intact, but that means this check alone wouldn't skip it. Firing more
+    // requests here just re-triggers the same 401 this host is already
+    // blocked on, for no benefit; resume automatically once the queue clears.
+    if (hostUid && hostUid !== 'global' && reconnectQueue?.includes(hostUid)) return;
     // If a fetch triggered by ANY path (initial load, a poll tick, tab
     // resume, global refresh, network recovery) is still in flight, skip —
     // see the Polling Timer effect below for why letting fetches overlap is
@@ -66,7 +73,7 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
       isFetchingRef.current = false;
       if (!silent) setIsManualRefreshing(false);
     }
-  }, [dispatch, hostUid, authorizedHosts, onFetch, tabId]);
+  }, [dispatch, hostUid, authorizedHosts, reconnectQueue, onFetch, tabId]);
 
   // Callers pass `onFetch` as an inline closure that's recreated every render,
   // so `handleRefresh` itself gets a new identity every render too. Effects
