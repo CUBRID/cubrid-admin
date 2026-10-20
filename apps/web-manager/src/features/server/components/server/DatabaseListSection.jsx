@@ -6,7 +6,7 @@ import { Typography } from '../../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../../constants/useCM';
 
-export default function DatabaseListSection({ dbListDisplay, handleAutoStartToggle, isHA, autoStartReady = false, updatingAutoStart = false }) {
+export default function DatabaseListSection({ dbListDisplay, handleAutoStartToggle, autoStartReady = false, updatingAutoStart = false }) {
   const CM = useCM();
   const columns = [
     {

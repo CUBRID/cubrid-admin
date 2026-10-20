@@ -1,4 +1,4 @@
-import { LogContentContainer } from '@type/cms-response/view-log-cms-response';
+import { LogContentContainer } from '../models/cms-response/view-log-cms-response';
 
 /**
  * Client-facing response for log file content.

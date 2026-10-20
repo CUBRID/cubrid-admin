@@ -1,4 +1,4 @@
-import { DatabaseLogInfoContainer } from '@type/cms-response/get-database-log-info-cms-response';
+import { DatabaseLogInfoContainer } from '../models/cms-response/get-database-log-info-cms-response';
 
 /**
  * Client-facing response for database log file list.

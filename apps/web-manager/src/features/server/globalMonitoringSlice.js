@@ -30,7 +30,7 @@ export const fetchHostSummary = createAsyncThunk(
 
       // 3. Process Volume Aggregation (Legacy Logic)
       let totalPagePerm = 0, freePagePerm = 0;
-      let totalPagePermTemp = 0, freePagePermTemp = 0;
+      let totalPagePermTemp = 0;
       let totalPageTempTemp = 0, freePageTempTemp = 0;
       let freespaceOnStorage = 0;
 
@@ -46,14 +46,12 @@ export const fetchHostSummary = createAsyncThunk(
             freePagePerm += s.freepage || 0;
           } else if (type === 'TEMP') {
             totalPagePermTemp += s.totalpage || 0;
-            freePagePermTemp += s.freepage || 0;
           } else if (type === 'PERMANENT') {
             if (purpose === 'PERMANENT') {
               totalPagePerm += s.totalpage || 0;
               freePagePerm += s.freepage || 0;
             } else {
               totalPagePermTemp += s.totalpage || 0;
-              freePagePermTemp += s.freepage || 0;
             }
           } else if (type === 'TEMPORARY') {
             totalPageTempTemp += s.totalpage || 0;

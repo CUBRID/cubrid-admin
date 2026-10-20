@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, shallowEqual } from 'react-redux';
 import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
@@ -11,8 +11,6 @@ export default function Breadcrumb({
   onTabChange, 
   openTabs = [], 
   onCloseTab, 
-  onCloseOthers, 
-  onCloseAll, 
   labels = {} 
 }) {
   const CM = useCM();
@@ -77,9 +75,6 @@ export default function Breadcrumb({
     };
   }, [activeTab, handleCloseTab]);
 
-  const others = React.useMemo(() => openTabs.filter(tid => tid !== activeTab), [openTabs, activeTab]);
-  const dirtyOthers = React.useMemo(() => others.filter(tid => dirtyTabs.includes(tid)), [others, dirtyTabs]);
-  const cleanOthers = React.useMemo(() => others.filter(tid => !dirtyTabs.includes(tid)), [others, dirtyTabs]);
 
   const dirtyOnes = React.useMemo(() => openTabs.filter(tid => dirtyTabs.includes(tid)), [openTabs, dirtyTabs]);
   const cleanOnes = React.useMemo(() => openTabs.filter(tid => !dirtyTabs.includes(tid)), [openTabs, dirtyTabs]);

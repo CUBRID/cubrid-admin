@@ -1,4 +1,4 @@
-import { AccessLogEntry, ErrorLogEntry } from '@type/cms-response/load-access-log-cms-response';
+import { AccessLogEntry, ErrorLogEntry } from '../models/cms-response/load-access-log-cms-response';
 
 /**
  * Client-facing response for access log.

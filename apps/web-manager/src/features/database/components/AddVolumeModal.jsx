@@ -17,8 +17,7 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -71,7 +70,7 @@ export default function AddVolumeModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
-    state, 
+
     error, 
     startAction, 
     endSuccess, 

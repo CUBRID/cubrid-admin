@@ -14,9 +14,9 @@ import { getLogPath } from '../util/resolve-log-path';
  */
 @Injectable()
 export class ConfigService {
-  public port: string = '8080';
+  public port = '8080';
   public secret_key!: string;
-  public environment: string = 'development';
+  public environment = 'development';
   public allowedOrigins: string[] = [];
   public cmsRejectUnauthorized!: boolean;
   public cmsForwardEnabled!: boolean;

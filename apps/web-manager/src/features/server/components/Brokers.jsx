@@ -19,7 +19,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   // dashboard/broker tabs for different hosts don't clobber each other.
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,

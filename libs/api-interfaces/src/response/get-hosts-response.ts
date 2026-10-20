@@ -1,4 +1,4 @@
-import { SafeHostGroupsMap } from '@type/collections';
+import { SafeHostGroupsMap } from '../models/collections';
 
 /**
  * Response for host/group listing — groups contain nested hosts.

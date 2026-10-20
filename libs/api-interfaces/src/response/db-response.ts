@@ -1,4 +1,4 @@
-import { DBInfo } from '@type/db-info';
+import { DBInfo } from '../models/db-info';
 
 /**
  * Response interface for single database connection information.

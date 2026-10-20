@@ -302,7 +302,7 @@ apiClient.interceptors.response.use(
 
           originalRequest._retry = true;
           return apiClient(originalRequest);
-        } catch (refreshError) {
+        } catch {
           refreshingHosts.delete(hostUid);
           if (reconnectingHosts.has(hostUid)) {
             return Promise.reject(error);

@@ -3,10 +3,10 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { logoutUser, fetchUser } from '../../auth/authSlice';
 import { fetchPreferences } from '../../user/userSlice';
 import UserProfileModal from '../../user/components/UserProfileModal';
-import { showStatusModal } from '../layoutSlice';
+
 import { fetchDatabaseStartInfo, startDatabase } from '../../database/databaseSlice';
 import { fetchBrokerList, startBroker } from '../../broker/brokerSlice';
-import { setAboutCubrid } from '../appBarSlice';
+
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';

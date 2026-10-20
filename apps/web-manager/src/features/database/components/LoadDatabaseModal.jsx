@@ -16,8 +16,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import {
-  ModalStatusLoading,
+import { ModalStatusLoading,
   ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
@@ -26,11 +25,10 @@ export default function LoadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isLoadDatabaseModalOpen: isLoadDBModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabases, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabases } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
-  const isLoggedIn = selectedDatabase && loggedInDatabases?.includes(selectedDatabase);
 
   const {
     error: actionError,

@@ -5,11 +5,9 @@ import { brokerApi } from '../broker/brokerApi';
 import { fetchDatabaseStartInfo } from '../database/databaseSlice';
 import { fetchBrokerList } from '../broker/brokerSlice';
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
-import {
-  findHaPeersNeedingMerge,
+import { findHaPeersNeedingMerge,
   findRegisteredHaPeersInSameGroup,
   findUndiscoveredHaPeers,
-  isHaPostLoginModalOpen,
 } from './haPeerUtils';
 
 export { isHaPostLoginModalOpen, clearHaClusterLinkSessionNotices } from './haPeerUtils';
@@ -874,7 +872,7 @@ const hostSlice = createSlice({
       })
       .addCase(deleteHostGroup.fulfilled, (state, action) => {
         state.loading = false;
-        const { groupId, hostGroups, removedHostUids = [] } = action.payload;
+        const { hostGroups, removedHostUids = [] } = action.payload;
         applyHostGroupsResponse(state, hostGroups);
         const removedSet = new Set(removedHostUids);
         if (removedSet.has(state.selectedHostUid)) {

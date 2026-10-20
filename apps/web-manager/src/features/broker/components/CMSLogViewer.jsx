@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSelector, useDispatch , shallowEqual } from 'react-redux';
+import { useSelector, useDispatch  } from 'react-redux';
 import { fetchCMSLogs } from '../brokerSlice';
 import { useCM } from '../../../constants/useCM';
 

@@ -1,8 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { brokerApi } from './brokerApi';
 
-const generateId = () => Math.random().toString(36).substring(2, 6);
-
 export const fetchBrokerList = createAsyncThunk(
   'broker/fetchBrokerList',
   async (arg, { rejectWithValue }) => {
@@ -34,7 +32,7 @@ export const fetchBrokerList = createAsyncThunk(
           try {
             const statusRes = await brokerApi.getBrokerStatus(hostUid, b.name);
             return { b, statusRes, success: true };
-          } catch (err) {
+          } catch {
             return { b, success: false };
           }
         })

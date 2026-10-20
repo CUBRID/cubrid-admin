@@ -47,7 +47,7 @@ export const updatePreferences = createAsyncThunk(
   'user/updatePreferences',
   async (preferences, { rejectWithValue }) => {
     try {
-      const response = await userApi.updatePreferences(preferences);
+      await userApi.updatePreferences(preferences);
       return preferences;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to update preferences');
@@ -236,7 +236,7 @@ const userSlice = createSlice({
         state.actionLoading = true;
         state.error = null;
       })
-      .addCase(createDatabaseUser.fulfilled, (state, action) => {
+      .addCase(createDatabaseUser.fulfilled, (state, _action) => {
         state.actionLoading = false;
         // Optionally refetch users or update state manually
       })
@@ -249,7 +249,7 @@ const userSlice = createSlice({
         state.actionLoading = true;
         state.error = null;
       })
-      .addCase(updateDatabaseUser.fulfilled, (state, action) => {
+      .addCase(updateDatabaseUser.fulfilled, (state, _action) => {
         state.actionLoading = false;
       })
       .addCase(updateDatabaseUser.rejected, (state, action) => {

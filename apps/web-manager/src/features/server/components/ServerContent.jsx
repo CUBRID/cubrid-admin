@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useState, useCallback, useRef } from 'react';
-import { useSelector, useDispatch , shallowEqual } from 'react-redux';
+import React, { useState, useRef } from 'react';
+import { useSelector , shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
 import { databaseApi } from '../../database/databaseApi';
 import { fetchHostEnv } from '../../host/hostSlice';
@@ -22,16 +22,16 @@ import { useCM } from '../../../constants/useCM';
 
 const Component = function ServerContent({ hostUid }) {
   const CM = useCM();
-  const dispatch = useDispatch();
+
   // Database list/active list are fetched into this component's own state
   // (not the shared `state.database.databases/activeDatabases` slice) so that
   // multiple simultaneously-open dashboard tabs for different hosts, and the
   // navigator, don't clobber each other's displayed data.
   const [databases, setDatabases] = useState([]);
   const [activeDatabases, setActiveDatabases] = useState([]);
-  const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { refreshCounter } = useSelector((state) => state.layout, shallowEqual);
+
   const [autoStartDBs, setAutoStartDBs] = useState([]);
   const [autoStartReady, setAutoStartReady] = useState(false);
   const autoStartReadVersion = useRef(0);

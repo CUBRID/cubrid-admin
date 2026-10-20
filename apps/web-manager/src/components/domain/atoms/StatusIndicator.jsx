@@ -7,7 +7,6 @@ export const StatusIndicator = ({
 }) => {
   const isOk = status === 'on' || status === 'connected';
   const isErr = status === 'error' || status === 'disconnected' || status === 'off';
-  const isUnknown = status === 'unknown';
 
   const baseConfig = isOk
     ? {

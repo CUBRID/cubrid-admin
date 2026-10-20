@@ -3,7 +3,7 @@ import { useRef, useState, useLayoutEffect } from 'react';
 /**
  * A reusable context menu wrapper that positions itself within the viewport.
  */
-export default function ContextMenuWrapper({ x, y, children, onClose, width = "w-60" }) {
+export default function ContextMenuWrapper({ x, y, children, width = "w-60" }) {
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: y, left: x });
   const [isPositioned, setIsPositioned] = useState(false);

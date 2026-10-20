@@ -14,7 +14,7 @@ import { useCM } from '../../../constants/useCM';
 export default function EditHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isEditHostModalOpen, hostToEditUid, hosts, selectedHostUid, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  const { isEditHostModalOpen, hostToEditUid, hosts, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -129,10 +129,6 @@ export default function EditHostModal() {
     dispatch(closeEditHostModal());
     dispatch(clearHostError());
   };
-
-  const connectionPreview = formData.address
-    ? `${formData.address}:${formData.port || '8001'}`
-    : null;
 
   return (
     <Modal

@@ -1,7 +1,7 @@
-import React, { createContext, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Toast } from '../../components/ds/feedback/Toast';
 
-export const ToastContext = createContext(null);
+import { ToastContext } from './toastContextValue';
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);

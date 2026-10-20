@@ -20,7 +20,7 @@ export const fetchDatabaseVolumes = createAsyncThunk(
         try {
           const res = await databaseApi.getVolumeInfo(hostUid, dbname);
           return { ...res, dbname }; // Inject dbname for mapping
-        } catch (e) {
+        } catch {
           return null;
         }
       });

@@ -1,5 +1,5 @@
-import { BaseCmsResponse } from '@type/cms-response/base-cms-response';
-import { ParamdumpCmsResponse } from '@type/cms-response/paramdump-cms-response';
+import { BaseCmsResponse } from '../models/cms-response/base-cms-response';
+import { ParamdumpCmsResponse } from '../models/cms-response/paramdump-cms-response';
 
 /**
  * Client-facing response for paramdump.

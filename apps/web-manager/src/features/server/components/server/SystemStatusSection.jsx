@@ -27,7 +27,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
-  const { currentStatus = {}, averages = {}, history = [], loading = false, error = null } = hostData;
+  const { currentStatus = {}, averages = {}, history = [], error = null } = hostData;
   const { authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = hostUid && authorizedHosts.includes(hostUid);
   const hostHaInfo = haInfo[hostUid] || {};

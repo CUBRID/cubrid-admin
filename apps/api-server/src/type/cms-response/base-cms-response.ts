@@ -1,6 +1,1 @@
-export type BaseCmsResponse = {
-  __EXEC_TIME: string;
-  note: string;
-  status: string;
-  task: string;
-};
+export * from '@api-interfaces/models/cms-response/base-cms-response';

@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import {
-  addHost,
+import { addHost,
   clearHostError,
   openDiscoveryModal,
   loginToHostWithSideEffects,
@@ -150,10 +149,6 @@ export default function AddHostModal({ isOpen, onClose }) {
       dispatch(openDiscoveryModal());
     }
   };
-
-  const connectionPreview = formData.address
-    ? `${formData.address}:${formData.port || '8001'}`
-    : null;
 
   return (
     <Modal

@@ -1,4 +1,4 @@
-import { HostInfo } from '@type/host-info';
+import { HostInfo } from '../models/host-info';
 
 /**
  * Request interface for updating an existing host.

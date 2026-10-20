@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import React, { useState } from 'react';
-import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
 import DBPerformanceSection from './dashboard/DBPerformanceSection';
 import DBVolumesSection from './dashboard/DBVolumesSection';
@@ -21,7 +21,7 @@ import { useCM } from '../../../constants/useCM';
 
 const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const CM = useCM();
-  const dispatch = useDispatch();
+
   const { selectedHostUid, hosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   
   const hostUid = propHostUid || selectedHostUid;
@@ -78,7 +78,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   
   const { dashboardData, dashboardLoading } = useSelector((state) => state.databaseMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { refreshCounter, activeMainTab } = useSelector((state) => state.layout, shallowEqual);
+  const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
 
   const [logModal, setLogModal] = useState({ isOpen: false, brokerName: '', casId: '', type: 'sql' });
   

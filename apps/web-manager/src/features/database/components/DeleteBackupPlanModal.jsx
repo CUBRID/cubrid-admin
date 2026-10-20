@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {  useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDeleteBackupPlanModal, deleteBackupSchedule, fetchBackupSchedule } from '../databaseSlice';
 import { useCM } from '../../../constants/useCM';
@@ -9,8 +9,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -29,7 +28,7 @@ export default function DeleteBackupPlanModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   
   const { 
-    state, 
+
     error: actionError, 
     startAction, 
     endSuccess, 

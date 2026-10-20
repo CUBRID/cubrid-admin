@@ -49,7 +49,7 @@ function hostnameMatches(a, b) {
 /** Match saved host connection to CMS heartbeat peer (ip / hostname). */
 export function hostMatchesHaPeer(host, peer) {
   const hAddr = normalizeIdent(host?.address);
-  const hAlias = normalizeIdent(host?.alias);
+
   const nIp = normalizeIdent(peer?.ip);
   const nHost = normalizeIdent(peer?.hostname);
 

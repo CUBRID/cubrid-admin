@@ -1,7 +1,5 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -14,7 +12,7 @@ import { JobResultModal } from '../cmsJob/JobResultModal';
 import { isTerminalCmsJobStatus } from '../cmsJob/cmsJobLabels';
 import { normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
 
-export const CmsJobContext = createContext(null);
+import { CmsJobContext } from './cmsJobContextValue';
 
 const MAX_TRACKED = 50;
 
@@ -261,12 +259,4 @@ export function CmsJobProvider({ children }) {
       )}
     </CmsJobContext.Provider>
   );
-}
-
-export function useCmsJobs() {
-  const ctx = useContext(CmsJobContext);
-  if (!ctx) {
-    throw new Error('useCmsJobs must be used within CmsJobProvider');
-  }
-  return ctx;
 }

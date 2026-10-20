@@ -1,5 +1,5 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useState, useCallback, useMemo, memo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { databaseApi } from '../databaseApi';
 import { openTab } from '../../layout/layoutSlice';

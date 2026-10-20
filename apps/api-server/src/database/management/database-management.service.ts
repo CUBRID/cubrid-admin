@@ -173,7 +173,7 @@ export class DatabaseManagementService extends BaseService {
     hostUid: string,
     dbname: string,
     request: UnloadDatabaseRequest
-  ): Promise<{}> {
+  ): Promise<UnloadDatabaseCmsResponse['result']> {
     const response = await this.unloadDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
     return response.result;

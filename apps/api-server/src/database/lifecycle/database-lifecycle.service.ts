@@ -547,8 +547,8 @@ export class DatabaseLifecycleService extends BaseService {
           ''
         );
 
-        let groups: { group: string[] } = { group: [] };
-        let authorization: string[] = [];
+        const groups: { group: string[] } = { group: [] };
+        const authorization: string[] = [];
 
         // Fetch current user info to preserve existing groups and authorization.
         try {

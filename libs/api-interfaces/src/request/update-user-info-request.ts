@@ -1,4 +1,4 @@
-import { User } from '@type/user';
+import { User } from '../models/user';
 
 /**
  * Request interface for updating user information.

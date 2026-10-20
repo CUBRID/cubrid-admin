@@ -45,7 +45,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   const configReads = useRef(createSingleFlight());
   const loadVersion = useRef(0);
   const [content, setContent] = useState('');
-  const [originalContent, setOriginalContent] = useState('');
+  const [, setOriginalContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,7 +74,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
       setHasChanges(false);
       setLoaded(true);
       dispatch(setTabDirty({ tabId, isDirty: false }));
-    } catch (err) {
+    } catch {
       if (version !== loadVersion.current) return;
       dispatch(showStatusModal({ type: 'error', title: CM.fetchFailed, message: CM.configFetchErrorMsg }));
     } finally {

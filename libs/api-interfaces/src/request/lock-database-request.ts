@@ -5,4 +5,4 @@
  * @category Client Requests
  * @since 1.0.0
  */
-export type LockDatabaseRequest = {};
+export type LockDatabaseRequest = Record<string, never>;

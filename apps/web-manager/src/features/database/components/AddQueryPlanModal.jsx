@@ -15,8 +15,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -38,7 +37,7 @@ export default function AddQueryPlanModal() {
   const { theme } = useSelector((state) => state.layout, shallowEqual);
   
   const { 
-    state, 
+
     error: actionError, 
     startAction, 
     endSuccess, 

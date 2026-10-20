@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import {
-  setSelectedDatabase,
+import { setSelectedDatabase,
   setSelectedDatabaseSubItem,
   fetchBackupSchedule,
   fetchQueryPlan,
@@ -12,11 +11,7 @@ import {
   setSelectedBackupId,
   openEditQueryPlanModal,
 } from '../../../database/databaseSlice';
-import { 
-  fetchDatabaseParamDump, 
-  fetchDatabasePlanDump, 
-  fetchAutoVolumeConfig 
-} from '../../../database/databaseConfigurationSlice';
+
 import { fetchDatabaseUsers } from '../../../user/userSlice';
 import { openTab } from '../../layoutSlice';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';

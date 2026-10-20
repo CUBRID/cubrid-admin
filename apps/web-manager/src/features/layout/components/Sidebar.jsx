@@ -1,8 +1,7 @@
 import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
-import {
-  fetchHosts,
+import { fetchHosts,
   setSelectedHost,
   loginHostsBatch,
   openDeleteHostModal,
@@ -15,45 +14,34 @@ import {
   stopService,
   moveHost
 } from '../../host/hostSlice';
-import {
-  fetchDatabaseStartInfo, startDatabase, stopDatabase, loginDatabase, registerDatabase,
-  setSelectedDatabase, setSelectedDatabaseSubItem, clearDatabaseError, resetDatabaseState
+import { fetchDatabaseStartInfo, startDatabase, stopDatabase,
+  setSelectedDatabase, resetDatabaseState
 } from '../../database/databaseCoreSlice';
 
-import {
-  fetchDatabaseVolumes, fetchDatabaseSpaceInfo, fetchDashboardVolumes, fetchDashboardLocks,
-  fetchDashboardPerformance, fetchDashboardCAS, fetchDashboardData, clearMonitoringError
+import { fetchDatabaseSpaceInfo
 } from '../../database/databaseMonitoringSlice';
 
-import {
-  createDatabase, copyDatabase, deleteDatabase, renameDatabase, fetchCreateDatabaseInfo,
-  addVolume, fetchBackupSchedule, addBackupSchedule,
-  editBackupSchedule, deleteBackupSchedule, fetchBackupList, fetchBackupDbInfo,
-  fetchAutoBackupLog, checkDatabase, compactDatabase, optimizeDatabase, loadDatabase,
-  unloadDatabase, fetchQueryPlan, setAutoExecQuery, fetchQueryPlanLog, fetchLockInfo,
-  fetchTransactionInfo, killTransaction, clearError
+import { fetchBackupSchedule, fetchQueryPlan
 } from '../../database/databaseOperationSlice';
 
-import {
-  openUnloadDatabaseModal, closeUnloadDatabaseModal, openLoadDatabaseModal, closeLoadDatabaseModal,
-  openCheckDatabaseModal, closeCheckDatabaseModal, openCompactDatabaseModal, closeCompactDatabaseModal,
-  openCopyDatabaseModal, closeCopyDatabaseModal, openBackupDatabaseModal, closeBackupDatabaseModal,
-  openRestoreDatabaseModal, closeRestoreDatabaseModal, openOptimizeDatabaseModal, closeOptimizeDatabaseModal,
-  openAddBackupPlanModal, closeAddBackupPlanModal, openEditBackupPlanModal, closeEditBackupPlanModal,
-  openDeleteBackupPlanModal, closeDeleteBackupPlanModal, openAutoBackupLogModal, closeAutoBackupLogModal,
-  openLockInformationModal, closeLockInformationModal, openUnloadResultModal, closeUnloadResultModal,
-  openTransactionInfoModal, closeTransactionInfoModal, openKillTransactionModal, closeKillTransactionModal,
-  openDeleteDatabaseModal, closeDeleteDatabaseModal, openDatabasePropertyModal, closeDatabasePropertyModal,
-  openRenameDatabaseModal, closeRenameDatabaseModal, openAddVolumeModal, closeAddVolumeModal,
-  openDatabaseInfoModal, closeDatabaseInfoModal, openPlanDumpModal, closePlanDumpModal,
-  openAddQueryPlanModal, closeAddQueryPlanModal, openAutoQueryLogModal, closeAutoQueryLogModal,
-  openCreateDatabaseModal, closeCreateDatabaseModal, openSetAutomationVolumeModal, closeSetAutomationVolumeModal,
-  openAutoVolumeLogModal, closeAutoVolumeLogModal, openLoginDatabaseModal, closeLoginDatabaseModal,
-  openEditQueryPlanModal, closeEditQueryPlanModal, openDeleteQueryPlanModal, closeDeleteQueryPlanModal,
-  setSelectedBackupId, clearSelectedBackupId, setSelectedQueryPlanId
+import { openUnloadDatabaseModal, openLoadDatabaseModal,
+  openCheckDatabaseModal, openCompactDatabaseModal,
+  openCopyDatabaseModal, openBackupDatabaseModal,
+  openRestoreDatabaseModal, openOptimizeDatabaseModal,
+  openAddBackupPlanModal, openEditBackupPlanModal,
+  openDeleteBackupPlanModal, openAutoBackupLogModal,
+  openLockInformationModal,
+  openTransactionInfoModal,
+  openDeleteDatabaseModal, openDatabasePropertyModal,
+  openRenameDatabaseModal, openAddVolumeModal,
+  openDatabaseInfoModal, openPlanDumpModal,
+  openAddQueryPlanModal, openAutoQueryLogModal,
+  openCreateDatabaseModal, openSetAutomationVolumeModal,
+  openAutoVolumeLogModal, openLoginDatabaseModal,
+  openEditQueryPlanModal, openDeleteQueryPlanModal,
+  setSelectedBackupId
 } from '../../database/databaseUISlice';
-import {
-  fetchBrokerList,
+import { fetchBrokerList,
   fetchBrokerLogs,
   fetchAdminLogs,
   fetchCMSLogs,
@@ -81,7 +69,7 @@ import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import { Button } from '../../../components/ds/foundation/Button';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
-import { useCmsJobs } from '../../../infrastructure/context/CmsJobContext';
+import { useCmsJobs } from '../../../infrastructure/hooks/useCmsJobs';
 import { BackgroundJobsPanel } from '../../../infrastructure/cmsJob/BackgroundJobsPanel';
 
 // Internal Sidebar Components
@@ -122,7 +110,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const [spaceContextMenu, setSpaceContextMenu] = useState(null);
   const [queryPlanContextMenu, setQueryPlanContextMenu] = useState(null);
   const [queryItemContextMenu, setQueryItemContextMenu] = useState(null);
-  const [jobAutomationContextMenu, setJobAutomationContextMenu] = useState(null);
+  const [, setJobAutomationContextMenu] = useState(null);
   const [brokerRootContextMenu, setBrokerRootContextMenu] = useState(null);
 
   const [backupItemContextMenu, setBackupItemContextMenu] = useState(null);
@@ -154,9 +142,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { databases, activeDatabases, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
-  const { brokers, logsLoading, adminLogsLoading, cmsLogsLoading, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
-  const isRefreshingLogs = logsLoading || adminLogsLoading || cmsLogsLoading || dbLogsLoading;
-
+  const { brokers } = useSelector((state) => state.broker, shallowEqual);
 
   useEffect(() => {
     dispatch(fetchHosts());

@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useSelector, useDispatch , shallowEqual } from 'react-redux';
+import React from 'react';
+import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus } from '../brokerSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -12,7 +12,7 @@ import { useCM } from '../../../constants/useCM';
 
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
-  const dispatch = useDispatch();
+
   const { brokers, detailedStatus } = useSelector((state) => state.broker, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };

@@ -5,4 +5,4 @@
  * @category Client Requests
  * @since 1.0.0
  */
-export type GetAutoBackupDbErrLogRequest = {};
+export type GetAutoBackupDbErrLogRequest = Record<string, never>;

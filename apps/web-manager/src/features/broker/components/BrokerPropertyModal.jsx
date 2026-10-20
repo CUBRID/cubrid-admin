@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { useCM } from '../../../constants/useCM';
-import {
-  closeBrokerPropertyModal,
+import { closeBrokerPropertyModal,
   fetchBrokerConfig,
   updateBrokerConfig,
 } from '../brokerSlice';
@@ -112,7 +111,7 @@ export default function BrokerPropertyModal() {
   const [initialParams, setInitialParams] = useState({});
   const [initialSpecificParams, setInitialSpecificParams] = useState(new Set());
   const [viewStatus, setViewStatus] = useState(ViewStatus.FORM);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [, setErrorMessage] = useState('');
 
   const config = useMemo(() => brokerConfig[hostUid] || { data: {}, loading: false }, [brokerConfig, hostUid]);
 

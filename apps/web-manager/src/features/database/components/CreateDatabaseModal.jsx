@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { 
-  closeCreateDatabaseModal, 
+import { closeCreateDatabaseModal,
   fetchCreateDatabaseInfo,
   fetchDatabaseStartInfo 
 } from '../databaseSlice';
@@ -21,8 +20,7 @@ import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -40,7 +38,7 @@ const BASE_LOCALE_VALUES = ['en_US.iso88591', 'en_US.utf8', 'ko_KR.euckr', 'ko_K
 
 const renameVolumesSequentially = (volumes, dbName) => {
   const typeCounters = {};
-  return volumes.map((vol, idx) => {
+  return volumes.map((vol, _idx) => {
     const type = vol.type;
     typeCounters[type] = (typeCounters[type] || 0) + 1;
     const padNum = String(typeCounters[type]).padStart(3, '0');
@@ -122,7 +120,7 @@ export default function CreateDatabaseModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
-    state, 
+
     error, 
     startAction, 
     endSuccess, 

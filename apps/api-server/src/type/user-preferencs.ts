@@ -1,4 +1,1 @@
-export type UserPreference = {
-  dashboardInterval: Number;
-  brokerStatusInterval: Number;
-};
+export * from '@api-interfaces/models/user-preferencs';

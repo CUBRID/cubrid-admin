@@ -24,7 +24,7 @@ export default function BrokerConfigEditor({ hostUid }) {
   // Source View State
   const originalRawContentRef = useRef('');
   const [rawContent, setRawContent] = useState('');
-  const [originalRawContent, setOriginalRawContent] = useState('');
+  const [, setOriginalRawContent] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
 
   const fetchConfig = useCallback(async () => {
@@ -84,7 +84,7 @@ export default function BrokerConfigEditor({ hostUid }) {
         title: CM.configSaved,
         message: CM.brokerConfigSaveSuccess
       }));
-    } catch (err) {
+    } catch {
       dispatch(showStatusModal({
         type: 'error',
         title: CM.saveFailed,

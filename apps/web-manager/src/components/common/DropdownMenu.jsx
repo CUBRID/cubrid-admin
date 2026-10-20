@@ -7,7 +7,7 @@ const MenuContext = createContext({ closeMenu: () => {} });
  * Reusable submenu component with hover delay.
  * Aligned with the "Technical Compact" design system.
  */
-export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56', gap = 'ml-1' }) {
+export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56', _gap = 'ml-1' }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ x: 'right', top: 0, left: 0, maxHeight: 300 });
   const [isPositioned, setIsPositioned] = useState(false);

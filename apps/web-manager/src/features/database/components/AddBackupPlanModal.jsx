@@ -14,8 +14,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -42,7 +41,7 @@ export default function AddBackupPlanModal() {
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
-    state, 
+
     error: actionError, 
     startAction, 
     endSuccess, 

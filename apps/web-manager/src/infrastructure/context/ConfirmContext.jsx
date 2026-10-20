@@ -1,7 +1,7 @@
-import React, { createContext, useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { ConfirmDialog } from '../../components/ds/layout/ConfirmDialog';
 
-export const ConfirmContext = createContext(null);
+import { ConfirmContext } from './confirmContextValue';
 
 export const ConfirmProvider = ({ children }) => {
   const [dialogConfig, setDialogConfig] = useState(null);
