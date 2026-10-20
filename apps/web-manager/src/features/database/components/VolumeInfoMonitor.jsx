@@ -102,8 +102,8 @@ export default function VolumeInfoMonitor({ tabId }) {
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-none animate-in fade-in duration-300">
 
       {/* ── Header ── */}
-      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
-        <div className="flex items-center gap-3">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 min-w-fit bg-white dark:bg-background-dark sticky top-0 z-10">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="hard_drive" size="sm" weight={300} className="text-amber-500" />
           </div>
@@ -126,8 +126,8 @@ export default function VolumeInfoMonitor({ tabId }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mr-2 whitespace-nowrap">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
           </Typography>
 

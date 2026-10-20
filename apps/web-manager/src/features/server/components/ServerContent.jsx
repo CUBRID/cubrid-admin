@@ -201,8 +201,8 @@ const Component = function ServerContent({ hostUid }) {
     <div data-testid="server-dashboard" className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden">
 
       {/* ── Header ── */}
-      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <div className="flex items-center gap-3">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 min-w-fit sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="dns" size="sm" weight={300} className="text-amber-500" />
           </div>
@@ -224,8 +224,8 @@ const Component = function ServerContent({ hostUid }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-14">
-          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 text-14 ml-auto shrink-0">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mr-2 whitespace-nowrap">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 

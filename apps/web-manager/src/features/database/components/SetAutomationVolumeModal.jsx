@@ -254,7 +254,7 @@ export default function SetAutomationVolumeModal() {
       onSubmit={handleSave}
       footer={
         <div className="flex items-center justify-between w-full">
-          <Typography variant="caption" className="text-11 text-slate-400 font-mono hidden sm:block">
+          <Typography variant="caption" className="text-11 text-slate-400 font-mono whitespace-nowrap">
             {CM.pageSize16kLabel}
           </Typography>
           <div className="flex gap-2">

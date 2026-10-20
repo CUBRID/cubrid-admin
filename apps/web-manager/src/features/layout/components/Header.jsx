@@ -35,16 +35,19 @@ export default function Header({ theme, toggleTheme }) {
 
   return (
     <>
-      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center px-6 z-40 shrink-0 select-none relative overflow-x-auto overflow-y-hidden custom-scrollbar">
+      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center px-6 z-40 shrink-0 min-w-fit select-none relative">
         {/* No justify-between: with both sides pinned to opposite edges,
             squeezing the row below their combined natural width makes the
             left side run straight into the right side's space instead of
             yielding it — flexbox only avoids that via shrinking, which none
             of these items do. ml-auto gets the same flush-right look while
             there's room, but once there isn't, it just settles to 0 instead
-            of going negative, so the row grows past the header's width and
-            scrolls horizontally (via overflow-x-auto above) instead of the
-            two sides overlapping. */}
+            of going negative, so the row grows past the header's own width
+            instead of the two sides overlapping — the resulting horizontal
+            overflow is handled one level up by <main>'s own scroll
+            container (App.jsx), so the header, tab bar, and dashboard body
+            all scroll together as one unit instead of each getting its own
+            independent scrollbar. */}
         <div className="w-full flex items-center">
           {/* ── Left: logo + menus ── */}
           <div className="flex items-center gap-1 shrink-0">
