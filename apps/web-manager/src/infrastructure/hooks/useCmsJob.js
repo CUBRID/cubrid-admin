@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { cancelCmsJobPoll } from '../services/cmsJobRunner';
-import { useCmsJobs } from '../context/CmsJobContext';
+import { useCmsJobs } from '../hooks/useCmsJobs';
 
 /**
  * Run a CMS background job: submit (202 + jobId) then poll until done.

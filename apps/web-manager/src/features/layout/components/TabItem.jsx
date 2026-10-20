@@ -77,7 +77,7 @@ export default function TabItem({
       <div className="relative flex items-center justify-center shrink-0">
         <Icon 
            name={icon || 'description'} 
-           size="17px" 
+           size="17px"
            className={isActive ? 'text-amber-500' : 'text-slate-400 dark:text-slate-600'} 
            weight={isActive ? 400 : 300}
         />

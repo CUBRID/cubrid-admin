@@ -16,7 +16,7 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange }) {
     { label: CM.loFileCountPerDir, name: 'loFileDirectory', useName: 'useLoFileDirectory', type: 'text' },
   ];
 
-  const handleCheckboxToggle = (e, useName, valueName) => {
+  const handleCheckboxToggle = (e, useName, _valueName) => {
     const isChecked = e.target.checked;
     handleInputChange(e);
 

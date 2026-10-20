@@ -3,7 +3,7 @@ import { brokerApi } from './brokerApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { createRateTracker } from './rateTracker';
 
-const generateId = () => Math.random().toString(36).substring(2, 6);
+
 
 // Module-level so the previous-sample baseline survives across polls and
 // across every host/broker tab, keyed by hostUid+brokerName below.
@@ -49,7 +49,7 @@ export const fetchBrokerList = createAsyncThunk(
           try {
             const statusRes = await brokerApi.getBrokerStatus(hostUid, b.name);
             return { b, statusRes, success: true };
-          } catch (err) {
+          } catch {
             return { b, success: false };
           }
         })

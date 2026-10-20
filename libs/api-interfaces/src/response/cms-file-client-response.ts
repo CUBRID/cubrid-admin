@@ -1,3 +1,3 @@
-import { CheckFileCmsResponse } from '@type/cms-response/check-file-cms-response';
+import { CheckFileCmsResponse } from '../models/cms-response/check-file-cms-response';
 
 export type CheckFileClientResponse = CheckFileCmsResponse;

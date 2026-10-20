@@ -6,7 +6,7 @@ import { StartInfoClientResponse } from './database-client-response';
  * @category Client Responses
  * @since 1.0.0
  */
-export type OperationResult<T = {}> = {
+export type OperationResult<T = unknown> = {
   /**
    * Whether the operation succeeded
    */

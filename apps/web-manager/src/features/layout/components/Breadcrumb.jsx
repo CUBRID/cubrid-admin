@@ -12,8 +12,8 @@ export default function Breadcrumb({
   onTabChange, 
   openTabs = [], 
   onCloseTab, 
-  onCloseOthers, 
-  onCloseAll, 
+  onCloseOthers,
+  onCloseAll,
   onReload,
   labels = {} 
 }) {

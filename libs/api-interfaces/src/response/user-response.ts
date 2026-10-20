@@ -1,4 +1,4 @@
-import { User } from '@type/user';
+import { User } from '../models/user';
 
 /**
  * Response interface for user information.

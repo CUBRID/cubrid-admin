@@ -1,0 +1,92 @@
+name: TCP for trusted pull requests
+
+on:
+  # Run the workflow definition from the base repository so trusted project
+  # developers can validate PRs submitted from their forks.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  tcp:
+    name: TCP against fixed CMS host
+    if: >-
+      github.event.pull_request.draft == false &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 45
+    # Keep TCP/CMS secrets scoped to this environment. Do not configure
+    # required reviewers: this check is informational and runs automatically.
+    environment: tcp-e2e
+    concurrency:
+      # Share the native E2E workflow's lock because both suites mutate the
+      # same fixed CMS environment.
+      group: real-cms-e2e
+      cancel-in-progress: false
+    env:
+      CI: true
+      CWM_PR_SHA: ${{ github.event.pull_request.head.sha }}
+
+    steps:
+      - name: Checkout exact CWM PR commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ env.CWM_PR_SHA }}
+          persist-credentials: false
+
+      - name: Verify CWM commit
+        run: test "$(git rev-parse HEAD)" = "$CWM_PR_SHA"
+
+      - name: Checkout TCP
+        uses: actions/checkout@v4
+        with:
+          repository: CUBRID/cubrid-webmanager-e2e
+          token: ${{ secrets.TCP_REPOSITORY_TOKEN }}
+          path: tcp
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tcp/package-lock.json
+
+      - name: Install and build CWM
+        run: |
+          npm ci
+          npm run build:server
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      - name: Install TCP and Chromium
+        working-directory: tcp
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run TCP
+        working-directory: tcp
+        run: npm test
+        env:
+          CMS_HOST: ${{ secrets.E2E_CMS_HOST }}
+          CMS_PORT: ${{ secrets.E2E_CMS_PORT }}
+          CMS_USER: ${{ secrets.E2E_CMS_USER }}
+          CMS_PASSWORD: ${{ secrets.E2E_CMS_PASSWORD }}
+          E2E_DB: ${{ secrets.E2E_DB }}
+          WEBMANAGER_REPO_PATH: ${{ github.workspace }}
+          WEBMANAGER_SKIP_BUILD: 'true'
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcp-playwright-report-pr-${{ github.event.pull_request.number }}-attempt-${{ github.run_attempt }}
+          path: tcp/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14

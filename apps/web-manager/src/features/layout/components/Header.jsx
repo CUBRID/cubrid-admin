@@ -3,8 +3,8 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { logoutUser, fetchUser } from '../../auth/authSlice';
 import { fetchPreferences } from '../../user/userSlice';
 import UserProfileModal from '../../user/components/UserProfileModal';
-import { showStatusModal } from '../layoutSlice';
-import { setAboutCubrid } from '../appBarSlice';
+
+
 import { Icon } from '../../../components/ds/foundation/Icon';
 import AboutModal from './AboutModal';
 import HeaderMenu from './HeaderMenu';

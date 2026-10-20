@@ -1,5 +1,5 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
 import { fetchHostEnv } from '../../host/hostSlice';
@@ -28,6 +28,7 @@ const HA_ABNORMAL_POLL_MAX_MS = 30000;
 const Component = function ServerContent({ hostUid }) {
   const CM = useCM();
   const dispatch = useDispatch();
+
   // Database list/active list are fetched into this component's own state
   // (not the shared `state.database.databases/activeDatabases` slice) so that
   // multiple simultaneously-open dashboard tabs for different hosts, and the
@@ -37,9 +38,9 @@ const Component = function ServerContent({ hostUid }) {
   const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { refreshCounter } = useSelector((state) => state.layout, shallowEqual);
+
   const [autoStartDBs, setAutoStartDBs] = useState([]);
-  const [autoStartReady, setAutoStartReady] = useState(false);
+  const [, setAutoStartReady] = useState(false);
   const autoStartReadVersion = useRef(0);
   const autoStartWritePending = useRef(false);
   
@@ -240,7 +241,7 @@ const Component = function ServerContent({ hostUid }) {
           >
             <Icon 
               name="refresh" 
-              size="19px" 
+              size="19px"
               className={isRefreshing ? 'animate-spin' : ''} 
             />
           </button>

@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import {
-  closeImportExportModal,
+import { closeImportExportModal,
   addHost,
   createHostGroup,
   deleteHostGroup,
@@ -10,8 +9,7 @@ import {
   setSkipAutoHostLogin,
 } from '../hostSlice';
 import { showStatusModal } from '../../layout/layoutSlice';
-import {
-  exportHostsToXml,
+import { exportHostsToXml,
   exportHostGroupsToNativeXml,
   exportHostGroupsToJson,
   parseHostsImportFile,
@@ -45,7 +43,6 @@ export default function ImportExportHostModal() {
   const [fileName, setFileName] = useState('export_hosts');
   const [exportFormat, setExportFormat] = useState('nativeXml');
   const [importGroupName, setImportGroupName] = useState('Imported');
-  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isImportExportModalOpen) {

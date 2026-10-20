@@ -1,7 +1,5 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -12,9 +10,9 @@ import { databaseJobApi } from '../../features/database/databaseJobApi';
 import { runCmsJobInBackground, isCmsJobPolling, cancelAllCmsJobPolls } from '../services/cmsJobRunner';
 import { JobResultModal } from '../cmsJob/JobResultModal';
 import { isTerminalCmsJobStatus } from '../cmsJob/cmsJobLabels';
-import { getCmsJobErrorResult, normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
+import { enqueueUniqueJobResult, getCmsJobErrorResult, normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
 
-export const CmsJobContext = createContext(null);
+import { CmsJobContext } from './cmsJobContextValue';
 
 const MAX_TRACKED = 50;
 const MAX_DISMISSED = 200;
@@ -39,10 +37,6 @@ function persistDismissedJobIds(ids) {
   }
 }
 
-export function enqueueUniqueJobResult(results, result) {
-  if (results.some((existing) => existing.jobId === result.jobId)) return results;
-  return [...results, result];
-}
 
 function sortJobs(a, b) {
   const ta = a.createdAt || '';
@@ -334,12 +328,4 @@ export function CmsJobProvider({ children }) {
       )}
     </CmsJobContext.Provider>
   );
-}
-
-export function useCmsJobs() {
-  const ctx = useContext(CmsJobContext);
-  if (!ctx) {
-    throw new Error('useCmsJobs must be used within CmsJobProvider');
-  }
-  return ctx;
 }

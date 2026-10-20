@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import {
-  setSelectedDatabase,
+import { setSelectedDatabase,
   setSelectedDatabaseSubItem,
   fetchBackupSchedule,
   fetchQueryPlan,

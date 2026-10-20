@@ -1,4 +1,4 @@
-import { LogFileInfoContainer } from '@type/cms-response/get-log-file-info-cms-response';
+import { LogFileInfoContainer } from '../models/cms-response/get-log-file-info-cms-response';
 
 /**
  * Client-facing response for broker log file list.

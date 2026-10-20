@@ -35,7 +35,7 @@ export default function CASLogModal({ isOpen, onClose, hostUid, brokerName, casI
       } else {
         setError(CM.logResolveError(suffix));
       }
-    } catch (err) {
+    } catch {
       setError(CM.logRetrievalRefused);
     } finally {
       setLoading(false);

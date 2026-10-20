@@ -18,15 +18,13 @@ import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
-import {
-  CaDialogField,
+import { CaDialogField,
   CaDialogFieldGrid,
   CaDialogGroup,
 } from '../../../components/ds/layout/CaDialogLayout';
@@ -84,13 +82,7 @@ const parseCmsDate = (cmsDate) => {
   return null;
 };
 
-// "dd-mm-yyyy:HH:MM:SS" → "yyyy-MM-ddTHH:mm" (datetime-local min value)
-const toDatetimeLocal = (cmsDate) => {
-  const d = parseCmsDate(cmsDate);
-  if (!d || isNaN(d.getTime())) return undefined;
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-};
+
 
 // datetime-local "yyyy-MM-ddTHH:mm" → CMS "dd-mm-yyyy:HH:mm:ss"
 const formatCmsDate = (datetimeLocal) => {
@@ -127,14 +119,13 @@ export default function RestoreDatabaseModal() {
   const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
   const {
     databaseBackups,
-    databaseBackupsLoading,
   } = useSelector((state) => state.databaseOperation);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const {
-    state,
+
     error: actionError,
     startAction,
     endSuccess,
@@ -164,7 +155,7 @@ export default function RestoreDatabaseModal() {
     manualLevel2Path: '',
     changeRestorePath: false
   });
-  const [filter, setFilter] = useState('all'); // 'all' | 0 | 1 | 2
+  const [, setFilter] = useState('all'); // 'all' | 0 | 1 | 2
 
   const parseBackupString = (str, level) => {
     if (!str || str === 'none' || typeof str !== 'string') return [];
@@ -191,8 +182,6 @@ export default function RestoreDatabaseModal() {
   }, [backupData]);
 
 
-  const backups = filter === 'all' ? allBackups : allBackups.filter(b => b.level === filter);
-  const isLoadingBackups = databaseBackupsLoading[dbKey(selectedHostUid, selectedDatabase)];
 
   useEffect(() => {
     if (isRestoreDatabaseModalOpen && selectedHostUid && selectedDatabase) {
@@ -378,29 +367,6 @@ export default function RestoreDatabaseModal() {
     }));
   };
 
-  const handleBackupSelect = (backup) => {
-    const isSel = formData.selectedBackup === backup.pathname;
-    const nextBackup = isSel ? null : backup.pathname;
-    
-    let nextDate = '';
-    let nextTime = '00:00';
-    if (nextBackup && backup.date) {
-      const dt = toDatetimeLocal(backup.date);
-      if (dt) {
-        const [dPart, tPart] = dt.split('T');
-        nextDate = dPart;
-        nextTime = tPart;
-      }
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      selectedBackup: nextBackup,
-      restoreDateOnly: nextDate,
-      restoreTimeOnly: nextTime
-    }));
-  };
-
   const handleRestore = async () => {
     let levelVal = '';
     let pathnameVal = '';
@@ -501,8 +467,6 @@ export default function RestoreDatabaseModal() {
   };
 
   const handleClose = () => dispatch(closeRestoreDatabaseModal());
-
-  const levelCounts = { 0: allBackups.filter(b => b.level === 0).length, 1: allBackups.filter(b => b.level === 1).length, 2: allBackups.filter(b => b.level === 2).length };
 
   /* ─── LOADING view ─── */
   if (isLoading) {

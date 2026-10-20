@@ -1,0 +1,22 @@
+name: cwm-e2e-ephemeral
+
+services:
+  cubrid-cms:
+    image: ${CUBRID_IMAGE:-ghcr.io/srltas/cubrid-nca-nightly:latest}
+    pull_policy: always
+    container_name: ${CUBRID_CONTAINER_NAME:-cubrid-e2e-ephemeral}
+    restart: "no"
+    ports:
+      # Use 28001/38000 as local defaults to avoid collisions with
+      # existing cubrid-11.4 (8001/33000) or cubrid-webmanager-e2e-cms
+      # (18001/33001) containers already running on developer machines.
+      # GitHub CI runners start clean so the default is always free there.
+      - "${CUBRID_CMS_PORT:-28001}:8001"
+      - "${CUBRID_BROKER_PORT:-38000}:33000"
+    environment:
+      - CUBRID_VOLUME_SIZE=100M
+      - CUBRID_DB=demodb
+      - CUBRID_COMPONENTS=NCA
+      - CUBRID_LOCALE=en_US.utf8
+      - TZ=UTC
+    # Use the image's health check: both the database and CMS must be ready.

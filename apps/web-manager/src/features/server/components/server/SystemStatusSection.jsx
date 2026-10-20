@@ -27,7 +27,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
-  const { currentStatus = {}, averages = {}, history = [], loading = false, error = null } = hostData;
+  const { currentStatus = {}, averages = {}, history = [], error = null } = hostData;
   const { authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = hostUid && authorizedHosts.includes(hostUid);
   const hostHaInfo = haInfo[hostUid] || {};
@@ -161,7 +161,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
                     hostHaInfo.currentNodeType === 'slave' ? 'settings_backup_restore' : 
                     hostHaInfo.currentNodeType === 'replica' ? 'copy_all' : 'hub'
                   } 
-                  size="13px" 
+                  size="13px"
                 />
                 {hostHaInfo.currentNodeType === 'master' ? CM.haMaster :
                   hostHaInfo.currentNodeType === 'slave' ? CM.haSlave :

@@ -5,4 +5,4 @@
  * @category Client Requests
  * @since 1.0.0
  */
-export type GetAutoExecQueryErrLogRequest = {};
+export type GetAutoExecQueryErrLogRequest = Record<string, never>;

@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useSelector, useDispatch , shallowEqual } from 'react-redux';
+import React, { useEffect, useState, useRef } from 'react';
+import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
 import { createRateTracker } from '../rateTracker';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
@@ -20,7 +20,7 @@ const EMPTY_LIST = [];
 
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
-  const dispatch = useDispatch();
+
   const { detailedStatus } = useSelector((state) => state.broker, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };

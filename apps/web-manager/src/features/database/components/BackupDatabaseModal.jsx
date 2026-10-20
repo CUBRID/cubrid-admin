@@ -3,13 +3,12 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeBackupDatabaseModal, fetchBackupDbInfo, setPendingBackupJob, clearPendingBackupJob } from '../databaseSlice';
 import { dbKey } from '../dbKey';
 import { databaseJobApi } from '../databaseJobApi';
-import { useCmsJobs } from '../../../infrastructure/context/CmsJobContext';
+import { useCmsJobs } from '../../../infrastructure/hooks/useCmsJobs';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 import { deriveBackupDir } from '../backupPathUtils';
 
 import { Modal } from '../../../components/ds/layout/Modal';
-import {
-  CaDialogField,
+import { CaDialogField,
   CaDialogFieldGrid,
   CaDialogTable,
   CaDialogTabs,
@@ -20,8 +19,7 @@ import { Select } from '../../../components/ds/forms/Select';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';

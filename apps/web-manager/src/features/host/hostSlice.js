@@ -4,8 +4,7 @@ import { databaseApi } from '../database/databaseApi';
 import { fetchDatabaseStartInfo } from '../database/databaseSlice';
 import { fetchBrokerList } from '../broker/brokerSlice';
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
-import {
-  findHaPeersNeedingMerge,
+import { findHaPeersNeedingMerge,
   findRegisteredHaPeersInSameGroup,
   findUndiscoveredHaPeers,
 } from './haPeerUtils';

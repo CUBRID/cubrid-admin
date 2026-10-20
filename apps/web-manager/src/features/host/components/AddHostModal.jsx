@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import {
-  addHost,
+import { addHost,
   clearHostError,
   openDiscoveryModal,
   loginToHostWithSideEffects,

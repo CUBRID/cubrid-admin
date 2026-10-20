@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSelector, shallowEqual } from 'react-redux';
+
 import { EmptyState } from '../../components/ds/layout/EmptyState';
 
 export const PermissionGate = ({
@@ -8,7 +8,7 @@ export const PermissionGate = ({
   children,
 }) => {
   // Assuming a generic pattern where the userSlice has currentUser or session data
-  const { loggedInDatabases } = useSelector((state) => state.database || { loggedInDatabases: [] }, shallowEqual);
+
   // Fallback simplified role matching since specific role slice wasn't provided directly in snippet
   // We'll mock fail-closed if required array is empty (no requirement = open block logic, handled below)
   

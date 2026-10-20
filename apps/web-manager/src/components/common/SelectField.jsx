@@ -109,7 +109,7 @@ export default function SelectField({
         <span className="truncate">{displayLabel}</span>
         <Icon 
           name="expand_more" 
-          size="19px" 
+          size="19px"
           weight={300} 
           className={`transition-transform duration-200 text-slate-400 ${isOpen ? 'rotate-180 text-amber-500 dark:text-bk-yellow' : ''}`} 
         />

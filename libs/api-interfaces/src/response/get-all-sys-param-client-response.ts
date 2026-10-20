@@ -1,5 +1,5 @@
-import { BaseCmsResponse } from '@type/cms-response/base-cms-response';
-import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
+import { BaseCmsResponse } from '../models/cms-response/base-cms-response';
+import { GetAllSysParamCmsResponse } from '../models/cms-response/get-all-sys-param-cms-response';
 
 /**
  * Client-facing response for getting all system parameters.

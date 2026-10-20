@@ -18,8 +18,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import {
-  ModalStatusLoading,
+import { ModalStatusLoading,
   ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';

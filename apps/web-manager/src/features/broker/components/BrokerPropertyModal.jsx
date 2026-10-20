@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { useCM } from '../../../constants/useCM';
-import {
-  closeBrokerPropertyModal,
+import { closeBrokerPropertyModal,
   fetchBrokerConfig,
   updateBrokerConfig,
 } from '../brokerSlice';

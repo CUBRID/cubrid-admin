@@ -190,7 +190,7 @@ export default function SuggestedHaNodesModal() {
                   ${selectedIndex === i ? 'bg-amber-500/20 text-amber-600' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
                   <Icon 
                     name={node.state === 'master' ? 'star' : node.state === 'replica' ? 'copy_all' : 'settings_backup_restore'} 
-                    size="17px" 
+                    size="17px"
                   />
                 </div>
                 <div className="min-w-0">

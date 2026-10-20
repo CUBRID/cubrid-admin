@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { toggleTheme, toggleSidebar, setIsResizing, setActiveMainTab, closeTab, closeOtherTabs, closeAllTabs, triggerRefreshActiveTab } from '../features/layout/layoutSlice';
-import { openAddHostModal, closeAddHostModal, closeChangePasswordModal, setSelectedHost } from '../features/host/hostSlice';
+import { openAddHostModal, closeAddHostModal, setSelectedHost } from '../features/host/hostSlice';
 import { stripHaRoleTagFromAlias } from '../features/host/hostGroupUtils';
 import { setSelectedDatabase } from '../features/database/databaseSlice';
-import { closeCreateUserModal, closeEditUserModal, closeDropUserModal } from '../features/user/userSlice';
+import { closeCreateUserModal, closeEditUserModal } from '../features/user/userSlice';
 import Sidebar from '../features/layout/components/Sidebar';
 import Header from '../features/layout/components/Header';
 import Breadcrumb from '../features/layout/components/Breadcrumb';
@@ -96,7 +96,7 @@ function DashboardLayout() {
   const [isFlashing, setIsFlashing] = useState(false);
   const { isAddHostModalOpen, hosts, isServiceOperating, serviceOperationType, serviceProgressMessage } = useSelector((state) => state.host, shallowEqual);
   // isAddDatabaseModalOpen removed
-  const { isCreateUserModalOpen, createUserDbName, isEditUserModalOpen, editUserData, isDropUserModalOpen } = useSelector((state) => state.user, shallowEqual);
+  const { isCreateUserModalOpen, createUserDbName, isEditUserModalOpen, editUserData } = useSelector((state) => state.user, shallowEqual);
   const { 
     actionLoading: brokerActionLoading, 
     lastActionTarget: brokerActionName, 

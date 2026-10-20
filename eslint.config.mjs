@@ -14,6 +14,8 @@ export default [
         'error',
         {
           enforceBuildableLibDependency: true,
+          // The server uses tsconfig aliases for imports within its own project.
+          allowCircularSelfDependency: true,
           allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$'],
           depConstraints: [
             {

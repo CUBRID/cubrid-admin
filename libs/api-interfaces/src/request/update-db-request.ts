@@ -1,4 +1,4 @@
-import { DBInfo } from '@type/db-info';
+import { DBInfo } from '../models/db-info';
 
 /**
  * Request interface for updating an existing database connection.

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useCmsJob } from './useCmsJob';
 
 const mocks = vi.hoisted(() => ({ runJob: vi.fn(), dismissJobResult: vi.fn() }));
-vi.mock('../context/CmsJobContext', () => ({ useCmsJobs: () => mocks }));
+vi.mock('./useCmsJobs', () => ({ useCmsJobs: () => mocks }));
 vi.mock('../services/cmsJobRunner', () => ({ cancelCmsJobPoll: vi.fn() }));
 let root;
 let container;

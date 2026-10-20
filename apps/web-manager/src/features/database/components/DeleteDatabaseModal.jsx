@@ -14,8 +14,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -35,7 +34,7 @@ export default function DeleteDatabaseModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
-    state, 
+
     error, 
     startAction, 
     endSuccess, 

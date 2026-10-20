@@ -6,8 +6,7 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { 
-  ModalStatusLoading, 
+import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
@@ -20,7 +19,7 @@ export default function DropUserModal() {
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
-    state, 
+
     error: actionError, 
     startAction, 
     endSuccess, 

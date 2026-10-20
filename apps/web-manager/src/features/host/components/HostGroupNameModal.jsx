@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import {
-  closeCreateGroupModal,
+import { closeCreateGroupModal,
   closeRenameGroupModal,
   createHostGroup,
   updateHostGroup,
@@ -66,7 +65,7 @@ export default function HostGroupNameModal() {
       } else {
         await dispatch(createHostGroup({ name: trimmed })).unwrap();
       }
-    } catch (e) {
+    } catch {
       // handled by slice
     }
   };

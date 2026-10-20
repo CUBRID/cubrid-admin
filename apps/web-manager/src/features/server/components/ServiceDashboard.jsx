@@ -13,8 +13,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Badge } from '../../../components/ds/foundation/Badge';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
-import {
-  orderedGroupEntries,
+import { orderedGroupEntries,
   resolveDefaultHostUid,
   sortHostUidsByHaRole,
   inferHaNodeType,
@@ -37,7 +36,7 @@ const Component = function ServiceDashboard() {
   const { hosts, hostGroups, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { refreshCounter, activeMainTab } = useSelector((state) => state.layout, shallowEqual);
+
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const [roleFilter, setRoleFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
@@ -250,8 +249,7 @@ const Component = function ServiceDashboard() {
         }
 
         const isConnected = authorizedHosts.includes(row.uid);
-        const meta = hostMetaByUid[row.uid] || {};
-        
+
         const haRole = inferHaNodeType(row, haInfo[row.uid]);
         const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 

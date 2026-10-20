@@ -38,3 +38,8 @@ export function normalizeTrackedJob(serverJob, fallback = {}) {
     dismissed: fallback.dismissed ?? false,
   };
 }
+
+export function enqueueUniqueJobResult(results, result) {
+  if (results.some((existing) => existing.jobId === result.jobId)) return results;
+  return [...results, result];
+}

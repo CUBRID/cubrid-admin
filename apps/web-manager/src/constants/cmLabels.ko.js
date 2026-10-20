@@ -231,7 +231,6 @@ export const CM_KO = {
   confirmDisconnectHostTitle: '호스트 연결 해제',
   confirmDisconnectHostDesc: (alias) => `"${alias}" 연결을 해제하시겠습니까? 열려있는 탭이 모두 닫히고, 이 호스트의 데이터베이스 로그인도 다시 해야 합니다.`,
   openDashboard: '대시보드 열기',
-  tryAgain: '다시 시도',
   add: '추가',
   edit: '편집',
   remove: '제거',
@@ -325,14 +324,14 @@ export const CM_KO = {
   spaceTab: (db) => `공간: ${db}`,
   volumeTab: (path) => `볼륨: ${path}`,
   volumesTab: (cat) => `볼륨: ${cat.replace(/_/g, ' ')}`,
-  brokerConfig: '브로커 설정',
+
   serviceDashboard: '서비스 대시보드',
 
   file: '파일',
   view: '보기',
   service: '서비스',
   database: '데이터베이스',
-  broker: '브로커',
+
   addHost: '호스트 추가',
   exportHost: '호스트 내보내기',
   importHost: '호스트 가져오기',
@@ -359,8 +358,8 @@ export const CM_KO = {
   addYourFirstHost: '첫 호스트를 추가하세요',
   connectToCubridServer: 'CUBRID 서버에 연결',
   hostLogin: '호스트 로그인',
-  establishingSession: '보안 세션을 설정하는 중...',
-  connectionFailed: '연결 실패',
+
+
   connectionLost: '연결 끊김',
   reconnect: '재연결',
   reconnectPrompt: '세션 연결이 끊어졌습니다. 토큰이 만료되었거나 다른 사용자가 이 호스트에 로그인했을 수 있습니다. 재연결을 클릭해 다시 시도하세요.',
@@ -374,7 +373,7 @@ export const CM_KO = {
   serverColon: (s) => `호스트: ${s}`,
   databaseColon: (db) => `데이터베이스: ${db}`,
   allDatabases: '모든 데이터베이스',
-  allBrokers: '모든 브로커',
+
   brokerColon: (b) => `브로커: ${b}`,
   startDatabase: '데이터베이스 시작',
   stopDatabase: '데이터베이스 중지',
@@ -404,7 +403,7 @@ export const CM_KO = {
   manager: '관리자',
   accessLog: '접근 로그',
   errorLog: '오류 로그',
-  serverLogs: '서버 로그',
+
   sqlLog: 'SQL 로그',
   noHostSelectedTitle: '호스트 미선택',
   selectServerFromList: '위 목록에서 호스트를 선택하세요.',
@@ -496,7 +495,7 @@ export const CM_KO = {
   saveChanges: '변경 저장',
   testConnectionAndSave: '연결 및 저장',
   reloadConfig: '설정 다시 불러오기',
-  modified: '수정됨',
+
   sourceEditor: '소스 편집기',
   configPlaceholder: '# 설정 내용...',
   tableEditor: '테이블 편집기',
@@ -518,7 +517,7 @@ export const CM_KO = {
   propertyLabel: '속성',
   brokerNumberFallback: (n) => `브로커 ${n}`,
   propertiesBrokersCountLabel: (props, brokers) => `속성 ${props}개 · 브로커 ${brokers}개`,
-  runtimeConfiguration: '런타임 설정',
+
   synchronizing: '로딩 중…',
   failedToLoadStatus: '상태를 불러오지 못했습니다',
   refreshBrokerStatus: '브로커 상태 새로 고침',
@@ -531,11 +530,11 @@ export const CM_KO = {
   monitoring: '모니터링',
   copyVisibleEntries: '표시 항목을 클립보드에 복사',
   connected: '연결됨',
-  jobQueue: '작업 대기열',
+
   autoAddAS: 'AS 자동 추가',
   sqlLogMode: 'SQL 로그 모드',
   longTranLabel: '장기 트랜잭션',
-  longQueryLabel: '장기 쿼리',
+
   rawLog: '원시 로그',
   parsedSQL: '파싱된 SQL',
   topSQL: 'Top SQL',
@@ -620,7 +619,7 @@ export const CM_KO = {
   noHeldObjectLocks: '보유된 객체 잠금이 없습니다.',
   failedToGetLockInfo: '잠금 정보를 가져오지 못했습니다.',
   leaveBlankNoPassword: '비밀번호 없음은 비워 두세요',
-  repeatPassword: '비밀번호 확인',
+
   addVolume: '볼륨 추가',
   clickAddVolumeHint: '"볼륨 추가"를 클릭하여 스토리지 볼륨을 추가하세요.',
   identifier: '식별자',
@@ -745,7 +744,7 @@ export const CM_KO = {
   updatingConfigSubtitle: '서버 설정(cubrid.conf)을 갱신합니다.',
   navigation: '탐색',
   context: '대상 데이터베이스',
-  loadingLabel: '로딩',
+
   queryingHostRegistry: '설정 불러오는 중…',
   brokerConnection: '브로커 연결',
   brokerIp: '브로커 IP',
@@ -938,7 +937,7 @@ export const CM_KO = {
   paramsFetchErrorMsg: (db) => `${db}에 대한 매개변수를 가져올 수 없습니다.`,
   extractionProfileDesc: '현재 데이터베이스에 적용된 파라미터 값을 보여줍니다.',
   loadingBrokerStatus: '브로커 상태 로딩 중…',
-  basicInformation: '기본 정보',
+
   lastAccess: '마지막 접근',
   clientIp: '클라이언트 IP',
   jobId: '작업 ID',
@@ -956,7 +955,7 @@ export const CM_KO = {
   retryBackup: '백업 재시도',
   backupCompleted: '백업 완료',
   backupFailed: '백업 실패',
-  targetDatabase: '대상 데이터베이스',
+
   executeRestore: '복구 실행',
   retryRecovery: '복구 재시도',
   restoreSuccessful: '복구 성공',
@@ -974,7 +973,7 @@ export const CM_KO = {
   allocationStrategy: '볼륨 정보',
   instanceRegistry: '데이터베이스',
   privilegedOperation: '주의',
-  addVolumeNote: '볼륨을 추가하려면 데이터베이스가 실행 중이어야 합니다. 볼륨 경로에 쓰기 권한이 있는지 확인하세요.',
+
   extendDiskCapacity: (db) => `${db} 볼륨 추가`,
   historyForDatabase: (db) => `데이터베이스 기록: ${db}`,
   globalBackupHistory: '전역 백업 기록',
@@ -1038,7 +1037,7 @@ export const CM_KO = {
   // rule as CM.permanent/CM.temporary above.
   permanentTemp: 'Permanent Temp',
   tempTemp: 'Temporary Temp',
-  userLabel: '사용자',
+
   haMaster: '마스터',
   haSlave: '슬레이브',
   haReplica: '레플리카',
@@ -1091,7 +1090,7 @@ export const CM_KO = {
   fileDistribution: '파일 분포',
   logicalPartitioning: '논리적 파티셔닝',
   filesLabel: '파일',
-  usedLabel: '사용',
+
   fileTable: '파일 테이블',
   reservedLabel: '예약',
   totalLabel: '합계',
@@ -1356,7 +1355,7 @@ export const CM_KO = {
   // User modals
   moveToGroups: '그룹으로 이동',
   removeFromAssigned: '할당 해제',
-  departmentLabel: '부서',
+
   currentPasswordLabel: '현재 비밀번호',
   confirmNewPassword: '새 비밀번호 확인',
   dropDatabaseUser: '데이터베이스 사용자 삭제',
@@ -1412,15 +1411,15 @@ export const CM_KO = {
   // Config editors
   undoAllChanges: '모든 변경 사항 되돌리기',
   brokerConfigPlaceholder: '# 여기에 브로커 설정을 입력하세요...',
-  initializingEditor: '편집기 초기화 중...',
+
   brokerConfigFile: 'Configuration: cubrid_broker.conf',
   brokerConfigFetchError: '브로커 설정을 불러오지 못했습니다.',
-  brokerConfigSaveSuccess: '브로커 설정이 성공적으로 저장되었습니다.',
-  brokerConfigSaveError: '브로커 설정 저장 중 오류가 발생했습니다.',
+
+
 
   // EditCMSUserModal
-  savingChanges: '저장 중',
-  creatingUser: '생성 중',
+
+
   accountInformation: '계정 정보',
   allowDatabaseCreation: '데이터베이스 생성 허용',
   allowDbCreationDesc: '이 호스트에서 데이터베이스를 생성하고 삭제할 수 있습니다',
@@ -1458,14 +1457,14 @@ export const CM_KO = {
   // VolumeCategoryMonitor
   volumeCategoryMonitor: '볼륨 카테고리 모니터',
   capacity: '용량',
-  usageLabel: '사용률',
-  overallUtilization: '전체 사용률',
+
+
   volumesLabel: '볼륨',
   pagesLabel: '페이지',
-  freeLabel: '여유',
+
 
   // Auto log modals / CASLogModal
-  timeLabel: '시간',
+
   outcomeLabel: '결과',
   executionTime: '실행 시간',
   globalAutomationHistory: '전역 볼륨 자동 확장 이력',

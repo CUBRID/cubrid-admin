@@ -58,21 +58,17 @@ export class LockService {
     const filePath = this.resolvePath(filename);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 
-    try {
-      const release = await lockfile.lock(filePath, {
-        stale: 30_000,
-        realpath: false,
-        retries: {
-          retries: 50, // Increased retry count
-          factor: 1.2, // Decreased retry interval growth rate
-          minTimeout: 50, // Decreased minimum wait time
-          maxTimeout: 2000, // Increased maximum wait time
-        },
-      });
-      return { filePath, release };
-    } catch (err: any) {
-      throw err;
-    }
+    const release = await lockfile.lock(filePath, {
+      stale: 30_000,
+      realpath: false,
+      retries: {
+        retries: 50, // Increased retry count
+        factor: 1.2, // Decreased retry interval growth rate
+        minTimeout: 50, // Decreased minimum wait time
+        maxTimeout: 2000, // Increased maximum wait time
+      },
+    });
+    return { filePath, release };
   }
 
   /**
@@ -113,16 +109,13 @@ export class LockService {
    */
   async withLock<T>(filename: string, work: () => Promise<T>): Promise<T> {
     const lock = await this.acquire(filename);
-    let workerError: any = null;
-    let result: T | undefined = undefined;
 
     try {
       Logger.log('with lock work');
-      result = await work();
-      return result;
+      return await work();
     } catch (error) {
       Logger.log('with lock error');
-      workerError = error;
+      throw error;
     } finally {
       try {
         await this.release(lock);
@@ -132,12 +125,6 @@ export class LockService {
           releaseError.stack
         );
       }
-
-      if (workerError) {
-        throw workerError;
-      }
     }
-
-    return result!;
   }
 }

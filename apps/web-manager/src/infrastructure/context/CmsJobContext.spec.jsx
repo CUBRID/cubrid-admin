@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CmsJobProvider, enqueueUniqueJobResult, useCmsJobs } from './CmsJobContext';
+import { CmsJobProvider } from './CmsJobContext';
+import { enqueueUniqueJobResult } from '../cmsJob/cmsJobUtils';
+import { useCmsJobs } from '../hooks/useCmsJobs';
 
 const mocks = vi.hoisted(() => ({ getJob: vi.fn(), listRecent: vi.fn(), run: vi.fn() }));
 vi.mock('../../features/database/databaseJobApi', async importOriginal => ({
