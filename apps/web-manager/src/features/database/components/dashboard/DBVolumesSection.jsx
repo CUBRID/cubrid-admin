@@ -54,7 +54,7 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
         return (
           <div className="flex items-center gap-2 min-w-0">
             <Icon name="draft" size="sm" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200 truncate">{name}</span>
+            <span title={val} className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200 truncate">{name}</span>
           </div>
         );
       }

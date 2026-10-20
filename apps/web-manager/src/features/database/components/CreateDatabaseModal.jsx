@@ -980,7 +980,7 @@ export default function CreateDatabaseModal() {
                 ].map((vol, idx) => (
                   <div key={idx} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50/50 dark:hover:bg-white/2 transition-colors">
                     <Icon name="storage" size="15px" weight={300} className="text-slate-400 shrink-0" />
-                    <span className="text-13 font-mono font-bold text-slate-600 dark:text-slate-300 flex-1 truncate">{vol.name}</span>
+                    <span title={vol.name} className="text-13 font-mono font-bold text-slate-600 dark:text-slate-300 flex-1 truncate">{vol.name}</span>
                     <span className={`text-11 font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border leading-tight ${typeBadge('data')}`}>
                       {CM.permanent}
                     </span>

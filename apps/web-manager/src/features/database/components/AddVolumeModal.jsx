@@ -210,7 +210,7 @@ export default function AddVolumeModal() {
         <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/4 px-4 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <Icon name="database" size="16px" weight={300} className="text-amber-500 shrink-0" />
-            <Typography variant="p" className="text-14 font-medium text-slate-700 dark:text-slate-200 font-mono truncate">{selectedDatabase}</Typography>
+            <Typography title={selectedDatabase} variant="p" className="text-14 font-medium text-slate-700 dark:text-slate-200 font-mono truncate">{selectedDatabase}</Typography>
           </div>
           <Typography variant="p" className="text-14 font-medium text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
             {fetchingStatus ? CM.calculating : `${CM.availableSpace}: ${volStatus.freespace || '—'}`}

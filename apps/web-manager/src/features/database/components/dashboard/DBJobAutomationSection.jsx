@@ -83,7 +83,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
     {
       header: CM.path,
       accessor: 'path',
-      render: (v) => <span className="font-mono text-13 text-slate-500 truncate block max-w-[240px]">{v}</span>,
+      render: (v) => <span title={v} className="font-mono text-13 text-slate-500 truncate block max-w-[240px]">{v}</span>,
     },
     {
       header: CM.backupLevelColumn,
@@ -127,7 +127,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
     {
       header: 'SQL',
       accessor: 'query_string',
-      render: (v) => <span className="font-mono text-13 text-slate-500 truncate block max-w-[280px]">{v}</span>,
+      render: (v) => <span title={v} className="font-mono text-13 text-slate-500 truncate block max-w-[280px]">{v}</span>,
     },
     {
       header: CM.actions,

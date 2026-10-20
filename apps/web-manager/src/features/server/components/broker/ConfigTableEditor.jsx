@@ -34,7 +34,7 @@ export default function ConfigTableEditor({
             {sections.map((sec, idx) => (
               <div key={idx} className="w-full min-w-0 px-4 py-2.5 border-r border-slate-200 dark:border-white/8 flex items-center gap-1.5">
                 <Icon name="hub" size="sm" weight={300} className="text-amber-500 dark:text-bk-yellow shrink-0" />
-                <span className="text-12 font-bold uppercase tracking-widest text-amber-600 dark:text-bk-yellow truncate">
+                <span title={sec.properties?.BROKER_NAME || CM.brokerNumberFallback(idx + 1)} className="text-12 font-bold uppercase tracking-widest text-amber-600 dark:text-bk-yellow truncate">
                   {sec.properties?.BROKER_NAME || CM.brokerNumberFallback(idx + 1)}
                 </span>
               </div>
