@@ -35,16 +35,25 @@ export default function Header({ theme, toggleTheme }) {
 
   return (
     <>
-      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center justify-center px-6 z-40 shrink-0 select-none relative overflow-hidden">
-        <div className="w-full flex items-center justify-between">
+      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center px-6 z-40 shrink-0 select-none relative overflow-x-auto overflow-y-hidden custom-scrollbar">
+        {/* No justify-between: with both sides pinned to opposite edges,
+            squeezing the row below their combined natural width makes the
+            left side run straight into the right side's space instead of
+            yielding it — flexbox only avoids that via shrinking, which none
+            of these items do. ml-auto gets the same flush-right look while
+            there's room, but once there isn't, it just settles to 0 instead
+            of going negative, so the row grows past the header's width and
+            scrolls horizontally (via overflow-x-auto above) instead of the
+            two sides overlapping. */}
+        <div className="w-full flex items-center">
           {/* ── Left: logo + menus ── */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Dropdown menus */}
             <HeaderMenu />
           </div>
 
           {/* ── Right: theme toggle + user + logout ── */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto shrink-0">
             <LanguageToggle />
 
             <div className="w-px h-5 bg-slate-200 dark:bg-white/8 mx-1" />
@@ -62,7 +71,7 @@ export default function Header({ theme, toggleTheme }) {
 
             {/* User profile pill */}
             <button
-              className={`${btnBase} px-2 gap-2 bg-slate-100 dark:bg-white/4 border-slate-200 dark:border-white/[0.07] hover:bg-slate-200 dark:hover:bg-white/8 group min-w-[120px] justify-between`}
+              className={`${btnBase} px-2 gap-2 bg-slate-100 dark:bg-white/4 border-slate-200 dark:border-white/[0.07] hover:bg-slate-200 dark:hover:bg-white/8 group shrink-0 justify-between`}
               onClick={() => setIsProfileOpen(true)}
             >
               {authLoading ? (
@@ -80,7 +89,7 @@ export default function Header({ theme, toggleTheme }) {
                       className={authError ? 'text-white' : 'text-bk-side'}
                     />
                   </div>
-                  <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight flex-1 text-left px-1 truncate">
+                  <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight text-left px-1 whitespace-nowrap">
                     {user?.id || CM.admin}
                   </span>
                   <Icon name="expand_more" size="15px" className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
