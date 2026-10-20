@@ -5,7 +5,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCM } from '../../constants/useCM';
 import { MaintenanceDetails } from './MaintenanceDetails';
-import { getMaintenanceRows } from './maintenanceDetails';
+import { getMaintenanceRows } from './maintenanceDetailsUtils';
 import { JobResultModal } from './JobResultModal';
 import { BackgroundJobsPanel } from './BackgroundJobsPanel';
 import { getCmsJobErrorResult, normalizeTrackedJob } from './cmsJobUtils';
