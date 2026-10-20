@@ -135,7 +135,7 @@ function ParamNameCell({ label, isModified }) {
   return (
     <div className="flex items-center gap-1.5">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
-      <span className={`text-13 font-mono truncate ${isModified ? 'text-amber-500 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
+      <span className={`text-13 font-mono font-medium truncate ${isModified ? 'text-amber-500' : 'text-slate-600 dark:text-slate-400'}`}>
         {label}
       </span>
     </div>
@@ -552,7 +552,12 @@ export default function DatabasePropertyModal() {
   // Parameter Value. CA has no separate "Default" column — the value cell
   // itself shows the current value, falling back to the default.
   const advancedColumns = [
-    { header: CM.parameter, accessor: 'key', width: '30%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} /> },
+    {
+      header: CM.parameter, accessor: 'key', width: '30%',
+      className: '!sticky left-0 z-20 bg-slate-100 dark:bg-slate-900',
+      cellClassName: 'sticky left-0 z-[1] bg-white dark:bg-slate-900',
+      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} />,
+    },
     {
       header: CM.parameterTypeLabel, accessor: 'scope', width: '16%',
       render: (val) => {
@@ -561,7 +566,7 @@ export default function DatabasePropertyModal() {
           CLIENT: 'text-violet-500 bg-violet-500/8 border-violet-500/20',
           BOTH: 'text-emerald-500 bg-emerald-500/8 border-emerald-500/20',
         };
-        return <span className={`text-11 font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
+        return <span className={`text-11 font-medium uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
       },
     },
     { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{val}</span> },
@@ -686,11 +691,11 @@ export default function DatabasePropertyModal() {
         </div>
 
         {/* ─── Main Content ─── */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-transparent overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-white dark:bg-transparent overflow-hidden">
 
           {/* Tab bar — only for Server Parameter */}
           {activeSidebar === 'Server Parameter' && (
-            <div className="p-4 border-b border-slate-100 dark:border-white/6 flex items-center justify-between">
+            <div className="shrink-0 p-4 border-b border-slate-100 dark:border-white/6 flex items-center justify-between">
               <TabGroup
                 tabs={SERVER_TABS}
                 active={activeTab}
@@ -707,7 +712,7 @@ export default function DatabasePropertyModal() {
           )}
 
           {/* Content area */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          <div className={`flex-1 min-h-0 custom-scrollbar ${activeSidebar === 'Server Parameter' && activeTab === 'Advanced' ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
             {fetching ? (
               <div className="h-full flex flex-col items-center justify-center gap-5">
                 <div className="w-10 h-10 border-2 border-amber-500/10 border-t-amber-500 rounded-full animate-spin" />
@@ -799,20 +804,28 @@ export default function DatabasePropertyModal() {
 
                 <div className="space-y-3">
                   <SectionHeader title={CM.standardParameters} icon="settings" />
-                  <Table columns={generalColumns} data={generalRows} zebra bordered showEmptyStateAsRow />
+                  <Table columns={generalColumns} data={generalRows} bordered showEmptyStateAsRow className="[&_th]:font-medium" />
                 </div>
               </div>
 
             ) : (
               /* ─── ADVANCED PARAMETERS TABLE ─── */
-              <div>
-                <div className="px-6 py-6">
+              <div className="h-full min-h-0 flex flex-col">
+                <div className="shrink-0 px-6 py-6">
                   <InfoBanner>
                     {CM.advancedParamsWarning}
                   </InfoBanner>
                 </div>
-                <div className="px-6 pb-6">
-                  <Table columns={advancedColumns} data={advancedRows} zebra bordered showEmptyStateAsRow />
+                <div className="flex-1 min-h-0 px-6 pb-6">
+                  {/* One bounded scroll container keeps both scrollbars in view. */}
+                  <Table
+                    columns={advancedColumns}
+                    data={advancedRows}
+                    bordered
+                    showEmptyStateAsRow
+                    stickyHeader
+                    className="h-full overflow-y-auto custom-scrollbar [&_table]:border-separate [&_table]:border-spacing-0 [&_td]:border-b [&_td]:border-b-slate-100 dark:[&_td]:border-b-white/[0.04] [&_th]:font-medium [&_thead]:bg-slate-100 dark:[&_thead]:bg-bk-side"
+                  />
                 </div>
               </div>
             )}
