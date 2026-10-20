@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 export CI="${CI:-true}"
 export CUBRID_CMS_PORT="${CUBRID_CMS_PORT:-28001}"
 export CUBRID_BROKER_PORT="${CUBRID_BROKER_PORT:-38000}"
-export CUBRID_IMAGE="${CUBRID_IMAGE:-cubrid/cubrid:11.4}"
+export CUBRID_IMAGE="${CUBRID_IMAGE:-ghcr.io/srltas/cubrid-nca-nightly:latest}"
 export CUBRID_CONTAINER_NAME="${CUBRID_CONTAINER_NAME:-cubrid-e2e-ephemeral}"
 
 # TCP Test Suite Environment (Targeting local Ephemeral Docker CMS)
@@ -44,7 +44,7 @@ docker compose -f docker-compose.e2e.yml up -d
 
 # 2. Wait for CMS to become healthy
 echo "⏳ [Step 2/3] Waiting for CUBRID CMS to become ready on port $CUBRID_CMS_PORT..."
-MAX_ATTEMPTS=60
+MAX_ATTEMPTS=150
 READY=false
 for i in $(seq 1 $MAX_ATTEMPTS); do
   STATUS="$(docker inspect --format '{{json .State.Health.Status}}' "$CUBRID_CONTAINER_NAME" 2>/dev/null || echo '"starting"')"

@@ -2,7 +2,8 @@ name: cwm-e2e-ephemeral
 
 services:
   cubrid-cms:
-    image: ${CUBRID_IMAGE:-cubrid/cubrid:11.4}
+    image: ${CUBRID_IMAGE:-ghcr.io/srltas/cubrid-nca-nightly:latest}
+    pull_policy: always
     container_name: ${CUBRID_CONTAINER_NAME:-cubrid-e2e-ephemeral}
     restart: "no"
     ports:
@@ -15,14 +16,7 @@ services:
     environment:
       - CUBRID_VOLUME_SIZE=100M
       - CUBRID_DB=demodb
-      - CUBRID_ONLINE_DB=demodb
-      - CUBRID_OFFLINE_DB=db1
-      - CUBRID_COMPONENTS=ALL
+      - CUBRID_COMPONENTS=NCA
       - CUBRID_LOCALE=en_US.utf8
       - TZ=UTC
-    healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8001 && exec 3>&- && exec 3<&-"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 25s
+    # Use the image's health check: both the database and CMS must be ready.

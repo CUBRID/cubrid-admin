@@ -111,8 +111,10 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Run TCP against Ephemeral Docker CUBRID CMS
+      - name: Run TCP against Ephemeral Docker CUBRID NCA
         run: ./scripts/ci/run-e2e-docker.sh
+        env:
+          CUBRID_IMAGE: ghcr.io/srltas/cubrid-nca-nightly:latest
 
       - name: Upload TCP Playwright HTML Report
         if: always()
