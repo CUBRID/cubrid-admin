@@ -465,6 +465,26 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
 
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
         job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+
+        if (job.type === 'rename') {
+          // Best-effort: a failure here must not flip an already-successful
+          // rename job to "failed" (it would be caught by the outer catch
+          // below and misreport the rename itself as having failed).
+          try {
+            const renameTo = (job.payload as RenameDatabaseRequest)?.rename;
+            await this.managementService.clearDbAliasCachesAfterRename(
+              job.userId,
+              job.hostUid,
+              job.dbname,
+              renameTo
+            );
+          } catch (err: unknown) {
+            this.logger.warn(
+              `Failed to clear stale login profile/cache after renaming database ${job.dbname}: ` +
+              `${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
       }
     } catch (err: unknown) {
       if (job.type === 'create') {

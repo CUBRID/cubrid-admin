@@ -33,6 +33,7 @@ describe('DatabaseManagementService', () => {
   let service: DatabaseManagementService;
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
+  let databaseUserService: { loginDatabase: jest.Mock; ensureDbLogin: jest.Mock; deleteDbProfile: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -68,6 +69,7 @@ describe('DatabaseManagementService', () => {
     const mockDatabaseUserService = {
       loginDatabase: jest.fn().mockResolvedValue(true),
       ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -95,6 +97,7 @@ describe('DatabaseManagementService', () => {
     service = module.get<DatabaseManagementService>(DatabaseManagementService);
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
+    databaseUserService = mockDatabaseUserService;
 
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
@@ -998,6 +1001,21 @@ describe('DatabaseManagementService', () => {
       await expect(
         service.renameDatabase(mockUserId, mockHostUid, mockDbname, request)
       ).rejects.toThrow(HostError);
+    });
+
+    it('clears the stored login profile + dbmt-login cache for both the old and new name, so neither can inherit a stale previous database', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      const request: RenameDatabaseRequest = {
+        rename: 'renamed_db',
+        exvolpath: 'none',
+        advanced: 'off',
+        forcedel: 'n',
+      };
+
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(mockUserId, mockHostUid, 'renamed_db');
     });
 
     it('should throw CmsError if CMS request fails', async () => {

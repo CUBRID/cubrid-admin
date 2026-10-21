@@ -140,6 +140,38 @@ describe('loggedInDatabases is scoped per host, not by bare dbname', () => {
   });
 });
 
+describe('deleting or renaming a database clears its cached login state here too', () => {
+  // The backend forgets the stored login profile + dbmt-login cache for a
+  // deleted/renamed dbname (see DatabaseLifecycleService.deleteDatabase and
+  // DatabaseManagementService.clearDbAliasCachesAfterRename) so a different,
+  // later database that ends up with that same name can't silently inherit
+  // it — mirror that belief here too, or the client would keep showing the
+  // old, now-gone database's name as still "logged in".
+  it("clears the deleted dbname's login state for that host", () => {
+    const store = configureStore({ reducer, preloadedState: { loggedInDatabases: ['hostA:demodb'], loggingInDatabases: {} } });
+
+    store.dispatch({ type: 'database/deleteDatabase/fulfilled', meta: { arg: { hostUid: 'hostA', dbname: 'demodb' } } });
+
+    expect(store.getState().loggedInDatabases).not.toContain('hostA:demodb');
+  });
+
+  it('clears login state for both the old and new name on rename', () => {
+    const store = configureStore({
+      reducer,
+      preloadedState: { loggedInDatabases: ['hostA:demodb', 'hostA:renamed_db'], loggingInDatabases: {} },
+    });
+
+    store.dispatch({
+      type: 'database/renameDatabase/fulfilled',
+      meta: { arg: { hostUid: 'hostA', dbname: 'demodb', payload: { rename: 'renamed_db' } } },
+    });
+
+    const { loggedInDatabases } = store.getState();
+    expect(loggedInDatabases).not.toContain('hostA:demodb');
+    expect(loggedInDatabases).not.toContain('hostA:renamed_db');
+  });
+});
+
 describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () => {
   // The guard discards a response whose requestId no longer matches the
   // latest one dispatched — but scoped per hostUid. A single shared id
