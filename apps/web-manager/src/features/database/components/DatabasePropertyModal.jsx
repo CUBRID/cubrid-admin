@@ -7,6 +7,7 @@ import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
+import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import { Button } from '../../../components/ds/foundation/Button';
 import { TabGroup } from '../../../components/ds/layout/TabGroup';
 import { Table } from '../../../components/ds/layout/Table';
@@ -252,6 +253,7 @@ export default function DatabasePropertyModal() {
   const [activeTab, setActiveTab] = useState('General');
   const [activeSidebar, setActiveSidebar] = useState('Server Parameter');
   const [fetching, setFetching] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [initialParams, setInitialParams] = useState({});
   const [params, setParams] = useState({});
   const [rawLines, setRawLines] = useState([]);
@@ -268,6 +270,7 @@ export default function DatabasePropertyModal() {
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
+      setShowDiscardConfirm(false);
       resetAction();
       setInitialParams({});
       setParams({});
@@ -377,7 +380,7 @@ export default function DatabasePropertyModal() {
   }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized]);
 
   const handleApply = async () => {
-    if (activeSidebar === 'Connection Information') { dispatch(closeDatabasePropertyModal()); return; }
+    if (activeSidebar === 'Connection Information') { handleClose(); return; }
     startAction();
     try {
       // Reconcile the pages/size radio choice per buffer group: only the
@@ -386,7 +389,7 @@ export default function DatabasePropertyModal() {
       const saveParams = getEffectiveParams(params, bufferMode, bufferUnit);
 
       const sectionName = selectedDatabase ? `[@${selectedDatabase.toLowerCase()}]` : '[common]';
-      let lines = [...rawLines];
+      const lines = [...rawLines];
       let sectionStartIndex = -1, sectionEndIndex = -1;
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].trim().toLowerCase() === sectionName.toLowerCase()) {
@@ -442,7 +445,8 @@ export default function DatabasePropertyModal() {
     }
   }, [isDatabasePropertyModalOpen, resetAction]);
 
-  const handleClose = () => {
+  const closeModal = () => {
+    setShowDiscardConfirm(false);
     dispatch(closeDatabasePropertyModal());
     setInitialParams({});
     setParams({});
@@ -467,6 +471,14 @@ export default function DatabasePropertyModal() {
   );
   const modifiedKeySet = useMemo(() => new Set(modifiedKeys), [modifiedKeys]);
   const modifiedCount = modifiedKeys.length;
+
+  const handleClose = () => {
+    if (modifiedCount > 0) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    closeModal();
+  };
 
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
@@ -600,6 +612,7 @@ export default function DatabasePropertyModal() {
 
   /* ─── FORM VIEW ─── */
   return (
+    <>
     <Modal
       isOpen={isDatabasePropertyModalOpen}
       onClose={handleClose}
@@ -833,5 +846,17 @@ export default function DatabasePropertyModal() {
         </div>
       </div>
     </Modal>
+    <ConfirmDialog
+      isOpen={isDatabasePropertyModalOpen && showDiscardConfirm}
+      title={CM.discardChangesTitle}
+      description={CM.discardChangesDesc}
+      confirmLabel={CM.discardChangesBtn}
+      cancelLabel={CM.keepEditingBtn}
+      variant="warning"
+      onConfirm={closeModal}
+      onCancel={() => setShowDiscardConfirm(false)}
+      testId="database-property-discard"
+    />
+    </>
   );
 }
