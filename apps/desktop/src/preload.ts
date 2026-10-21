@@ -25,6 +25,11 @@ const desktopBridge: DesktopBridge = {
     };
   },
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
+  getAppVersion: () => ipcRenderer.invoke('desktop:get-app-version'),
+  checkForUpdates: () => ipcRenderer.invoke('desktop:check-for-updates'),
+  getCheckForUpdatesOnStartup: () => ipcRenderer.invoke('desktop:get-check-updates-on-startup'),
+  setCheckForUpdatesOnStartup: (enabled) =>
+    ipcRenderer.invoke('desktop:set-check-updates-on-startup', enabled),
 };
 
 contextBridge.exposeInMainWorld('desktopConfig', {

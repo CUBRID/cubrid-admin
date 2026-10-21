@@ -10,7 +10,11 @@
     "types": ["node"],
     "esModuleInterop": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@update-check": ["../../dist/libs/update-check"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

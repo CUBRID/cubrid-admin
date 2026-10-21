@@ -5,6 +5,10 @@ import { getPortableAppRoot, isPathInsideAppBundle } from './portable-root';
 export type DesktopSettings = {
   workspaceRoot?: string;
   workspaceSetupComplete?: boolean;
+  checkForUpdatesOnStartup?: boolean;
+  lastUpdateCheckAt?: string;
+  lastKnownLatestVersion?: string;
+  dismissedUpdateVersion?: string;
 };
 
 const SETTINGS_FILE = 'desktop-settings.json';
@@ -56,6 +60,17 @@ export function loadDesktopSettings(): DesktopSettings {
   ) {
     throw new Error(`Invalid desktop settings file: ${filePath}`);
   }
+  if (
+    parsed.checkForUpdatesOnStartup != null &&
+    typeof parsed.checkForUpdatesOnStartup !== 'boolean'
+  ) {
+    throw new Error(`Invalid desktop settings file: ${filePath}`);
+  }
+  for (const field of ['lastUpdateCheckAt', 'lastKnownLatestVersion', 'dismissedUpdateVersion'] as const) {
+    if (parsed[field] != null && typeof parsed[field] !== 'string') {
+      throw new Error(`Invalid desktop settings file: ${filePath}`);
+    }
+  }
 
   return normalizeLoadedSettings(parsed);
 }
@@ -98,4 +113,35 @@ export function clearConfiguredWorkspaceRoot(): DesktopSettings {
 
 export function getDesktopSettingsPath(): string {
   return getSettingsFilePath();
+}
+
+export function isCheckForUpdatesOnStartupEnabled(): boolean {
+  return loadDesktopSettings().checkForUpdatesOnStartup !== false;
+}
+
+export function setCheckForUpdatesOnStartup(enabled: boolean): void {
+  const current = loadDesktopSettings();
+  saveDesktopSettings({ ...current, checkForUpdatesOnStartup: enabled });
+}
+
+export function recordUpdateCheckTimestamp(latestVersion?: string): void {
+  const current = loadDesktopSettings();
+  saveDesktopSettings({
+    ...current,
+    lastUpdateCheckAt: new Date().toISOString(),
+    ...(latestVersion ? { lastKnownLatestVersion: latestVersion } : {}),
+  });
+}
+
+export function getLastUpdateCheckAt(): string | undefined {
+  return loadDesktopSettings().lastUpdateCheckAt;
+}
+
+export function getDismissedUpdateVersion(): string | undefined {
+  return loadDesktopSettings().dismissedUpdateVersion;
+}
+
+export function dismissUpdateVersion(version: string): void {
+  const current = loadDesktopSettings();
+  saveDesktopSettings({ ...current, dismissedUpdateVersion: version });
 }

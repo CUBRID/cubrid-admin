@@ -21,6 +21,10 @@ export type DesktopBridge = {
   revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
   onCloseActiveTab: (callback: () => void) => () => void;
   closeWindow: () => Promise<void>;
+  getAppVersion: () => Promise<string>;
+  checkForUpdates: () => Promise<void>;
+  getCheckForUpdatesOnStartup: () => Promise<boolean>;
+  setCheckForUpdatesOnStartup: (enabled: boolean) => Promise<{ ok: true }>;
 };
 
 declare global {

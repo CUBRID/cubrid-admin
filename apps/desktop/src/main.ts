@@ -4,7 +4,9 @@ import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
 import { getPortableAppRoot } from './config/portable-root';
 import { registerDesktopIpcHandlers } from './ipc/handlers';
+import { installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
+import { checkForUpdateInBackgroundIfDue } from './update/check-for-update';
 import { getRendererDistDir, getWorkspacePaths, refreshWorkspacePaths } from './workspace/paths';
 import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
 import {
@@ -48,6 +50,7 @@ async function loadRoute(window: BrowserWindow, routePath: string): Promise<void
 
 async function bootstrap(): Promise<void> {
   registerDesktopIpcHandlers();
+  installApplicationMenu();
 
   console.log('[desktop] install dir (beside .app / exe):', getPortableAppRoot());
   console.log('[desktop] settings file:', getDesktopSettingsPath());
@@ -105,6 +108,8 @@ async function bootstrap(): Promise<void> {
   await loadRoute(mainWindow, 'login');
   mainWindow.show();
   bootstrapComplete = true;
+
+  void checkForUpdateInBackgroundIfDue();
 }
 
 app.whenReady().then(bootstrap).catch((error) => {

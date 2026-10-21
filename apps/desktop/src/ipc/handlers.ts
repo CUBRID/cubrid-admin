@@ -1,12 +1,14 @@
-import { dialog, ipcMain, shell } from 'electron';
+import { app, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import { getApiProcess, restartApiForCurrentWorkspace } from '../api/api-runtime';
 import {
   clearConfiguredWorkspaceRoot,
   getDesktopSettingsPath,
+  isCheckForUpdatesOnStartupEnabled,
   loadDesktopSettings,
   markWorkspaceSetupComplete,
   needsWorkspaceSetup,
+  setCheckForUpdatesOnStartup,
   setWorkspaceRoot,
 } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
@@ -17,6 +19,7 @@ import {
 } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { getMainWindow } from '../window/window-registry';
+import { checkForUpdateManually } from '../update/check-for-update';
 
 async function applyWorkspaceChange(): Promise<{ ok: true }> {
   if (getApiProcess()) {
@@ -108,6 +111,19 @@ export function registerDesktopIpcHandlers(): void {
     refreshWorkspacePaths();
     markWorkspaceSetupComplete();
     notifyWorkspaceSetupComplete();
+    return { ok: true };
+  });
+
+  ipcMain.handle('desktop:get-app-version', () => app.getVersion());
+
+  ipcMain.handle('desktop:check-for-updates', async () => {
+    await checkForUpdateManually();
+  });
+
+  ipcMain.handle('desktop:get-check-updates-on-startup', () => isCheckForUpdatesOnStartupEnabled());
+
+  ipcMain.handle('desktop:set-check-updates-on-startup', (_event, enabled: boolean) => {
+    setCheckForUpdatesOnStartup(enabled);
     return { ok: true };
   });
 
