@@ -258,6 +258,7 @@ export const CM_KO = {
   passwordsDoNotMatch: '비밀번호가 일치하지 않습니다.',
   hostNameRequired: '호스트 이름을 입력하세요.',
   hostNameDuplicate: '이미 다른 호스트가 사용 중인 이름입니다. 다른 이름을 입력하세요.',
+  hostNameTooLong: (max) => `호스트 이름은 ${max}자 이하로 입력하세요.`,
   addressRequired: '주소를 입력하세요.',
   portRequired: '포트를 입력하세요.',
   usernameRequired: '사용자 이름을 입력하세요.',

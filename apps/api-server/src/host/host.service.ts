@@ -18,6 +18,7 @@ import {
   findHostRef,
   getHost,
   isValidGroupNameStart,
+  MAX_HOST_ALIAS_LENGTH,
   moveHostToGroup,
   removeHostFromUser,
   sanitizeHostGroups,
@@ -63,6 +64,9 @@ export class HostService {
       const alias = typeof hostInfo.alias === 'string' ? hostInfo.alias.trim() : '';
       if (!alias) {
         throw HostError.InvalidFormat({ field: 'alias', reason: 'MISSING_OR_BLANK_ALIAS' });
+      }
+      if (alias.length > MAX_HOST_ALIAS_LENGTH) {
+        throw HostError.InvalidFormat({ field: 'alias', reason: 'ALIAS_TOO_LONG', max: MAX_HOST_ALIAS_LENGTH });
       }
 
       const duplicate = findDuplicateHost(user, { ...hostInfo, alias });
@@ -183,6 +187,9 @@ export class HostService {
         const trimmed = String(hostInfo.alias).trim();
         if (!trimmed) {
           throw HostError.InvalidFormat({ field: 'alias', reason: 'BLANK_ALIAS_NOT_ALLOWED' });
+        }
+        if (trimmed.length > MAX_HOST_ALIAS_LENGTH) {
+          throw HostError.InvalidFormat({ field: 'alias', reason: 'ALIAS_TOO_LONG', max: MAX_HOST_ALIAS_LENGTH });
         }
         proposedAlias = trimmed;
       }
