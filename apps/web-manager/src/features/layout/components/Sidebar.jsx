@@ -17,7 +17,8 @@ import { fetchHosts,
   refreshServerList
 } from '../../host/hostSlice';
 import {
-  fetchDatabaseStartInfo, startDatabase, stopDatabase, loginDatabase, logoutDatabase, deleteDatabaseProfile,
+  fetchDatabaseStartInfo, startDatabase, stopDatabase, startAllDatabases, stopAllDatabases,
+  loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { dbKey } from '../../database/dbKey';
@@ -1542,13 +1543,21 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.startingAllDatabasesMsg);
                   startAction();
                   try {
-                    for (const db of databases) {
-                      if (!activeDatabases.includes(db.dbname)) {
-                        await dispatch(startDatabase({ hostUid: selectedHostUid, dbname: db.dbname })).unwrap();
-                      }
-                    }
+                    const dbnames = databases
+                      .filter((db) => !activeDatabases.includes(db.dbname))
+                      .map((db) => db.dbname);
+                    const result = dbnames.length > 0
+                      ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
+                      : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    resetAction();
+                    if (result.failed?.length > 0) {
+                      endError(
+                        CM.someDatabasesFailedToStartMsg(result.failed.length) +
+                        CM.failedListSuffix(result.failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
+                      );
+                    } else {
+                      resetAction();
+                    }
                   } catch (err) {
                     endError(err);
                   }
@@ -1570,11 +1579,19 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.stoppingAllDatabasesMsg);
                   startAction();
                   try {
-                    for (const dbname of activeDatabases) {
-                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                    }
+                    const dbnames = [...activeDatabases];
+                    const result = dbnames.length > 0
+                      ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
+                      : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    resetAction();
+                    if (result.failed?.length > 0) {
+                      endError(
+                        CM.someDatabasesFailedToStopMsg(result.failed.length) +
+                        CM.failedListSuffix(result.failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
+                      );
+                    } else {
+                      resetAction();
+                    }
                   } catch (err) {
                     endError(err);
                   }
@@ -1597,15 +1614,29 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   startAction();
                   try {
                     const currentActive = [...activeDatabases];
-                    for (const dbname of currentActive) {
-                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                    }
-                    for (const dbname of currentActive) {
-                      await dispatch(startDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                    }
+                    // Bulk stop then bulk start, same list both times (a
+                    // restart) — each phase isolates its own per-database
+                    // failures (e.g. one database with no stored login
+                    // profile) instead of a single failure aborting every
+                    // other database still needing to be stopped/started.
+                    const stopResult = currentActive.length > 0
+                      ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames: currentActive })).unwrap()
+                      : { succeeded: [], failed: [] };
+                    const startResult = currentActive.length > 0
+                      ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames: currentActive })).unwrap()
+                      : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    resetAction();
+                    const failed = [...(stopResult.failed || []), ...(startResult.failed || [])];
+                    if (failed.length > 0) {
+                      endError(
+                        CM.someDatabasesFailedToRestartMsg(failed.length) +
+                        CM.failedListSuffix(failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
+                      );
+                    } else {
+                      resetAction();
+                    }
                   } catch (err) {
+                    dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     endError(err);
                   }
                 },

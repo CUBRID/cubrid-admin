@@ -60,6 +60,37 @@ export const stopDatabase = createAsyncThunk(
   }
 );
 
+// Bulk start/stop for the "Start/Stop/Restart All Databases" tree actions.
+// Goes through the dedicated start-all/stop-all endpoints instead of looping
+// individual startDatabase/stopDatabase calls client-side: the backend
+// already isolates per-database failures there (a database with no stored
+// login profile is reported in `failed` instead of aborting every other
+// database in the batch), which a client-side loop awaiting each call in
+// turn cannot do once any one of them throws.
+export const startAllDatabases = createAsyncThunk(
+  'database/startAllDatabases',
+  async ({ hostUid, dbnames }, { rejectWithValue }) => {
+    try {
+      const response = await databaseApi.startAllDatabases(hostUid, dbnames);
+      return response;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to start databases');
+    }
+  }
+);
+
+export const stopAllDatabases = createAsyncThunk(
+  'database/stopAllDatabases',
+  async ({ hostUid, dbnames }, { rejectWithValue }) => {
+    try {
+      const response = await databaseApi.stopAllDatabases(hostUid, dbnames);
+      return response;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to stop databases');
+    }
+  }
+);
+
 export const loginDatabase = createAsyncThunk(
   'database/loginDatabase',
   async ({ hostUid, dbname, payload }, { rejectWithValue }) => {
@@ -309,7 +340,20 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(startDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
-        parseDbResponse(state, action.payload, action.meta.arg?.hostUid);
+        const { hostUid, dbname } = action.meta.arg || {};
+        parseDbResponse(state, action.payload, hostUid);
+        // startDatabase only succeeds once the backend's own ensureDbLogin
+        // gate has (re-)established a dbmtuserlogin for this database — sync
+        // that belief here too, not just when the explicit loginDatabase
+        // thunk runs. Otherwise a database started via a bulk action (which
+        // never dispatches loginDatabase itself) stays marked "not logged
+        // in" here, which disables this database's own individual
+        // start/stop menu items from then on even though the backend will
+        // happily service them.
+        if (hostUid && dbname) {
+          const key = dbKey(hostUid, dbname);
+          if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+        }
       })
       .addCase(startDatabase.rejected, (state, action) => {
         state.actionLoading = false;
@@ -321,9 +365,51 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(stopDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
-        parseDbResponse(state, action.payload, action.meta.arg?.hostUid);
+        const { hostUid, dbname } = action.meta.arg || {};
+        parseDbResponse(state, action.payload, hostUid);
+        // See startDatabase.fulfilled's matching comment.
+        if (hostUid && dbname) {
+          const key = dbKey(hostUid, dbname);
+          if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+        }
       })
       .addCase(stopDatabase.rejected, (state, action) => {
+        state.actionLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(startAllDatabases.pending, (state) => {
+        state.actionLoading = true;
+        state.error = null;
+      })
+      .addCase(startAllDatabases.fulfilled, (state, action) => {
+        state.actionLoading = false;
+        const { hostUid } = action.meta.arg || {};
+        if (hostUid) {
+          (action.payload?.succeeded || []).forEach((dbname) => {
+            const key = dbKey(hostUid, dbname);
+            if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+          });
+        }
+      })
+      .addCase(startAllDatabases.rejected, (state, action) => {
+        state.actionLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(stopAllDatabases.pending, (state) => {
+        state.actionLoading = true;
+        state.error = null;
+      })
+      .addCase(stopAllDatabases.fulfilled, (state, action) => {
+        state.actionLoading = false;
+        const { hostUid } = action.meta.arg || {};
+        if (hostUid) {
+          (action.payload?.succeeded || []).forEach((dbname) => {
+            const key = dbKey(hostUid, dbname);
+            if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+          });
+        }
+      })
+      .addCase(stopAllDatabases.rejected, (state, action) => {
         state.actionLoading = false;
         state.error = action.payload;
       })
