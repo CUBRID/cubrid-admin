@@ -107,9 +107,10 @@ export const fetchDashboardCAS = createAsyncThunk(
       );
 
       brokerDetails.forEach((status, idx) => {
-        if (!status || !status.asinfo) return;
+        const asinfo = status?.data?.asinfo;
+        if (!asinfo) return;
         const brokerName = actualBrokerList[idx]?.name;
-        status.asinfo.forEach(cas => {
+        asinfo.forEach(cas => {
           if (cas.as_dbname?.toLowerCase() === dbname.toLowerCase()) {
             // as_num_query is a per-AS lifetime total, not a rate — derive a
             // real per-second value from the delta between consecutive polls.

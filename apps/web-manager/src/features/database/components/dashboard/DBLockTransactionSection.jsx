@@ -142,8 +142,8 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
           emptyState={
             <EmptyState
               icon="verified_user"
-              title={CM.lockAndTransaction}
-              subtitle={CM.loadingLockAndTransaction}
+              title={CM.noLocksTitle}
+              subtitle={CM.noLocksMsg}
               py="py-8"
             />
           }
