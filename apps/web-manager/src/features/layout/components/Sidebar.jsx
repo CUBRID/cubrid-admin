@@ -57,7 +57,7 @@ import { fetchBrokerList,
   openBrokerPropertyModal,
   resetBrokerState
 } from '../../broker/brokerSlice';
-import { setActiveMainTab, openTab, closeHostTabs, showStatusModal } from '../layoutSlice';
+import { setActiveMainTab, openTab, closeHostTabs, showStatusModal, triggerRefreshActiveTab } from '../layoutSlice';
 import { fetchDatabaseUsers, openCreateUserModal, openEditUserModal, openDropUserModal } from '../../user/userSlice';
 import { clearHostSummary } from '../../server/globalMonitoringSlice';
 import { MenuItem, MenuDivider, SubMenu } from '../../../components/common/DropdownMenu';
@@ -1655,6 +1655,15 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   startAction();
                   try {
                     await dispatch(startAllBrokers(selectedHostUid)).unwrap();
+                    // Start-all's own fetchBrokerList only updates the
+                    // shared brokersByHost slice — the dashboard/status tabs
+                    // (Brokers.jsx, BrokerStatus.jsx) deliberately keep their
+                    // own local state via usePollingRefresh and never read
+                    // that slice, so without this they'd keep showing the
+                    // pre-start PID/status until their next poll tick. This
+                    // reuses the same signal usePollingRefresh already acts
+                    // on for F5/manual reload.
+                    dispatch(triggerRefreshActiveTab());
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1678,6 +1687,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   startAction();
                   try {
                     await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
+                    // See startAllBrokers' identical comment above.
+                    dispatch(triggerRefreshActiveTab());
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1702,6 +1713,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   try {
                     await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
                     await dispatch(startAllBrokers(selectedHostUid)).unwrap();
+                    // See startAllBrokers' identical comment above.
+                    dispatch(triggerRefreshActiveTab());
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1769,6 +1782,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     try {
                       await dispatch(stopBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
                       dispatch(fetchBrokerList(selectedHostUid));
+                      // fetchBrokerList above only refreshes the shared
+                      // brokersByHost slice — see startAllBrokers' identical
+                      // comment for why the dashboard/status tabs need this
+                      // too.
+                      dispatch(triggerRefreshActiveTab());
                       resetAction();
                     } catch (err) {
                       endError(err);
@@ -1795,6 +1813,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     try {
                       await dispatch(startBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
                       dispatch(fetchBrokerList(selectedHostUid));
+                      // See stopBroker's identical comment above.
+                      dispatch(triggerRefreshActiveTab());
                       resetAction();
                     } catch (err) {
                       endError(err);
