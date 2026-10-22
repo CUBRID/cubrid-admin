@@ -191,7 +191,7 @@ const parseDbResponse = (state, payload, hostUid, isBackground = false, { update
   // from any live-heartbeat-based HA signal, which can read "not HA" while
   // the pair is genuinely down or mid-recovery (see haDbNames comment on
   // StartInfoClientResponse).
-  if (payload.haDbNames !== undefined) {
+  if (updateLive && payload.haDbNames !== undefined) {
     const newHaDbNames = Array.isArray(payload.haDbNames) ? payload.haDbNames : [];
     if (JSON.stringify(state.haDbNamesByHost[hostUid]) !== JSON.stringify(newHaDbNames)) {
       state.haDbNamesByHost[hostUid] = newHaDbNames;
