@@ -17,6 +17,7 @@ export const ConfirmDialog = ({
 }) => {
   const CM = useCM();
   const isDanger = variant === 'danger';
+  const isWarning = variant === 'warning';
   const resolvedConfirmLabel = confirmLabel ?? CM.confirm;
   const resolvedCancelLabel = cancelLabel ?? CM.cancel;
 
@@ -36,8 +37,8 @@ export const ConfirmDialog = ({
       isOpen={isOpen}
       onClose={onCancel}
       title={title}
-      icon={isDanger ? 'warning' : 'info'}
-      iconVariant={isDanger ? 'danger' : 'primary'}
+      icon={isDanger || isWarning ? 'warning' : 'info'}
+      iconVariant={isDanger ? 'danger' : isWarning ? 'warning' : 'primary'}
       footer={footer}
       maxWidth="max-w-md"
       testId={testId}
