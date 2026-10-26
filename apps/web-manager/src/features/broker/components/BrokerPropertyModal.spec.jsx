@@ -107,7 +107,7 @@ it('surfaces a stored crossField violation as a passive "invalid" diagnostic, no
 });
 
 it.each([
-  ['broker1', 'broker1 · Broker Properties', '[%broker1] section — applies only to the "broker1" broker.'],
+  ['broker1', 'broker1 · Broker Properties', 'Properties of the selected broker "broker1" ([%broker1] section).'],
   [null, 'Broker Common Properties', '[broker] section — applies to every broker on this host.'],
 ])('title/subtitle for brokerName=%s use the read-only scope wording', async (brokerName, title, subtitle) => {
   await render(buildState({ brokerName, confdata: ['[broker]', 'MASTER_SHM_ID=30001', '[%broker1]', 'BROKER_PORT=30000'] }));
