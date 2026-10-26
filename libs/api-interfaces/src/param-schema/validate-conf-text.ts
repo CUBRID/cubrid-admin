@@ -65,6 +65,18 @@ export function validateConfText(
           : { lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — not found in any catalogued engine version close to this host's; the engine refuses to load a file with an unknown key, so check the spelling.` });
       }
     }
+    // ini_parser lowercases keys and overwrites a repeated key in the same
+    // section without any error, so only the last line takes effect.
+    const lastLineByKey = new Map<string, number>();
+    for (const { key, lineNo } of [...section.entries].reverse()) {
+      const lower = key.toLowerCase();
+      const laterLineNo = lastLineByKey.get(lower);
+      if (laterLineNo === undefined) {
+        lastLineByKey.set(lower, lineNo);
+      } else {
+        problems.push({ lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — set again on line ${laterLineNo}; this line is ignored and the later value is used.` });
+      }
+    }
     const isCommonSection = section.name === null || section.name === commonSection;
     const sectionValues: Record<string, string> = {};
     const sectionLineNos: Record<string, number> = {};

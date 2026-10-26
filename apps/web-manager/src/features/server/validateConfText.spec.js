@@ -41,6 +41,16 @@ describe('validateConfText — cubridconf', () => {
       .toEqual([expect.objectContaining({ key: 'max_clients' })]);
   });
 
+  it('warns on a repeated key — the engine silently keeps only the last one', () => {
+    expect(validateConfText(DB_SCHEMA, '[common]\nmax_clients=100\n[@demodb]\nmax_clients=50\n[common]\nMAX_CLIENTS=200', 'cubridconf'))
+      .toEqual([expect.objectContaining({ lineNo: 2, key: 'max_clients', severity: 'warning', message: expect.stringContaining('line 6') })]);
+    expect(validateConfText(DB_SCHEMA, '[common]\nmax_clients=100\nmax_clients=9999', 'cubridconf'))
+      .toEqual([
+        expect.objectContaining({ lineNo: 2, severity: 'warning' }),
+        expect.objectContaining({ lineNo: 3, key: 'max_clients', message: expect.stringContaining('<= 4000') }),
+      ]);
+  });
+
   it('runs syntax checks even before the schema has loaded', () => {
     expect(validateConfText([], '[common]\nmax_clients 100', 'cubridconf')).toHaveLength(1);
   });
