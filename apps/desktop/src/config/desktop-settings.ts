@@ -17,6 +17,13 @@ function getSettingsFilePath(): string {
   return path.join(getPortableAppRoot(), SETTINGS_FILE);
 }
 
+/** Drops only the workspace override; update preferences and history stay. */
+function withoutWorkspaceRoot(settings: DesktopSettings): DesktopSettings {
+  const rest = { ...settings };
+  delete rest.workspaceRoot;
+  return rest;
+}
+
 function normalizeLoadedSettings(parsed: DesktopSettings): DesktopSettings {
   const portableRoot = getPortableAppRoot();
   const defaultWorkspace = path.join(portableRoot, 'cwm-workspace');
@@ -30,15 +37,11 @@ function normalizeLoadedSettings(parsed: DesktopSettings): DesktopSettings {
     resolved === portableRoot || resolved.startsWith(`${portableRoot}${path.sep}`);
 
   if (!underPortableRoot || isPathInsideAppBundle(resolved)) {
-    return {
-      workspaceSetupComplete: parsed.workspaceSetupComplete,
-    };
+    return withoutWorkspaceRoot(parsed);
   }
 
   if (path.basename(resolved) === 'test' && resolved !== defaultWorkspace) {
-    return {
-      workspaceSetupComplete: parsed.workspaceSetupComplete,
-    };
+    return withoutWorkspaceRoot(parsed);
   }
 
   return parsed;
@@ -105,6 +108,7 @@ export function setWorkspaceRoot(workspaceRoot: string): DesktopSettings {
 export function clearConfiguredWorkspaceRoot(): DesktopSettings {
   const current = loadDesktopSettings();
   const settings: DesktopSettings = {
+    ...withoutWorkspaceRoot(current),
     workspaceSetupComplete: current.workspaceSetupComplete ?? true,
   };
   saveDesktopSettings(settings);

@@ -16,5 +16,6 @@
       "@update-check": ["../../dist/libs/update-check"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts"]
 }
