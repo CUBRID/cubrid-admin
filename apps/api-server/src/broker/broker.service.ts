@@ -8,6 +8,7 @@ import {
   AddDbmtUserClientResponse,
   AddDbmtUserRequest,
   BrokerStartStopClientResponse,
+  GetBrokerStatusBulkClientResponse,
   GetBrokerStatusClientResponse,
   StartAllBrokersClientResponse,
   StopAllBrokersClientResponse,
@@ -18,8 +19,10 @@ import {
   AddDbmtUserCmsRequest,
   BaseCmsRequest,
   BaseCmsResponse,
+  BrokerStatusEntry,
   GetBrokerStatusCmsRequest,
   GetBrokerStatusCmsResponse,
+  GetBrokerStatusMultiCmsResponse,
   GetBrokersInfoCmsResponse,
   HandleBrokerCmsRequest,
   StartAllBrokersCmsRequest,
@@ -32,6 +35,13 @@ import {
   StopAllBrokersCmsResponse,
   UpdateDbmtUserCmsResponse,
 } from '@type/cms-response';
+
+/**
+ * Broker names per bulk `getbrokerstatus` call. CMS has no length limit on
+ * `bname` (dynamic nvplist strings, no HTTP body cap); this only bounds the
+ * size of one response (~6 KB per broker with 20 CAS) and CMS time per call.
+ */
+export const BROKER_STATUS_BULK_CHUNK_SIZE = 50;
 
 /**
  * Service for managing broker operations.
@@ -212,6 +222,42 @@ export class BrokerService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     return this.extractDomainData(response);
+  }
+
+  /**
+   * Get the status of many brokers with one `getbrokerstatus` call per
+   * chunk of BROKER_STATUS_BULK_CHUNK_SIZE names (CMS accepts a
+   * comma-separated `bname`), instead of one call per broker.
+   *
+   * CMS returns `{ broker: [...] }` when `bname` contains a comma and the
+   * flat single-broker shape otherwise; both are normalized to a list here.
+   */
+  @HandleCmsErrors()
+  async getBrokerStatusBulk(
+    userId: string,
+    hostUid: string,
+    bnames: string[]
+  ): Promise<GetBrokerStatusBulkClientResponse> {
+    const names = [...new Set(bnames.map((name) => name.trim()).filter(Boolean))];
+    const brokers: BrokerStatusEntry[] = [];
+
+    // Sequential on purpose: CMS serves one host's requests one at a time.
+    for (let i = 0; i < names.length; i += BROKER_STATUS_BULK_CHUNK_SIZE) {
+      const chunk = names.slice(i, i + BROKER_STATUS_BULK_CHUNK_SIZE);
+      const response = await this.executeCmsRequest<
+        GetBrokerStatusCmsRequest,
+        GetBrokerStatusCmsResponse & GetBrokerStatusMultiCmsResponse
+      >(userId, hostUid, { task: 'getbrokerstatus', bname: chunk.join(',') });
+
+      if (chunk.length === 1) {
+        const { bname, time, asinfo, jobinfo } = response;
+        brokers.push({ bname, time, asinfo, jobinfo });
+      } else {
+        brokers.push(...(response.broker ?? []).filter((entry) => entry?.bname));
+      }
+    }
+
+    return { brokers };
   }
 
   @HandleCmsErrors()

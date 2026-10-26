@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BrokerService } from './broker.service';
+import { BROKER_STATUS_BULK_CHUNK_SIZE, BrokerService } from './broker.service';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
 import { CmsError } from '@error/cms/cms-error';
+import { GetBrokerStatusCmsRequest } from '@type';
 
 jest.mock('@common', () => ({
   ...jest.requireActual('@common'),
@@ -249,6 +250,93 @@ describe('BrokerService', () => {
 
       await expect(
         service.updateDbmtUser(mockUserId, mockHostUid, mockRequest)
+      ).rejects.toThrow(CmsError);
+    });
+  });
+  describe('getBrokerStatusBulk', () => {
+    const envelope = { __EXEC_TIME: '1 ms', note: 'none', status: 'success', task: 'getbrokerstatus' };
+    const as1 = { as_id: '1', as_num_query: '10', as_num_tran: '2' };
+
+    it('sends one comma-joined getbrokerstatus call and splits the broker blocks', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        ...envelope,
+        broker: [
+          { bname: 'query_editor', time: 't', asinfo: [as1] },
+          { bname: 'broker1', time: 't' },
+        ],
+      });
+
+      const result = await service.getBrokerStatusBulk(mockUserId, mockHostUid, ['query_editor', 'broker1']);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        'https://localhost:8001/cm_api',
+        expect.objectContaining({ task: 'getbrokerstatus', bname: 'query_editor,broker1', token: 'test-token' })
+      );
+      expect(result).toEqual({
+        brokers: [
+          { bname: 'query_editor', time: 't', asinfo: [as1] },
+          { bname: 'broker1', time: 't' },
+        ],
+      });
+    });
+
+    it('normalizes the flat CMS shape returned for a single name', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ ...envelope, bname: 'query_editor', time: 't', asinfo: [as1] });
+
+      const result = await service.getBrokerStatusBulk(mockUserId, mockHostUid, ['query_editor']);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ bname: 'query_editor' })
+      );
+      expect(result).toEqual({
+        brokers: [{ bname: 'query_editor', time: 't', asinfo: [as1], jobinfo: undefined }],
+      });
+    });
+
+    it(`chunks long lists into ${BROKER_STATUS_BULK_CHUNK_SIZE}-name calls`, async () => {
+      const names = Array.from({ length: 120 }, (_, i) => `broker${i}`);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, req) => ({
+        ...envelope,
+        broker: (req as GetBrokerStatusCmsRequest).bname.split(',').map((bname: string) => ({ bname, time: 't' })),
+      }));
+
+      const result = await service.getBrokerStatusBulk(mockUserId, mockHostUid, names);
+
+      const sent = cmsClient.postAuthenticated.mock.calls.map(([, req]) => (req as GetBrokerStatusCmsRequest).bname.split(','));
+      expect(sent.map((chunk) => chunk.length)).toEqual([50, 50, 20]);
+      expect(sent.flat()).toEqual(names);
+      expect(result.brokers.map((b) => b.bname)).toEqual(names);
+    });
+
+    it('trims, drops empty and duplicate names, and ignores empty broker blocks', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        ...envelope,
+        broker: [{ bname: 'a', time: 't' }, { bname: 'b', time: 't' }, { bname: '', time: 't' }],
+      });
+
+      const result = await service.getBrokerStatusBulk(mockUserId, mockHostUid, [' a ', '', 'b', 'a']);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ bname: 'a,b' })
+      );
+      expect(result.brokers.map((b) => b.bname)).toEqual(['a', 'b']);
+    });
+
+    it('makes no CMS call when no usable names are given', async () => {
+      const result = await service.getBrokerStatusBulk(mockUserId, mockHostUid, ['', '  ']);
+
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+      expect(result).toEqual({ brokers: [] });
+    });
+
+    it('throws CmsError when CMS status is not success', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ ...envelope, status: 'fail', note: 'failed' });
+
+      await expect(
+        service.getBrokerStatusBulk(mockUserId, mockHostUid, ['a', 'b'])
       ).rejects.toThrow(CmsError);
     });
   });
