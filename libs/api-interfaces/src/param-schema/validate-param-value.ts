@@ -76,6 +76,11 @@ function formatBytesAsSize(bytes: number): string {
   return bytes === 1 ? '1 byte' : `${bytes} bytes`;
 }
 
+function formatSizeBound(bound: number | string): string {
+  const n = Number(bound);
+  return Number.isSafeInteger(n) ? formatBytesAsSize(n) : `${bound} bytes`;
+}
+
 /**
  * Validates a raw string value against a guard. Returns `null` when
  * valid, or a short human-readable reason when not. Empty string is
@@ -130,8 +135,11 @@ export function validateParamValue(guard: ParamGuard | undefined, rawValue: unkn
     case 'size': {
       const bytes = parseEngineSizeToBytes(value);
       if (bytes === null) return 'Must be a number optionally followed by B, K/KB, M/MB, G/GB, T/TB or P/PB (e.g. 512M or 0.5G)';
-      if (guard.min !== undefined && bytes < guard.min) return `Must be >= ${formatBytesAsSize(guard.min)}`;
-      if (guard.max !== undefined && bytes > guard.max) return `Must be <= ${formatBytesAsSize(guard.max)}`;
+      // `bytes` is an integer-valued double, as the engine's own (UINT64) cast
+      // of strtod()'s result is, so BigInt compares it exactly.
+      if (!Number.isFinite(bytes)) return 'Value is too large';
+      if (guard.min !== undefined && BigInt(bytes) < BigInt(guard.min)) return `Must be >= ${formatSizeBound(guard.min)}`;
+      if (guard.max !== undefined && BigInt(bytes) > BigInt(guard.max)) return `Must be <= ${formatSizeBound(guard.max)}`;
       return null;
     }
     case 'brokerSize': {

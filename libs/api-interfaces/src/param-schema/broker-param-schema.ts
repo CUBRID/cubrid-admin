@@ -64,7 +64,8 @@ export const BROKER_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   { key: 'LOG_BACKUP', category: 'advance', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'OFF' },
   { key: 'SOURCE_ENV', category: 'advance', guard: { kind: 'string' }, default: 'cubrid.env' },
   { key: 'MAX_STRING_LENGTH', category: 'advance', guard: { kind: 'int', base: 0 }, default: '-1' }, // no range in source; -1 = unlimited convention
-  { key: 'ACCESS_LOG', category: 'advance', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'ON' },
+  // broker_config.c: INI_GETSTR_CHK (s, ini, sec_name, "ACCESS_LOG", "OFF", ...) on release/11.0-11.4 and develop.
+  { key: 'ACCESS_LOG', category: 'advance', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'OFF' },
   { key: 'ACCESS_LIST', category: 'advance', guard: { kind: 'string' }, default: '' },
   { key: 'CCI_PCONNECT', category: 'advance', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'OFF' },
   { key: 'ACCESS_MODE', category: 'advance', guard: { kind: 'enum', options: ['RW', 'RO', 'SO'] }, default: 'RW' },

@@ -169,6 +169,17 @@ describe('validateParamValue', () => {
       expect(validateParamValue(guard, '1k')).toBeNull();
       expect(validateParamValue(guard, '1K')).toBeNull();
     });
+    // The engine casts strtod()'s result to UINT64 and compares it with the
+    // INT64-sized upper limit as integers (prm_check_range), so the largest
+    // value it accepts is the largest double below 2^63.
+    it('compares INT64-sized bounds exactly, as the engine does (backup_volume_max_size_bytes)', () => {
+      const { guard } = DATABASE_PARAM_SCHEMA.find(e => e.key === 'backup_volume_max_size_bytes');
+      expect(validateParamValue(guard, '8191P')).toBeNull();
+      expect(validateParamValue(guard, '8192P')).toBe('Must be <= 9223372036854775807 bytes'); // 2^63
+      expect(validateParamValue(guard, '9223372036854775807')).not.toBeNull(); // strtod rounds it up to 2^63
+      expect(validateParamValue(guard, '32K')).toBeNull();
+      expect(validateParamValue(guard, '31K')).toBe('Must be >= 32K');
+    });
   });
 
   describe('regression: log_volume_size / db_volume_size (previously entirely missing from the schema)', () => {

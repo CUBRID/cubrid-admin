@@ -40,7 +40,7 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // any other value and fails the load: lower_limit is 32K on every
   // version (`1024 * 32`, PRM_ID_IO_BACKUP_MAX_VOLUME_SIZE). PRM_BIGINT
   // with PRM_SIZE_UNIT, so "1G" etc. is valid.
-  { key: 'backup_volume_max_size_bytes', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 32768, max: 9223372036854775807 }, default: '0' },
+  { key: 'backup_volume_max_size_bytes', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 32768, max: '9223372036854775807' }, default: '0' },
   { key: 'block_ddl_statement', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no' },
   { key: 'block_nowhere_statement', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no' },
   { key: 'call_stack_dump_activation_list', category: 'advanced', scope: 'BOTH', guard: { kind: 'intList', allowDefaultElement: true }, default: '' },

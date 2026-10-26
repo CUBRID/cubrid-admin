@@ -74,3 +74,9 @@ describe('BROKER_PARAM_SCHEMA vs the engine catalog', () => {
   });
 });
 
+describe('broker defaults the catalog cannot check', () => {
+  // broker_keywords[] carries names only, so defaults read from broker_config.c are pinned here.
+  it('ACCESS_LOG defaults to OFF (INI_GETSTR_CHK ... "ACCESS_LOG", "OFF")', () => {
+    expect(BROKER_PARAM_SCHEMA.find(e => e.key === 'ACCESS_LOG').default).toBe('OFF');
+  });
+});

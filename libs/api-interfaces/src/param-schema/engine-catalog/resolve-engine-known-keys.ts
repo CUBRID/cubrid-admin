@@ -18,7 +18,11 @@ export function guardFromCatalog(c: EngineCatalogDbParam): ParamGuard | undefine
   const min = sameUnit ? numberOrUndefined(c.lowerLimit) : undefined;
   const max = sameUnit ? numberOrUndefined(c.upperLimit) : undefined;
   const bounds = { ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
-  if (c.sizeUnit) return { kind: 'size', ...(c.datatype === 'bigint' ? bounds : {}) };
+  if (c.sizeUnit) {
+    if (c.datatype !== 'bigint') return { kind: 'size' };
+    // Keep the catalog's decimal strings: INT64-sized limits lose precision as numbers.
+    return { kind: 'size', ...(min !== undefined ? { min: String(c.lowerLimit) } : {}), ...(max !== undefined ? { max: String(c.upperLimit) } : {}) };
+  }
   if (c.timeUnit) return { kind: 'time', ...bounds };
   switch (c.datatype) {
     case 'boolean': return { kind: 'boolean' };

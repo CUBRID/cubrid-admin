@@ -44,7 +44,10 @@ export type ParamGuard =
   // existing entry relied on the old numeric-prefix-only comparison (only
   // `APPL_SERVER_MAX_SIZE_HARD_LIMIT`'s `min: 1` used it, and "reject
   // exactly zero regardless of unit" behaves identically either way).
-  | { kind: 'size'; min?: number; max?: number }
+  // Bounds may be decimal strings: the engine compares the parsed byte count
+  // as a UINT64 against INT64-sized limits (prm_check_range), which a JS
+  // number cannot hold exactly (e.g. 9223372036854775807).
+  | { kind: 'size'; min?: number | string; max?: number | string }
   // broker.conf sizes (broker_util.c ut_size_string_to_kbyte) — NOT the
   // engine's size rules: a value with no unit is read in `defaultUnit`
   // (MB for APPL_SERVER_MAX_SIZE*, KB for the log sizes), only
