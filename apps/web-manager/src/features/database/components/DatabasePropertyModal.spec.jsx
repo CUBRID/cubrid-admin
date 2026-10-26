@@ -23,6 +23,7 @@ const DATABASE_PARAM_SCHEMA = [
   { key: 'data_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1024 }, default: '32768', bufferGroup: { pairKey: 'data', role: 'pages' }, deprecated: { replacedBy: 'data_buffer_size' } },
   { key: 'data_buffer_size', category: 'buffer', guard: { kind: 'size' }, default: '512', bufferGroup: { pairKey: 'data', role: 'size' } },
   { key: 'max_clients', category: 'general', guard: { kind: 'int', min: 10, max: 4000 }, default: '100' },
+  { key: 'checkpoint_interval', category: 'general', guard: { kind: 'time', min: 59001 }, default: '6min' },
   { key: 'lock_timeout_in_secs', category: 'general', guard: { kind: 'int', min: -1 }, default: '-1', deprecated: { replacedBy: 'lock_timeout' } },
 ];
 
@@ -222,4 +223,11 @@ it('shows a deprecated key that the conf does set, labelled with its replacement
     expect.stringContaining('use data_buffer_size instead'),
     expect.stringContaining('use lock_timeout instead'),
   ]);
+});
+
+it('compares time values in ms, so 360000 (ms) counts as the 6min default', async () => {
+  await renderWith(['[@demodb]', 'checkpoint_interval=360000']);
+  const row = Array.from(container.querySelectorAll('tr')).find(r => r.textContent.includes('checkpoint_interval'));
+  expect(row.textContent).toContain('360000');
+  expect(row.textContent).toContain('Default');
 });

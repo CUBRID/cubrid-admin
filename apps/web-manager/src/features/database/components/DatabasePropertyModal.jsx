@@ -81,6 +81,13 @@ const TRUE_WORDS = ['yes', 'y', '1', 'true', 'on'];
 function canonicalValue(guard, value) {
   const text = String(value ?? '').trim();
   if (guard?.kind === 'size') return parseEngineSizeToBytes(text) ?? text;
+  if (guard?.kind === 'time') {
+    // util_time_string_to_msec units; no unit = ms, negatives as-is.
+    const m = /^(-?\d+(?:\.\d+)?)\s*(ms|msec|s|sec|min|h)?$/i.exec(text);
+    if (!m) return text;
+    const n = Number(m[1]);
+    return n < 0 ? Math.trunc(n) : Math.trunc(n * ({ ms: 1, msec: 1, s: 1000, sec: 1000, min: 60000, h: 3600000 }[(m[2] ?? 'ms').toLowerCase()]));
+  }
   if (guard?.kind === 'boolean') return TRUE_WORDS.includes(text.toLowerCase());
   if (guard?.kind === 'enum') return text.toLowerCase();
   return text;
