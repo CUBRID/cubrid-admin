@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Request } from '@nestjs/common';
 import { ResourceMonitoringService } from './resource-monitoring.service';
-import { BaseCmsResponse, CmsGetHostStatResponse } from '@type/cms-response';
+import { BaseCmsResponse, CmsGetHostStatResponse, CmsGetSysDiskInfoResponse } from '@type/cms-response';
 
 /**
  * Controller for handling resource monitoring operations.
@@ -27,5 +27,21 @@ export class ResourceMonitoringController {
   ): Promise<Omit<CmsGetHostStatResponse, keyof BaseCmsResponse>> {
     const userId = req.user.sub;
     return await this.resourceMonitoringService.getHostStat(userId, hostUid);
+  }
+
+  /**
+   * Retrieves disk usage (getsysdiskinfo) from the CMS API: one entry per
+   * filesystem with total/free bytes. On Linux this is the root filesystem only.
+   *
+   * @param hostUid The UID of the host.
+   * @param req The request object containing user information.
+   */
+  @Get('get-sys-disk-info')
+  async getSysDiskInfo(
+    @Param('hostUid') hostUid: string,
+    @Request() req
+  ): Promise<Omit<CmsGetSysDiskInfoResponse, keyof BaseCmsResponse>> {
+    const userId = req.user.sub;
+    return await this.resourceMonitoringService.getSysDiskInfo(userId, hostUid);
   }
 }

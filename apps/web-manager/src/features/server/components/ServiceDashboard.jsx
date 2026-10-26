@@ -365,8 +365,9 @@ const Component = function ServiceDashboard() {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.tps : undefined;
-        if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v}</span>;
+        // null = no rate yet (needs two samples), see computeBrokerRates.
+        if (v === undefined || v === null) return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v.toFixed(1)}</span>;
       }
     },
     {
@@ -379,8 +380,8 @@ const Component = function ServiceDashboard() {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.qps : undefined;
-        if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v}</span>;
+        if (v === undefined || v === null) return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v.toFixed(1)}</span>;
       }
     },
     { 

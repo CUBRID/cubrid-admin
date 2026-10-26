@@ -94,6 +94,7 @@ export const CM = {
   locksUnavailableMsg: 'Failed to load lock information for this database.',
   dataUnavailableTitle: 'Information Unavailable',
   dataUnavailableMsg: 'Failed to load this information.',
+  diskRootFilesystem: 'Root filesystem (/)',
   lockIndex: 'Index',
   pname: 'Pname',
   uid: 'Uid',
