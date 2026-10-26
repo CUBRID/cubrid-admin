@@ -254,3 +254,4 @@ E2E 환경과 실제 CMS 테스트 규칙은 [`e2e/README.md`](e2e/README.md)를
 | `SSL_KEY_PATH` | SSL 키 경로 | — |
 | `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분) | — |
 | `CWM_DESKTOP` | Electron 모드 (`1`) | — |
+| `CWM_UPDATE_CHECK_REPO` | 업데이트 확인 시 조회할 GitHub 리포 (`owner/repo`, 형식이 틀리면 무시) | — (기본: `CUBRID/cubrid-admin`) |

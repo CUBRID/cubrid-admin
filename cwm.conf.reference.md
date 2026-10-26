@@ -44,3 +44,4 @@ unreadable.
 | `LOG_MAX_SIZE` | Rotate to a new file once the current one reaches this size, e.g. `20m`, `500k` | `20m` |
 | `LOG_MAX_FILES` | How long to keep rotated files — a duration like `14d`, or a plain count like `20` | `14d` |
 | `LOG_APPEND_ON_RESTART` | `true` to keep appending to today's log file across restarts, `false` to start each restart with a clean file | `true` |
+| `CWM_UPDATE_CHECK_REPO` | GitHub `owner/repo` that Help > Check for Updates queries. A malformed value is ignored. On a closed network the check simply reports that it couldn't reach GitHub. | `CUBRID/cubrid-admin` |
