@@ -20,12 +20,6 @@ import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { parseConfText, parseEngineSizeToBytes, validateEffectiveParams } from '@api-interfaces';
 
-// View states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
-
 // The param list itself — which keys exist, their category/type/guard/
 // default — no longer lives here. It comes from the connected host's
 // `getEnv` response (`paramSchemas.database`, cached in Redux's

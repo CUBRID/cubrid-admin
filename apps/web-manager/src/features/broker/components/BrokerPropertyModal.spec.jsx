@@ -105,3 +105,14 @@ it('surfaces a stored crossField violation as a passive "invalid" diagnostic, no
   expect(control('guard-error-count')).not.toBeNull();
   expect(container.textContent).toContain('1 invalid');
 });
+
+it.each([
+  ['broker1', 'broker1 · Broker Properties', '[%broker1] section — applies only to the "broker1" broker.'],
+  [null, 'Broker Common Properties', '[broker] section — applies to every broker on this host.'],
+])('title/subtitle for brokerName=%s use the read-only scope wording', async (brokerName, title, subtitle) => {
+  await render(buildState({ brokerName, confdata: ['[broker]', 'MASTER_SHM_ID=30001', '[%broker1]', 'BROKER_PORT=30000'] }));
+  const text = document.body.textContent;
+  expect(text).toContain(title);
+  expect(text).toContain(subtitle);
+  expect(text).not.toMatch(/Editing \[/);
+});
