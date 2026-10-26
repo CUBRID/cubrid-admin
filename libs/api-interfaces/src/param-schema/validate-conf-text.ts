@@ -3,8 +3,10 @@ import { parseConfText } from './parse-conf-text';
 import { validateEffectiveParams } from './validate-effective-params';
 import { EngineKnownKeys } from './engine-known-keys';
 import { DEPRECATED_PARAM_REPLACEMENTS } from './deprecated-param-replacements';
+import { validateCmConfText } from './validate-cm-conf-text';
+import { CM_PENDING_PARAM_SCHEMA, CM_TEMPLATE_ONLY_KEYS } from './cm-unreleased-keys';
 
-export type ConfFileKind = 'cubridconf' | 'brokerconf';
+export type ConfFileKind = 'cubridconf' | 'brokerconf' | 'cmconf';
 
 export interface ConfTextProblem {
   lineNo?: number;
@@ -14,10 +16,10 @@ export interface ConfTextProblem {
   severity?: 'error' | 'warning';
 }
 
-const COMMON_SECTION: Record<ConfFileKind, string> = { cubridconf: 'common', brokerconf: 'broker' };
+const COMMON_SECTION: Record<Exclude<ConfFileKind, 'cmconf'>, string> = { cubridconf: 'common', brokerconf: 'broker' };
 
 /**
- * Validates a whole hand-edited cubrid.conf / cubrid_broker.conf text —
+ * Validates a whole hand-edited cubrid.conf / cubrid_broker.conf / cm.conf text —
  * the raw text editors' save check (client) and its server-side re-check
  * both run this, so the two can't drift. Parses with the engine's own
  * INI rules (`parseConfText`), then checks every key against the
@@ -30,6 +32,11 @@ export function validateConfText(
   kind: ConfFileKind,
   knownKeys?: EngineKnownKeys
 ): ConfTextProblem[] {
+  // cm.conf is read by CMS with its own line reader, not the engine's INI
+  // parser, and has no sections (see validate-cm-conf-text.ts).
+  if (kind === 'cmconf') {
+    return validateCmConfText(input, { schema, pending: CM_PENDING_PARAM_SCHEMA, templateOnly: CM_TEMPLATE_ONLY_KEYS });
+  }
   const { sections, syntaxErrors } = parseConfText(input);
   const problems: ConfTextProblem[] = syntaxErrors.map(({ lineNo, message }) => ({ lineNo, message }));
   const commonSection = COMMON_SECTION[kind];

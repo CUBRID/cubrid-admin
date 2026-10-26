@@ -107,6 +107,12 @@ export interface ParamSchemaEntry {
    * engine catalog by paramSchemaVsEngineCatalog.spec.js.
    */
   deprecated?: { replacedBy?: string };
+  /**
+   * Other spellings the reader accepts for the same key (cm.conf only:
+   * CMS matches e.g. `MonitorInterval` and `cm_process_monitor_interval`
+   * to one setting, case-insensitively).
+   */
+  aliases?: string[];
 }
 
 /**

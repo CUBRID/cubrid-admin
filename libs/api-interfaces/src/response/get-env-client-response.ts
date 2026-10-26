@@ -16,6 +16,8 @@ import { EngineKnownKeys } from '../param-schema/engine-known-keys';
 export type ResolvedParamSchemas = {
   database: ResolvedParamSchemaEntry[];
   broker: ResolvedParamSchemaEntry[];
+  /** cm.conf (CMS) keys — see cm-param-schema.ts. Optional for older cached payloads. */
+  cm?: ResolvedParamSchemaEntry[];
   knownKeys: EngineKnownKeys;
 };
 

@@ -200,6 +200,14 @@ export function validateParamValue(guard: ParamGuard | undefined, rawValue: unkn
       if (guard.max !== undefined && n > guard.max) return `Must be <= ${guard.max}`;
       return null;
     }
+    case 'cmsMegabytes': {
+      const match = /^(\d+)[mM]?$/.exec(value.trim());
+      if (!match) return 'Must be a whole number of megabytes, optionally followed by M (e.g. 4M)';
+      const mb = Number(match[1]);
+      if (mb < guard.min) return `Must be >= ${guard.min}M`;
+      if (mb > guard.max) return `Must be <= ${guard.max}M`;
+      return null;
+    }
     default:
       return null;
   }

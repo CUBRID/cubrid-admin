@@ -139,10 +139,62 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       ).rejects.toMatchObject({ additionalData: { message: expect.stringContaining('BROKR_PORT') } });
     });
 
-    it('still passes cmconf through untouched (CMS parses it itself)', async () => {
+    it('accepts the cm.conf template CMS ships (11.4.5 pin), including keys CMS reads in its own space-separated form', async () => {
+      const template = [
+        '# cm.conf', '[cm]', 'cm_port=8001', 'cm_process_monitor_interval=5', 'allow_user_multi_connection=YES',
+        '#execute_diag=ON', 'server_long_query_time=10', 'auto_job_timeout=43200', '#token_active_time=7200',
+        'support_mon_statistic=NO', 'max_log_files=10', 'cm_port 8001',
+      ];
+      const result = await service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', template);
+      expect(result).toMatchObject({ success: true, warnings: [expect.stringContaining('server_long_query_time')] });
+      expect(postAuthenticated.mock.calls.some(([, req]) => req.task === 'setsysparam')).toBe(true);
+    });
+  });
+
+  describe('cm.conf and request shape', () => {
+    beforeEach(() => postAuthenticated.mockImplementation((_url, req) => Promise.resolve(cmsResponseFor(req.task))));
+    const writes = () => postAuthenticated.mock.calls.filter(([, req]) => req.task === 'setsysparam');
+
+    it('rejects out-of-range / mistyped / unknown cm.conf values with a 400 listing each line', async () => {
+      const error = await service
+        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['[cm]', 'cm_port=70000', 'auto_job_timeout=abc', 'cm_prot=8001'])
+        .catch((e) => e);
+      expect(error.additionalData.problems).toEqual([
+        { lineNo: 2, key: 'cm_port', message: expect.stringContaining('<= 65535') },
+        { lineNo: 3, key: 'auto_job_timeout', message: expect.stringContaining('32-bit integer') },
+        { lineNo: 4, key: 'cm_prot', message: expect.stringContaining('not a cm.conf parameter') },
+      ]);
+      expect(error.toProblemDetails().problems).toHaveLength(3);
+      expect(error.toProblemDetails().status).toBe(400);
+      expect(writes()).toHaveLength(0);
+    });
+
+    it('accepts CMS aliases case-insensitively', async () => {
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['cm_port 8001'])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['MonitorInterval=10', 'HTTPTIMEOUT=60'])
       ).resolves.toEqual({ success: true });
+    });
+
+    it('only warns for the develop-only async keys (not in any released engine pin)', async () => {
+      const result = await service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['async_job_ttl_sec=10']);
+      expect(result).toMatchObject({ success: true, warnings: [expect.stringContaining('async_job_ttl_sec')] });
+    });
+
+    it('refuses any confname other than cubridconf/cmconf (CMS would write it as a raw file name)', async () => {
+      await expect(
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubrid_broker.conf', ['[broker]', 'MASTER_SHM_ID=0'])
+      ).rejects.toMatchObject({ additionalData: { confname: 'cubrid_broker.conf' } });
+      expect(writes()).toHaveLength(0);
+    });
+
+    it('returns structured problems for cubrid.conf too, and warnings for deprecated keys', async () => {
+      const error = await service
+        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=5000'])
+        .catch((e) => e);
+      expect(error.additionalData.problems).toEqual([{ lineNo: 2, key: 'max_clients', message: expect.stringContaining('<= 4000') }]);
+      await expect(
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'data_buffer_pages=32768'])
+      ).resolves.toMatchObject({ warnings: [expect.stringContaining('use data_buffer_size')] });
     });
   });
 });

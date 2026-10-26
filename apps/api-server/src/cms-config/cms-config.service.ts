@@ -207,10 +207,13 @@ export class CmsConfigService extends BaseService {
   /**
    * Entry point for the raw cubridconf/cmconf text editor's save — the one
    * place arbitrary hand-edited conf text reaches the server, so it's the
-   * one place that text needs validating before being accepted; `setSystemParam`
+   * one place that text is validated before being written; `setSystemParam`
    * itself does no validation of its own.
-   * cmconf is passed straight through unchanged: it has no schema, and
-   * CMS reads it with its own parser rather than the engine's INI rules.
+   *
+   * Only `cubridconf` and `cmconf` are accepted. CMS's setsysparam writes
+   * any other confname as a file name under $CUBRID/conf
+   * (cm_job_task.cpp _get_confpath_by_name), so e.g. "cubrid_broker.conf"
+   * would otherwise skip the broker.conf check entirely.
    */
   @HandleCmsErrors()
   async setSystemParamFromRawEdit(
@@ -219,11 +222,18 @@ export class CmsConfigService extends BaseService {
     confname: string,
     confdata: string[]
   ): Promise<SetSysParamClientResponse> {
-    if (confname === 'cubridconf') {
-      const { database: schema, knownKeys } = (await this.getEnv(userId, hostUid)).paramSchemas;
-      this.assertValidConfText(schema, confdata, 'cubridconf', knownKeys);
+    if (confname !== 'cubridconf' && confname !== 'cmconf') {
+      throw ValidationError.InvalidFieldFormat('confname', 'cubridconf | cmconf', {
+        confname,
+        message: `confname "${confname}" cannot be saved through this endpoint (use cubridconf or cmconf; broker.conf has its own endpoint).`,
+      });
     }
-    return this.setSystemParam(userId, hostUid, confname, confdata);
+    const paramSchemas = (await this.getEnv(userId, hostUid)).paramSchemas;
+    const warnings = confname === 'cubridconf'
+      ? this.assertValidConfText(paramSchemas.database, confdata, 'cubridconf', paramSchemas.knownKeys)
+      : this.assertValidConfText(paramSchemas.cm ?? [], confdata, 'cmconf', paramSchemas.knownKeys);
+    const result = await this.setSystemParam(userId, hostUid, confname, confdata);
+    return warnings.length > 0 ? { ...result, warnings } : result;
   }
 
   /**
@@ -304,8 +314,9 @@ export class CmsConfigService extends BaseService {
     confdata: string[]
   ): Promise<SetSysParamClientResponse> {
     const { broker: schema, knownKeys } = (await this.getEnv(userId, hostUid)).paramSchemas;
-    this.assertValidConfText(schema, confdata, 'brokerconf', knownKeys);
-    return this.setBrokerParam(userId, hostUid, confdata);
+    const warnings = this.assertValidConfText(schema, confdata, 'brokerconf', knownKeys);
+    const result = await this.setBrokerParam(userId, hostUid, confdata);
+    return warnings.length > 0 ? { ...result, warnings } : result;
   }
 
   /**
@@ -336,22 +347,28 @@ export class CmsConfigService extends BaseService {
   }
 
   /**
-   * Rejects hand-edited conf text the engine itself would fail to load —
-   * same shared check (`validateConfText`) the raw text editors run before
-   * saving, re-run here in case a request reaches this endpoint some other way.
+   * Rejects hand-edited conf text with a 400 that lists every blocking
+   * problem ("Line N: [section] key — reason") — the same shared check
+   * (`validateConfText`) the property tables use, run here so no client
+   * (editor or direct API call) can write a value the rules refuse.
+   * Returns the non-blocking warnings for the success response.
    */
   private assertValidConfText(
     schema: ParamSchemaEntry[],
     lines: string[],
     kind: ConfFileKind,
     knownKeys: EngineKnownKeys
-  ): void {
-    const problems = validateConfText(schema, lines, kind, knownKeys).filter(isBlockingConfTextProblem);
-    if (problems.length > 0) {
+  ): string[] {
+    const problems = validateConfText(schema, lines, kind, knownKeys);
+    const blocking = problems.filter(isBlockingConfTextProblem);
+    if (blocking.length > 0) {
       throw ValidationError.InvalidFieldFormat('confdata', undefined, {
-        message: `Invalid configuration: ${problems.map(formatConfTextProblem).join('; ')}`,
+        confname: kind,
+        message: `Invalid configuration: ${blocking.map(formatConfTextProblem).join('; ')}`,
+        problems: blocking.map(({ lineNo, key, message }) => ({ lineNo: lineNo ?? null, key: key ?? null, message })),
       });
     }
+    return problems.map(formatConfTextProblem);
   }
 
   private flattenCmsLogLines(log: LogContentContainer[] | undefined): string[] {

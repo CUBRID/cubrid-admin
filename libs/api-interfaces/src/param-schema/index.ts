@@ -15,3 +15,5 @@ export * from './validate-effective-params';
 export * from './parse-conf-text';
 export * from './validate-conf-text';
 export * from './deprecated-param-replacements';
+export * from './validate-cm-conf-text';
+export * from './cm-unreleased-keys';

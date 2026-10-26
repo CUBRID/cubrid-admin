@@ -68,4 +68,8 @@ export type ParamGuard =
   // engine catalog for keys with no schema entry): only non-emptiness is
   // checked, since the engine's own word list isn't known here.
   | { kind: 'opaque' }
+  // cm.conf max_log_filesize: whole megabytes with an optional trailing
+  // m/M (cm_config.cpp strips one 'M' then atoi()s and multiplies by
+  // 1024 * 1024 into an int).
+  | { kind: 'cmsMegabytes'; min: number; max: number }
   | { kind: 'string' };
