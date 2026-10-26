@@ -9,7 +9,9 @@ import { dbKey } from './dbKey';
 
 // start_statdump is idempotent ("already running"), so it is re-issued on
 // this period: that restores the watcher after CMS restarted (its watcher
-// table is in memory) or after another client stopped it.
+// table is in memory) or after another client stopped it. It is also the
+// api-server's lease heartbeat: a watcher not renewed for 150s is stopped
+// there (STATDUMP_WATCHER_LEASE_TTL_MS), so this must stay well below that.
 export const WATCHER_REFRESH_MS = 60 * 1000;
 
 // CMS keeps a dead watcher's slot marked running (e.g. the child exited when
@@ -97,8 +99,9 @@ export function restartFrozenStatdumpWatcher(hostUid, dbname, unchangedSince, no
   return true;
 }
 
-// A closed or reloaded page never runs the grace timer above, and CMS has no
-// expiry for its watchers, so stop the held ones on pagehide. keepalive lets
+// A closed or reloaded page never runs the grace timer above, and the
+// api-server lease only expires after minutes, so stop the held ones on
+// pagehide. keepalive lets
 // the request outlive the page. If the page comes back from the bfcache, the
 // periodic start would restore them; start them right away instead.
 if (typeof window !== 'undefined') {
