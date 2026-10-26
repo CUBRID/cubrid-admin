@@ -181,6 +181,7 @@ export default function UpdateCheckModal() {
       onClose={handleClose}
       title={CM.checkForUpdates}
       icon="update"
+      maxWidth="max-w-lg"
       testId="update-check"
       footer={footer}
     >
