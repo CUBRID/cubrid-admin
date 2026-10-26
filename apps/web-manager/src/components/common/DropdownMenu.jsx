@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useLayoutEffect, createContext, useContext } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect, useEffect, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 
 const MenuContext = createContext({ closeMenu: () => undefined });
@@ -62,6 +62,23 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
       setIsPositioned(true);
     }
   }, [open, isPositioned]);
+
+  // The portal is position:fixed at coordinates captured on open, so if any
+  // ancestor scrolls (e.g. App.jsx's horizontally scrolling <main>) the parent
+  // row moves away from it. Close instead of leaving it stranded.
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleScroll = (event) => {
+      const target = event.target;
+      const scrolledAncestor = target === document || (target instanceof Node && target.contains(containerRef.current));
+      if (!scrolledAncestor) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setOpen(false);
+      setIsPositioned(false);
+    };
+    document.addEventListener('scroll', handleScroll, true);
+    return () => document.removeEventListener('scroll', handleScroll, true);
+  }, [open]);
 
   const menuStyle = isPositioned ? {
     top: `${position.top}px`,
