@@ -151,7 +151,11 @@ export default function VolumeInfoMonitor({ tabId }) {
       {/* ── Body ── */}
       <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
         <section className="border border-slate-200 dark:border-white/6 bg-white dark:bg-white/2 rounded-sm p-4 space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          {/* One row at every width, like the dashboard headers: the stats
+              grid stays beside the title instead of dropping below it under
+              the lg breakpoint; <main> (App.jsx) scrolls horizontally once
+              the row no longer fits. */}
+          <div className="flex items-start gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <Icon name="bar_chart" size="sm" weight={300} className="text-amber-500" />
@@ -164,7 +168,7 @@ export default function VolumeInfoMonitor({ tabId }) {
               </Typography>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[360px]">
+            <div className="grid grid-cols-3 gap-2 ml-auto shrink-0 min-w-[360px]">
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
                 <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.usedLabel}</Typography>
                 <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{formatMegabytes(usedM)}</Typography>
@@ -201,8 +205,8 @@ export default function VolumeInfoMonitor({ tabId }) {
                 title={`${formatMegabytes(freeM)} ${CM.freeLabel.toLowerCase()}`}
               />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4 shrink-0 whitespace-nowrap">
                 <span className="flex items-center gap-1.5 text-12 text-slate-500 dark:text-slate-400">
                   <span className={`w-2 h-2 rounded-full ${barColor}`} />
                   {CM.usedLabel} {formatMegabytes(usedM)}
@@ -212,7 +216,7 @@ export default function VolumeInfoMonitor({ tabId }) {
                   {CM.freeLabel} {formatMegabytes(freeM)}
                 </span>
               </div>
-              <Typography variant="label" className="text-12 text-slate-400 font-mono">
+              <Typography variant="label" className="text-12 text-slate-400 font-mono ml-auto shrink-0 whitespace-nowrap">
                 {formatNumber(usedPages)} / {formatNumber(totalPages)} {CM.pagesLabel}
               </Typography>
             </div>
