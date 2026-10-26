@@ -21,6 +21,7 @@ import {
   loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
+import { restartDatabasesIndividually, groupBulkFailures } from '../../database/databaseBulkActions';
 import { dbKey } from '../../database/dbKey';
 
 import { fetchDatabaseSpaceInfo
@@ -1613,24 +1614,20 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.restartingAllDatabasesMsg);
                   startAction();
                   try {
-                    const currentActive = [...activeDatabases];
-                    // Bulk stop then bulk start, same list both times (a
-                    // restart) — each phase isolates its own per-database
-                    // failures (e.g. one database with no stored login
-                    // profile) instead of a single failure aborting every
-                    // other database still needing to be stopped/started.
-                    const stopResult = currentActive.length > 0
-                      ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames: currentActive })).unwrap()
-                      : { succeeded: [], failed: [] };
-                    const startResult = currentActive.length > 0
-                      ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames: currentActive })).unwrap()
-                      : { succeeded: [], failed: [] };
+                    // Per-database, not the start-all/stop-all endpoints —
+                    // see restartDatabasesIndividually for why (HA scope).
+                    const { failed } = await restartDatabasesIndividually(
+                      dispatch, selectedHostUid, [...activeDatabases]
+                    );
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    const failed = [...(stopResult.failed || []), ...(startResult.failed || [])];
-                    if (failed.length > 0) {
+                    const grouped = groupBulkFailures(failed);
+                    if (grouped.length > 0) {
+                      const phaseLabel = { stop: CM.bulkRestartPhaseStop, start: CM.bulkRestartPhaseStart };
                       endError(
-                        CM.someDatabasesFailedToRestartMsg(failed.length) +
-                        CM.failedListSuffix(failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
+                        CM.someDatabasesFailedToRestartMsg(grouped.length) +
+                        CM.failedListSuffix(grouped.map(({ dbname, reasons }) =>
+                          `${dbname} (${reasons.map((r) => `${phaseLabel[r.phase]}: ${r.error}`).join('; ')})`
+                        ).join(', '))
                       );
                     } else {
                       resetAction();

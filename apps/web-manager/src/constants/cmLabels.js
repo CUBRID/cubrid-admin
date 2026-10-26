@@ -2008,6 +2008,8 @@ export const CM = {
   someDatabasesFailedToStartMsg: (count) => `${count} database(s) failed to start.`,
   someDatabasesFailedToStopMsg: (count) => `${count} database(s) failed to stop.`,
   someDatabasesFailedToRestartMsg: (count) => `${count} database(s) failed to restart.`,
+  bulkRestartPhaseStop: 'stop',
+  bulkRestartPhaseStart: 'start',
   startingAllBrokersMsg: 'Starting all brokers ...',
   stoppingAllBrokersMsg: 'Stopping all brokers ...',
   restartingAllBrokersMsg: 'Restarting all brokers ...',

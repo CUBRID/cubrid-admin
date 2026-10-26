@@ -1966,6 +1966,8 @@ export const CM_KO = {
   someDatabasesFailedToStartMsg: (count) => `${count}개의 데이터베이스를 시작하지 못했습니다.`,
   someDatabasesFailedToStopMsg: (count) => `${count}개의 데이터베이스를 중지하지 못했습니다.`,
   someDatabasesFailedToRestartMsg: (count) => `${count}개의 데이터베이스를 재시작하지 못했습니다.`,
+  bulkRestartPhaseStop: '중지',
+  bulkRestartPhaseStart: '시작',
   startingAllBrokersMsg: '모든 브로커 시작 중 ...',
   stoppingAllBrokersMsg: '모든 브로커 중지 중 ...',
   restartingAllBrokersMsg: '모든 브로커 재시작 중 ...',
