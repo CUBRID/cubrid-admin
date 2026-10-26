@@ -423,23 +423,6 @@ const databaseCoreSlice = createSlice({
           delete state.loggingInDatabases[key];
         }
       )
-      // Same reasoning as the delete matcher above, for both ends of a
-      // rename — the backend clears the old name (no longer this database)
-      // and the new name (may have belonged to some other, unrelated
-      // database before) alike. See
-      // DatabaseManagementService.clearDbAliasCachesAfterRename.
-      .addMatcher(
-        (action) => action.type === 'database/renameDatabase/fulfilled',
-        (state, action) => {
-          const { hostUid, dbname, payload } = action.meta.arg || {};
-          if (!hostUid) return;
-          [dbname, payload?.rename].filter(Boolean).forEach((name) => {
-            const key = dbKey(hostUid, name);
-            state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
-            delete state.loggingInDatabases[key];
-          });
-        }
-      )
       // Dispatched unconditionally on delete/disconnect, regardless of
       // whether this host was the currently selected one — unlike
       // resetDatabaseState, which only fires for the currently-selected
