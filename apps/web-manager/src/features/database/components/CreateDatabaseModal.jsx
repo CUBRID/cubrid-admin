@@ -335,7 +335,11 @@ export default function CreateDatabaseModal() {
         }
       );
 
-      dispatch(fetchDatabaseStartInfo({ hostUid: selectedHostUid, isBackground: true }));
+      // NOT isBackground - this is the post-creation refetch, so the new
+      // database must show up in the navigator tree immediately (an
+      // operation's own success refetch, same as start/stop's refetch
+      // elsewhere - never background-tagged, per parseDbResponse's comment).
+      dispatch(fetchDatabaseStartInfo({ hostUid: selectedHostUid }));
 
       // The database itself can be created successfully even when a
       // follow-up step (start, dba password, auto-add-vol config) didn't
