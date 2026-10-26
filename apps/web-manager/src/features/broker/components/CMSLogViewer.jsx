@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchCMSLogs } from '../brokerSlice';
 import { useCM } from '../../../constants/useCM';
@@ -37,11 +37,15 @@ function CMSLogViewer({ hostUid, type }) {
   };
 
   // The log tree fetches on expand; a tab restored without that fetch would
-  // otherwise wait forever on the loading state below.
+  // otherwise wait forever on the loading state below. The loading flag is
+  // shared by all hosts, so if another host's fetch is in flight, wait for it
+  // to settle and fetch then. Once per host, so an odd response can't loop.
+  const requestedHostRef = useRef(null);
   useEffect(() => {
-    if (cmsLogs === undefined && !loading) dispatch(fetchCMSLogs(hostUid));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostUid]);
+    if (cmsLogs !== undefined || loading || requestedHostRef.current === hostUid) return;
+    requestedHostRef.current = hostUid;
+    dispatch(fetchCMSLogs(hostUid));
+  }, [dispatch, hostUid, cmsLogs, loading]);
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);

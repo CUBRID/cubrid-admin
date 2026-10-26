@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../brokerApi', () => ({ brokerApi: { getCMSLogs: vi.fn() } }));
 import { brokerApi } from '../brokerApi';
-import brokerReducer from '../brokerSlice';
+import brokerReducer, { fetchCMSLogs } from '../brokerSlice';
 import CMSLogViewer from './CMSLogViewer';
 import { CM } from '../../../constants/cmLabels';
 
@@ -66,6 +66,27 @@ describe('CMSLogViewer fetch states', () => {
 
     expect(container.textContent).toContain(CM.dataUnavailableTitle);
     expect(container.textContent).not.toContain(CM.noLogEntriesFound);
+  });
+
+  it('fetches once another host\'s in-flight fetch settles instead of loading forever', async () => {
+    const other = deferred();
+    brokerApi.getCMSLogs.mockReturnValueOnce(other.promise);
+    const store = makeStore();
+    let otherFetch;
+    await act(async () => { otherFetch = store.dispatch(fetchCMSLogs('h2')); });
+
+    await render(store);
+    expect(brokerApi.getCMSLogs.mock.calls).toEqual([['h2']]);
+    expect(container.textContent).toContain(CM.loadingManagerLogs);
+
+    brokerApi.getCMSLogs.mockResolvedValueOnce({ accesslog: [{ time: 't1', '@user': 'admin', taskname: 'login' }], errorlog: [] });
+    await act(async () => {
+      other.resolve({ accesslog: [], errorlog: [] });
+      await otherFetch;
+    });
+
+    expect(brokerApi.getCMSLogs.mock.calls).toEqual([['h2'], ['h1']]);
+    expect(container.textContent).toContain('login');
   });
 
   it('keeps the loaded entries when a refresh fails', async () => {
