@@ -342,7 +342,6 @@ export const CM_KO = {
   hostServiceManagement: '호스트 서비스 관리',
   help: '도움말',
   aboutCubridAdmin: 'CUBRID Admin 정보',
-  aboutCubrid: 'CUBRID 정보',
   cubridWebManager: 'Next CUBRID Admin',
   startService: '서비스 시작',
   stopService: '서비스 중지',

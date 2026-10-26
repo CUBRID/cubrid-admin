@@ -9,6 +9,7 @@ import { Input } from '../../../components/ds/forms/Input';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { useCM } from '../../../constants/useCM';
+import { APP_VERSION } from '../../../constants/appVersion';
 
 export default function LoginPage() {
   const CM = useCM();
@@ -217,7 +218,7 @@ export default function LoginPage() {
             <a href="https://www.cubrid.org" target="_blank" rel="noreferrer" className="hover:text-amber-500 transition-colors">{CM.website}</a>
             <a href="https://github.com/CUBRID" target="_blank" rel="noreferrer" className="hover:text-amber-500 transition-colors">{CM.github}</a>
           </div>
-          <span className="font-mono text-slate-400 dark:text-slate-600">v12.4.0</span>
+          <span className="font-mono text-slate-400 dark:text-slate-600" data-testid="login-app-version">v{APP_VERSION}</span>
         </div>
 
       </div>
