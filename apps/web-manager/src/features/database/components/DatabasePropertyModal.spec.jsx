@@ -27,6 +27,7 @@ const DATABASE_PARAM_SCHEMA = [
 
 let container;
 let root;
+let dispatch;
 beforeEach(async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
@@ -50,6 +51,7 @@ beforeEach(async () => {
     user: { preferences: { uiLocale: 'en' } },
   };
   const store = configureStore({ reducer: () => state });
+  dispatch = vi.spyOn(store, 'dispatch');
   await act(async () => root.render(
     <Provider store={store}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
   ));
@@ -123,4 +125,65 @@ it('matches [@dbname] case-sensitively, like the engine — [@demodb] is not Dem
   ));
   expect(container.textContent).toContain('456');
   expect(container.textContent).not.toContain('123');
+});
+
+const discardControl = id => container.querySelector(`[data-testid="database-property-discard-${id}"]`);
+const escape = async () => act(async () => {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+});
+
+it.each(['modal-close', 'cancel-btn'])('closes unchanged properties through %s without confirmation', async trigger => {
+  await click(control(trigger));
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+});
+
+const openConnectionTab = () => click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection')));
+const editBrokerIp = async value => {
+  const field = container.querySelector('input');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  await act(async () => {
+    setter.call(field, value);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+};
+
+it.each(['modal-close', 'cancel-btn'])('protects Connection Information edits through %s and only closes after discard', async trigger => {
+  await openConnectionTab();
+  await editBrokerIp('10.0.0.5');
+  await click(control(trigger));
+  expect(discardControl('modal').textContent).toContain('Discard changes?');
+  expect(dispatch).not.toHaveBeenCalledWith({ type: 'close' });
+  await click(discardControl('cancel-btn'));
+  expect(discardControl('modal')).toBeNull();
+  expect(container.querySelector('input').value).toBe('10.0.0.5');
+  await click(control(trigger));
+  await click(discardControl('confirm-btn'));
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+});
+
+it('Escape prompts for Connection Information edits and dismissing the prompt preserves them', async () => {
+  await openConnectionTab();
+  await editBrokerIp('10.0.0.5');
+  await escape();
+  expect(discardControl('modal')).not.toBeNull();
+  await escape();
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).not.toHaveBeenCalledWith({ type: 'close' });
+  expect(container.querySelector('input').value).toBe('10.0.0.5');
+});
+
+it('Apply on Connection Information closes without prompting', async () => {
+  await openConnectionTab();
+  await editBrokerIp('10.0.0.5');
+  await click(control('apply-btn'));
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+});
+
+it('Server Parameter tables are read-only, so closing from them never prompts', async () => {
+  await click(Array.from(container.querySelectorAll('button')).find(el => el.textContent.includes('Advanced Settings')));
+  await click(control('cancel-btn'));
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
 });

@@ -9,6 +9,7 @@ import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
+import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import { Button } from '../../../components/ds/foundation/Button';
 import { TabGroup } from '../../../components/ds/layout/TabGroup';
 import { Table } from '../../../components/ds/layout/Table';
@@ -226,16 +227,27 @@ export default function DatabasePropertyModal() {
   // Read-only display state — loaded once per (host, database) and never
   // mutated by the user; actual edits happen only in the raw text editor
   // (see the "Edit in Text Editor" banner below).
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [params, setParams] = useState({});
   const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [brokers, setBrokers] = useState([]);
   const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
+  // Connection Information is the only editable part of this modal, so it is
+  // also the only thing the "discard changes?" confirmation guards. The
+  // Server Parameter tables are read-only and have nothing to discard.
+  const [connectionDirty, setConnectionDirty] = useState(false);
+  const updateConnectionInfo = patch => {
+    setConnectionInfo(prev => ({ ...prev, ...patch }));
+    setConnectionDirty(true);
+  };
   // Tracks which (host, database) the Server Parameter config has already
   // been fetched for, so switching tabs and back doesn't needlessly re-fetch.
   const fetchedConfigKeyRef = useRef(null);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
+      setShowDiscardConfirm(false);
+      setConnectionDirty(false);
       setParams({});
       setBufferMode(DEFAULT_BUFFER_MODE);
       setActiveSidebar('Server Parameter');
@@ -337,7 +349,7 @@ export default function DatabasePropertyModal() {
   // Server Parameter values are edited exclusively through the raw text
   // editor now (see handleOpenTextEditor below).
   const handleApply = () => {
-    dispatch(closeDatabasePropertyModal());
+    closeModal();
   };
 
   const handleOpenTextEditor = () => {
@@ -345,7 +357,9 @@ export default function DatabasePropertyModal() {
     dispatch(closeDatabasePropertyModal());
   };
 
-  const handleClose = () => {
+  const closeModal = () => {
+    setShowDiscardConfirm(false);
+    setConnectionDirty(false);
     dispatch(closeDatabasePropertyModal());
     setParams({});
     setBufferMode(DEFAULT_BUFFER_MODE);
@@ -377,6 +391,14 @@ export default function DatabasePropertyModal() {
     [databaseParamSchema, reconciledParams, selectedDatabase]
   );
   const guardErrorCount = Object.keys(guardErrors).length;
+
+  const handleClose = () => {
+    if (connectionDirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    closeModal();
+  };
 
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
@@ -505,6 +527,7 @@ export default function DatabasePropertyModal() {
 
   /* ─── FORM VIEW ─── */
   return (
+    <>
     <Modal
       isOpen={isDatabasePropertyModalOpen}
       onClose={handleClose}
@@ -642,7 +665,7 @@ export default function DatabasePropertyModal() {
                     <div className="flex-1">
                       <Input
                         value={connectionInfo.brokerIp}
-                        onChange={e => setConnectionInfo({ ...connectionInfo, brokerIp: e.target.value })}
+                        onChange={e => updateConnectionInfo({ brokerIp: e.target.value })}
                         size="sm"
                         icon="dns"
                       />
@@ -658,7 +681,7 @@ export default function DatabasePropertyModal() {
                       <Select
                         value={connectionInfo.brokerPort}
                         options={brokers.map(b => ({ value: b.label, label: b.label }))}
-                        onChange={e => setConnectionInfo({ ...connectionInfo, brokerPort: e.target.value })}
+                        onChange={e => updateConnectionInfo({ brokerPort: e.target.value })}
                         size="sm"
                       />
                     </div>
@@ -673,7 +696,7 @@ export default function DatabasePropertyModal() {
                       <Select
                         value={connectionInfo.charset}
                         options={['UTF-8', 'EUC-KR', 'ISO-8859-1', 'UHC'].map(o => ({ value: o, label: o }))}
-                        onChange={e => setConnectionInfo({ ...connectionInfo, charset: e.target.value })}
+                        onChange={e => updateConnectionInfo({ charset: e.target.value })}
                         size="sm"
                       />
                     </div>
@@ -742,5 +765,17 @@ export default function DatabasePropertyModal() {
         </div>
       </div>
     </Modal>
+    <ConfirmDialog
+      isOpen={isDatabasePropertyModalOpen && showDiscardConfirm}
+      title={CM.discardChangesTitle}
+      description={CM.discardChangesDesc}
+      confirmLabel={CM.discardChangesBtn}
+      cancelLabel={CM.keepEditingBtn}
+      variant="warning"
+      onConfirm={closeModal}
+      onCancel={() => setShowDiscardConfirm(false)}
+      testId="database-property-discard"
+    />
+    </>
   );
 }

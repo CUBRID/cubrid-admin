@@ -182,6 +182,29 @@ describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () =>
     const { databasesByHost } = store.getState();
     expect(databasesByHost.hostA).toEqual([{ dbname: 'newer' }]);
   });
+
+  // Found in review on PR #158: parseDbResponse gates databasesByHost and
+  // activeDatabasesByHost on `updateLive`, but wrote haDbNamesByHost
+  // unconditionally — so a manual fetch that resolves AFTER a newer
+  // background poll (making the manual one stale, updateLive: false) still
+  // overwrote the fresher HA membership list the background poll just set.
+  it('does not let a stale manual response overwrite haDbNamesByHost from a newer background poll', async () => {
+    const manual = deferred();
+    const background = deferred();
+    let call = 0;
+    databaseApi.getStartInfo.mockImplementation(() => (++call === 1 ? manual.promise : background.promise));
+    const store = configureStore({ reducer });
+
+    const dispatchManual = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    const dispatchBackground = store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+
+    background.resolve({ dblist: { dbs: [] }, haDbNames: ['newHa'] });
+    await dispatchBackground;
+    manual.resolve({ dblist: { dbs: [] }, haDbNames: ['oldHa'] });
+    await dispatchManual;
+
+    expect(store.getState().haDbNamesByHost.hostA).toEqual(['newHa']);
+  });
 });
 
 describe('database lists are stored per host, not in one shared array', () => {
