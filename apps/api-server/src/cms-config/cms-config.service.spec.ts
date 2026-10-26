@@ -151,6 +151,19 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
     });
   });
 
+  describe('getEnv — schemas resolved for the host\'s engine version', () => {
+    it('sends database/broker/cm schemas plus the engine key list for 11.4.5', async () => {
+      postAuthenticated.mockImplementation((_url, req) => Promise.resolve(cmsResponseFor(req.task)));
+      const { paramSchemas } = await service.getEnv(mockUserId, mockHostUid);
+      expect(paramSchemas.knownKeys).toMatchObject({ strict: true, catalogVersion: '11.4.5' });
+      expect(paramSchemas.cm.map((e) => e.key)).toContain('cm_port');
+      expect(paramSchemas.cm.map((e) => e.key)).not.toContain('async_job_ttl_sec');
+      expect(paramSchemas.broker.map((e) => e.key)).toContain('ACCESS_CONTROL_DEFAULT_POLICY');
+      // Default comes from the engine catalog (HB_DEFAULT_HA_PORT_ID).
+      expect(paramSchemas.database.find((e) => e.key === 'ha_port_id')).toMatchObject({ default: '59901', scope: 'CLIENT' });
+    });
+  });
+
   describe('cm.conf and request shape', () => {
     beforeEach(() => postAuthenticated.mockImplementation((_url, req) => Promise.resolve(cmsResponseFor(req.task))));
     const writes = () => postAuthenticated.mock.calls.filter(([, req]) => req.task === 'setsysparam');

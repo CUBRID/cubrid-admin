@@ -77,6 +77,7 @@ export function parseEngineSizeToBytes(value: string): number | null {
  * "20M", not "20971520"), falling back to raw bytes if none does.
  */
 function formatBytesAsSize(bytes: number): string {
+  if (bytes === 0) return '0';
   for (const unit of ['T', 'G', 'M', 'K'] as const) {
     const factor = SIZE_UNIT_BYTES[unit];
     if (bytes % factor === 0) return `${bytes / factor}${unit}`;

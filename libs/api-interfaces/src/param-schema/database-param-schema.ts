@@ -85,10 +85,10 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // database-specific) — setting it has no effect at all unless ha_mode
   // is actually on, and [common] only for the same cubrid_ha.conf-reload
   // reason as ha_node_list above (HA clustering is per-host, not per-db).
-  { key: 'ha_port_id', category: 'advanced', scope: 'SERVER', guard: { kind: 'int', min: 1, max: 65535 }, default: '', advisory: { dependsOnKey: 'ha_mode', inactiveWhen: ['off', 'no', 'n', '0', 'false'] }, commonOnly: true },
+  { key: 'ha_port_id', category: 'advanced', scope: 'CLIENT', guard: { kind: 'int', min: 1, max: 65535 }, default: '59901', advisory: { dependsOnKey: 'ha_mode', inactiveWhen: ['off', 'no', 'n', '0', 'false'] }, commonOnly: true },
   { key: 'hostvar_late_binding', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no' },
   { key: 'index_scan_in_oid_order', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no' },
-  { key: 'insert_execution_mode', category: 'advanced', scope: 'CLIENT', guard: { kind: 'int', min: 0, max: 31 }, default: '1' }, // bitmask
+  { key: 'insert_execution_mode', category: 'advanced', scope: 'CLIENT', guard: { kind: 'int', min: 0, max: 31 }, default: '3' }, // bitmask; engine default 1 + 2
   { key: 'intl_mbs_support', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no' },
   // PRM_INTEGER, no lower bound; upper bound 10000 exists ONLY on develop
   // (system_parameter.c:2247, CUBRID-PARAM-VERSION-MATRIX.md §5) — 11.0
@@ -131,8 +131,8 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // convention as data_buffer_size — only bytes the engine rejects on EVERY
   // log page size are rejected: min = 9 * 4K + 1, max = INT_MAX * 16K.
   // Default is 100000 log pages; shown in bytes at the default 16K log page
-  // size (100000 * 16K = 1562500K).
-  { key: 'checkpoint_every_size', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 36865, max: 35184372072448 }, default: '1562500K' },
+  // size (100000 * 16K = 1600000K).
+  { key: 'checkpoint_every_size', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 36865, max: 35184372072448 }, default: '1600000K' },
   // PRM_FOR_HA keys (ha_db_list, ha_copy_sync_mode, ha_apply_max_mem_size,
   // ha_copy_log_max_archives): accepted in cubrid.conf, but whenever
   // ha_mode is on the engine re-reads cubrid_ha.conf with no database name
