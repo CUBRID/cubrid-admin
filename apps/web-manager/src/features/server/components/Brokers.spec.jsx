@@ -115,4 +115,23 @@ describe('Brokers as its own tab', () => {
     expect(brokerApi.getBrokerList).toHaveBeenCalledWith('h1');
     expect(container.textContent).toContain('4444');
   });
+
+  it('refetches after a sidebar broker action that lands while its own fetch is in flight', async () => {
+    let resolveFirst;
+    brokerApi.getBrokerList
+      .mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }))
+      .mockResolvedValue(brokerList('2222', 'ON'));
+    brokerApi.startBroker.mockResolvedValue({});
+    const store = makeStore('brokers_status:h1');
+    await render(store, {});
+
+    await act(async () => {
+      await store.dispatch(startBrokerAndRefresh({ hostUid: 'h1', brokerName: 'broker1' }));
+    });
+    // The fetch sent before the start returns pre-action values.
+    await act(async () => { resolveFirst(brokerList('1111', 'OFF')); });
+
+    expect(container.textContent).toContain('2222');
+    expect(container.textContent).not.toContain('1111');
+  });
 });
