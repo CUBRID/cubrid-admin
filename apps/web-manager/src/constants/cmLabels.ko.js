@@ -65,6 +65,7 @@ export const CM_KO = {
   dataUnavailableTitle: '정보를 사용할 수 없음',
   dataUnavailableMsg: '이 정보를 불러오지 못했습니다.',
   diskRootFilesystem: '루트 파일 시스템 (/)',
+  casCpuNotCollectedLinux: 'Linux에서는 수집되지 않음: CUBRID 브로커는 CAS별 CPU를 Solaris/HP-UX에서만 제공합니다.',
   lockIndex: '인덱스',
   pname: '프로세스명',
   uid: '사용자 ID',

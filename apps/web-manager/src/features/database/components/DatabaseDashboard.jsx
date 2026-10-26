@@ -11,6 +11,7 @@ import DBJobAutomationSection from './dashboard/DBJobAutomationSection';
 import CASLogModal from './CASLogModal';
 import { isDatabaseInHa } from '../../host/haPeerUtils';
 import { useStatdumpWatcher } from '../useStatdumpWatcher';
+import { isLinuxHost } from '../hostOs';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -26,6 +27,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const isHA = hostHaInfo.isHA;
 
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
+  // CMS getenv osinfo ("LINUX", "NT", ...). On Linux the broker never fills
+  // per-CAS CPU (get_psinfo in broker_process_info.c is Solaris/HP-UX only),
+  // so CMS as_cpu is always 0.00 there; unknown OS keeps the CAS sum.
+  const hostOs = useSelector((state) => state.host.hostEnvs?.[hostUid]?.osinfo);
+  const casCpuNotCollected = isLinuxHost(hostOs);
   const haHeartbeat = hostData?.haHeartbeat;
   const isDbInHa = React.useMemo(
     () => isDatabaseInHa(haHeartbeat, dbname),
@@ -103,8 +109,9 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(1));
   
   const dbStats = [{
-    cpu: casStats.cpu.toFixed(1) + '%', 
-    cpuPct: Math.min(casStats.cpu, 100),
+    cpu: casCpuNotCollected ? '-' : casStats.cpu.toFixed(1) + '%',
+    cpuPct: casCpuNotCollected ? 0 : Math.min(casStats.cpu, 100),
+    cpuNote: casCpuNotCollected ? CM.casCpuNotCollectedLinux : undefined,
     memory: totalMemMB + 'MB', 
     memPct: Math.min((casStats.memKB / 1024) / 4, 100),
     tps: formatRate(rates.tps),

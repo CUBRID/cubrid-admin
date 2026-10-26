@@ -95,6 +95,7 @@ export const CM = {
   dataUnavailableTitle: 'Information Unavailable',
   dataUnavailableMsg: 'Failed to load this information.',
   diskRootFilesystem: 'Root filesystem (/)',
+  casCpuNotCollectedLinux: "Not collected on Linux: CUBRID's broker reports per-CAS CPU only on Solaris/HP-UX.",
   lockIndex: 'Index',
   pname: 'Pname',
   uid: 'Uid',
