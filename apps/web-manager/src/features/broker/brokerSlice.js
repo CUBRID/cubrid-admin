@@ -260,6 +260,7 @@ const initialState = {
   // one host's tabs while fetchBrokerList was still in flight for it could
   // only clear loading by zeroing it globally, which also hid a DIFFERENT,
   // still-legitimately-loading host's own spinner.
+  brokerListFailedByHost: {}, // { hostUid: boolean } — latest fetchBrokerList failed
   actionLoading: false,
   lastActionTarget: null, // Track broker name
   lastActionType: null,   // Track 'start' or 'stop'
@@ -537,6 +538,17 @@ const brokerSlice = createSlice({
         (action) => action.type === 'host/setSelectedHost',
         (state, action) => {
           state.activeHostUid = action.payload;
+        }
+      )
+      // fetchBrokerList.rejected blanks brokersByHost[hostUid]; flag the
+      // failure per host so the host dashboard's broker section (Brokers.jsx)
+      // can tell it apart from a real empty list and keep its last list.
+      .addMatcher(
+        (action) => fetchBrokerList.fulfilled.match(action) || fetchBrokerList.rejected.match(action),
+        (state, action) => {
+          const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+          if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
+          state.brokerListFailedByHost[hostUid] = fetchBrokerList.rejected.match(action);
         }
       )
       // Cleanup on tab close to prevent memory leaks

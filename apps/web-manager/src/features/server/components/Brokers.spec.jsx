@@ -106,6 +106,32 @@ describe('Brokers embedded in the host dashboard', () => {
 
     expect(container.textContent).toContain('1111');
   });
+
+  it('keeps the last list when a broker list fetch fails', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await hostDashboardTick(store, '1111');
+
+    brokerApi.getBrokerList.mockRejectedValueOnce(new Error('network'));
+    await act(async () => { await store.dispatch(fetchBrokerList('h1')); });
+    expect(container.textContent).toContain('1111');
+
+    await hostDashboardTick(store, '2222');
+    expect(container.textContent).toContain('2222');
+  });
+
+  it('shows an empty list after a failure once a fetch really returns none', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await hostDashboardTick(store, '1111');
+
+    brokerApi.getBrokerList.mockRejectedValueOnce(new Error('network'));
+    await act(async () => { await store.dispatch(fetchBrokerList('h1')); });
+    brokerApi.getBrokerList.mockResolvedValueOnce({ result: [] });
+    await act(async () => { await store.dispatch(fetchBrokerList('h1')); });
+
+    expect(container.textContent).not.toContain('1111');
+  });
 });
 
 describe('Brokers as its own tab', () => {
