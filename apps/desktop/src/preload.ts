@@ -17,6 +17,7 @@ const desktopBridge: DesktopBridge = {
   finishWorkspaceSetup: (workspaceRoot) =>
     ipcRenderer.invoke('desktop:finish-workspace-setup', workspaceRoot),
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),
+  setMenuLanguage: (language) => ipcRenderer.invoke('desktop:set-menu-language', language),
   onCloseActiveTab: (callback) => {
     const subscription = () => callback();
     ipcRenderer.on('desktop:close-active-tab', subscription);

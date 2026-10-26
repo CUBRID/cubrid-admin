@@ -10,6 +10,7 @@ import {
   setWorkspaceRoot,
 } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
+import { installApplicationMenu } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import {
   assertWorkspaceWritable,
@@ -46,6 +47,11 @@ export function registerDesktopIpcHandlers(): void {
       shell.openPath(portableRoot);
     }
     return { settingsPath, portableRoot };
+  });
+
+  ipcMain.handle('desktop:set-menu-language', (_event, language: unknown) => {
+    installApplicationMenu(language);
+    return { ok: true };
   });
 
   ipcMain.handle('desktop:get-workspace-info', () => {
