@@ -184,6 +184,41 @@ describe('CmsConfigService statdump watcher', () => {
       ]);
     });
 
+    it('does not let a start from a user without the host take over the lease', async () => {
+      hostService.findHostInternal.mockImplementation(async (userId: string) => {
+        if (userId !== 'u1') throw new Error('No such host');
+        return { address: '10.0.0.1', port: 8001, token: 'tok' };
+      });
+      await service.startStatDumpWatcher('u1', 'h1', 'testdb29');
+      await expect(service.startStatDumpWatcher('u2', 'h1', 'testdb29')).rejects.toBeDefined();
+
+      await jest.advanceTimersByTimeAsync(STATDUMP_WATCHER_LEASE_TTL_MS + STATDUMP_WATCHER_SWEEP_INTERVAL_MS);
+      expect(stopCalls()).toHaveLength(1);
+      expect(hostService.findHostInternal).toHaveBeenLastCalledWith('u1', 'h1');
+    });
+
+    it('runs a start that arrives during an expiry stop after that stop', async () => {
+      let resolveStop: (value: unknown) => void = () => undefined;
+      await service.startStatDumpWatcher('u1', 'h1', 'testdb29');
+      cmsClient.postAuthenticated.mockImplementation((_url, body) =>
+        body.task === 'stop_statdump'
+          ? new Promise((resolve) => { resolveStop = resolve; })
+          : Promise.resolve({ task: body.task, status: 'success', note: body.dbname })
+      );
+      const tasks = () => cmsClient.postAuthenticated.mock.calls.map(([, body]) => body.task);
+
+      await jest.advanceTimersByTimeAsync(STATDUMP_WATCHER_LEASE_TTL_MS + STATDUMP_WATCHER_SWEEP_INTERVAL_MS);
+      expect(tasks()).toEqual(['start_statdump', 'stop_statdump']);
+
+      const restart = service.startStatDumpWatcher('u1', 'h1', 'testdb29');
+      await jest.advanceTimersByTimeAsync(0);
+      expect(tasks()).toEqual(['start_statdump', 'stop_statdump']);
+
+      resolveStop({ task: 'stop_statdump', status: 'success', note: 'testdb29@127.0.0.1' });
+      await expect(restart).resolves.toEqual({ running: true, alreadyRunning: false });
+      expect(tasks()).toEqual(['start_statdump', 'stop_statdump', 'start_statdump']);
+    });
+
     it('stops sweeping once the module is destroyed', async () => {
       await service.startStatDumpWatcher('u1', 'h1', 'testdb29');
       service.onModuleDestroy();

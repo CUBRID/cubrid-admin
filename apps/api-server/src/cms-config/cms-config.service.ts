@@ -85,6 +85,9 @@ const cmsFailureNote = (err: unknown): string =>
 export class CmsConfigService extends BaseService implements OnModuleInit, OnModuleDestroy {
   private readonly statdumpLeases = new Map<string, StatdumpWatcherLease>();
   private statdumpSweepTimer: ReturnType<typeof setInterval> | null = null;
+  // Tail of the start/stop calls per lease key: they run one at a time, so a
+  // late stop can't kill a watcher that a start just restored.
+  private readonly statdumpCalls = new Map<string, Promise<unknown>>();
 
   constructor(
     protected readonly hostService: HostService,
@@ -205,27 +208,39 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     hostUid: string,
     dbname: string
   ): Promise<StatdumpWatcherClientResponse> {
+    // Only a user who has this host may renew its lease (the sweeper stops
+    // as the user who renewed it last).
+    await this.hostService.findHostInternal(userId, hostUid);
+    const key = statdumpLeaseKey(hostUid, dbname);
     // Renew even if the start fails: CMS can mark a failed start as running.
-    this.statdumpLeases.set(statdumpLeaseKey(hostUid, dbname), {
-      userId,
-      hostUid,
-      dbname,
-      renewedAt: Date.now(),
-    });
+    this.statdumpLeases.set(key, { userId, hostUid, dbname, renewedAt: Date.now() });
     const cmsRequest: Omit<StartStatdumpCmsRequest, 'token'> = {
       task: 'start_statdump',
       dbname: statdumpWatcherTarget(dbname),
       interval: String(STATDUMP_WATCHER_INTERVAL_SEC),
     };
-    try {
-      await this.executeCmsRequest<typeof cmsRequest, BaseCmsResponse>(userId, hostUid, cmsRequest);
-      return { running: true, alreadyRunning: false };
-    } catch (err) {
-      if (/already running/i.test(cmsFailureNote(err))) {
-        return { running: true, alreadyRunning: true };
+    return this.serializeStatdumpCall(key, async () => {
+      try {
+        await this.executeCmsRequest<typeof cmsRequest, BaseCmsResponse>(userId, hostUid, cmsRequest);
+        return { running: true, alreadyRunning: false };
+      } catch (err) {
+        if (/already running/i.test(cmsFailureNote(err))) {
+          return { running: true, alreadyRunning: true };
+        }
+        throw err;
       }
-      throw err;
-    }
+    });
+  }
+
+  private serializeStatdumpCall<T>(key: string, call: () => Promise<T>): Promise<T> {
+    const previous = this.statdumpCalls.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(call);
+    const tail = current.catch(() => undefined);
+    this.statdumpCalls.set(key, tail);
+    void tail.then(() => {
+      if (this.statdumpCalls.get(key) === tail) this.statdumpCalls.delete(key);
+    });
+    return current;
   }
 
   /**
@@ -241,7 +256,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
   ): Promise<StatdumpWatcherClientResponse> {
     const key = statdumpLeaseKey(hostUid, dbname);
     const lease = this.statdumpLeases.get(key);
-    const result = await this.sendStopStatdump(userId, hostUid, dbname);
+    const result = await this.serializeStatdumpCall(key, () => this.sendStopStatdump(userId, hostUid, dbname));
     // A start that arrived while stopping opened a newer lease; keep that one.
     if (this.statdumpLeases.get(key) === lease) this.statdumpLeases.delete(key);
     return result;
@@ -261,7 +276,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
       expired.map(async ([key, { userId, hostUid, dbname }]) => {
         this.statdumpLeases.delete(key);
         try {
-          await this.sendStopStatdump(userId, hostUid, dbname);
+          await this.serializeStatdumpCall(key, () => this.sendStopStatdump(userId, hostUid, dbname));
         } catch (err) {
           this.logger.warn(
             `Stopping the expired statdump watcher for ${dbname} on host ${hostUid} failed: ${
