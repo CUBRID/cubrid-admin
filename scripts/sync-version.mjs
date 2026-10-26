@@ -29,12 +29,12 @@ const desktopPackageJson = JSON.parse(fs.readFileSync(desktopPackageJsonPath, 'u
 desktopPackageJson.version = version;
 fs.writeFileSync(desktopPackageJsonPath, JSON.stringify(desktopPackageJson, null, 2) + '\n');
 
+const VERSION_LINE = /^  version: .+$/m;
 const electronBuilderYml = fs.readFileSync(electronBuilderYmlPath, 'utf8');
-const updatedYml = electronBuilderYml.replace(/^  version: .+$/m, `  version: ${version}`);
-if (updatedYml === electronBuilderYml) {
+if (!VERSION_LINE.test(electronBuilderYml)) {
   console.error('Could not find "  version:" line in electron-builder.yml — aborting.');
   process.exit(1);
 }
-fs.writeFileSync(electronBuilderYmlPath, updatedYml);
+fs.writeFileSync(electronBuilderYmlPath, electronBuilderYml.replace(VERSION_LINE, `  version: ${version}`));
 
 console.log(`Synced version ${version} into apps/desktop/package.json and electron-builder.yml`);
