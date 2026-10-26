@@ -3,6 +3,7 @@ import * as updateCheck from '@update-check';
 import { VersionService } from './version.service';
 
 jest.mock('@update-check', () => ({
+  ...jest.requireActual('@update-check'),
   checkForUpdate: jest.fn(),
 }));
 
@@ -11,9 +12,11 @@ const mockCheckForUpdate = updateCheck.checkForUpdate as jest.Mock;
 describe('VersionService', () => {
   let service: VersionService;
   const originalAppVersion = process.env.APP_VERSION;
+  const originalRepoOverride = process.env.CWM_UPDATE_CHECK_REPO;
 
   beforeEach(async () => {
     process.env.APP_VERSION = '1.2.3';
+    delete process.env.CWM_UPDATE_CHECK_REPO;
     mockCheckForUpdate.mockReset();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -26,6 +29,11 @@ describe('VersionService', () => {
   afterEach(() => {
     service.onModuleDestroy();
     process.env.APP_VERSION = originalAppVersion;
+    if (originalRepoOverride === undefined) {
+      delete process.env.CWM_UPDATE_CHECK_REPO;
+    } else {
+      process.env.CWM_UPDATE_CHECK_REPO = originalRepoOverride;
+    }
   });
 
   it('reports the baked-in app version', () => {
@@ -48,17 +56,17 @@ describe('VersionService', () => {
   });
 
   it('de-duplicates concurrent calls into a single outbound check', async () => {
-    let resolveCheck: (value: updateCheck.UpdateCheckResult) => void;
+    const resolvers: Array<(value: updateCheck.UpdateCheckResult) => void> = [];
     mockCheckForUpdate.mockReturnValue(
       new Promise((resolve) => {
-        resolveCheck = resolve;
+        resolvers.push(resolve);
       })
     );
 
     const first = service.runCheck();
     const second = service.runCheck();
 
-    resolveCheck!({ status: 'up-to-date' });
+    resolvers.forEach((resolve) => resolve({ status: 'up-to-date' }));
     await Promise.all([first, second]);
 
     expect(mockCheckForUpdate).toHaveBeenCalledTimes(1);
@@ -74,7 +82,7 @@ describe('VersionService', () => {
     expect(service.getState().result).toEqual({ status: 'error', reason: 'network' });
   });
 
-  it('requests the "server" package type with the current version', async () => {
+  it('requests the "server" package type from the official repo by default', async () => {
     mockCheckForUpdate.mockResolvedValue({ status: 'up-to-date' });
 
     await service.runCheck();
@@ -82,6 +90,52 @@ describe('VersionService', () => {
     expect(mockCheckForUpdate).toHaveBeenCalledWith({
       currentVersion: '1.2.3',
       packageType: 'server',
+      repo: 'CUBRID/cubrid-admin',
     });
+  });
+
+  it('honors a well-formed CWM_UPDATE_CHECK_REPO override', async () => {
+    process.env.CWM_UPDATE_CHECK_REPO = 'JohnDohnut/cubrid-webmanager';
+    mockCheckForUpdate.mockResolvedValue({ status: 'up-to-date' });
+
+    await service.runCheck();
+
+    expect(mockCheckForUpdate).toHaveBeenCalledWith(expect.objectContaining({ repo: 'JohnDohnut/cubrid-webmanager' }));
+  });
+
+  it('ignores a malformed CWM_UPDATE_CHECK_REPO override', async () => {
+    process.env.CWM_UPDATE_CHECK_REPO = '../../evil';
+    mockCheckForUpdate.mockResolvedValue({ status: 'up-to-date' });
+
+    await service.runCheck();
+
+    expect(mockCheckForUpdate).toHaveBeenCalledWith(expect.objectContaining({ repo: 'CUBRID/cubrid-admin' }));
+  });
+
+  it('fires one check on init and stops its periodic timer on destroy', async () => {
+    jest.useFakeTimers();
+    try {
+      mockCheckForUpdate.mockResolvedValue({ status: 'up-to-date' });
+
+      service.onModuleInit();
+      expect(mockCheckForUpdate).toHaveBeenCalledTimes(1);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+      expect(mockCheckForUpdate).toHaveBeenCalledTimes(2);
+
+      service.onModuleDestroy();
+      await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+      expect(mockCheckForUpdate).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not block or throw from onModuleInit when the first check hangs', () => {
+    mockCheckForUpdate.mockReturnValue(new Promise(() => undefined));
+
+    expect(() => service.onModuleInit()).not.toThrow();
   });
 });

@@ -60,6 +60,9 @@ import DesktopWorkspaceSettingsPage from '../features/desktop/components/Desktop
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
+import UpdateCheckModal from '../features/layout/components/UpdateCheckModal';
+import { openUpdateCheck } from '../features/layout/appBarSlice';
+import { fetchStartupUpdateNotice, subscribeToOpenUpdateCheck } from '../features/update/updateCheckClient';
 import LogViewer from '../features/broker/components/LogViewer';
 import CMSLogViewer from '../features/broker/components/CMSLogViewer';
 import AllLogsViewer from '../features/broker/components/AllLogsViewer';
@@ -512,7 +515,30 @@ function RootRedirect() {
 }
 
 function App() {
+  const dispatch = useDispatch();
   const { theme } = useSelector((state) => state.layout, shallowEqual);
+
+  // Desktop only (both are no-ops in a browser): the native Help menu's
+  // "Check for Updates" item, and the once-per-24h startup notice. Mounted
+  // here rather than in DashboardLayout so they also work on /login.
+  useEffect(
+    () => subscribeToOpenUpdateCheck(() => dispatch(openUpdateCheck({ source: 'manual' }))),
+    [dispatch]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchStartupUpdateNotice()
+      .then((status) => {
+        if (!cancelled && status) {
+          dispatch(openUpdateCheck({ source: 'startup', preloadedStatus: status }));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   useEffect(() => {
     if (window.desktopBridge?.onCloseActiveTab) {
@@ -540,20 +566,23 @@ function App() {
   }, [theme]);
 
   return (
-    <Routes>
-      <Route path="/" element={<RootRedirect />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+      <UpdateCheckModal />
+    </>
   );
 }
 

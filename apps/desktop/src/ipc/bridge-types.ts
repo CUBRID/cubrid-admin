@@ -1,3 +1,5 @@
+import type { UpdateStatus } from '@update-check';
+
 export type DesktopConfig = {
   apiBaseUrl: string;
   clearAuthOnExit: boolean;
@@ -22,7 +24,11 @@ export type DesktopBridge = {
   onCloseActiveTab: (callback: () => void) => () => void;
   closeWindow: () => Promise<void>;
   getAppVersion: () => Promise<string>;
-  checkForUpdates: () => Promise<void>;
+  getUpdateStatus: () => Promise<UpdateStatus>;
+  getStartupUpdateNotice: () => Promise<UpdateStatus | null>;
+  dismissUpdate: (version: string) => Promise<{ ok: true }>;
+  openUpdateDownload: (url: string) => Promise<boolean>;
+  onOpenUpdateCheck: (callback: () => void) => () => void;
   getCheckForUpdatesOnStartup: () => Promise<boolean>;
   setCheckForUpdatesOnStartup: (enabled: boolean) => Promise<{ ok: true }>;
 };

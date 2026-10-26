@@ -15,6 +15,8 @@ export interface CheckForUpdateOptions {
   timeoutMs?: number;
 }
 
+export type UpdateCheckErrorReason = 'network' | 'rate-limited' | 'no-release' | 'parse-error';
+
 export type UpdateCheckResult =
   | { status: 'up-to-date' }
   | {
@@ -23,4 +25,11 @@ export type UpdateCheckResult =
       downloadUrl: string;
       releaseNotesUrl: string;
     }
-  | { status: 'error'; reason: 'network' | 'rate-limited' | 'no-release' | 'parse-error' };
+  | { status: 'error'; reason: UpdateCheckErrorReason };
+
+/** Shape returned to UI clients by both the server endpoint and the desktop IPC. */
+export interface UpdateStatus {
+  currentVersion: string;
+  lastCheckedAt: string | null;
+  result: UpdateCheckResult;
+}

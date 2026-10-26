@@ -6,7 +6,6 @@ import { getPortableAppRoot } from './config/portable-root';
 import { registerDesktopIpcHandlers } from './ipc/handlers';
 import { installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
-import { checkForUpdateInBackgroundIfDue } from './update/check-for-update';
 import { getRendererDistDir, getWorkspacePaths, refreshWorkspacePaths } from './workspace/paths';
 import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
 import {
@@ -108,8 +107,6 @@ async function bootstrap(): Promise<void> {
   await loadRoute(mainWindow, 'login');
   mainWindow.show();
   bootstrapComplete = true;
-
-  void checkForUpdateInBackgroundIfDue();
 }
 
 app.whenReady().then(bootstrap).catch((error) => {

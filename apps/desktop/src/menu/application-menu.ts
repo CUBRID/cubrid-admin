@@ -2,9 +2,18 @@ import { Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import * as fs from 'fs';
 import { getDesktopSettingsPath } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
-import { checkForUpdateManually } from '../update/check-for-update';
+import { getMainWindow } from '../window/window-registry';
 
 const PRODUCT_NAME = 'Next CUBRID Admin';
+
+// The check itself and its result UI live in the renderer's update-check
+// modal (shared with the web build) — the native item only asks it to open.
+function openUpdateCheck(): void {
+  const window = getMainWindow();
+  if (window && !window.isDestroyed()) {
+    window.webContents.send('desktop:open-update-check');
+  }
+}
 
 function revealSettingsFile(): void {
   const settingsPath = getDesktopSettingsPath();
@@ -98,12 +107,7 @@ export function installApplicationMenu(): void {
     {
       label: '도움말',
       submenu: [
-        {
-          label: '업데이트 확인...',
-          click: () => {
-            void checkForUpdateManually();
-          },
-        },
+        { label: '업데이트 확인...', click: () => openUpdateCheck() },
         { type: 'separator' as const },
         { label: 'CUBRID 홈페이지', click: () => shell.openExternal('https://www.cubrid.org/') },
         {

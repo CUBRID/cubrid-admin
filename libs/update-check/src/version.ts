@@ -1,29 +1,62 @@
 /**
- * Minimal semver-ish comparison for release tags like "v1.4.2" or "1.4.2-beta.1".
- * Build metadata (anything after "+") is ignored, as semver specifies.
- * A version with a prerelease identifier is considered lower than the same
- * MAJOR.MINOR.PATCH without one.
+ * Semver 2.0.0 precedence for release tags like "v1.4.2" or "0.1.0-alpha.1".
+ * Build metadata (anything after "+") is ignored, as the spec requires.
  */
 interface ParsedVersion {
   core: [number, number, number];
-  prerelease: string | null;
+  prerelease: string[];
 }
 
+const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+
 export function parseVersion(raw: string): ParsedVersion | null {
-  const withoutBuildMeta = raw.trim().replace(/^v/i, '').split('+')[0];
-  const [corePart, prerelease = null] = withoutBuildMeta.split('-', 2) as [string, string?];
-
-  const segments = corePart.split('.');
-  if (segments.length !== 3) {
+  const match = SEMVER_PATTERN.exec(raw.trim().replace(/^v/i, '').split('+')[0]);
+  if (!match) {
     return null;
   }
 
-  const core = segments.map(Number) as [number, number, number];
-  if (core.some((segment) => Number.isNaN(segment))) {
-    return null;
+  return {
+    core: [Number(match[1]), Number(match[2]), Number(match[3])],
+    prerelease: match[4] ? match[4].split('.') : [],
+  };
+}
+
+export function isPrereleaseVersion(raw: string): boolean {
+  return (parseVersion(raw)?.prerelease.length ?? 0) > 0;
+}
+
+function compareIdentifiers(a: string, b: string): number {
+  const aNumeric = /^\d+$/.test(a);
+  const bNumeric = /^\d+$/.test(b);
+  if (aNumeric && bNumeric) {
+    return Number(a) - Number(b);
+  }
+  if (aNumeric !== bNumeric) {
+    return aNumeric ? -1 : 1;
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Negative when a < b, positive when a > b, 0 when equal. Both must be valid versions. */
+export function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
+  for (let i = 0; i < 3; i += 1) {
+    if (a.core[i] !== b.core[i]) {
+      return a.core[i] - b.core[i];
+    }
   }
 
-  return { core, prerelease };
+  if (a.prerelease.length === 0 || b.prerelease.length === 0) {
+    return b.prerelease.length - a.prerelease.length;
+  }
+
+  const length = Math.min(a.prerelease.length, b.prerelease.length);
+  for (let i = 0; i < length; i += 1) {
+    const result = compareIdentifiers(a.prerelease[i], b.prerelease[i]);
+    if (result !== 0) {
+      return result;
+    }
+  }
+  return a.prerelease.length - b.prerelease.length;
 }
 
 /** Returns true when `latest` is strictly newer than `current`. Invalid versions compare as not-newer. */
@@ -33,21 +66,5 @@ export function isNewerVersion(latest: string, current: string): boolean {
   if (!parsedLatest || !parsedCurrent) {
     return false;
   }
-
-  for (let i = 0; i < 3; i += 1) {
-    if (parsedLatest.core[i] !== parsedCurrent.core[i]) {
-      return parsedLatest.core[i] > parsedCurrent.core[i];
-    }
-  }
-
-  if (parsedLatest.prerelease === parsedCurrent.prerelease) {
-    return false;
-  }
-  if (parsedLatest.prerelease === null) {
-    return true;
-  }
-  if (parsedCurrent.prerelease === null) {
-    return false;
-  }
-  return parsedLatest.prerelease > parsedCurrent.prerelease;
+  return compareVersions(parsedLatest, parsedCurrent) > 0;
 }

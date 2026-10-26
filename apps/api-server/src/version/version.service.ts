@@ -1,13 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { checkForUpdate, UpdateCheckResult } from '@update-check';
+import { checkForUpdate, resolveUpdateRepo, UpdateCheckResult, UpdateStatus } from '@update-check';
 
 const PERIODIC_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-export interface VersionCheckState {
-  currentVersion: string;
-  lastCheckedAt: string | null;
-  result: UpdateCheckResult;
-}
 
 /**
  * Checks GitHub Releases for a newer server version on two triggers: a
@@ -34,7 +28,7 @@ export class VersionService implements OnModuleInit, OnModuleDestroy {
     return process.env.APP_VERSION || '0.0.0';
   }
 
-  getState(): VersionCheckState {
+  getState(): UpdateStatus {
     return {
       currentVersion: this.getCurrentVersion(),
       lastCheckedAt: this.lastCheckedAt?.toISOString() ?? null,
@@ -67,6 +61,7 @@ export class VersionService implements OnModuleInit, OnModuleDestroy {
     this.inFlight = checkForUpdate({
       currentVersion: this.getCurrentVersion(),
       packageType: 'server',
+      repo: resolveUpdateRepo(process.env.CWM_UPDATE_CHECK_REPO),
     })
       .catch((error: unknown): UpdateCheckResult => {
         // checkForUpdate itself never rejects, but guard defensively

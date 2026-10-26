@@ -26,7 +26,17 @@ const desktopBridge: DesktopBridge = {
   },
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
   getAppVersion: () => ipcRenderer.invoke('desktop:get-app-version'),
-  checkForUpdates: () => ipcRenderer.invoke('desktop:check-for-updates'),
+  getUpdateStatus: () => ipcRenderer.invoke('desktop:get-update-status'),
+  getStartupUpdateNotice: () => ipcRenderer.invoke('desktop:get-startup-update-notice'),
+  dismissUpdate: (version) => ipcRenderer.invoke('desktop:dismiss-update', version),
+  openUpdateDownload: (url) => ipcRenderer.invoke('desktop:open-update-download', url),
+  onOpenUpdateCheck: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('desktop:open-update-check', subscription);
+    return () => {
+      ipcRenderer.removeListener('desktop:open-update-check', subscription);
+    };
+  },
   getCheckForUpdatesOnStartup: () => ipcRenderer.invoke('desktop:get-check-updates-on-startup'),
   setCheckForUpdatesOnStartup: (enabled) =>
     ipcRenderer.invoke('desktop:set-check-updates-on-startup', enabled),

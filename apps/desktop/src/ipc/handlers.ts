@@ -19,7 +19,12 @@ import {
 } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { getMainWindow } from '../window/window-registry';
-import { checkForUpdateManually } from '../update/check-for-update';
+import {
+  dismissUpdate,
+  getStartupUpdateNotice,
+  getUpdateStatus,
+  openUpdateDownload,
+} from '../update/check-for-update';
 
 async function applyWorkspaceChange(): Promise<{ ok: true }> {
   if (getApiProcess()) {
@@ -116,13 +121,23 @@ export function registerDesktopIpcHandlers(): void {
 
   ipcMain.handle('desktop:get-app-version', () => app.getVersion());
 
-  ipcMain.handle('desktop:check-for-updates', async () => {
-    await checkForUpdateManually();
+  ipcMain.handle('desktop:get-update-status', () => getUpdateStatus());
+
+  ipcMain.handle('desktop:get-startup-update-notice', () => getStartupUpdateNotice());
+
+  ipcMain.handle('desktop:dismiss-update', (_event, version: unknown) => {
+    dismissUpdate(version);
+    return { ok: true };
   });
+
+  ipcMain.handle('desktop:open-update-download', (_event, url: unknown) => openUpdateDownload(url));
 
   ipcMain.handle('desktop:get-check-updates-on-startup', () => isCheckForUpdatesOnStartupEnabled());
 
-  ipcMain.handle('desktop:set-check-updates-on-startup', (_event, enabled: boolean) => {
+  ipcMain.handle('desktop:set-check-updates-on-startup', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('enabled must be a boolean');
+    }
     setCheckForUpdatesOnStartup(enabled);
     return { ok: true };
   });

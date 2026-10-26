@@ -2,7 +2,7 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { openTab, showStatusModal } from '../layoutSlice';
 import { openAddHostModal, openEditHostModal, openServerVersionModal, openImportExportModal, openCmsUserManagementModal } from '../../host/hostSlice';
-import { setAboutCubrid } from '../appBarSlice';
+import { openUpdateCheck, setAboutCubrid } from '../appBarSlice';
 import { useCM } from '../../../constants/useCM';
 
 export default function HeaderMenu() {
@@ -125,8 +125,7 @@ export default function HeaderMenu() {
         <MenuItem
           icon="update"
           label={CM.checkForUpdates}
-          disabled={true}
-          onClick={() => {}}
+          onClick={() => dispatch(openUpdateCheck({ source: 'manual' }))}
         />
         <MenuItem
           icon="info"

@@ -2,6 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
+    // The packaged Electron app ships this build without node_modules, so the
+    // emitted JS must not require("tslib") (async/await → __awaiter at ES2015).
+    "target": "ES2022",
+    "importHelpers": false,
     "declaration": true,
     "types": ["node"],
     "baseUrl": "."

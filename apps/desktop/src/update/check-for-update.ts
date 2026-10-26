@@ -1,5 +1,12 @@
-import { app, dialog, shell } from 'electron';
-import { checkForUpdate as checkForUpdateCore, PackageType, UpdateCheckResult } from '@update-check';
+import { app, shell } from 'electron';
+import {
+  checkForUpdate,
+  isTrustedDownloadUrl,
+  PackageType,
+  resolveUpdateRepo,
+  UpdateCheckResult,
+  UpdateStatus,
+} from '@update-check';
 import {
   dismissUpdateVersion,
   getDismissedUpdateVersion,
@@ -7,10 +14,10 @@ import {
   isCheckForUpdatesOnStartupEnabled,
   recordUpdateCheckTimestamp,
 } from '../config/desktop-settings';
-import { getMainWindow } from '../window/window-registry';
 
-const BACKGROUND_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const TRUSTED_DOWNLOAD_HOSTS = ['github.com', 'objects.githubusercontent.com'];
+const STARTUP_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+let inFlight: Promise<UpdateStatus> | null = null;
 
 function resolvePackageType(): PackageType {
   if (process.platform === 'darwin') {
@@ -22,95 +29,80 @@ function resolvePackageType(): PackageType {
   return 'desktop-linux-x64';
 }
 
-function isTrustedDownloadUrl(url: string): boolean {
-  try {
-    return TRUSTED_DOWNLOAD_HOSTS.includes(new URL(url).hostname);
-  } catch {
-    return false;
-  }
-}
-
-function showMessageBox(
-  options: Electron.MessageBoxOptions
-): Promise<Electron.MessageBoxReturnValue> {
-  const window = getMainWindow();
-  return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
-}
-
-async function runCheck(): Promise<UpdateCheckResult> {
-  const result = await checkForUpdateCore({
+async function runCheck(): Promise<UpdateStatus> {
+  const result = await checkForUpdate({
     currentVersion: app.getVersion(),
     packageType: resolvePackageType(),
-  });
-  recordUpdateCheckTimestamp(result.status === 'update-available' ? result.latestVersion : undefined);
-  return result;
-}
+    repo: resolveUpdateRepo(process.env.CWM_UPDATE_CHECK_REPO),
+  }).catch((): UpdateCheckResult => ({ status: 'error', reason: 'network' }));
 
-async function showUpdateAvailableDialog(
-  result: Extract<UpdateCheckResult, { status: 'update-available' }>,
-  { allowDismiss }: { allowDismiss: boolean }
-): Promise<void> {
-  const buttons = allowDismiss ? ['다운로드 페이지 열기', '나중에'] : ['다운로드 페이지 열기', '닫기'];
-
-  const { response } = await showMessageBox({
-    type: 'info',
-    buttons,
-    defaultId: 0,
-    message: `새 버전이 있습니다 (v${result.latestVersion})`,
-    detail: '다운로드 페이지에서 설치 파일을 받아 업데이트하세요.',
-  });
-
-  if (response === 0) {
-    const url = isTrustedDownloadUrl(result.downloadUrl) ? result.downloadUrl : result.releaseNotesUrl;
-    await shell.openExternal(url);
-  } else if (allowDismiss) {
-    dismissUpdateVersion(result.latestVersion);
-  }
-}
-
-/** Manual "Check for Updates..." menu action — always hits the network and always shows a result. */
-export async function checkForUpdateManually(): Promise<void> {
-  const result = await runCheck();
-
-  if (result.status === 'up-to-date') {
-    await showMessageBox({ message: `현재 최신 버전입니다 (v${app.getVersion()}).` });
-    return;
+  const checkedAt = new Date().toISOString();
+  try {
+    recordUpdateCheckTimestamp(result.status === 'update-available' ? result.latestVersion : undefined);
+  } catch (error) {
+    // A read-only portable folder must not turn a successful check into a failure.
+    console.warn('[desktop] could not persist update-check timestamp:', error);
   }
 
-  if (result.status === 'update-available') {
-    await showUpdateAvailableDialog(result, { allowDismiss: false });
-    return;
-  }
-
-  await showMessageBox({
-    type: 'warning',
-    message: '업데이트 확인에 실패했습니다. 네트워크 연결을 확인해 주세요.',
-  });
+  return { currentVersion: app.getVersion(), lastCheckedAt: checkedAt, result };
 }
 
 /**
- * Called once at startup. Silently does nothing unless it's actually due
- * (24h since last check) and the result is a non-dismissed update — never
- * surfaces errors or "up to date" to the user, since this wasn't requested.
+ * Runs a fresh check (de-duplicated across concurrent callers). Never
+ * rejects — on a closed network this resolves to `{ status: 'error' }`.
  */
-export async function checkForUpdateInBackgroundIfDue(): Promise<void> {
-  if (!isCheckForUpdatesOnStartupEnabled()) {
-    return;
+export function getUpdateStatus(): Promise<UpdateStatus> {
+  if (!inFlight) {
+    inFlight = runCheck().finally(() => {
+      inFlight = null;
+    });
   }
+  return inFlight;
+}
 
-  const lastCheckAt = getLastUpdateCheckAt();
-  const dueForCheck = !lastCheckAt || Date.now() - new Date(lastCheckAt).getTime() >= BACKGROUND_CHECK_INTERVAL_MS;
-  if (!dueForCheck) {
-    return;
-  }
+/**
+ * Startup notice the renderer asks for once on load: returns a status only
+ * when the user hasn't opted out, a check is due (24h since the last one),
+ * and that check found an update the user hasn't already dismissed.
+ * Everything else — including errors — resolves to null so nothing is shown.
+ */
+export async function getStartupUpdateNotice(): Promise<UpdateStatus | null> {
+  try {
+    if (!isCheckForUpdatesOnStartupEnabled()) {
+      return null;
+    }
+    const lastCheckAt = getLastUpdateCheckAt();
+    const lastCheckMs = lastCheckAt ? new Date(lastCheckAt).getTime() : Number.NaN;
+    if (Number.isFinite(lastCheckMs) && Date.now() - lastCheckMs < STARTUP_CHECK_INTERVAL_MS) {
+      return null;
+    }
 
-  const result = await runCheck().catch((): UpdateCheckResult => ({ status: 'error', reason: 'network' }));
-  if (result.status !== 'update-available') {
-    return;
+    const status = await getUpdateStatus();
+    if (status.result.status !== 'update-available') {
+      return null;
+    }
+    if (getDismissedUpdateVersion() === status.result.latestVersion) {
+      return null;
+    }
+    return status;
+  } catch (error) {
+    console.warn('[desktop] startup update check skipped:', error);
+    return null;
   }
-  if (getDismissedUpdateVersion() === result.latestVersion) {
-    return;
-  }
+}
 
-  await showUpdateAvailableDialog(result, { allowDismiss: true });
+export function dismissUpdate(version: unknown): void {
+  if (typeof version !== 'string' || version.length === 0 || version.length > 64) {
+    return;
+  }
+  dismissUpdateVersion(version);
+}
+
+/** Opens a release/download URL in the system browser — only GitHub https URLs. */
+export async function openUpdateDownload(url: unknown): Promise<boolean> {
+  if (typeof url !== 'string' || !isTrustedDownloadUrl(url)) {
+    return false;
+  }
+  await shell.openExternal(url);
+  return true;
 }
