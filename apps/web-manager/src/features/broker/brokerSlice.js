@@ -693,6 +693,10 @@ const brokerSlice = createSlice({
           delete state.latestBrokerListRequestIdByHost[hostUid];
           delete state.latestNavigatorBrokerListRequestIdByHost[hostUid];
           delete state.loadingByHost[hostUid];
+          // Same for the after-action fetch: once the host reconnects, a new
+          // request sets the latest id again, and the old connection's
+          // response must not pass the check above.
+          delete state.afterActionBrokerListByHost[hostUid];
         }
       );
   },

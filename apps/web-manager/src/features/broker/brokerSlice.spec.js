@@ -201,6 +201,28 @@ describe('broker lists are stored per host, not in one shared array', () => {
     expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
   });
 
+  it("an after-action response from before a disconnect is not shown after the host reconnects", async () => {
+    const before = deferred();
+    const after = deferred();
+    brokerApi.getBrokerList.mockImplementationOnce(() => before.promise).mockImplementationOnce(() => after.promise);
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    const stale = store.dispatch(fetchBrokerList({ hostUid: 'hostA', afterAction: true, skipStatusEnrichment: true }));
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    // Reconnected: a new list request is in flight for the same host.
+    const fresh = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+
+    before.resolve({ result: [{ name: 'old-broker', pid: '1' }] });
+    await stale;
+    expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
+
+    after.resolve({ result: [{ name: 'new-broker', pid: '2' }] });
+    await fresh;
+    expect(store.getState().broker.brokersByHost.hostA).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'new-broker' })])
+    );
+  });
+
   it('clears loading when its host is deleted/disconnected mid-fetch, instead of leaving it stuck', async () => {
     const hostA = deferred();
     brokerApi.getBrokerList.mockImplementation(() => hostA.promise);
