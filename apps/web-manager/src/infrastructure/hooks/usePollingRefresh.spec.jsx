@@ -86,6 +86,32 @@ it('runs a refresh requested during an in-flight fetch once that fetch settles',
   expect(fetchCalls.length).toBe(2);
 });
 
+it('runs a refresh requested while the browser window is hidden', async () => {
+  const pending = [];
+  await render({ pollingIntervalSeconds: 0, onFetch: hangingFetch(pending) });
+  await act(async () => {
+    pending[0].resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetchCalls.length).toBe(1);
+
+  // e.g. a broker start/stop finishing after the user switched browser tabs:
+  // with polling off, nothing would refetch once the window is shown again.
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  try {
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await act(async () => { store.dispatch({ type: 'refresh' }); });
+    expect(fetchCalls.length).toBe(2);
+  } finally {
+    visibility.mockRestore();
+  }
+
+  await act(async () => {
+    pending.forEach((d) => d.resolve());
+    await vi.advanceTimersByTimeAsync(0);
+  });
+});
+
 it('does not queue polling ticks that land during an in-flight fetch', async () => {
   const pending = [];
   await render({ pollingIntervalSeconds: 1, onFetch: hangingFetch(pending) });

@@ -90,16 +90,21 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   }, [handleRefresh]);
 
   const lastProcessedCounterRef = useRef(refreshCounter);
-  // 2. Global Refresh (F5 / Ctrl+R) Listener
+  // 2. Global Refresh (F5 / Ctrl+R) Listener — gated on this being the
+  // foreground app tab, not on browser visibility. F5 can't land while the
+  // window is hidden, so a refresh requested then comes from code (e.g. a
+  // broker start/stop finishing, see refreshAfterBrokerAction); skipping it
+  // would consume the request, and with polling off nothing refetches later.
+  const isForegroundTab = activeMainTab === tabId;
   useEffect(() => {
     if (refreshCounter > lastProcessedCounterRef.current) {
       lastProcessedCounterRef.current = refreshCounter;
-      if (isTabActive) {
+      if (isForegroundTab) {
         if (isFetchingRef.current) pendingRefreshRef.current = true;
         else handleRefresh();
       }
     }
-  }, [refreshCounter, handleRefresh, isTabActive]);
+  }, [refreshCounter, handleRefresh, isForegroundTab]);
 
   // Don't fire a queued refresh from a fetch that settles after unmount.
   useEffect(() => () => { pendingRefreshRef.current = false; }, []);
