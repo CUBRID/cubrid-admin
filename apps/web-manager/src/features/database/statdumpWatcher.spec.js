@@ -120,3 +120,28 @@ describe('restartFrozenStatdumpWatcher', () => {
     expect(api.stopStatDumpWatcher).not.toHaveBeenCalled();
   });
 });
+
+describe('page exit', () => {
+  it('stops every held watcher with a keepalive request on pagehide', async () => {
+    acquire('h1', 'a');
+    acquire('h2', 'b');
+    window.dispatchEvent(new Event('pagehide'));
+    expect(api.stopStatDumpWatcher.mock.calls).toEqual([
+      ['h1', 'a', { keepalive: true }],
+      ['h2', 'b', { keepalive: true }],
+    ]);
+  });
+
+  it('starts held watchers again when the page is restored from the bfcache', () => {
+    acquire();
+    const pageshow = (persisted) => {
+      const event = new Event('pageshow');
+      Object.defineProperty(event, 'persisted', { value: persisted });
+      window.dispatchEvent(event);
+    };
+    pageshow(false);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(1);
+    pageshow(true);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(2);
+  });
+});

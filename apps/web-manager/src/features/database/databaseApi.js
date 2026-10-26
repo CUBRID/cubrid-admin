@@ -135,8 +135,13 @@ export const databaseApi = {
   // statdump counters only advance while a watcher is attached (see statdumpWatcher.js).
   startStatDumpWatcher: (hostUid, dbname) =>
     apiClient.post(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/start`, {}),
-  stopStatDumpWatcher: (hostUid, dbname) =>
-    apiClient.post(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/stop`, {}),
+  // keepalive: sent while the page is closing (pagehide), so it must outlive it.
+  stopStatDumpWatcher: (hostUid, dbname, { keepalive = false } = {}) =>
+    apiClient.post(
+      `/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/stop`,
+      {},
+      keepalive ? { adapter: 'fetch', fetchOptions: { keepalive: true } } : undefined
+    ),
   getParamDump: (hostUid, dbname, both = 'n') => {
     return apiClient.get(`/${hostUid}/cms-config/param-dump/${encodeURIComponent(dbname)}?both=${both}`);
   },

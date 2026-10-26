@@ -24,7 +24,7 @@ export const RESTART_COOLDOWN_MS = 5 * 60 * 1000;
 // stop against the next start.
 export const STOP_GRACE_MS = 2000;
 
-const watchers = new Map(); // dbKey -> { count, timer, stopTimer, lastRestartAt }
+const watchers = new Map(); // dbKey -> { hostUid, dbname, api, count, timer, stopTimer, lastRestartAt }
 
 const warn = (action, hostUid, dbname) => (err) => {
   console.warn(`[statdump watcher] ${action} failed for ${dbname} on ${hostUid}:`, err?.message || err);
@@ -51,7 +51,7 @@ export function acquireStatdumpWatcher(hostUid, dbname, api = databaseApi) {
     clearTimeout(entry.stopTimer);
     entry.stopTimer = null;
   } else {
-    entry = { count: 1, lastRestartAt: 0, timer: null, stopTimer: null };
+    entry = { hostUid, dbname, api, count: 1, lastRestartAt: 0, timer: null, stopTimer: null };
     watchers.set(key, entry);
     start(api, hostUid, dbname);
     entry.timer = setInterval(() => start(api, hostUid, dbname), WATCHER_REFRESH_MS);
@@ -97,3 +97,20 @@ export function restartFrozenStatdumpWatcher(hostUid, dbname, unchangedSince, no
   return true;
 }
 
+// A closed or reloaded page never runs the grace timer above, and CMS has no
+// expiry for its watchers, so stop the held ones on pagehide. keepalive lets
+// the request outlive the page. If the page comes back from the bfcache, the
+// periodic start would restore them; start them right away instead.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    watchers.forEach(({ hostUid, dbname, api }) => {
+      api.stopStatDumpWatcher(hostUid, dbname, { keepalive: true }).catch(warn('stop', hostUid, dbname));
+    });
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    watchers.forEach(({ hostUid, dbname, api, count }) => {
+      if (count > 0) start(api, hostUid, dbname);
+    });
+  });
+}
