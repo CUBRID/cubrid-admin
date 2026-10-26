@@ -15,7 +15,9 @@ describe('CmsConfigController', () => {
       getStatDump: jest.fn(),
       getAllSystemParam: jest.fn(),
       setSystemParam: jest.fn(),
+      setSystemParamFromRawEdit: jest.fn(),
       setBrokerParam: jest.fn(),
+      setBrokerParamFromRawEdit: jest.fn(),
     };
     cmsConfigService = mockCmsConfigService as unknown as jest.Mocked<CmsConfigService>;
 
@@ -58,14 +60,14 @@ describe('CmsConfigController', () => {
   });
 
   describe('setBrokerParam', () => {
-    it('should call cmsConfigService.setBrokerParam and return { success: true }', async () => {
-      cmsConfigService.setBrokerParam.mockResolvedValue({ success: true });
+    it('should call cmsConfigService.setBrokerParamFromRawEdit and return { success: true }', async () => {
+      cmsConfigService.setBrokerParamFromRawEdit.mockResolvedValue({ success: true });
 
       const req = { user: { sub: 'user-123' } };
       const body = { confdata: ['[broker]', 'SERVICE=ON'] };
       const result = await controller.setBrokerParam(req as any, 'host-uid-1', body);
 
-      expect(cmsConfigService.setBrokerParam).toHaveBeenCalledWith(
+      expect(cmsConfigService.setBrokerParamFromRawEdit).toHaveBeenCalledWith(
         'user-123',
         'host-uid-1',
         body.confdata

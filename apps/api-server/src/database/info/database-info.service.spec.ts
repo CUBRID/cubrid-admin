@@ -19,6 +19,7 @@ const mockGetEnvForCreatedb: GetEnvClientResponse = {
   HOSTMONTAB2: '',
   HOSTMONTAB3: '',
   osinfo: 'Linux',
+  paramSchemas: { database: [], broker: [], knownKeys: { strict: false, catalogVersion: null, database: [], broker: [], databaseGuards: {} } },
 };
 
 jest.mock('@common', () => ({

@@ -1,5 +1,6 @@
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
+import { ValidationError } from '@error/validation/validation-error';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import {
   GetAddBrokerInfoClientResponse,
@@ -27,6 +28,8 @@ import { LogContentContainer } from '@type/cms-response/view-log-cms-response';
 import { BaseCmsResponse } from '@type/cms-response/base-cms-response';
 import { BaseService, HandleCmsErrors } from '@common';
 import { DatabaseUserService } from '@database/user/database-user.service';
+import { resolveHostParamSchemas } from './param-schema.util';
+import { ConfFileKind, EngineKnownKeys, ParamSchemaEntry, formatConfTextProblem, isBlockingConfTextProblem, validateConfText } from '@api-interfaces';
 
 /**
  * Service for managing CMS environment configuration operations.
@@ -49,7 +52,10 @@ export class CmsConfigService extends BaseService {
 
   /**
    * Get environment information from a CMS host.
-   * Returns domain-only data (CMS envelope removed).
+   * Returns domain-only data (CMS envelope removed), plus the
+   * database/broker param-editor schema already resolved for this host's
+   * CUBRIDVER (see `resolveHostParamSchemas`) — one round trip instead of
+   * a separate schema fetch every time a param editor modal opens.
    *
    * @param userId - User ID from JWT
    * @param hostUid - Host unique identifier
@@ -68,7 +74,11 @@ export class CmsConfigService extends BaseService {
       cmsRequest
     );
 
-    return this.extractDomainData(response);
+    const domainData = this.extractDomainData(response);
+    return {
+      ...domainData,
+      paramSchemas: resolveHostParamSchemas(domainData.CUBRIDVER),
+    };
   }
 
   /**
@@ -195,6 +205,28 @@ export class CmsConfigService extends BaseService {
   }
 
   /**
+   * Entry point for the raw cubridconf/cmconf text editor's save — the one
+   * place arbitrary hand-edited conf text reaches the server, so it's the
+   * one place that text needs validating before being accepted; `setSystemParam`
+   * itself does no validation of its own.
+   * cmconf is passed straight through unchanged: it has no schema, and
+   * CMS reads it with its own parser rather than the engine's INI rules.
+   */
+  @HandleCmsErrors()
+  async setSystemParamFromRawEdit(
+    userId: string,
+    hostUid: string,
+    confname: string,
+    confdata: string[]
+  ): Promise<SetSysParamClientResponse> {
+    if (confname === 'cubridconf') {
+      const { database: schema, knownKeys } = (await this.getEnv(userId, hostUid)).paramSchemas;
+      this.assertValidConfText(schema, confdata, 'cubridconf', knownKeys);
+    }
+    return this.setSystemParam(userId, hostUid, confname, confdata);
+  }
+
+  /**
    * Set system parameters in a configuration file on a CMS host.
    * Returns domain-only data (CMS envelope removed).
    *
@@ -260,6 +292,23 @@ export class CmsConfigService extends BaseService {
   }
 
   /**
+   * Entry point for the raw brokerconf text editor's save — same reasoning
+   * as `setSystemParamFromRawEdit`: `setBrokerParam` itself does no
+   * validation of its own, so this is the one place hand-edited
+   * broker.conf text needs validating before being accepted.
+   */
+  @HandleCmsErrors()
+  async setBrokerParamFromRawEdit(
+    userId: string,
+    hostUid: string,
+    confdata: string[]
+  ): Promise<SetSysParamClientResponse> {
+    const { broker: schema, knownKeys } = (await this.getEnv(userId, hostUid)).paramSchemas;
+    this.assertValidConfText(schema, confdata, 'brokerconf', knownKeys);
+    return this.setBrokerParam(userId, hostUid, confdata);
+  }
+
+  /**
    * Set broker configuration file content on a CMS host (CMS task: broker_setparam).
    *
    * @param userId - User ID from JWT
@@ -284,6 +333,25 @@ export class CmsConfigService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     return { success: true };
+  }
+
+  /**
+   * Rejects hand-edited conf text the engine itself would fail to load —
+   * same shared check (`validateConfText`) the raw text editors run before
+   * saving, re-run here in case a request reaches this endpoint some other way.
+   */
+  private assertValidConfText(
+    schema: ParamSchemaEntry[],
+    lines: string[],
+    kind: ConfFileKind,
+    knownKeys: EngineKnownKeys
+  ): void {
+    const problems = validateConfText(schema, lines, kind, knownKeys).filter(isBlockingConfTextProblem);
+    if (problems.length > 0) {
+      throw ValidationError.InvalidFieldFormat('confdata', undefined, {
+        message: `Invalid configuration: ${problems.map(formatConfTextProblem).join('; ')}`,
+      });
+    }
   }
 
   private flattenCmsLogLines(log: LogContentContainer[] | undefined): string[] {
