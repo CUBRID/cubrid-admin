@@ -92,21 +92,24 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   const totalQps = brokersCAS.reduce((a, c) => a + parseInt(c.qps || 0), 0);
   const totalMemMB = (casStats.memKB / 1024).toFixed(1);
-  const rates = perf.calculatedRates || { tps: 0, qps: 0, fetchPerSec: 0, dirtyPerSec: 0, ioReadPerSec: 0, ioWritePerSec: 0 };
+  // Per-second rates from consecutive statdump samples (statdumpRates.js);
+  // null until two samples exist, or after a counter reset.
+  const rates = perf.calculatedRates || {};
+  const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(1));
   
   const dbStats = [{
     cpu: casStats.cpu.toFixed(1) + '%', 
     cpuPct: Math.min(casStats.cpu, 100),
     memory: totalMemMB + 'MB', 
     memPct: Math.min((casStats.memKB / 1024) / 4, 100),
-    tps: rates.tps.toFixed(1),
+    tps: formatRate(rates.tps),
     qps: totalQps.toLocaleString(), 
     hitRatio: (perf.data_page_buffer_hit_ratio || '0.00') + '%',
     hitPct: parseFloat(perf.data_page_buffer_hit_ratio || '0'),
-    fetch: rates.fetchPerSec.toFixed(1),
-    dirty: rates.dirtyPerSec.toFixed(1),
-    ioReads: rates.ioReadPerSec.toFixed(1),
-    ioWrites: rates.ioWritePerSec.toFixed(1)
+    fetch: formatRate(rates.fetchPerSec),
+    dirty: formatRate(rates.dirtyPerSec),
+    ioReads: formatRate(rates.ioReadPerSec),
+    ioWrites: formatRate(rates.ioWritePerSec)
   }];
   
   const mappedBrokers = brokersCAS.map(c => ({ broker: c.broker, id: c.id, pid: c.pid, qps: c.qps, lqs: c.lqs, status: c.status, lastConn: c.lastConn, dbname: c.dbname }));

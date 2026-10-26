@@ -21,6 +21,7 @@ import reducer, {
   fetchDashboardCAS,
   fetchDashboardData,
   fetchDashboardLocks,
+  fetchDashboardPerformance,
   fetchDatabaseSpaceInfo,
   fetchDatabaseVolumes,
 } from './databaseMonitoringSlice';
@@ -249,5 +250,25 @@ describe('fetchDatabaseVolumes', () => {
     const store = makeStore();
     const result = await store.dispatch(fetchDatabaseVolumes({ hostUid: HOST, activeDatabases: [] })).unwrap();
     expect(result).toEqual([]);
+  });
+});
+
+describe('fetchDashboardPerformance rates', () => {
+  it('stores per-second rates from consecutive statdump samples of the same db', async () => {
+    const now = vi.spyOn(Date, 'now');
+    const store = makeStore();
+
+    now.mockReturnValue(100_000);
+    databaseApi.getStatDump.mockResolvedValueOnce({ num_tran_commits: '100', num_data_page_fetches: '10' });
+    await store.dispatch(fetchDashboardPerformance({ hostUid: HOST, dbname: DB })).unwrap();
+    expect(entry(store).performance.calculatedRates.tps).toBeNull();
+
+    now.mockReturnValue(102_000);
+    databaseApi.getStatDump.mockResolvedValueOnce({ num_tran_commits: '140', num_data_page_fetches: '30' });
+    await store.dispatch(fetchDashboardPerformance({ hostUid: HOST, dbname: DB })).unwrap();
+    expect(entry(store).performance.calculatedRates).toMatchObject({ tps: 20, fetchPerSec: 10 });
+    expect(entry(store).performance.num_tran_commits).toBe('140');
+
+    now.mockRestore();
   });
 });

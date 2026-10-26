@@ -4,6 +4,7 @@ import { brokerApi } from '../broker/brokerApi';
 import { buildDashboardLockRows } from './lockMappers';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
+import { computeStatdumpRates } from './statdumpRates';
 
 // Module-level so the previous-sample baseline survives across polls.
 const casRateTracker = createRateTracker();
@@ -84,10 +85,14 @@ export const fetchDashboardLocks = createAsyncThunk(
 
 export const fetchDashboardPerformance = createAsyncThunk(
   'database/fetchDashboardPerformance',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
+  async ({ hostUid, dbname }, { rejectWithValue, getState }) => {
     try {
       const response = await databaseApi.getStatDump(hostUid, dbname);
-      return { hostUid, dbname, performance: response };
+      // statdump counters are cumulative; derive per-second rates against
+      // this db's previous sample (kept on its dashboard entry).
+      const prevSample = getState().databaseMonitoring?.dashboardData?.[dashboardKey(hostUid, dbname)]?.perfSample;
+      const { sample, rates } = computeStatdumpRates(prevSample, response, Date.now());
+      return { hostUid, dbname, performance: { ...response, calculatedRates: rates }, perfSample: sample };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch performance stats');
     }
@@ -260,10 +265,10 @@ const databaseMonitoringSlice = createSlice({
         setSectionStatus(state, action.meta.arg, 'volumesStatus', 'error');
       })
       .addCase(fetchDashboardPerformance.fulfilled, (state, action) => {
-        const { hostUid, dbname, performance } = action.payload;
+        const { hostUid, dbname, performance, perfSample } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, performance };
+        state.dashboardData[key] = { ...existing, performance, perfSample };
       })
       .addCase(fetchDashboardCAS.fulfilled, (state, action) => {
         const { hostUid, dbname, brokersCAS } = action.payload;
