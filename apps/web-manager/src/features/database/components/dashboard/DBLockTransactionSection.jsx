@@ -27,7 +27,7 @@ function lockRowToTransaction(row) {
   };
 }
 
-export default function DBLockTransactionSection({ locks, pollingProps }) {
+export default function DBLockTransactionSection({ locks, locksStatus, pollingProps }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -140,12 +140,30 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
           data={locks}
           onRowContextMenu={handleRowContextMenu}
           emptyState={
-            <EmptyState
-              icon="verified_user"
-              title={CM.noLocksTitle}
-              subtitle={CM.noLocksMsg}
-              py="py-8"
-            />
+            locksStatus === 'error' ? (
+              <EmptyState
+                icon="error"
+                accent="rose"
+                title={CM.locksUnavailableTitle}
+                subtitle={CM.locksUnavailableMsg}
+                py="py-8"
+              />
+            ) : locksStatus === 'loaded' ? (
+              <EmptyState
+                icon="verified_user"
+                title={CM.noLocksTitle}
+                subtitle={CM.noLocksMsg}
+                py="py-8"
+              />
+            ) : (
+              <EmptyState
+                icon="hourglass_empty"
+                accent="slate"
+                title={CM.lockAndTransaction}
+                subtitle={CM.loadingLabel}
+                py="py-8"
+              />
+            )
           }
         />
       </Card>

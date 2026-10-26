@@ -90,6 +90,8 @@ export const CM = {
   lockAndTransaction: 'Lock and Transaction',
   noLocksTitle: 'No Active Locks',
   noLocksMsg: 'No locks are currently held on this database.',
+  locksUnavailableTitle: 'Lock Information Unavailable',
+  locksUnavailableMsg: 'Failed to load lock information for this database.',
   lockIndex: 'Index',
   pname: 'Pname',
   uid: 'Uid',

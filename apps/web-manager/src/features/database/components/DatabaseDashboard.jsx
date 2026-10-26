@@ -216,7 +216,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}
               onViewSlowQueryLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'slow' })}
             />
-            <DBLockTransactionSection locks={data.locks || []} pollingProps={pollingProps} />
+            <DBLockTransactionSection locks={data.locks || []} locksStatus={data.locksStatus} pollingProps={pollingProps} />
             <DBJobAutomationSection pollingProps={pollingProps} />
           </div>
         )}

@@ -107,7 +107,10 @@ export const fetchDashboardCAS = createAsyncThunk(
       );
 
       brokerDetails.forEach((status, idx) => {
-        const asinfo = status?.data?.asinfo;
+        // apiClient already unwraps the server's { data, status, note }
+        // envelope, so the CAS list sits directly on the resolved value
+        // (same as fetchBrokerList's statusRes.asinfo).
+        const asinfo = status?.asinfo;
         if (!asinfo) return;
         const brokerName = actualBrokerList[idx]?.name;
         asinfo.forEach(cas => {
@@ -166,6 +169,8 @@ export const fetchDashboardData = createAsyncThunk(
 
     const vol = volR.status === 'fulfilled' ? volR.value : { volumes: [], pagesize: undefined, logpagesize: undefined };
     const lock = lockR.status === 'fulfilled' ? lockR.value : { locks: [] };
+    // Lets the lock section tell "no locks held" apart from "lock request failed".
+    const locksStatus = lockR.status === 'fulfilled' ? 'loaded' : 'error';
     const perf = perfR.status === 'fulfilled' ? perfR.value : { performance: {} };
     const cas = casR.status === 'fulfilled' ? casR.value : { brokersCAS: [] };
     const space = spaceR.status === 'fulfilled' ? spaceR.value : { data: {} };
@@ -175,6 +180,7 @@ export const fetchDashboardData = createAsyncThunk(
       dbname,
       volumes: vol.volumes,
       locks: lock.locks,
+      locksStatus,
       performance: perf.performance,
       brokersCAS: cas.brokersCAS,
       spaceInfo: space.data?.fileinfo || [],
@@ -265,12 +271,18 @@ const databaseMonitoringSlice = createSlice({
         const { hostUid, dbname, locks } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, locks };
+        state.dashboardData[key] = { ...existing, locks, locksStatus: 'loaded' };
+      })
+      .addCase(fetchDashboardLocks.rejected, (state, action) => {
+        const { hostUid, dbname } = action.meta.arg;
+        const key = dashboardKey(hostUid, dbname);
+        const existing = state.dashboardData[key] || emptyDashboardEntry();
+        state.dashboardData[key] = { ...existing, locksStatus: 'error' };
       })
       .addCase(fetchDashboardData.fulfilled, (state, action) => {
-        const { hostUid, dbname, volumes, locks, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize } = action.payload;
+        const { hostUid, dbname, volumes, locks, locksStatus, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize } = action.payload;
         const key = dashboardKey(hostUid, dbname);
-        state.dashboardData[key] = { volumes, locks, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize };
+        state.dashboardData[key] = { volumes, locks, locksStatus, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize };
         state.dashboardLoading[key] = false;
       })
       // Cleanup on tab close to prevent memory leaks
