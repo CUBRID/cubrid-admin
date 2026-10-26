@@ -218,7 +218,7 @@ export default function LoginPage() {
             <a href="https://www.cubrid.org" target="_blank" rel="noreferrer" className="hover:text-amber-500 transition-colors">{CM.website}</a>
             <a href="https://github.com/CUBRID" target="_blank" rel="noreferrer" className="hover:text-amber-500 transition-colors">{CM.github}</a>
           </div>
-          <span className="font-mono text-slate-400 dark:text-slate-600" data-testid="login-app-version">v{APP_VERSION}</span>
+          <span className="font-mono normal-case text-slate-400 dark:text-slate-600" data-testid="login-app-version">v{APP_VERSION}</span>
         </div>
 
       </div>
