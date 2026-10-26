@@ -384,6 +384,15 @@ const initialState = {
   hosts: [],
   hostGroups: {},
   authorizedHosts: [], // Array of hostUids that have active forwarded sessions
+  // One-time only (see fetchHosts.fulfilled): whether this tab/session has
+  // already seeded authorizedHosts from the server's own initialLogin
+  // flag. Must not re-run on every later fetchHosts (manual refresh,
+  // after add/edit/delete, etc.) — initialLogin stays false forever once
+  // a host has ever been logged into (server never resets it on
+  // disconnect), so re-seeding on every refetch would silently
+  // "re-authorize" a host the user explicitly disconnected earlier in
+  // this same tab session.
+  authorizedHostsHydrated: false,
   hostEnvs: {}, // Cache of environment info (version, paths, etc) indexed by hostUid
   haInfo: JSON.parse(localStorage.getItem('cubrid_ha_info') || '{}'), // Cache of HA info (isHA, currentNodeType, haNodes) indexed by hostUid
   suggestedHaNodes: [],
@@ -626,6 +635,28 @@ const hostSlice = createSlice({
       .addCase(fetchHosts.fulfilled, (state, action) => {
         state.loading = false;
         applyHostGroupsResponse(state, action.payload);
+        // First fetchHosts of this tab/session only — see
+        // authorizedHostsHydrated's own comment for why this can't just
+        // run on every fetchHosts. A host whose server record already has
+        // initialLogin: false has a previously-established CMS session
+        // token persisted server-side (cms-auth.service.ts's `login`
+        // clears this flag on first successful login and never sets it
+        // back) — optimistically treating it as still-authorized here
+        // means a reload/new tab doesn't show every host as disconnected
+        // even though the backend may still hold a live session for it.
+        // If that token has actually expired, the existing 401 interceptor
+        // (apiClient.js) already opens the reconnect modal on the first
+        // real request against it — the same recovery path an
+        // expired-mid-session token already goes through today, so this
+        // doesn't introduce a new failure mode.
+        if (!state.authorizedHostsHydrated) {
+          for (const host of state.hosts) {
+            if (host.initialLogin === false && !state.authorizedHosts.includes(host.uid)) {
+              state.authorizedHosts.push(host.uid);
+            }
+          }
+          state.authorizedHostsHydrated = true;
+        }
       })
       .addCase(fetchHosts.rejected, (state, action) => {
         state.loading = false;
