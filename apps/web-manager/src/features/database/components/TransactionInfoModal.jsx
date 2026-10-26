@@ -8,12 +8,8 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Table } from '../../../components/ds/layout/Table';
-import { ModalStatusLoading } from '../../../components/ds/feedback/ActionStatus';
+import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLoadingOverlay';
 import { useCM } from '../../../constants/useCM';
-
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR = 'error';
 
 export default function TransactionInfoModal() {
   const CM = useCM();
@@ -25,10 +21,16 @@ export default function TransactionInfoModal() {
 
   const isActive = selectedDatabase && activeDatabases?.includes(selectedDatabase);
 
-  const [view, setView] = useState(VIEW_LOADING);
+  // One modal frame for every state: the list (or error) stays mounted and a
+  // spinner overlays it while a fetch is in flight, instead of swapping in a
+  // separate loading modal on each refresh.
   const [transactions, setTransactions] = useState([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedTranIndex, setSelectedTranIndex] = useState(null);
+  // Drops a response that lands after the modal was closed or retargeted.
+  const requestIdRef = useRef(0);
 
   // killtransaction/gettransactioninfo (CUBRID 11+) don't take dbuser/dbpasswd —
   // they run under the already-authenticated CMS session, so there's nothing
@@ -36,25 +38,29 @@ export default function TransactionInfoModal() {
   // pre-11 legacy branch, which does still read them.
   const fetchTransactionInfo = async () => {
     if (!selectedHostUid || !selectedDatabase) return;
+    const requestId = ++requestIdRef.current;
     if (!isActive) {
       setErrorMsg('Database is stopped. Transaction information is only available when the database is running.');
-      setView(VIEW_ERROR);
+      setLoading(false);
       return;
     }
 
-    setView(VIEW_LOADING);
-    setErrorMsg('');
+    setLoading(true);
 
     try {
       const response = await databaseApi.getTransactionInfo(selectedHostUid, selectedDatabase, {
         dbuser: 'dba',
         dbpasswd: '',
       });
+      if (requestId !== requestIdRef.current) return;
       setTransactions(extractTransactionList(response));
-      setView(VIEW_SUCCESS);
+      setHasLoaded(true);
+      setErrorMsg('');
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setErrorMsg(err.response?.data?.note || err.response?.data?.message || CM.error);
-      setView(VIEW_ERROR);
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -62,6 +68,14 @@ export default function TransactionInfoModal() {
     if (isTransactionInfoModalOpen) {
       setSelectedTranIndex(null);
       fetchTransactionInfo();
+    } else {
+      // Reset while hidden so the next open starts on the loading state
+      // rather than the previous database's list.
+      requestIdRef.current += 1;
+      setTransactions([]);
+      setHasLoaded(false);
+      setLoading(false);
+      setErrorMsg('');
     }
   }, [isTransactionInfoModalOpen, selectedHostUid, selectedDatabase]);
 
@@ -70,7 +84,7 @@ export default function TransactionInfoModal() {
   // dropping the user back to the auth screen.
   const lastSeenKillSignal = useRef(transactionKillSignal);
   useEffect(() => {
-    if (!isTransactionInfoModalOpen || view !== VIEW_SUCCESS) return;
+    if (!isTransactionInfoModalOpen || !hasLoaded || errorMsg) return;
     if (lastSeenKillSignal.current === transactionKillSignal) return;
     lastSeenKillSignal.current = transactionKillSignal;
     fetchTransactionInfo();
@@ -107,32 +121,10 @@ export default function TransactionInfoModal() {
     { accessor: 'wait_for_lock_holder', header: CM.waitHolder, align: 'right', render: (value) => value ?? '-', cellClassName: 'font-mono' },
   ];
 
-  if (view === VIEW_LOADING) {
-    return (
-      <Modal isOpen title={CM.transactionInformation} icon="swap_horiz" onClose={handleClose} maxWidth="540px" showCloseButton={false}>
-        <ModalStatusLoading title={CM.transactionInformation} subtitle={CM.loggingInto(selectedDatabase)} />
-      </Modal>
-    );
-  }
-
-  if (view === VIEW_ERROR) {
-    return (
-      <Modal isOpen title={CM.transactionInformation} icon="error" iconVariant="danger" onClose={handleClose} maxWidth="540px" testId="transaction-info">
-        <div className="py-8 space-y-4 text-center">
-          <Typography variant="p" className="text-15 text-slate-600 dark:text-slate-300">
-            {CM.error}
-          </Typography>
-          <Typography variant="caption" className="text-rose-500 font-mono block break-words px-4">
-            {errorMsg}
-          </Typography>
-          <div className="flex justify-center gap-3">
-            <Button data-testid="transaction-info-close-btn" variant="ghost" onClick={handleClose}>{CM.close}</Button>
-            <Button data-testid="transaction-info-retry-btn" variant="primary" icon="refresh" onClick={fetchTransactionInfo}>{CM.refresh}</Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
+  // Nothing settled yet (first open): spinner from the very first frame,
+  // before the fetch effect has even run.
+  const showSpinner = loading || (!hasLoaded && !errorMsg);
+  const showError = Boolean(errorMsg) && !loading;
 
   return (
     <Modal
@@ -145,17 +137,18 @@ export default function TransactionInfoModal() {
       testId="transaction-info"
       footer={
         <div className="flex items-center justify-between w-full">
-          <Button data-testid="transaction-info-kill-btn" variant="danger" disabled={!selectedTranIndex} onClick={handleKill} icon="cancel">
+          <Button data-testid="transaction-info-kill-btn" variant="danger" disabled={!selectedTranIndex || showSpinner || showError} onClick={handleKill} icon="cancel">
             {CM.killTransaction}
           </Button>
           <div className="flex gap-2">
             <Button data-testid="transaction-info-close-btn" variant="ghost" onClick={handleClose}>{CM.close}</Button>
-            <Button data-testid="transaction-info-refresh-btn" onClick={fetchTransactionInfo} icon="refresh">{CM.refresh}</Button>
+            <Button data-testid="transaction-info-refresh-btn" onClick={fetchTransactionInfo} disabled={showSpinner} icon="refresh">{CM.refresh}</Button>
           </div>
         </div>
       }
     >
-      <div className="flex flex-col h-[540px] animate-in fade-in slide-in-from-bottom-4 duration-400">
+      <div className="relative flex flex-col h-[540px]">
+        <ContentLoadingOverlay show={showSpinner} testId="transaction-info-loading" />
         <div className="mb-4 flex items-center justify-between bg-slate-50/80 dark:bg-black/20 border border-slate-200 dark:border-white/8 rounded-xl px-4 py-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
@@ -169,19 +162,34 @@ export default function TransactionInfoModal() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden flex-1 overflow-y-auto min-h-0">
-          <Table
-            columns={columns}
-            data={transactions}
-            emptyMessage={CM.activeTransactionsOf}
-            onRowClick={(tran) => setSelectedTranIndex(tran.tranindex)}
-            isRowSelected={(tran) => String(selectedTranIndex) === String(tran.tranindex)}
-            getRowAriaLabel={(tran) => `${CM.tranIndex} ${tran.tranindex}`}
-            stickyHeader
-            selectable
-            showEmptyStateAsRow
-          />
-        </div>
+        {showError ? (
+          <div data-testid="transaction-info-error" className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+            <Icon name="error" size="md" weight={300} className="text-rose-500" />
+            <Typography variant="p" className="text-15 text-slate-600 dark:text-slate-300">
+              {CM.error}
+            </Typography>
+            <Typography variant="caption" className="text-rose-500 font-mono block break-words px-4">
+              {errorMsg}
+            </Typography>
+            <Button data-testid="transaction-info-retry-btn" variant="primary" icon="refresh" onClick={fetchTransactionInfo}>{CM.refresh}</Button>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden flex-1 overflow-y-auto min-h-0">
+            {hasLoaded && (
+              <Table
+                columns={columns}
+                data={transactions}
+                emptyMessage={CM.activeTransactionsOf}
+                onRowClick={(tran) => setSelectedTranIndex(tran.tranindex)}
+                isRowSelected={(tran) => String(selectedTranIndex) === String(tran.tranindex)}
+                getRowAriaLabel={(tran) => `${CM.tranIndex} ${tran.tranindex}`}
+                stickyHeader
+                selectable
+                showEmptyStateAsRow
+              />
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   );
