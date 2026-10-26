@@ -6,7 +6,7 @@ import { Modal } from '../../components/ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
 import { stripHaRoleTagFromAlias } from '../../features/host/hostGroupUtils';
 import { MaintenanceDetails } from './MaintenanceDetails';
-import { isMaintenanceJob } from './maintenanceDetails';
+import { isMaintenanceJob } from './maintenanceDetailsUtils';
 import {
   getCmsJobTypeLabel,
   getCmsJobStatusLabel,
