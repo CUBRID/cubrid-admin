@@ -983,6 +983,7 @@ export const CM = {
   jobId: 'Job ID',
   priority: 'Priority',
   elapsed: 'Elapsed',
+  jobReceivedAt: (t) => `Received at ${t}`,
   request: 'Request',
   activeCount: (n) => `${n} active`,
   queuedCount: (n) => `${n} queued`,

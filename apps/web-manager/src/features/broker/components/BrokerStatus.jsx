@@ -10,6 +10,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
+import { jobElapsedSeconds, formatElapsed } from '../jobElapsed';
 
 // Stable fallback reference — `status.data?.asinfo || []` would otherwise
 // hand the asInfo-rate-tracking effect below a brand-new array on every
@@ -167,7 +168,15 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     { header: CM.jobId, accessor: 'job_id', width: '100px', render: (v) => <span className="font-mono">{v}</span> },
     { header: CM.priority, accessor: 'job_priority', width: '100px', render: (v) => <span className="font-mono">{v}</span> },
     { header: CM.address, accessor: 'job_ip', render: (v) => <span className="font-mono text-amber-600/80 dark:text-amber-500/70">{v}</span> },
-    { header: CM.elapsed, accessor: 'job_time', width: '100px', render: (v) => <span className="font-mono text-rose-500">{v}s</span> },
+    // job_time is the receive time of day, not a duration — see jobElapsed.js.
+    {
+      header: CM.elapsed, accessor: 'job_time', width: '100px',
+      render: (v) => (
+        <span className="font-mono text-rose-500" title={v ? CM.jobReceivedAt(v) : undefined}>
+          {formatElapsed(jobElapsedSeconds(status.data?.time, v)) ?? '—'}
+        </span>
+      ),
+    },
     { header: CM.request, accessor: 'job_request', render: (v) => <div className="max-w-xs truncate text-slate-500 dark:text-slate-500 font-mono">{v}</div> },
   ];
 
