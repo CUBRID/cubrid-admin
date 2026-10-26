@@ -4,7 +4,11 @@ import { CheckForUpdateOptions, UpdateCheckResult } from './types';
 import { compareVersions, isPrereleaseVersion, parseVersion } from './version';
 
 const DEFAULT_TIMEOUT_MS = 5000;
-const RELEASES_PAGE_SIZE = 30;
+// GitHub lists releases newest-created first, not by version, so every page
+// is read until a short page ends the list. 100 is GitHub's maximum page
+// size; the page cap (1000 releases) only bounds a runaway loop.
+const RELEASES_PAGE_SIZE = 100;
+const MAX_RELEASE_PAGES = 10;
 
 interface GithubRelease {
   tag_name: string;
@@ -15,10 +19,10 @@ interface GithubRelease {
 }
 
 /**
- * Picks the highest-versioned published release from the repo's recent
- * releases. Prereleases (flagged on GitHub, or carrying a semver prerelease
- * tag like "-alpha.1") are only candidates when the running version is
- * itself a prerelease — a stable install is never offered an alpha.
+ * Picks the highest-versioned published release from the repo's releases.
+ * Prereleases (flagged on GitHub, or carrying a semver prerelease tag like
+ * "-alpha.1") are only candidates when the running version is itself a
+ * prerelease — a stable install is never offered an alpha.
  *
  * Deliberately not `/releases/latest`: that endpoint skips prereleases
  * entirely and orders by date rather than version.
@@ -71,39 +75,49 @@ export async function checkForUpdate(options: CheckForUpdateOptions): Promise<Up
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetchImpl(
-      `https://api.github.com/repos/${repo}/releases?per_page=${RELEASES_PAGE_SIZE}`,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'cubrid-admin-update-check',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-        signal: controller.signal,
+    const releases: GithubRelease[] = [];
+    for (let page = 1; page <= MAX_RELEASE_PAGES; page++) {
+      const response = await fetchImpl(
+        `https://api.github.com/repos/${repo}/releases?per_page=${RELEASES_PAGE_SIZE}&page=${page}`,
+        {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'cubrid-admin-update-check',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          signal: controller.signal,
+        }
+      );
+
+      // Any failed page fails the whole check: a partial list could hide
+      // the newest release and report a false "up to date".
+      if (response.status === 404) {
+        return { status: 'error', reason: 'no-release' };
       }
-    );
+      if (response.status === 403 || response.status === 429) {
+        return { status: 'error', reason: 'rate-limited' };
+      }
+      if (!response.ok) {
+        return { status: 'error', reason: 'network' };
+      }
 
-    if (response.status === 404) {
-      return { status: 'error', reason: 'no-release' };
-    }
-    if (response.status === 403 || response.status === 429) {
-      return { status: 'error', reason: 'rate-limited' };
-    }
-    if (!response.ok) {
-      return { status: 'error', reason: 'network' };
+      let pageReleases: unknown;
+      try {
+        pageReleases = await response.json();
+      } catch {
+        return { status: 'error', reason: 'parse-error' };
+      }
+      if (!Array.isArray(pageReleases)) {
+        return { status: 'error', reason: 'parse-error' };
+      }
+
+      releases.push(...(pageReleases as GithubRelease[]));
+      if (pageReleases.length < RELEASES_PAGE_SIZE) {
+        break;
+      }
     }
 
-    let releases: unknown;
-    try {
-      releases = await response.json();
-    } catch {
-      return { status: 'error', reason: 'parse-error' };
-    }
-    if (!Array.isArray(releases)) {
-      return { status: 'error', reason: 'parse-error' };
-    }
-
-    const latest = pickLatestRelease(releases as GithubRelease[], currentVersion);
+    const latest = pickLatestRelease(releases, currentVersion);
     if (!latest) {
       return { status: 'error', reason: 'no-release' };
     }

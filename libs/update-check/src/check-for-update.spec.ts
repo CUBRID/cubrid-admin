@@ -31,7 +31,7 @@ describe('checkForUpdate', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe('https://api.github.com/repos/CUBRID/cubrid-admin/releases?per_page=30');
+    expect(url).toBe('https://api.github.com/repos/CUBRID/cubrid-admin/releases?per_page=100&page=1');
     expect(init.headers).toMatchObject({
       Accept: 'application/vnd.github+json',
       'User-Agent': 'cubrid-admin-update-check',
@@ -44,7 +44,7 @@ describe('checkForUpdate', () => {
 
     await checkForUpdate({ currentVersion: '1.0.0', packageType: 'server', repo: 'owner/fork', fetchImpl });
 
-    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.github.com/repos/owner/fork/releases?per_page=30');
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.github.com/repos/owner/fork/releases?per_page=100&page=1');
   });
 
   it('reports update-available with the asset matching the package type', async () => {
@@ -245,5 +245,85 @@ describe('checkForUpdate', () => {
 
     expect(result).toEqual({ status: 'error', reason: 'network' });
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  describe('pagination', () => {
+    const prereleasePage = (count: number, start = 0) =>
+      Array.from({ length: count }, (_, i) => release(`v3.0.0-alpha.${start + i + 1}`, { prerelease: true }));
+
+    function respondWithPages(pages: unknown[][]): jest.Mock {
+      const fetchImpl = jest.fn();
+      for (const body of pages) {
+        fetchImpl.mockResolvedValueOnce({ ok: true, status: 200, json: async () => body });
+      }
+      return fetchImpl;
+    }
+
+    it('stops after a short first page', async () => {
+      const fetchImpl = respondWithPages([[release('v2.0.0')]]);
+
+      await checkForUpdate({ currentVersion: '1.0.0', packageType: 'server', fetchImpl });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('finds a stable release beyond a full page of prereleases', async () => {
+      const fetchImpl = respondWithPages([prereleasePage(100), [release('v2.0.0')]]);
+
+      const result = await checkForUpdate({ currentVersion: '1.0.0', packageType: 'server', fetchImpl });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(fetchImpl.mock.calls[1][0]).toBe(
+        'https://api.github.com/repos/CUBRID/cubrid-admin/releases?per_page=100&page=2'
+      );
+      expect(result).toMatchObject({ status: 'update-available', latestVersion: '2.0.0' });
+    });
+
+    it('picks the highest version across pages, not the newest-created', async () => {
+      const fetchImpl = respondWithPages([
+        [release('v2.0.1'), ...prereleasePage(99)],
+        [release('v2.1.0')],
+      ]);
+
+      const result = await checkForUpdate({ currentVersion: '2.0.0', packageType: 'server', fetchImpl });
+
+      expect(result).toMatchObject({ status: 'update-available', latestVersion: '2.1.0' });
+    });
+
+    it('fetches another page when a page is exactly full and the next one is empty', async () => {
+      const fetchImpl = respondWithPages([[release('v2.0.0'), ...prereleasePage(99)], []]);
+
+      const result = await checkForUpdate({ currentVersion: '1.0.0', packageType: 'server', fetchImpl });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({ status: 'update-available', latestVersion: '2.0.0' });
+    });
+
+    it('fails the whole check when a later page fails instead of judging a partial list', async () => {
+      const fetchImpl = jest
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [release('v1.0.0'), ...prereleasePage(99)] })
+        .mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) });
+
+      const result = await checkForUpdate({ currentVersion: '1.0.0', packageType: 'server', fetchImpl });
+
+      expect(result).toEqual({ status: 'error', reason: 'rate-limited' });
+    });
+
+    it('stops at the page cap', async () => {
+      const fetchImpl = jest.fn(async (url: string) => {
+        const page = Number(new URL(url).searchParams.get('page'));
+        return { ok: true, status: 200, json: async () => prereleasePage(100, (page - 1) * 100) };
+      });
+
+      const result = await checkForUpdate({
+        currentVersion: '3.0.0-alpha.1',
+        packageType: 'server',
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(10);
+      expect(result).toMatchObject({ status: 'update-available', latestVersion: '3.0.0-alpha.1000' });
+    });
   });
 });
