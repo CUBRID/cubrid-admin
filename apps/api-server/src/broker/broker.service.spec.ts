@@ -339,5 +339,43 @@ describe('BrokerService', () => {
         service.getBrokerStatusBulk(mockUserId, mockHostUid, ['a', 'b'])
       ).rejects.toThrow(CmsError);
     });
+
+    describe('when one chunk fails', () => {
+      const names = Array.from({ length: 60 }, (_, i) => `broker${i}`);
+      const chunkResponse = (req: unknown) => ({
+        ...envelope,
+        broker: (req as GetBrokerStatusCmsRequest).bname.split(',').map((bname: string) => ({ bname, time: 't' })),
+      });
+
+      it('keeps the brokers of the chunks that succeeded', async () => {
+        cmsClient.postAuthenticated
+          .mockImplementationOnce(async (_url, req) => chunkResponse(req))
+          .mockRejectedValueOnce(new Error('socket hang up'));
+
+        const result = await service.getBrokerStatusBulk(mockUserId, mockHostUid, names);
+
+        expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(2);
+        expect(result.brokers.map((b) => b.bname)).toEqual(names.slice(0, BROKER_STATUS_BULK_CHUNK_SIZE));
+      });
+
+      it('still throws on an invalid CMS token', async () => {
+        cmsClient.postAuthenticated
+          .mockImplementationOnce(async (_url, req) => chunkResponse(req))
+          .mockResolvedValueOnce({ ...envelope, status: 'fail', note: 'Request is rejected due to invalid token. Please reconnect.' });
+
+        await expect(
+          service.getBrokerStatusBulk(mockUserId, mockHostUid, names)
+        ).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+      });
+
+      it('throws when every chunk fails', async () => {
+        cmsClient.postAuthenticated.mockRejectedValue(new Error('socket hang up'));
+
+        await expect(
+          service.getBrokerStatusBulk(mockUserId, mockHostUid, names)
+        ).rejects.toThrow(CmsError);
+        expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 });

@@ -1,6 +1,8 @@
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { BaseService, HandleCmsErrors } from '@common';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
+import { CmsError } from '@error/cms/cms-error';
+import { CmsErrorCode } from '@error/cms/cms-error-code';
 import { DatabaseError } from '@error/database/database-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
@@ -231,6 +233,9 @@ export class BrokerService extends BaseService {
    *
    * CMS returns `{ broker: [...] }` when `bname` contains a comma and the
    * flat single-broker shape otherwise; both are normalized to a list here.
+   *
+   * A failed chunk only drops its own brokers: the other chunks' results are
+   * kept. An invalid CMS token, or every chunk failing, still throws.
    */
   @HandleCmsErrors()
   async getBrokerStatusBulk(
@@ -240,14 +245,28 @@ export class BrokerService extends BaseService {
   ): Promise<GetBrokerStatusBulkClientResponse> {
     const names = [...new Set(bnames.map((name) => name.trim()).filter(Boolean))];
     const brokers: BrokerStatusEntry[] = [];
+    let firstError: unknown;
+    let succeeded = 0;
 
     // Sequential on purpose: CMS serves one host's requests one at a time.
     for (let i = 0; i < names.length; i += BROKER_STATUS_BULK_CHUNK_SIZE) {
       const chunk = names.slice(i, i + BROKER_STATUS_BULK_CHUNK_SIZE);
-      const response = await this.executeCmsRequest<
-        GetBrokerStatusCmsRequest,
-        GetBrokerStatusCmsResponse & GetBrokerStatusMultiCmsResponse
-      >(userId, hostUid, { task: 'getbrokerstatus', bname: chunk.join(',') });
+      let response: GetBrokerStatusCmsResponse & GetBrokerStatusMultiCmsResponse;
+      try {
+        response = await this.executeCmsRequest<
+          GetBrokerStatusCmsRequest,
+          GetBrokerStatusCmsResponse & GetBrokerStatusMultiCmsResponse
+        >(userId, hostUid, { task: 'getbrokerstatus', bname: chunk.join(',') });
+      } catch (err) {
+        if (err instanceof CmsError && err.code === CmsErrorCode.INVALID_TOKEN) throw err;
+        firstError ??= err;
+        this.logger.warn(
+          `getbrokerstatus failed for ${chunk.length} broker(s) on host ${hostUid}, keeping the other chunks: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+        );
+        continue;
+      }
+      succeeded++;
 
       if (chunk.length === 1) {
         const { bname, time, asinfo, jobinfo } = response;
@@ -257,6 +276,7 @@ export class BrokerService extends BaseService {
       }
     }
 
+    if (succeeded === 0 && firstError !== undefined) throw firstError;
     return { brokers };
   }
 
