@@ -13,6 +13,8 @@ describe('CmsConfigController', () => {
       getParamDump: jest.fn(),
       getPlanDump: jest.fn(),
       getStatDump: jest.fn(),
+      startStatDumpWatcher: jest.fn(),
+      stopStatDumpWatcher: jest.fn(),
       getAllSystemParam: jest.fn(),
       setSystemParam: jest.fn(),
       setBrokerParam: jest.fn(),
@@ -71,6 +73,20 @@ describe('CmsConfigController', () => {
         body.confdata
       );
       expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('statdump watcher', () => {
+    it('start delegates with the user, host and dbname', async () => {
+      cmsConfigService.startStatDumpWatcher.mockResolvedValue({ running: true, alreadyRunning: false });
+      await expect(controller.startStatDumpWatcher({ user: { sub: 'u1' } }, 'h1', 'demodb')).resolves.toEqual({ running: true, alreadyRunning: false });
+      expect(cmsConfigService.startStatDumpWatcher).toHaveBeenCalledWith('u1', 'h1', 'demodb');
+    });
+
+    it('stop delegates with the user, host and dbname', async () => {
+      cmsConfigService.stopStatDumpWatcher.mockResolvedValue({ running: false, wasRunning: true });
+      await expect(controller.stopStatDumpWatcher({ user: { sub: 'u1' } }, 'h1', 'demodb')).resolves.toEqual({ running: false, wasRunning: true });
+      expect(cmsConfigService.stopStatDumpWatcher).toHaveBeenCalledWith('u1', 'h1', 'demodb');
     });
   });
 });

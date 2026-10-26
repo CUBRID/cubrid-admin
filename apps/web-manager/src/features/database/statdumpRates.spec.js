@@ -69,3 +69,18 @@ describe('computeStatdumpRates', () => {
     expect(tooSoon.rates).toEqual(second.rates);
   });
 });
+
+describe('computeStatdumpRates unchangedSince', () => {
+  it('tracks since when the counters last moved', () => {
+    const first = computeStatdumpRates(undefined, dump(), 10_000).sample;
+    expect(first.unchangedSince).toBe(10_000);
+
+    const same = computeStatdumpRates(first, dump(), 20_000).sample;
+    expect(same.unchangedSince).toBe(10_000);
+    const stillSame = computeStatdumpRates(same, dump(), 30_000).sample;
+    expect(stillSame.unchangedSince).toBe(10_000);
+
+    const moved = computeStatdumpRates(stillSame, dump({ num_data_page_fetches: '1001' }), 40_000).sample;
+    expect(moved.unchangedSince).toBe(40_000);
+  });
+});

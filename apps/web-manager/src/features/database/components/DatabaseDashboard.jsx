@@ -10,6 +10,7 @@ import DBLockTransactionSection from './dashboard/DBLockTransactionSection';
 import DBJobAutomationSection from './dashboard/DBJobAutomationSection';
 import CASLogModal from './CASLogModal';
 import { isDatabaseInHa } from '../../host/haPeerUtils';
+import { useStatdumpWatcher } from '../useStatdumpWatcher';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -49,6 +50,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const activeHost = hosts.find(h => h.uid === selectedHostUid);
   const dashboardKey = `${hostUid}:${dbname}`;
   const data = dashboardData[dashboardKey] || { volumes: [], spaceInfo: [], locks: [], performance: {} };
+
+  // statdump counters only move while a watcher is attached; keep one running
+  // while this dashboard is open so the performance rates are real.
+  useStatdumpWatcher(hostUid, dbname, data.perfSample);
   const isLoading = dashboardLoading[dashboardKey];
 
   // Tabs are always opened as `db:${hostUid}:${dbname}` (DatabaseTree.jsx) —

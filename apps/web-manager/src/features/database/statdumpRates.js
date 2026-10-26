@@ -48,7 +48,9 @@ const noRates = () => Object.fromEntries(Object.keys(RATE_COUNTERS).map((metric)
  * @param {number} now sample time in ms
  * @returns {{ sample: object, rates: object }} rates per metric; null means
  *   "no rate yet": first sample, missing counter, or a counter that went
- *   backwards (server restart). The returned sample is the next baseline.
+ *   backwards (server restart). The returned sample is the next baseline;
+ *   its `unchangedSince` is when the counters last moved (frozen counters
+ *   mean no statdump watcher is attached, see statdumpWatcher.js).
  */
 export function computeStatdumpRates(prevSample, statdump, now) {
   if (prevSample && now - prevSample.time < MIN_SAMPLE_INTERVAL_MS) {
@@ -68,5 +70,8 @@ export function computeStatdumpRates(prevSample, statdump, now) {
     rates[metric] = (current - previous) / elapsedSec;
   }
 
-  return { sample: { time: now, counters, rates }, rates };
+  const moved = !prevSample || Object.keys(counters).some((metric) => counters[metric] !== prevSample.counters?.[metric]);
+  const unchangedSince = moved ? now : (prevSample.unchangedSince ?? prevSample.time);
+
+  return { sample: { time: now, counters, rates, unchangedSince }, rates };
 }

@@ -9,12 +9,15 @@ import {
   PlandumpClientResponse,
   SetSysParamClientResponse,
   StatdumpClientResponse,
+  StatdumpWatcherClientResponse,
 } from '@api-interfaces';
 import {
   SetSysParamCmsRequest,
   BaseCmsRequest,
   GetAddBrokerInfoCmsRequest,
   BrokerSetParamCmsRequest,
+  StartStatdumpCmsRequest,
+  StopStatdumpCmsRequest,
 } from '@type';
 import { GetAddBrokerInfoCmsResponse } from '@type/cms-response/get-add-broker-info-cms-response';
 import { GetEnvCmsResponse } from '@type/cms-response/get-env-cms-response';
@@ -27,6 +30,27 @@ import { LogContentContainer } from '@type/cms-response/view-log-cms-response';
 import { BaseCmsResponse } from '@type/cms-response/base-cms-response';
 import { BaseService, HandleCmsErrors } from '@common';
 import { DatabaseUserService } from '@database/user/database-user.service';
+import { CmsError } from '@error/cms/cms-error';
+
+/**
+ * Seconds between the statdump watcher's own dumps. Its output goes to
+ * /dev/null; only its attachment matters (the server accumulates counters
+ * while any watcher is attached), so a long interval keeps it nearly free.
+ */
+export const STATDUMP_WATCHER_INTERVAL_SEC = 60;
+
+/**
+ * Name CMS runs `cubrid statdump -i` against. In HA, databases.txt lists
+ * several hosts and a bare name fails (ER -985, "hostname ... should be
+ * specified when multihost is set"), yet start_statdump still reports
+ * success. `@127.0.0.1` is what CMS itself appends for HA in its other tasks
+ * (append_host_to_dbname) and also works for a non-HA local database. It is
+ * also CMS's per-database key, so stop must use the same name.
+ */
+export const statdumpWatcherTarget = (dbname: string) => `${dbname}@127.0.0.1`;
+
+const cmsFailureNote = (err: unknown): string =>
+  err instanceof CmsError ? String(err.additionalData?.response?.note ?? '') : '';
 
 /**
  * Service for managing CMS environment configuration operations.
@@ -132,6 +156,57 @@ export class CmsConfigService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     return this.extractDomainData(response);
+  }
+
+  /**
+   * Make sure a statdump watcher (CMS `start_statdump`) is attached to the
+   * database. Idempotent: CMS answers "already running" for a second start.
+   */
+  @HandleCmsErrors()
+  async startStatDumpWatcher(
+    userId: string,
+    hostUid: string,
+    dbname: string
+  ): Promise<StatdumpWatcherClientResponse> {
+    const cmsRequest: Omit<StartStatdumpCmsRequest, 'token'> = {
+      task: 'start_statdump',
+      dbname: statdumpWatcherTarget(dbname),
+      interval: String(STATDUMP_WATCHER_INTERVAL_SEC),
+    };
+    try {
+      await this.executeCmsRequest<typeof cmsRequest, BaseCmsResponse>(userId, hostUid, cmsRequest);
+      return { running: true, alreadyRunning: false };
+    } catch (err) {
+      if (/already running/i.test(cmsFailureNote(err))) {
+        return { running: true, alreadyRunning: true };
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Stop the statdump watcher (CMS `stop_statdump`). "No statdump running"
+   * is not an error: the result is the same.
+   */
+  @HandleCmsErrors()
+  async stopStatDumpWatcher(
+    userId: string,
+    hostUid: string,
+    dbname: string
+  ): Promise<StatdumpWatcherClientResponse> {
+    const cmsRequest: Omit<StopStatdumpCmsRequest, 'token'> = {
+      task: 'stop_statdump',
+      dbname: statdumpWatcherTarget(dbname),
+    };
+    try {
+      await this.executeCmsRequest<typeof cmsRequest, BaseCmsResponse>(userId, hostUid, cmsRequest);
+      return { running: false, wasRunning: true };
+    } catch (err) {
+      if (/no statdump running/i.test(cmsFailureNote(err))) {
+        return { running: false, wasRunning: false };
+      }
+      throw err;
+    }
   }
 
   /**

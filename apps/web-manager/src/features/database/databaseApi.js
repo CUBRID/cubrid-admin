@@ -132,6 +132,11 @@ export const databaseApi = {
   getStatDump: (hostUid, dbname) => {
     return apiClient.get(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}`);
   },
+  // statdump counters only advance while a watcher is attached (see statdumpWatcher.js).
+  startStatDumpWatcher: (hostUid, dbname) =>
+    apiClient.post(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/start`, {}),
+  stopStatDumpWatcher: (hostUid, dbname) =>
+    apiClient.post(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/stop`, {}),
   getParamDump: (hostUid, dbname, both = 'n') => {
     return apiClient.get(`/${hostUid}/cms-config/param-dump/${encodeURIComponent(dbname)}?both=${both}`);
   },
