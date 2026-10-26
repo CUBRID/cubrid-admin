@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
+import { MemoryRouter } from 'react-router-dom';
 import { configureStore, createSlice } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 // The real slices pull in apiClient/localStorage at import time; the map only
@@ -18,7 +19,7 @@ vi.mock('../../host/hostSlice', () => Object.fromEntries(
 ));
 
 import { useDesktopMenuActions } from './useDesktopMenuActions';
-import { ALL_MENU_ACTIONS_DISABLED, MENU_ACTIONS } from '../../layout/menuActions';
+import { MENU_ACTIONS, NO_DASHBOARD_MENU_ACTIONS } from '../../layout/menuActions';
 
 const authSlice = createSlice({
   name: 'auth',
@@ -47,7 +48,7 @@ function Harness() {
   return null;
 }
 
-const render = async ({ isAuthenticated = true, selectedHostUid = null } = {}) => {
+const render = async ({ isAuthenticated = true, selectedHostUid = null, path = '/home' } = {}) => {
   dispatched = [];
   store = configureStore({
     reducer: {
@@ -65,7 +66,11 @@ const render = async ({ isAuthenticated = true, selectedHostUid = null } = {}) =
         return next(action);
       }),
   });
-  await act(async () => root.render(<Provider store={store}><Harness /></Provider>));
+  await act(async () => root.render(
+    <Provider store={store}>
+      <MemoryRouter initialEntries={[path]}><Harness /></MemoryRouter>
+    </Provider>
+  ));
 };
 
 beforeEach(() => {
@@ -91,10 +96,23 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-it('reports every action disabled while signed out', async () => {
+it('reports only About enabled while signed out', async () => {
   await render({ isAuthenticated: false });
   expect(bridge.setMenuState).toHaveBeenCalledTimes(1);
-  expect(bridge.setMenuState).toHaveBeenLastCalledWith(ALL_MENU_ACTIONS_DISABLED);
+  expect(bridge.setMenuState).toHaveBeenLastCalledWith(NO_DASHBOARD_MENU_ACTIONS);
+});
+
+it('keeps dashboard actions disabled on /login even with a stored token', async () => {
+  await render({ isAuthenticated: true, selectedHostUid: 'h1', path: '/login' });
+  expect(bridge.setMenuState).toHaveBeenLastCalledWith(NO_DASHBOARD_MENU_ACTIONS);
+
+  dispatched = [];
+  await act(async () => emitMenuAction(MENU_ACTIONS.addHost));
+  await act(async () => emitMenuAction(MENU_ACTIONS.importHosts));
+  expect(dispatched).toEqual([]);
+
+  await act(async () => emitMenuAction(MENU_ACTIONS.about));
+  expect(dispatched).toEqual([{ type: 'appBar/setAboutCubrid', payload: true }]);
 });
 
 it('reports the enabled state only when it changes', async () => {

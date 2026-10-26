@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import { useCM } from '../../../constants/useCM';
 import {
-  ALL_MENU_ACTIONS_DISABLED,
+  NO_DASHBOARD_MENU_ACTIONS,
   getMenuActionEnabled,
   runMenuAction,
 } from '../../layout/menuActions';
+
+// App routes rendered without DashboardLayout (see App.jsx). A stored token
+// keeps isAuthenticated true on /login too, e.g. after the desktop app
+// crashed, since main always opens /login on startup.
+const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 
 /**
  * Wires the desktop app's native menu to the same actions as the header menu:
@@ -13,8 +19,8 @@ import {
  * action main sends on a native menu click. No-op outside the desktop app.
  *
  * Mounted in App rather than in HeaderMenu so a full reload (logout, View >
- * Reload) re-reports the state; actions are disabled whenever no dashboard,
- * and so none of the modals they open, is shown.
+ * Reload) re-reports the state; whenever no dashboard, and so none of the
+ * modals they open, is shown, only About stays enabled.
  */
 export function useDesktopMenuActions() {
   const CM = useCM();
@@ -28,9 +34,13 @@ export function useDesktopMenuActions() {
     shallowEqual
   );
 
-  const enabled = isAuthenticated
+  const { pathname } = useLocation();
+  const isDashboardShown = isAuthenticated
+    && !NO_DASHBOARD_PATHS.includes(pathname.replace(/\/+$/, '') || '/');
+
+  const enabled = isDashboardShown
     ? getMenuActionEnabled({ selectedHostUid, authorizedHosts })
-    : ALL_MENU_ACTIONS_DISABLED;
+    : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 

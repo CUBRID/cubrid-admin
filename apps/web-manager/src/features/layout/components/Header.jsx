@@ -6,7 +6,6 @@ import UserProfileModal from '../../user/components/UserProfileModal';
 
 
 import { Icon } from '../../../components/ds/foundation/Icon';
-import AboutModal from './AboutModal';
 import HeaderMenu from './HeaderMenu';
 import LanguageToggle from './LanguageToggle';
 import { useCM } from '../../../constants/useCM';
@@ -102,7 +101,6 @@ export default function Header({ theme, toggleTheme }) {
       </header>
 
       <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-      <AboutModal />
     </>
   );
 }

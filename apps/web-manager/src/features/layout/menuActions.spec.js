@@ -15,6 +15,7 @@ vi.mock('../host/hostSlice', () => Object.fromEntries(
 
 import {
   ALL_MENU_ACTIONS_DISABLED,
+  NO_DASHBOARD_MENU_ACTIONS,
   MENU_ACTIONS,
   getMenuActionEnabled,
   runMenuAction,
@@ -50,6 +51,12 @@ describe('getMenuActionEnabled', () => {
     expect(Object.keys(getMenuActionEnabled({ selectedHostUid: null })).sort()).toEqual(ids);
     expect(Object.keys(ALL_MENU_ACTIONS_DISABLED).sort()).toEqual(ids);
     expect(Object.values(ALL_MENU_ACTIONS_DISABLED).every((v) => v === false)).toBe(true);
+  });
+
+  it('leaves only About enabled while no dashboard is shown', () => {
+    expect(Object.keys(NO_DASHBOARD_MENU_ACTIONS).sort()).toEqual(Object.values(MENU_ACTIONS).sort());
+    expect(Object.entries(NO_DASHBOARD_MENU_ACTIONS).filter(([, on]) => on).map(([id]) => id))
+      .toEqual([MENU_ACTIONS.about]);
   });
 });
 

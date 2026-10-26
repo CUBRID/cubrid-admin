@@ -30,10 +30,20 @@ export const MENU_ACTIONS = Object.freeze({
 
 const ALL_ACTION_IDS = Object.values(MENU_ACTIONS);
 
-/** Every action disabled, e.g. while no dashboard (and so no header) is shown. */
+/** Every action disabled. */
 export const ALL_MENU_ACTIONS_DISABLED = Object.freeze(
   Object.fromEntries(ALL_ACTION_IDS.map((id) => [id, false]))
 );
+
+/**
+ * While no dashboard is shown (login, register, workspace setup): only About,
+ * whose modal App renders on every route. Every other action opens a modal
+ * or tab that only exists inside the dashboard.
+ */
+export const NO_DASHBOARD_MENU_ACTIONS = Object.freeze({
+  ...ALL_MENU_ACTIONS_DISABLED,
+  [MENU_ACTIONS.about]: true,
+});
 
 /** @returns {Record<string, boolean>} enabled flag per action id */
 export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [] }) {
