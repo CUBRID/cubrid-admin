@@ -1,4 +1,4 @@
-import { startDatabase, stopDatabase } from './databaseCoreSlice';
+import { fetchDatabaseStartInfo, startDatabase, stopDatabase } from './databaseCoreSlice';
 
 const errorText = (err) => (typeof err === 'string' ? err : err?.message || String(err));
 
@@ -7,20 +7,29 @@ const errorText = (err) => (typeof err === 'string' ? err : err?.message || Stri
 // the start-all/stop-all endpoints: those always act on every `ha_db_list`
 // entry on an HA host regardless of the dbnames passed, so a restart would
 // also start an HA database that was stopped on purpose. Each database's
-// failure is caught and recorded instead of aborting the rest; a database
-// that failed to stop is not started again (it is still running).
+// failure is caught and recorded instead of aborting the rest.
+//
+// A rejected stop doesn't prove the database is still running — the stop
+// command itself may have succeeded with only the follow-up status lookup
+// failing — so the active list is re-read once before deciding whom to
+// start. Only a database confirmed still active is skipped; one confirmed
+// stopped had its stop succeed after all; if the state can't be confirmed,
+// it is started anyway so a restart never leaves a database down.
 export async function restartDatabasesIndividually(dispatch, hostUid, dbnames) {
-  const failed = [];
-  const stopped = [];
+  let failed = [];
   for (const dbname of dbnames) {
     try {
       await dispatch(stopDatabase({ hostUid, dbname })).unwrap();
-      stopped.push(dbname);
     } catch (err) {
       failed.push({ dbname, phase: 'stop', error: errorText(err) });
     }
   }
-  for (const dbname of stopped) {
+  const stillActive = failed.length > 0 ? await readActiveDbnames(dispatch, hostUid) : null;
+  if (stillActive) {
+    failed = failed.filter((f) => stillActive.has(f.dbname));
+  }
+  const toStart = dbnames.filter((d) => !stillActive?.has(d));
+  for (const dbname of toStart) {
     try {
       await dispatch(startDatabase({ hostUid, dbname })).unwrap();
     } catch (err) {
@@ -28,6 +37,21 @@ export async function restartDatabasesIndividually(dispatch, hostUid, dbnames) {
     }
   }
   return { failed };
+}
+
+// Active dbnames per a fresh start-info read, or null if it can't be read
+// (or comes back malformed) — unknown, not "nothing is running".
+async function readActiveDbnames(dispatch, hostUid) {
+  try {
+    const info = await dispatch(fetchDatabaseStartInfo(hostUid)).unwrap();
+    const active = info?.activelist?.active;
+    if (!Array.isArray(active)) return null;
+    const names = active.map((a) => (typeof a === 'string' ? a : a?.dbname));
+    if (!names.every((n) => typeof n === 'string' && n.length > 0)) return null;
+    return new Set(names);
+  } catch (_) {
+    return null;
+  }
 }
 
 // Groups `{ dbname, phase, error }` failures by database (first-seen order)

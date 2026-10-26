@@ -132,11 +132,12 @@ describe('Restart All restarts only the requested databases and reports each fai
     expect(databaseApi.stopAllDatabases).not.toHaveBeenCalled();
   });
 
-  it('continues past a failed stop and does not try to start that database again', async () => {
+  it('continues past a failed stop and does not start a database confirmed still running', async () => {
     databaseApi.stopDatabase.mockImplementation(async (hostUid, dbname) => {
       if (dbname === 'otherdb') throw { response: { data: { message: 'Missing credentials for otherdb' } } };
       return { dblist: { dbs: [] }, activelist: { active: [] } };
     });
+    databaseApi.getStartInfo.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['otherdb'] } });
     databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['demodb'] } });
     const store = configureStore({ reducer });
 
@@ -145,6 +146,36 @@ describe('Restart All restarts only the requested databases and reports each fai
     expect(failed).toEqual([{ dbname: 'otherdb', phase: 'stop', error: 'Missing credentials for otherdb' }]);
     expect(databaseApi.startDatabase).toHaveBeenCalledTimes(1);
     expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'demodb');
+  });
+
+  // Re-review: a rejected stop doesn't prove the database is still running —
+  // the server only reads start info after the stop command succeeded, so if
+  // that lookup (and the thunk's own re-check) fails, the database is down
+  // and skipping its start would leave it down after "Restart All".
+  it('starts a database whose stop was rejected but which a re-check shows stopped', async () => {
+    databaseApi.stopDatabase.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
+    databaseApi.getStartInfo
+      .mockRejectedValueOnce({ response: { data: { message: 'startinfo failed' } } })
+      .mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: [] } });
+    databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['demodb'] } });
+    const store = configureStore({ reducer });
+
+    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['demodb']);
+
+    expect(failed).toEqual([]);
+    expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'demodb');
+  });
+
+  it('still starts a database whose stop was rejected when its state cannot be re-checked', async () => {
+    databaseApi.stopDatabase.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
+    databaseApi.getStartInfo.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
+    databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['demodb'] } });
+    const store = configureStore({ reducer });
+
+    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['demodb']);
+
+    expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'demodb');
+    expect(failed).toEqual([{ dbname: 'demodb', phase: 'stop', error: 'startinfo failed' }]);
   });
 
   it('records a failed start tagged with its phase', async () => {
