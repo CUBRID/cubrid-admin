@@ -1,3 +1,7 @@
+# Tier 2: Playwright/Chromium E2E tests from CUBRID/cubrid-webmanager-e2e
+# against an exact reviewed PR commit and a temporary CUBRID NCA database.
+# Launch manually from CUBRID/cubrid-admin's default branch with the PR number
+# and full head SHA. See .github/TIER2.md for setup and launch instructions.
 name: Run Tier 2 for PR
 run-name: 'Tier 2 for PR #${{ inputs.pr_number }} at ${{ inputs.commit_sha }}'
 
@@ -62,16 +66,26 @@ jobs:
       contents: read
     env:
       CI: 'true'
+      # This suite tests the server/browser build, so Electron is not needed.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # Docker Compose pulls the nightly image on each run; its version can change.
       CUBRID_IMAGE: ghcr.io/srltas/cubrid-nca-nightly:latest
+      # CMS runs in Docker on this runner: host 28001 -> container 8001.
+      # admin/admin are temporary CMS credentials, not database-user credentials.
       CMS_HOST: '127.0.0.1'
       CMS_PORT: '28001'
       CMS_USER: admin
       CMS_PASSWORD: admin
+      # Must match CUBRID_DB in docker-compose.e2e.yml. Compose also sets a 100M
+      # volume size, en_US.utf8 locale, UTC, and broker mapping 38000 -> 33000.
       E2E_DB: demodb
+      # The suite starts the PR application from this checkout. Build it once
+      # below, then tell the suite to reuse that build.
       WEBMANAGER_REPO_PATH: ${{ github.workspace }}/app
       WEBMANAGER_SKIP_BUILD: 'true'
     steps:
+      # Container settings come from the upstream workflow source, while the
+      # application code below comes from the selected PR (including fork PRs).
       - name: Checkout trusted container configuration
         uses: actions/checkout@v4
         with:
@@ -106,6 +120,9 @@ jobs:
       - name: Prepare private test-suite directory
         run: rm -rf app/tcp
 
+      # Private test cases come from this repository's default branch (no ref
+      # override). Record its SHA below because the suite can change between runs.
+      # TCP_REPOSITORY_TOKEN needs read access to the private test repository.
       # Download before executing PR code; do not persist the PAT in Git config.
       - name: Download private TCP suite
         uses: actions/checkout@v4
@@ -140,26 +157,35 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      # Wait up to five minutes for the image's database/CMS health check.
       - name: Start temporary CUBRID NCA
         run: docker compose -f "$RUNNER_TEMP/docker-compose.e2e.yml" up -d --wait --wait-timeout 300
 
+      # Keep terminal progress and explicitly generate HTML at the upload path.
       - name: Run TCP against PR application
+        id: tcp
         working-directory: app/tcp
-        run: npm test
+        run: npm test -- --reporter=line,html
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/app/tcp/playwright-report
+          PLAYWRIGHT_HTML_OPEN: never
 
       - name: Collect container diagnostics
         if: failure()
         run: docker compose -f "$RUNNER_TEMP/docker-compose.e2e.yml" logs --no-color --tail 200
 
+      # Always remove the temporary database and volumes, including on failure.
       - name: Remove temporary container and volumes
         if: always()
         run: docker compose -f "$RUNNER_TEMP/docker-compose.e2e.yml" down -v --remove-orphans
 
+      # Preserve reports for passing and failing tests, but skip if setup failed
+      # before tests ran. Missing output after a test attempt is an error.
       - name: Upload Playwright report
-        if: always()
+        if: always() && (steps.tcp.outcome == 'success' || steps.tcp.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
           name: tcp-report-pr-${{ needs.prepare.outputs.number }}-${{ needs.prepare.outputs.sha }}-${{ github.run_attempt }}
           path: app/tcp/playwright-report/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
