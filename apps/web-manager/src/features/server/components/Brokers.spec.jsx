@@ -17,12 +17,13 @@ vi.mock('../../broker/brokerApi', () => ({
     // (fix/broker-status-bulk-fetch); unused before that.
     getBrokerStatusBulk: vi.fn(),
     startBroker: vi.fn(),
+    stopBroker: vi.fn(),
   },
 }));
 import { brokerApi } from '../../broker/brokerApi';
 import brokerReducer, { fetchBrokerList, resetBrokerState } from '../../broker/brokerSlice';
 import layoutReducer, { setActiveMainTab } from '../../layout/layoutSlice';
-import { startBrokerAndRefresh } from '../../broker/brokerSidebarActions';
+import { startBrokerAndRefresh, stopBrokerAndRefresh } from '../../broker/brokerSidebarActions';
 import Brokers from './Brokers';
 
 let container;
@@ -99,6 +100,26 @@ describe('Brokers embedded in the host dashboard', () => {
     });
 
     expect(container.textContent).toContain('3333');
+  });
+
+  it('shows the new state as soon as the post-action fetch returns, even with a background poll in flight', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await hostDashboardTick(store, '1111', 'ON');
+
+    const held = [];
+    brokerApi.getBrokerList.mockImplementation(() => new Promise((resolve) => held.push(resolve)));
+    brokerApi.stopBroker.mockResolvedValue({});
+    await act(async () => {
+      await store.dispatch(stopBrokerAndRefresh({ hostUid: 'h1', brokerName: 'broker1' }));
+    });
+    // A host dashboard poll starts while the post-action fetch is in flight.
+    await act(async () => { store.dispatch(fetchBrokerList({ hostUid: 'h1', isBackground: true })); });
+
+    await act(async () => { held[0](brokerList('', 'OFF')); });
+    expect(container.textContent).toContain('OFF');
+
+    await act(async () => { held[1](brokerList('', 'OFF')); });
   });
 
   it('keeps the last list when focus leaves the host and its shared entry is evicted', async () => {

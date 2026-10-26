@@ -22,7 +22,7 @@ import brokerReducer from './brokerSlice';
 import layoutReducer, { setActiveMainTab } from '../layout/layoutSlice';
 import {
   isBrokerTabOfHost,
-  refreshActiveBrokerTab,
+  refreshAfterBrokerAction,
   startBrokerAndRefresh,
   stopBrokerAndRefresh,
   startAllBrokersAndRefresh,
@@ -62,10 +62,10 @@ describe('isBrokerTabOfHost', () => {
   });
 });
 
-describe('refreshActiveBrokerTab', () => {
+describe('refreshAfterBrokerAction', () => {
   it('refreshes the active broker tab of the same host', () => {
     const store = makeStore('broker_status:h1:broker1');
-    store.dispatch(refreshActiveBrokerTab('h1'));
+    store.dispatch(refreshAfterBrokerAction('h1'));
     expect(refreshState(store)).toEqual({ refreshCounter: 1, refreshTabId: 'broker_status:h1:broker1' });
   });
 
@@ -74,7 +74,7 @@ describe('refreshActiveBrokerTab', () => {
     'leaves a non-broker or other-host tab (%s) alone',
     (tabId) => {
       const store = makeStore(tabId);
-      store.dispatch(refreshActiveBrokerTab('h1'));
+      store.dispatch(refreshAfterBrokerAction('h1'));
       expect(refreshState(store).refreshCounter).toBe(0);
     }
   );
@@ -111,11 +111,39 @@ describe('broker actions with refresh', () => {
     expect(brokerApi.startAllBrokers).not.toHaveBeenCalled();
   });
 
-  it('per-broker actions also refetch the shared broker list', async () => {
-    brokerApi.startBroker.mockResolvedValue({});
+  // Each extra list fetch queues on CMS ahead of the one that updates the
+  // view, so every action refetches the list exactly once.
+  it.each(cases)('%s refetches the shared broker list once on the host dashboard', async (_name, action, apis) => {
+    apis.forEach((api) => api.mockResolvedValue({}));
     const store = makeStore('host:h1');
-    await store.dispatch(startBrokerAndRefresh({ hostUid: 'h1', brokerName: 'broker1' }));
+    await store.dispatch(action());
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
     expect(brokerApi.getBrokerList).toHaveBeenCalledWith('h1');
     expect(refreshState(store).refreshCounter).toBe(0);
+  });
+
+  it.each(cases)('%s refetches once and refreshes an open broker status tab', async (_name, action, apis) => {
+    apis.forEach((api) => api.mockResolvedValue({}));
+    const store = makeStore('broker_status:h1:broker1');
+    await store.dispatch(action());
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
+    expect(refreshState(store).refreshCounter).toBe(1);
+  });
+
+  it.each(cases)('%s leaves the list fetch to an open broker list tab', async (_name, action, apis) => {
+    apis.forEach((api) => api.mockResolvedValue({}));
+    const store = makeStore('brokers_status:h1');
+    await store.dispatch(action());
+    expect(brokerApi.getBrokerList).not.toHaveBeenCalled();
+    expect(refreshState(store).refreshCounter).toBe(1);
+  });
+
+  it('restart still refreshes when start fails after the brokers were stopped', async () => {
+    brokerApi.stopAllBrokers.mockResolvedValue({});
+    brokerApi.startAllBrokers.mockRejectedValue({ response: { status: 500, data: { message: 'boom' } } });
+    const store = makeStore('broker_status:h1:broker1');
+    await expect(store.dispatch(restartAllBrokersAndRefresh('h1'))).rejects.toBeTruthy();
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
+    expect(refreshState(store).refreshCounter).toBe(1);
   });
 });

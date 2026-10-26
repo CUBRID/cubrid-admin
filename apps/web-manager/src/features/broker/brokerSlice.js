@@ -95,12 +95,13 @@ export const fetchDetailedBrokerStatus = createAsyncThunk(
   }
 );
 
+// On success these don't refetch the broker list themselves: the sidebar
+// wrappers in brokerSidebarActions.js do it once per action (see there).
 export const startBroker = createAsyncThunk(
   'broker/startBroker',
   async ({ hostUid, brokerName }, { dispatch, rejectWithValue }) => {
     try {
       await brokerApi.startBroker(hostUid, brokerName);
-      dispatch(fetchBrokerList(hostUid));
       return { brokerName, success: true };
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchBrokerList(hostUid));
@@ -114,7 +115,6 @@ export const stopBroker = createAsyncThunk(
   async ({ hostUid, brokerName }, { dispatch, rejectWithValue }) => {
     try {
       await brokerApi.stopBroker(hostUid, brokerName);
-      dispatch(fetchBrokerList(hostUid));
       return { brokerName, success: true };
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchBrokerList(hostUid));
@@ -128,7 +128,6 @@ export const startAllBrokers = createAsyncThunk(
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
       await brokerApi.startAllBrokers(hostUid);
-      dispatch(fetchBrokerList(hostUid));
       return { success: true };
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchBrokerList(hostUid));
@@ -142,7 +141,6 @@ export const stopAllBrokers = createAsyncThunk(
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
       await brokerApi.stopAllBrokers(hostUid);
-      dispatch(fetchBrokerList(hostUid));
       return { success: true };
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchBrokerList(hostUid));
@@ -261,6 +259,7 @@ const initialState = {
   // only clear loading by zeroing it globally, which also hid a DIFFERENT,
   // still-legitimately-loading host's own spinner.
   brokerListFailedByHost: {}, // { hostUid: boolean } — latest fetchBrokerList failed
+  afterActionBrokerListByHost: {}, // { hostUid: { requestId, superseded } } — see the matcher below
   actionLoading: false,
   lastActionTarget: null, // Track broker name
   lastActionType: null,   // Track 'start' or 'stop'
@@ -549,6 +548,42 @@ const brokerSlice = createSlice({
           const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
           if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
           state.brokerListFailedByHost[hostUid] = fetchBrokerList.rejected.match(action);
+        }
+      )
+      // The list fetch right after a broker start/stop (`afterAction`) must
+      // be shown even if a background poll started while it was in flight:
+      // the poll then owns latestBrokerListRequestIdByHost, so the case
+      // reducer drops this response and the host dashboard keeps the
+      // pre-action state until that poll returns. It is still skipped if a
+      // response sent after it was already shown (that one is newer).
+      .addMatcher(
+        (action) => fetchBrokerList.pending.match(action) || fetchBrokerList.fulfilled.match(action)
+          || fetchBrokerList.rejected.match(action),
+        (state, action) => {
+          const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
+          const isAfterAction = typeof action.meta.arg === 'object' && !!action.meta.arg?.afterAction;
+          const { requestId } = action.meta;
+          const tracked = state.afterActionBrokerListByHost[hostUid];
+          if (fetchBrokerList.pending.match(action)) {
+            if (isAfterAction) state.afterActionBrokerListByHost[hostUid] = { requestId, superseded: false };
+            return;
+          }
+          if (!tracked) return;
+          if (!isAfterAction) {
+            if (!fetchBrokerList.fulfilled.match(action)) return;
+            // Applied by the case reducer, so it was sent after the action fetch.
+            if (requestId === state.latestBrokerListRequestIdByHost[hostUid]) tracked.superseded = true;
+            return;
+          }
+          if (requestId !== tracked.requestId) return;
+          delete state.afterActionBrokerListByHost[hostUid];
+          if (tracked.superseded || fetchBrokerList.rejected.match(action)) return;
+          // Host closed/disconnected meanwhile (closeHostTabs clears its id).
+          if (!state.latestBrokerListRequestIdByHost[hostUid]) return;
+          if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(action.payload)) {
+            state.brokersByHost[hostUid] = action.payload;
+          }
+          state.brokerListFailedByHost[hostUid] = false;
         }
       )
       // Cleanup on tab close to prevent memory leaks
