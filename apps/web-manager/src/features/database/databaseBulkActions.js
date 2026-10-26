@@ -64,3 +64,19 @@ export function groupBulkFailures(failed) {
   }
   return [...byDb].map(([dbname, reasons]) => ({ dbname, reasons }));
 }
+
+// Start All / Stop All result text: failures and skips are reported
+// separately (a skip is not an error). `failedMsg` is the action's own
+// "N database(s) failed to start/stop" label.
+export function bulkOutcomeMessages(CM, result, failedMsg) {
+  const failed = result?.failed || [];
+  const skipped = result?.skipped || [];
+  return {
+    failedText: failed.length > 0
+      ? failedMsg(failed.length) + CM.failedListSuffix(failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
+      : '',
+    skippedText: skipped.length > 0
+      ? CM.someDatabasesSkippedHaBulkMsg(skipped.length, skipped.map((s) => s.dbname).join(', '))
+      : '',
+  };
+}

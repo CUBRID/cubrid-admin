@@ -1966,6 +1966,7 @@ export const CM_KO = {
   someDatabasesFailedToStartMsg: (count) => `${count}개의 데이터베이스를 시작하지 못했습니다.`,
   someDatabasesFailedToStopMsg: (count) => `${count}개의 데이터베이스를 중지하지 못했습니다.`,
   someDatabasesFailedToRestartMsg: (count) => `${count}개의 데이터베이스를 재시작하지 못했습니다.`,
+  someDatabasesSkippedHaBulkMsg: (count, list) => `${count}개의 데이터베이스를 건너뛰었습니다: ${list} (HA 일괄 시작/중지는 CMS admin 계정으로만 할 수 있습니다).`,
   bulkRestartPhaseStop: '중지',
   bulkRestartPhaseStart: '시작',
   startingAllBrokersMsg: '모든 브로커 시작 중 ...',

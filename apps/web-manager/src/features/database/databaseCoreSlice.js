@@ -148,6 +148,20 @@ export const deleteDatabaseProfile = createAsyncThunk(
 // shared array, so a response for a host the user has since switched away
 // from can never overwrite the data the UI is now using to render a
 // DIFFERENT, currently-selected host's tree/dashboard.
+// A non-HA database in a start-all/stop-all `succeeded` list went through
+// the backend's ensureDbLogin gate, so it is logged in now. An HA one did
+// not — the host-wide ha_start/ha_stop runs without a per-database login —
+// so it is left as it was.
+const markBulkSucceededLoggedIn = (state, hostUid, succeeded) => {
+  if (!hostUid) return;
+  const haDbNames = state.haDbNamesByHost[hostUid] || [];
+  (succeeded || []).forEach((dbname) => {
+    if (haDbNames.includes(dbname)) return;
+    const key = dbKey(hostUid, dbname);
+    if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+  });
+};
+
 const parseDbResponse = (state, payload, hostUid) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
@@ -384,13 +398,7 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(startAllDatabases.fulfilled, (state, action) => {
         state.actionLoading = false;
-        const { hostUid } = action.meta.arg || {};
-        if (hostUid) {
-          (action.payload?.succeeded || []).forEach((dbname) => {
-            const key = dbKey(hostUid, dbname);
-            if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
-          });
-        }
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded);
       })
       .addCase(startAllDatabases.rejected, (state, action) => {
         state.actionLoading = false;
@@ -402,13 +410,7 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(stopAllDatabases.fulfilled, (state, action) => {
         state.actionLoading = false;
-        const { hostUid } = action.meta.arg || {};
-        if (hostUid) {
-          (action.payload?.succeeded || []).forEach((dbname) => {
-            const key = dbKey(hostUid, dbname);
-            if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
-          });
-        }
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded);
       })
       .addCase(stopAllDatabases.rejected, (state, action) => {
         state.actionLoading = false;

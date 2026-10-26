@@ -11,9 +11,11 @@ vi.mock('./databaseApi', () => ({
 }));
 import { databaseApi } from './databaseApi';
 import reducer, {
-  startDatabase, stopDatabase, startAllDatabases, stopAllDatabases,
+  startDatabase, stopDatabase, startAllDatabases, stopAllDatabases, fetchDatabaseStartInfo,
 } from './databaseCoreSlice';
-import { restartDatabasesIndividually, groupBulkFailures } from './databaseBulkActions';
+import { restartDatabasesIndividually, groupBulkFailures, bulkOutcomeMessages } from './databaseBulkActions';
+import { CM } from '../../constants/cmLabels';
+import { CM_KO } from '../../constants/cmLabels.ko';
 
 beforeEach(() => vi.resetAllMocks());
 
@@ -199,5 +201,56 @@ describe('Restart All restarts only the requested databases and reports each fai
       { dbname: 'otherdb', reasons: [{ phase: 'stop', error: 'no login' }, { phase: 'start', error: 'no login' }] },
       { dbname: 'demodb', reasons: [{ phase: 'start', error: 'boom' }] },
     ]);
+  });
+});
+
+describe('Start All / Stop All on an HA host: HA databases skipped for a non-admin CMS account', () => {
+  // Policy: a dbname-less ha_start/ha_stop is host-wide, so the backend runs
+  // it only for the CMS admin account (no per-db login gate) and reports
+  // every HA database as skipped for any other account.
+  const skipped = [
+    { dbname: 'hadb1', reason: 'HA bulk start/stop is limited to the CMS admin account' },
+    { dbname: 'hadb2', reason: 'HA bulk start/stop is limited to the CMS admin account' },
+  ];
+
+  it('reports skipped databases on their own, not as a failure', () => {
+    const { failedText, skippedText } = bulkOutcomeMessages(
+      CM, { succeeded: ['demodb'], failed: [], skipped }, CM.someDatabasesFailedToStartMsg
+    );
+
+    expect(failedText).toBe('');
+    expect(skippedText).toBe(
+      '2 database(s) skipped: hadb1, hadb2 (HA bulk start/stop requires the CMS admin account).'
+    );
+  });
+
+  it('reports both failures and skips when both happened', () => {
+    const { failedText, skippedText } = bulkOutcomeMessages(
+      CM_KO,
+      { succeeded: [], failed: [{ dbname: 'otherdb', error: 'boom' }], skipped: [skipped[0]] },
+      CM_KO.someDatabasesFailedToStopMsg
+    );
+
+    expect(failedText).toBe('1개의 데이터베이스를 중지하지 못했습니다. 실패: otherdb (boom).');
+    expect(skippedText).toBe(
+      '1개의 데이터베이스를 건너뛰었습니다: hadb1 (HA 일괄 시작/중지는 CMS admin 계정으로만 할 수 있습니다).'
+    );
+  });
+
+  it('does not mark an HA database logged in from a bulk success (host-wide ha_start skips the db login)', async () => {
+    databaseApi.getStartInfo.mockResolvedValue({
+      dblist: { dbs: [{ dbname: 'hadb1' }, { dbname: 'demodb' }] },
+      activelist: { active: [] },
+      haDbNames: ['hadb1'],
+    });
+    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['hadb1', 'demodb'], failed: [], skipped: [] });
+    const store = configureStore({ reducer });
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+
+    await store.dispatch(startAllDatabases({ hostUid: 'hostA', dbnames: ['hadb1', 'demodb'] }));
+
+    const { loggedInDatabases } = store.getState();
+    expect(loggedInDatabases).toContain('hostA:demodb');
+    expect(loggedInDatabases).not.toContain('hostA:hadb1');
   });
 });

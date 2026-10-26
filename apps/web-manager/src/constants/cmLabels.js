@@ -2008,6 +2008,7 @@ export const CM = {
   someDatabasesFailedToStartMsg: (count) => `${count} database(s) failed to start.`,
   someDatabasesFailedToStopMsg: (count) => `${count} database(s) failed to stop.`,
   someDatabasesFailedToRestartMsg: (count) => `${count} database(s) failed to restart.`,
+  someDatabasesSkippedHaBulkMsg: (count, list) => `${count} database(s) skipped: ${list} (HA bulk start/stop requires the CMS admin account).`,
   bulkRestartPhaseStop: 'stop',
   bulkRestartPhaseStart: 'start',
   startingAllBrokersMsg: 'Starting all brokers ...',

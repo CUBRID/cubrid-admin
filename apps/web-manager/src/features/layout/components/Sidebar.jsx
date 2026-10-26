@@ -21,7 +21,7 @@ import {
   loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
-import { restartDatabasesIndividually, groupBulkFailures } from '../../database/databaseBulkActions';
+import { restartDatabasesIndividually, groupBulkFailures, bulkOutcomeMessages } from '../../database/databaseBulkActions';
 import { dbKey } from '../../database/dbKey';
 
 import { fetchDatabaseSpaceInfo
@@ -1551,13 +1551,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
                       : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    if (result.failed?.length > 0) {
-                      endError(
-                        CM.someDatabasesFailedToStartMsg(result.failed.length) +
-                        CM.failedListSuffix(result.failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
-                      );
+                    const { failedText, skippedText } = bulkOutcomeMessages(CM, result, CM.someDatabasesFailedToStartMsg);
+                    if (failedText) {
+                      endError([failedText, skippedText].filter(Boolean).join(' '));
                     } else {
                       resetAction();
+                      if (skippedText) {
+                        dispatch(showStatusModal({ type: 'info', title: CM.startAllDatabases, message: skippedText }));
+                      }
                     }
                   } catch (err) {
                     endError(err);
@@ -1585,13 +1586,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
                       : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    if (result.failed?.length > 0) {
-                      endError(
-                        CM.someDatabasesFailedToStopMsg(result.failed.length) +
-                        CM.failedListSuffix(result.failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
-                      );
+                    const { failedText, skippedText } = bulkOutcomeMessages(CM, result, CM.someDatabasesFailedToStopMsg);
+                    if (failedText) {
+                      endError([failedText, skippedText].filter(Boolean).join(' '));
                     } else {
                       resetAction();
+                      if (skippedText) {
+                        dispatch(showStatusModal({ type: 'info', title: CM.stopAllDatabases, message: skippedText }));
+                      }
                     }
                   } catch (err) {
                     endError(err);
