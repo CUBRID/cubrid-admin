@@ -8,6 +8,15 @@ import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
+import { validateConfText, formatConfTextProblem, isBlockingConfTextProblem } from '@api-interfaces';
+
+// This editor is also used for cmconf, which CMS parses with its own
+// reader (not the engine's INI rules) and has no schema — only cubridconf
+// is checked here, through the same validateConfText the server re-runs.
+function validateCubridConfText(confname, text, paramSchemas) {
+  if (confname !== 'cubridconf') return [];
+  return validateConfText(paramSchemas?.database ?? [], text, 'cubridconf', paramSchemas?.knownKeys);
+}
 
 // ── Highlighted Source View ────────────────────────────────────────────────
 function renderHighlighted(content) {
@@ -38,8 +47,9 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   const CM = useCM();
   const tabId = `edit_config:${hostUid}:${confname}`;
   const dispatch = useDispatch();
-  const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, hostEnvs } = useSelector((state) => state.host, shallowEqual);
   const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
+  const paramSchemas = hostEnvs[hostUid]?.paramSchemas;
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
 
@@ -115,6 +125,18 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   };
 
   const handleSave = async () => {
+    const problems = validateCubridConfText(confname, content, paramSchemas);
+    const blocking = problems.filter(isBlockingConfTextProblem).map(formatConfTextProblem);
+    const warnings = problems.filter(p => !isBlockingConfTextProblem(p)).map(formatConfTextProblem);
+    if (blocking.length > 0) {
+      dispatch(showStatusModal({
+        type: 'error',
+        title: CM.invalidConfigValues,
+        message: CM.invalidConfigValuesMsg,
+        guidance: blocking,
+      }));
+      return;
+    }
     setSaving(true);
     try {
       const payload = { confname, confdata: content.split('\n') };
@@ -122,7 +144,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
       originalContentRef.current = content;
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
-      dispatch(showStatusModal({ type: 'success', title: CM.configSaved, message: CM.configUpdatedMsg(confname) }));
+      dispatch(showStatusModal({ type: 'success', title: CM.configSaved, message: CM.configUpdatedMsg(confname), ...(warnings.length > 0 ? { guidance: warnings } : {}) }));
     } catch (err) {
       dispatch(showStatusModal({
         type: 'error',

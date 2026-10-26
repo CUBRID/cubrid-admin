@@ -6,6 +6,7 @@ import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
+import { validateConfText, formatConfTextProblem, isBlockingConfTextProblem } from '@api-interfaces';
 
 import ConfigEditorToolbar from './broker/ConfigEditorToolbar';
 import ConfigSourceEditor from './broker/ConfigSourceEditor';
@@ -14,8 +15,9 @@ export default function BrokerConfigEditor({ hostUid }) {
   const CM = useCM();
   const tabId = `broker_config:${hostUid}`;
   const dispatch = useDispatch();
-  const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, hostEnvs } = useSelector((state) => state.host, shallowEqual);
   const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
+  const paramSchemas = hostEnvs[hostUid]?.paramSchemas;
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
 
@@ -77,6 +79,18 @@ export default function BrokerConfigEditor({ hostUid }) {
   };
 
   const handleSave = async () => {
+    const problems = validateConfText(paramSchemas?.broker ?? [], rawContent, 'brokerconf', paramSchemas?.knownKeys);
+    const blocking = problems.filter(isBlockingConfTextProblem).map(formatConfTextProblem);
+    const warnings = problems.filter(p => !isBlockingConfTextProblem(p)).map(formatConfTextProblem);
+    if (blocking.length > 0) {
+      dispatch(showStatusModal({
+        type: 'error',
+        title: CM.invalidConfigValues,
+        message: CM.invalidConfigValuesMsg,
+        guidance: blocking,
+      }));
+      return;
+    }
     setSaving(true);
     try {
       const confdata = rawContent.split('\n');
@@ -89,7 +103,8 @@ export default function BrokerConfigEditor({ hostUid }) {
       dispatch(showStatusModal({
         type: 'success',
         title: CM.configSaved,
-        message: CM.brokerConfigSaveSuccess
+        message: CM.brokerConfigSaveSuccess,
+        ...(warnings.length > 0 ? { guidance: warnings } : {}),
       }));
     } catch (err) {
       if (isAmbiguousFailure(err)) fetchConfig();
