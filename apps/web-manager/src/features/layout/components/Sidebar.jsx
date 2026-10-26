@@ -50,14 +50,17 @@ import { fetchBrokerList,
   fetchAdminLogs,
   fetchCMSLogs,
   fetchDatabaseLogs,
-  startBroker,
-  stopBroker,
-  startAllBrokers,
-  stopAllBrokers,
   openBrokerPropertyModal,
   resetBrokerState
 } from '../../broker/brokerSlice';
-import { setActiveMainTab, openTab, closeHostTabs, showStatusModal, triggerRefreshActiveTab } from '../layoutSlice';
+import {
+  startBrokerAndRefresh,
+  stopBrokerAndRefresh,
+  startAllBrokersAndRefresh,
+  stopAllBrokersAndRefresh,
+  restartAllBrokersAndRefresh,
+} from '../../broker/brokerSidebarActions';
+import { setActiveMainTab, openTab, closeHostTabs, showStatusModal } from '../layoutSlice';
 import { fetchDatabaseUsers, openCreateUserModal, openEditUserModal, openDropUserModal } from '../../user/userSlice';
 import { clearHostSummary } from '../../server/globalMonitoringSlice';
 import { MenuItem, MenuDivider, SubMenu } from '../../../components/common/DropdownMenu';
@@ -1654,16 +1657,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.startingAllBrokersMsg);
                   startAction();
                   try {
-                    await dispatch(startAllBrokers(selectedHostUid)).unwrap();
-                    // Start-all's own fetchBrokerList only updates the
-                    // shared brokersByHost slice — the dashboard/status tabs
-                    // (Brokers.jsx, BrokerStatus.jsx) deliberately keep their
-                    // own local state via usePollingRefresh and never read
-                    // that slice, so without this they'd keep showing the
-                    // pre-start PID/status until their next poll tick. This
-                    // reuses the same signal usePollingRefresh already acts
-                    // on for F5/manual reload.
-                    dispatch(triggerRefreshActiveTab());
+                    await dispatch(startAllBrokersAndRefresh(selectedHostUid));
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1686,9 +1680,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.stoppingAllBrokersMsg);
                   startAction();
                   try {
-                    await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
-                    // See startAllBrokers' identical comment above.
-                    dispatch(triggerRefreshActiveTab());
+                    await dispatch(stopAllBrokersAndRefresh(selectedHostUid));
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1711,10 +1703,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.restartingAllBrokersMsg);
                   startAction();
                   try {
-                    await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
-                    await dispatch(startAllBrokers(selectedHostUid)).unwrap();
-                    // See startAllBrokers' identical comment above.
-                    dispatch(triggerRefreshActiveTab());
+                    await dispatch(restartAllBrokersAndRefresh(selectedHostUid));
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1780,13 +1769,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     setLoadingText(`${CM.stoppingBrokerNamed(bName)} ...`);
                     startAction();
                     try {
-                      await dispatch(stopBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
-                      dispatch(fetchBrokerList(selectedHostUid));
-                      // fetchBrokerList above only refreshes the shared
-                      // brokersByHost slice — see startAllBrokers' identical
-                      // comment for why the dashboard/status tabs need this
-                      // too.
-                      dispatch(triggerRefreshActiveTab());
+                      await dispatch(stopBrokerAndRefresh({ hostUid: selectedHostUid, brokerName: bName }));
                       resetAction();
                     } catch (err) {
                       endError(err);
@@ -1811,10 +1794,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     setLoadingText(`${CM.startingBrokerNamed(bName)} ...`);
                     startAction();
                     try {
-                      await dispatch(startBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
-                      dispatch(fetchBrokerList(selectedHostUid));
-                      // See stopBroker's identical comment above.
-                      dispatch(triggerRefreshActiveTab());
+                      await dispatch(startBrokerAndRefresh({ hostUid: selectedHostUid, brokerName: bName }));
                       resetAction();
                     } catch (err) {
                       endError(err);
