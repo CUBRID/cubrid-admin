@@ -168,6 +168,32 @@ describe('Restart All: bulk stop then bulk start, each failed database reported 
     expect(databaseApi.startAllDatabases).not.toHaveBeenCalled();
   });
 
+  // The stop request itself failing (client timeout, lost response) must
+  // not skip the start phase: the server may already have stopped them.
+  it('still runs the start phase when the stop request itself fails, reporting only dbs still running', async () => {
+    databaseApi.stopAllDatabases.mockRejectedValue({ response: { data: { message: 'stop-all timed out' } } });
+    databaseApi.getStartInfo.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['otherdb'] } });
+    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['demodb', 'otherdb'], failed: [], skipped: [] });
+    const store = configureStore({ reducer });
+
+    const { failed } = await restartDatabasesInBulk(store.dispatch, 'hostA', ['demodb', 'otherdb']);
+
+    expect(databaseApi.startAllDatabases).toHaveBeenCalledWith('hostA', ['demodb', 'otherdb']);
+    expect(failed).toEqual([{ dbname: 'otherdb', phase: 'stop', error: 'stop-all timed out' }]);
+  });
+
+  it('reports every db as a stop failure, and still starts them, when the status cannot be re-read', async () => {
+    databaseApi.stopAllDatabases.mockRejectedValue({ response: { data: { message: 'stop-all timed out' } } });
+    databaseApi.getStartInfo.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
+    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [] });
+    const store = configureStore({ reducer });
+
+    const { failed } = await restartDatabasesInBulk(store.dispatch, 'hostA', ['demodb']);
+
+    expect(databaseApi.startAllDatabases).toHaveBeenCalledWith('hostA', ['demodb']);
+    expect(failed).toEqual([{ dbname: 'demodb', phase: 'stop', error: 'stop-all timed out' }]);
+  });
+
   it('groupBulkFailures counts a database once and keeps every phase reason', () => {
     const grouped = groupBulkFailures([
       { dbname: 'otherdb', phase: 'stop', error: 'no login' },
