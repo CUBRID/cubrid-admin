@@ -283,7 +283,7 @@ describe('DatabaseUserService', () => {
             {
               '@id': '163810704',
               '@name': 'yifan',
-              groups: { group: ['public', 'editors'] },
+              groups: [{ group: ['editors'] }],
               authorization: [{ '@name': 'db_class' }, { '@name': 'db_user' }],
             },
           ],
@@ -307,11 +307,40 @@ describe('DatabaseUserService', () => {
           dbname: 'demodb',
           username: 'yifan',
           userpass: '1111',
-          groups: { group: ['public', 'editors'] },
+          groups: [{ group: ['PUBLIC', 'EDITORS'] }],
           authorization: ['db_class', 'db_user'],
         })
       );
       expect(result).toEqual({ success: true });
+    });
+
+    it('keeps PUBLIC when the user has no other groups (CMS no longer re-adds it on updateuser)', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce(dbmtLoginSuccess)
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '20 ms',
+          dbname: 'demodb',
+          note: 'none',
+          status: 'success',
+          task: 'userinfo',
+          user: [{ '@id': '1', '@name': 'yifan', groups: [{ group: ['PUBLIC'] }], authorization: [] }],
+        })
+        .mockResolvedValueOnce(updateUserSuccess);
+
+      await service.updateUser(
+        mockUserId,
+        mockHostUid,
+        'demodb',
+        'yifan',
+        updateParams.userpass,
+        updateParams.groups,
+        updateParams.authorization
+      );
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'updateuser', groups: [{ group: ['PUBLIC'] }] })
+      );
     });
 
     it('should throw CmsError when CMS status is not success', async () => {
