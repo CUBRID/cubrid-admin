@@ -12,6 +12,9 @@ vi.mock('../broker/brokerApi', () => ({
   brokerApi: {
     getBrokerList: vi.fn(),
     getBrokerStatus: vi.fn(),
+    // Used instead of getBrokerStatus once the bulk status route lands
+    // (fix/broker-status-bulk-fetch); unused before that.
+    getBrokerStatusBulk: vi.fn(),
   },
 }));
 
@@ -60,7 +63,16 @@ const cas = (overrides = {}) => ({
 
 const lockInfo = (lot) => ({ lockinfo: [{ esc: '100000', lot }] });
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  // Answer a bulk status request from the per-broker mock, so the CAS tests
+  // below hold with either status fetch path.
+  brokerApi.getBrokerStatusBulk.mockImplementation(async (hostUid, names) => ({
+    brokers: (await Promise.all(names.map((bname) => brokerApi.getBrokerStatus(hostUid, bname)
+      .then((status) => ({ ...status, bname }))
+      .catch(() => null)))).filter(Boolean),
+  }));
+});
 
 describe('fetchDashboardCAS', () => {
   it('reads asinfo from the unwrapped getBrokerStatus result and keeps only CAS on this db', async () => {

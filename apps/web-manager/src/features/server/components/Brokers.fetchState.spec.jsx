@@ -13,6 +13,9 @@ vi.mock('../../broker/brokerApi', () => ({
   brokerApi: {
     getBrokerList: vi.fn(),
     getBrokerStatus: vi.fn(),
+    // Used instead of getBrokerStatus once the bulk status route lands
+    // (fix/broker-status-bulk-fetch); unused before that.
+    getBrokerStatusBulk: vi.fn(),
   },
 }));
 import { brokerApi } from '../../broker/brokerApi';
@@ -29,6 +32,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   brokerApi.getBrokerStatus.mockResolvedValue({});
+  brokerApi.getBrokerStatusBulk.mockImplementation(async (_hostUid, names) => ({ brokers: names.map((bname) => ({ bname })) }));
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
