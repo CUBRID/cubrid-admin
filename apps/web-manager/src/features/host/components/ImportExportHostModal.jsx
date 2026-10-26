@@ -17,6 +17,7 @@ import { exportHostsToXml,
   validateSelectedImportRows,
 } from '../hostImportExport';
 import { flattenHostsFromGroups, findNewGroupId } from '../hostGroupUtils';
+import { hostLoginFailureTables } from '../hostLoginReport';
 import { store } from '../../../app/store';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -389,7 +390,7 @@ export default function ImportExportHostModal() {
       if (savedUids.length > 0) {
         messageParts.push(CM.connectedHostsMsg(successCount));
         if (loginFailed.length > 0) {
-          messageParts.push(CM.loginFailedListMsg(loginFailed.join(', ')));
+          messageParts.push(CM.hostsFailedToLoginMsg(loginFailed.length));
         }
       }
 
@@ -408,6 +409,7 @@ export default function ImportExportHostModal() {
         type: statusType,
         title: CM.loginAll,
         message: messageParts.join(' '),
+        tables: hostLoginFailureTables(CM, loginFailed),
       }));
       dispatch(closeImportExportModal());
     } catch {

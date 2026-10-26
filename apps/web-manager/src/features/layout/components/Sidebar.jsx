@@ -21,7 +21,7 @@ import {
   loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
-import { restartDatabasesInBulk, groupBulkFailures, bulkOutcomeMessages } from '../../database/databaseBulkActions';
+import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
 import { dbKey } from '../../database/dbKey';
 
 import { fetchDatabaseSpaceInfo
@@ -1551,15 +1551,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
                       : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    const { failedText, skippedText } = bulkOutcomeMessages(CM, result, CM.someDatabasesFailedToStartMsg);
-                    if (failedText) {
-                      endError([failedText, skippedText].filter(Boolean).join(' '));
-                    } else {
-                      resetAction();
-                      if (skippedText) {
-                        dispatch(showStatusModal({ type: 'info', title: CM.startAllDatabases, message: skippedText }));
-                      }
-                    }
+                    resetAction();
+                    const report = bulkResultStatusModal(CM, {
+                      title: CM.startAllDatabases, failedMsg: CM.someDatabasesFailedToStartMsg, failed: result.failed, skipped: result.skipped,
+                    });
+                    if (report) dispatch(showStatusModal(report));
                   } catch (err) {
                     endError(err);
                   }
@@ -1586,15 +1582,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
                       : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    const { failedText, skippedText } = bulkOutcomeMessages(CM, result, CM.someDatabasesFailedToStopMsg);
-                    if (failedText) {
-                      endError([failedText, skippedText].filter(Boolean).join(' '));
-                    } else {
-                      resetAction();
-                      if (skippedText) {
-                        dispatch(showStatusModal({ type: 'info', title: CM.stopAllDatabases, message: skippedText }));
-                      }
-                    }
+                    resetAction();
+                    const report = bulkResultStatusModal(CM, {
+                      title: CM.stopAllDatabases, failedMsg: CM.someDatabasesFailedToStopMsg, failed: result.failed, skipped: result.skipped,
+                    });
+                    if (report) dispatch(showStatusModal(report));
                   } catch (err) {
                     endError(err);
                   }
@@ -1620,21 +1612,12 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                       dispatch, selectedHostUid, [...activeDatabases]
                     );
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
-                    const grouped = groupBulkFailures(failed);
-                    const { skippedText } = bulkOutcomeMessages(CM, { skipped }, CM.someDatabasesFailedToRestartMsg);
-                    if (grouped.length > 0) {
-                      const phaseLabel = { stop: CM.bulkRestartPhaseStop, start: CM.bulkRestartPhaseStart };
-                      const failedText = CM.someDatabasesFailedToRestartMsg(grouped.length) +
-                        CM.failedListSuffix(grouped.map(({ dbname, reasons }) =>
-                          `${dbname} (${reasons.map((r) => `${phaseLabel[r.phase]}: ${r.error}`).join('; ')})`
-                        ).join(', '));
-                      endError([failedText, skippedText].filter(Boolean).join(' '));
-                    } else {
-                      resetAction();
-                      if (skippedText) {
-                        dispatch(showStatusModal({ type: 'info', title: CM.restartAllDatabases, message: skippedText }));
-                      }
-                    }
+                    resetAction();
+                    const report = bulkResultStatusModal(CM, {
+                      title: CM.restartAllDatabases, failedMsg: CM.someDatabasesFailedToRestartMsg,
+                      failed, skipped, showPhase: true,
+                    });
+                    if (report) dispatch(showStatusModal(report));
                   } catch (err) {
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     endError(err);

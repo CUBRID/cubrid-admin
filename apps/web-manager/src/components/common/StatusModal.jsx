@@ -5,6 +5,7 @@ import { Icon } from '../ds/foundation/Icon';
 import { Button } from '../ds/foundation/Button';
 import { Modal } from '../ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
+import { FailureTable } from '../ds/feedback/FailureTable';
 
 const THEME_STYLES = {
   success: {
@@ -37,7 +38,8 @@ export default function StatusModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { statusModal } = useSelector((state) => state.layout, shallowEqual);
-  const { isOpen, type, title, message, guidance, detail } = statusModal;
+  const { isOpen, type, title, message, guidance, detail, tables } = statusModal;
+  const tableItems = Array.isArray(tables) ? tables.filter((tb) => tb?.rows?.length > 0) : [];
   const [showDetail, setShowDetail] = useState(false);
   const guidanceItems = Array.isArray(guidance) ? guidance : (guidance ? [guidance] : []);
 
@@ -57,7 +59,7 @@ export default function StatusModal() {
       title={title || (type === 'success' ? CM.statusSuccessTitle : type === 'error' ? CM.statusErrorTitle : CM.statusNotice)}
       icon={t.icon}
       iconVariant={type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}
-      maxWidth="380px"
+      maxWidth={tableItems.length > 0 ? '520px' : '380px'}
       zIndexClass="z-[2100]"
       testId="status"
       footer={(
@@ -92,6 +94,12 @@ export default function StatusModal() {
             <p className="text-13 text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-[280px]">
               {message}
             </p>
+          )}
+
+          {tableItems.length > 0 && (
+            <div className="mt-4 w-full flex flex-col gap-3">
+              {tableItems.map((tb, idx) => <FailureTable key={idx} {...tb} />)}
+            </div>
           )}
 
           {guidanceItems.length > 0 && (

@@ -13,7 +13,7 @@ import { databaseApi } from './databaseApi';
 import reducer, {
   startDatabase, stopDatabase, startAllDatabases, stopAllDatabases, fetchDatabaseStartInfo,
 } from './databaseCoreSlice';
-import { restartDatabasesInBulk, groupBulkFailures, bulkOutcomeMessages } from './databaseBulkActions';
+import { restartDatabasesInBulk, groupBulkFailures, bulkResultStatusModal } from './databaseBulkActions';
 import { CM } from '../../constants/cmLabels';
 import { CM_KO } from '../../constants/cmLabels.ko';
 
@@ -153,9 +153,11 @@ describe('Restart All: bulk stop then bulk start, each failed database reported 
 
     expect(failed).toEqual([]);
     expect(skipped).toEqual([skip]);
-    expect(bulkOutcomeMessages(CM, { skipped }, CM.someDatabasesFailedToRestartMsg).skippedText).toBe(
-      '1 database(s) skipped: hadb1 (HA bulk start/stop requires the CMS admin account).'
-    );
+    const report = bulkResultStatusModal(CM, {
+      title: CM.restartAllDatabases, failedMsg: CM.someDatabasesFailedToRestartMsg, failed, skipped,
+    });
+    expect(report.type).toBe('info');
+    expect(report.message).toBe('1 database(s) skipped.');
   });
 
   it('does nothing when no database is active', async () => {
@@ -189,28 +191,31 @@ describe('Start All / Stop All on an HA host: HA databases skipped for a non-adm
     { dbname: 'hadb2', reason: 'HA bulk start/stop is limited to the CMS admin account' },
   ];
 
-  it('reports skipped databases on their own, not as a failure', () => {
-    const { failedText, skippedText } = bulkOutcomeMessages(
-      CM, { succeeded: ['demodb'], failed: [], skipped }, CM.someDatabasesFailedToStartMsg
-    );
+  it('reports skipped databases on their own (info, not error), in a separate table', () => {
+    const report = bulkResultStatusModal(CM, {
+      title: CM.startAllDatabases, failedMsg: CM.someDatabasesFailedToStartMsg, failed: [], skipped,
+    });
 
-    expect(failedText).toBe('');
-    expect(skippedText).toBe(
-      '2 database(s) skipped: hadb1, hadb2 (HA bulk start/stop requires the CMS admin account).'
-    );
+    expect(report.type).toBe('info');
+    expect(report.message).toBe('2 database(s) skipped.');
+    expect(report.tables.map((tb) => tb.variant)).toEqual(['skipped']);
+    expect(report.tables[0].rows.map((r) => r.name)).toEqual(['hadb1', 'hadb2']);
   });
 
-  it('reports both failures and skips when both happened', () => {
-    const { failedText, skippedText } = bulkOutcomeMessages(
-      CM_KO,
-      { succeeded: [], failed: [{ dbname: 'otherdb', error: 'boom' }], skipped: [skipped[0]] },
-      CM_KO.someDatabasesFailedToStopMsg
-    );
+  it('reports both failures and skips when both happened (localized)', () => {
+    const report = bulkResultStatusModal(CM_KO, {
+      title: CM_KO.stopAllDatabases,
+      failedMsg: CM_KO.someDatabasesFailedToStopMsg,
+      failed: [{ dbname: 'otherdb', error: 'boom' }],
+      skipped: [skipped[0]],
+    });
 
-    expect(failedText).toBe('1개의 데이터베이스를 중지하지 못했습니다. 실패: otherdb (boom).');
-    expect(skippedText).toBe(
-      '1개의 데이터베이스를 건너뛰었습니다: hadb1 (HA 일괄 시작/중지는 CMS admin 계정으로만 할 수 있습니다).'
-    );
+    expect(report.type).toBe('error');
+    expect(report.message).toBe('1개의 데이터베이스를 중지하지 못했습니다. 1개의 데이터베이스를 건너뛰었습니다.');
+    expect(report.tables.map((tb) => [tb.variant, tb.rows])).toEqual([
+      ['failed', [{ name: 'otherdb', reasons: [{ phase: undefined, reason: 'boom' }] }]],
+      ['skipped', [{ name: 'hadb1', reasons: [{ reason: 'HA 일괄 시작/중지는 CMS admin 계정으로만 할 수 있습니다' }] }]],
+    ]);
   });
 
   it('does not mark an HA database logged in from a bulk success (host-wide ha_start skips the db login)', async () => {

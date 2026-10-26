@@ -30,18 +30,46 @@ export function groupBulkFailures(failed) {
   return [...byDb].map(([dbname, reasons]) => ({ dbname, reasons }));
 }
 
-// Start All / Stop All result text: failures and skips are reported
-// separately (a skip is not an error). `failedMsg` is the action's own
-// "N database(s) failed to start/stop" label.
-export function bulkOutcomeMessages(CM, result, failedMsg) {
-  const failed = result?.failed || [];
-  const skipped = result?.skipped || [];
+// Result dialog payload (showStatusModal) for Start/Stop/Restart All: a
+// short headline plus tables — failures (grouped per database, with the
+// stop/start phase for a restart) and skipped HA databases kept apart.
+// null when every database succeeded.
+export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipped = [], showPhase = false }) {
+  const grouped = groupBulkFailures(failed || []);
+  const skippedList = skipped || [];
+  if (grouped.length === 0 && skippedList.length === 0) return null;
+  const phaseLabel = { stop: CM.bulkRestartPhaseStop, start: CM.bulkRestartPhaseStart };
+  const tables = [];
+  if (grouped.length > 0) {
+    tables.push({
+      title: CM.failureTableFailedTitle,
+      nameLabel: CM.database,
+      showPhase,
+      variant: 'failed',
+      testId: 'bulk-failed-table',
+      rows: grouped.map(({ dbname, reasons }) => ({
+        name: dbname,
+        reasons: reasons.map((r) => ({ phase: phaseLabel[r.phase] ?? r.phase, reason: r.error })),
+      })),
+    });
+  }
+  if (skippedList.length > 0) {
+    tables.push({
+      title: CM.failureTableSkippedTitle,
+      nameLabel: CM.database,
+      variant: 'skipped',
+      testId: 'bulk-skipped-table',
+      // The only skip reason the server reports (HA admin-only rule).
+      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: CM.haBulkRequiresAdminReason }] })),
+    });
+  }
   return {
-    failedText: failed.length > 0
-      ? failedMsg(failed.length) + CM.failedListSuffix(failed.map((f) => `${f.dbname} (${f.error})`).join(', '))
-      : '',
-    skippedText: skipped.length > 0
-      ? CM.someDatabasesSkippedHaBulkMsg(skipped.length, skipped.map((s) => s.dbname).join(', '))
-      : '',
+    type: grouped.length > 0 ? 'error' : 'info',
+    title,
+    message: [
+      grouped.length > 0 ? failedMsg(grouped.length) : '',
+      skippedList.length > 0 ? CM.someDatabasesSkippedMsg(skippedList.length) : '',
+    ].filter(Boolean).join(' '),
+    tables,
   };
 }
