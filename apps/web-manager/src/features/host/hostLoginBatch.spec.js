@@ -5,11 +5,12 @@ vi.hoisted(() => {
   window.matchMedia ??= () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined });
 });
 vi.mock('./hostApi', () => ({
-  hostApi: { loginToHost: vi.fn(), markGroupHa: vi.fn() },
+  hostApi: { loginToHost: vi.fn(), markGroupHa: vi.fn(), moveHost: vi.fn() },
 }));
 import { hostApi } from './hostApi';
 import hostReducer, {
   loginHostsBatch, loginToHost, loginToHostWithSideEffects, processHaLoginSideEffects, haFollowUpAction,
+  mergeHaPeers,
 } from './hostSlice';
 import { hostLoginResultStatusModal } from './hostLoginReport';
 import { CM } from '../../constants/cmLabels';
@@ -121,6 +122,51 @@ describe('HA side effects: collect mode for bulk logins', () => {
     expect(haFollowUpAction({ type: 'merge', payload: { peers: [1] } }).type).toBe('host/setPendingHaMerge');
     expect(haFollowUpAction({ type: 'clusterLink', payload: { peers: [1] } }).type).toBe('host/setHaClusterLinkNotice');
     expect(haFollowUpAction(null)).toBeNull();
+  });
+});
+
+describe('deferred HA merge follow-ups are re-based on the current groups', () => {
+  // Bug: A and B (one HA pair) in different groups, logged in together,
+  // each got a stored plan — "move B into A's group" and "move A into B's
+  // group". Running both in turn split the pair again.
+  const a = host('h1', 'node-a', '10.0.0.1');
+  const b = host('h2', 'node-b', '10.0.0.2');
+  const pairLogin = {
+    success: true,
+    isHA: true,
+    haNodes: [{ hostname: 'node-a', ip: '10.0.0.1', state: 'master' }, { hostname: 'node-b', ip: '10.0.0.2', state: 'slave' }],
+  };
+  const makeSplitStore = () => configureStore({
+    reducer: { host: hostReducer },
+    preloadedState: {
+      host: {
+        ...hostReducer(undefined, { type: '@@init' }),
+        hosts: [a, b],
+        hostGroups: { g1: { name: 'G1', hosts: { h1: a } }, g2: { name: 'G2', hosts: { h2: b } } },
+      },
+    },
+  });
+
+  it('drops the second merge once the first one has put both hosts in one group', async () => {
+    hostApi.loginToHost.mockResolvedValue(pairLogin);
+    const store = makeSplitStore();
+    const batch = await store.dispatch(loginHostsBatch(['h1', 'h2'])).unwrap();
+    const [fa, fb] = batch.results.map((r) => r.followUp);
+    expect([fa?.type, fb?.type]).toEqual(['merge', 'merge']);
+
+    const first = haFollowUpAction(fa, store.getState().host);
+    expect(first.payload).toMatchObject({ targetGroupId: 'g1', peers: [{ hostUid: 'h2' }] });
+    hostApi.moveHost.mockResolvedValue({ host_groups: { g1: { name: 'G1', hosts: { h1: a, h2: b } }, g2: { name: 'G2', hosts: {} } } });
+    await store.dispatch(mergeHaPeers(first.payload)).unwrap();
+
+    expect(haFollowUpAction(fb, store.getState().host)).toBeNull();
+    expect(haFollowUpAction(fa, store.getState().host)).toBeNull();
+  });
+
+  it('a discovery follow-up takes the anchor host\'s current group', () => {
+    const followUp = { type: 'discovery', payload: { nodes: [{ hostname: 'peer-x' }], groupId: 'g2', anchorHostUid: 'h2' } };
+    const hostState = { hostGroups: { g1: { name: 'G1', hosts: { h1: a, h2: b } } }, haInfo: {} };
+    expect(haFollowUpAction(followUp, hostState).payload.groupId).toBe('g1');
   });
 });
 

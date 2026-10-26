@@ -39,6 +39,8 @@ export default function StatusModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { statusModal } = useSelector((state) => state.layout, shallowEqual);
+  // Follow-ups are re-based on the current host groups (see haFollowUpAction).
+  const { hostGroups, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { isOpen, type, title, message, guidance, detail, tables } = statusModal;
   const tableItems = Array.isArray(tables) ? tables.filter((tb) => tb?.rows?.length > 0) : [];
   const [showDetail, setShowDetail] = useState(false);
@@ -64,7 +66,9 @@ export default function StatusModal() {
   // the HA modal — so the user returns here for the next host's follow-up.
   const followUpLabels = { discovery: CM.haPeersDiscovered, merge: CM.mergeHAPeers, clusterLink: CM.haClusterLinked };
   const renderHaFollowUp = (row) => {
-    if (!row.followUp) return <span className="text-slate-300 dark:text-slate-600">—</span>;
+    // null once nothing is left to do, e.g. a merge an earlier follow-up already did.
+    const action = haFollowUpAction(row.followUp, { hostGroups, haInfo });
+    if (!action) return <span className="text-slate-300 dark:text-slate-600">—</span>;
     return (
       <Button
         size="sm"
@@ -72,8 +76,6 @@ export default function StatusModal() {
         data-testid={`ha-follow-up-${row.name}`}
         disabled={openedFollowUps.includes(row.uid ?? row.name)}
         onClick={() => {
-          const action = haFollowUpAction(row.followUp);
-          if (!action) return;
           setOpenedFollowUps((prev) => [...prev, row.uid ?? row.name]);
           dispatch(action);
         }}

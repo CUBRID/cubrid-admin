@@ -1070,15 +1070,43 @@ export const processHaLoginSideEffects = createAsyncThunk(
   }
 );
 
-/** Opens, on demand, an HA modal a collect-mode login deferred (see processHaLoginSideEffects). */
-export const haFollowUpAction = (followUp) => {
+/**
+ * Opens, on demand, an HA modal a collect-mode login deferred (see
+ * processHaLoginSideEffects). With `hostState` (the current state.host) the
+ * follow-up is first re-based on the CURRENT groups, since a follow-up the
+ * user opened earlier may already have moved hosts: a merge plan is
+ * recomputed (null once the hosts share a group — otherwise two hosts'
+ * opposite plans, run in turn, would split them again), and discovery /
+ * cluster-link take the anchor host's current group. null = nothing to open.
+ */
+export const haFollowUpAction = (followUp, hostState) => {
   if (!followUp) return null;
+  const { type, payload } = followUp;
+  const anchorHostUid = payload?.anchorHostUid;
+  if (hostState && anchorHostUid) {
+    const { hostGroups } = hostState;
+    if (type === 'merge') {
+      const plan = findHaPeersNeedingMerge(hostGroups, hostState.haInfo?.[anchorHostUid]?.haNodes, anchorHostUid);
+      return plan ? hostSlice.actions.setPendingHaMerge(plan) : null;
+    }
+    const groupId = findGroupIdForHost(hostGroups, anchorHostUid) ?? payload.groupId ?? null;
+    if (type === 'discovery') {
+      return hostSlice.actions.setSuggestedHaNodes({ ...payload, groupId });
+    }
+    if (type === 'clusterLink') {
+      return hostSlice.actions.setHaClusterLinkNotice({
+        ...payload,
+        targetGroupId: groupId,
+        targetGroupName: hostGroups?.[groupId]?.name || payload.targetGroupName,
+      });
+    }
+  }
   const creator = {
     discovery: hostSlice.actions.setSuggestedHaNodes,
     merge: hostSlice.actions.setPendingHaMerge,
     clusterLink: hostSlice.actions.setHaClusterLinkNotice,
-  }[followUp.type];
-  return creator ? creator(followUp.payload) : null;
+  }[type];
+  return creator ? creator(payload) : null;
 };
 
 /** Login + HA side effects — use instead of bare loginToHost for user-initiated logins. */
