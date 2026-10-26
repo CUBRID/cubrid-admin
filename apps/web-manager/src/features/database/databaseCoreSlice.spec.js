@@ -402,4 +402,39 @@ describe('start-info isLoggedIn syncs the padlock to the server-side DB login st
     pending.resolve({});
     await relogin;
   });
+
+  // A start-info request sent before a login/logout finished carries the
+  // older isLoggedIn; it must not undo that login/logout when it lands later.
+  it('does not let a start-info sent before a login clear that login', async () => {
+    const store = configureStore({ reducer });
+    const slow = deferred();
+    databaseApi.getStartInfo.mockReturnValueOnce(slow.promise);
+    const poll = store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    await loginOk(store, 'hostA', 'demodb');
+
+    slow.resolve(info([{ dbname: 'demodb', isLoggedIn: false }, { dbname: 'otherdb', isLoggedIn: true }]));
+    await poll;
+
+    expect([...store.getState().loggedInDatabases].sort()).toEqual(['hostA:demodb', 'hostA:otherdb']);
+
+    // A request sent after the login is authoritative again.
+    databaseApi.getStartInfo.mockResolvedValueOnce(info([{ dbname: 'demodb', isLoggedIn: false }]));
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    expect(store.getState().loggedInDatabases).toEqual([]);
+  });
+
+  it('does not let a start-info sent before a logout restore that login', async () => {
+    const store = configureStore({ reducer });
+    await loginOk(store, 'hostA', 'demodb');
+    const slow = deferred();
+    databaseApi.getStartInfo.mockReturnValueOnce(slow.promise);
+    const poll = store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    databaseApi.logoutDatabase.mockResolvedValueOnce({ dbname: 'demodb' });
+    await store.dispatch(logoutDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+
+    slow.resolve(info([{ dbname: 'demodb', isLoggedIn: true }]));
+    await poll;
+
+    expect(store.getState().loggedInDatabases).toEqual([]);
+  });
 });
