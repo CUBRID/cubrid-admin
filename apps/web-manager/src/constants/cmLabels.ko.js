@@ -1947,6 +1947,12 @@ export const CM_KO = {
   aboutTagline: 'CUBRID를 위한 웹 기반 관리 도구입니다.',
   copyrightNotice: '© 2026 CUBRID Corporation',
 
+  // Unsaved changes confirmation (English fallback pending translation)
+  discardChangesTitle: 'Discard changes?',
+  discardChangesDesc: 'You have unsaved changes. Closing will discard them.',
+  discardChangesBtn: 'Discard changes',
+  keepEditingBtn: 'Keep editing',
+
   // Breadcrumb
   unsavedChangesTitle: '저장하지 않은 변경 사항',
   unsavedChangesDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 닫으면 변경 사항이 사라집니다.`,

@@ -14,6 +14,7 @@ import DatabasePropertyModal from './DatabasePropertyModal';
 
 let container;
 let root;
+let dispatch;
 beforeEach(async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
@@ -32,6 +33,7 @@ beforeEach(async () => {
     user: { preferences: { uiLocale: 'en' } },
   };
   const store = configureStore({ reducer: () => state });
+  dispatch = vi.spyOn(store, 'dispatch');
   await act(async () => root.render(
     <Provider store={store}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
   ));
@@ -125,4 +127,82 @@ it('Reset restores loaded values, modes, and units across buffer groups', async 
   expect(control('modified-count')).toBeNull();
   expect(control('apply-btn').disabled).toBe(true);
   expect(hostApi.setHostConfig).not.toHaveBeenCalled();
+});
+
+const discardControl = id => container.querySelector(`[data-testid="database-property-discard-${id}"]`);
+const escape = async () => act(async () => {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+});
+
+it.each(['modal-close', 'cancel-btn'])('closes unchanged properties through %s without confirmation', async trigger => {
+  await click(control(trigger));
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+});
+
+it.each(['modal-close', 'cancel-btn'])('protects edits through %s and only closes after discard', async trigger => {
+  await fill(input('data', 'size'), '1024');
+  await click(control(trigger));
+  expect(discardControl('modal').textContent).toContain('Discard changes?');
+  expect(dispatch).not.toHaveBeenCalled();
+  await click(discardControl('cancel-btn'));
+  expect(discardControl('modal')).toBeNull();
+  expect(input('data', 'size').value).toBe('1024');
+  expect(control('modified-count').textContent).toBe('1 modified');
+  await click(control(trigger));
+  await click(discardControl('confirm-btn'));
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+  expect(hostApi.setHostConfig).not.toHaveBeenCalled();
+});
+
+it('Escape prompts for edits and dismissing the prompt preserves them', async () => {
+  await selectUnit('data', 'GB');
+  await escape();
+  expect(discardControl('modal')).not.toBeNull();
+  await escape();
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).not.toHaveBeenCalled();
+  expect(unitControl('data').textContent).toContain('GB');
+  await escape();
+  await click(discardControl('modal-close'));
+  expect(dispatch).not.toHaveBeenCalled();
+  expect(control('modified-count').textContent).toBe('1 modified');
+});
+
+it.each(['revert', 'reset', 'apply'])('closes without prompting after %s clears unsaved changes', async action => {
+  await selectUnit('data', 'GB');
+  if (action === 'revert') await selectUnit('data', 'MB');
+  if (action === 'reset') await click(control('reset-btn'));
+  if (action === 'apply') {
+    hostApi.setHostConfig.mockResolvedValue({});
+    await click(control('apply-btn'));
+  }
+  await click(control('cancel-btn'));
+  expect(discardControl('modal')).toBeNull();
+  expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+});
+
+it('still protects parameter edits when Connection Information is selected', async () => {
+  await fill(input('data', 'size'), '1024');
+  await click(Array.from(container.querySelectorAll('button')).find(el => el.textContent.includes('Connection')));
+  await click(control('cancel-btn'));
+  expect(discardControl('modal')).not.toBeNull();
+  await click(discardControl('cancel-btn'));
+  await click(control('apply-btn'));
+  expect(discardControl('modal')).not.toBeNull();
+  expect(dispatch).not.toHaveBeenCalled();
+});
+
+it('protects edits made in Advanced Settings after switching back to General', async () => {
+  await click(Array.from(container.querySelectorAll('button')).find(el => el.textContent.includes('Advanced Settings')));
+  const field = Array.from(container.querySelectorAll('tr')).find(el => el.textContent.includes('async_commit')).querySelector('[role="combobox"]');
+  await click(field);
+  await act(async () => {
+    const option = Array.from(document.querySelectorAll('[role="option"]')).find(el => el.textContent === 'YES');
+    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  });
+  await click(Array.from(container.querySelectorAll('button')).find(el => el.textContent.includes('General')));
+  await click(control('cancel-btn'));
+  expect(discardControl('modal')).not.toBeNull();
+  expect(dispatch).not.toHaveBeenCalled();
 });
