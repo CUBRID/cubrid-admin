@@ -3,7 +3,7 @@ import { useCM } from '../../../constants/useCM';
 
 // Raw server messages are shown as-is, minus a leading "Error: " (or
 // several) that adds nothing in a "Reason" column.
-export const cleanFailureReason = (reason) => String(reason ?? '').replace(/^\s*(?:Error:\s*)+/i, '').trim();
+const cleanFailureReason = (reason) => String(reason ?? '').replace(/^\s*(?:Error:\s*)+/i, '').trim();
 
 const VARIANT_STYLES = {
   failed: { box: 'border-rose-500/20', head: 'bg-rose-500/5 text-rose-500' },
