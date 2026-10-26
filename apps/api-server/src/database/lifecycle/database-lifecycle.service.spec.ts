@@ -86,6 +86,7 @@ describe('DatabaseLifecycleService', () => {
       loginDatabase: jest.fn().mockResolvedValue({}),
       getUserInfo: jest.fn().mockResolvedValue({ user: [] }),
       ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      isDbLoginActive: jest.fn().mockReturnValue(false),
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -196,13 +197,14 @@ describe('DatabaseLifecycleService', () => {
     };
 
     const mockStartInfoClientResponse = {
-      activelist: { active: [{ dbname: 'testdb' }] },
+      activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
       dblist: {
         dbs: [
           {
             dbname: 'testdb',
             dbdir: '/path/to/testdb',
             isProfileExists: false,
+            isLoggedIn: false,
           },
         ],
       },
@@ -220,13 +222,14 @@ describe('DatabaseLifecycleService', () => {
       const result = await service.startInfo(mockUserId, mockHostUid);
 
       expect(result).toEqual({
-        activelist: { active: [{ dbname: 'testdb' }] },
+        activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
         dblist: {
           dbs: [
             {
               dbname: 'testdb',
               dbdir: '/path/to/testdb',
               isProfileExists: true,
+              isLoggedIn: false,
             },
           ],
         },

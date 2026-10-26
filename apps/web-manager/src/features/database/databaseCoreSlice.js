@@ -162,6 +162,32 @@ const markBulkSucceededLoggedIn = (state, hostUid, succeeded) => {
   });
 };
 
+// Start-info's per-entry `isLoggedIn` is the server's real DB-login state
+// (same test as its ensureDbLogin cache hit — invalidated by a rotated CMS
+// token or a server restart), so this host's padlocks are set to exactly
+// that, even from a background poll. Other hosts are left untouched; so is
+// everything when the field is absent (older server) or there are no
+// entries to read it from, and so is any db with a login in flight.
+const syncLoggedInFromStartInfo = (state, payload, hostUid) => {
+  if (!hostUid) return;
+  const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+  const entries = [...toArray(payload.dblist?.dbs), ...toArray(payload.activelist?.active)]
+    .filter((e) => e && typeof e === 'object' && typeof e.dbname === 'string' && 'isLoggedIn' in e);
+  if (entries.length === 0) return;
+
+  const loggedIn = new Set(entries.filter((e) => e.isLoggedIn === true).map((e) => e.dbname));
+  const prefix = dbKey(hostUid, '');
+  const inFlight = (key) => state.loggingInDatabases[key] === true;
+  const next = state.loggedInDatabases.filter((key) => !key.startsWith(prefix) || inFlight(key));
+  loggedIn.forEach((dbname) => {
+    const key = dbKey(hostUid, dbname);
+    if (!next.includes(key)) next.push(key);
+  });
+  if (JSON.stringify(next) !== JSON.stringify(state.loggedInDatabases)) {
+    state.loggedInDatabases = next;
+  }
+};
+
 const parseDbResponse = (state, payload, hostUid) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
@@ -188,7 +214,13 @@ const parseDbResponse = (state, payload, hostUid) => {
     const activeNames = newActive ?? state.activeDatabasesByHost[hostUid] ?? [];
     const missingActiveNames = activeNames.filter((name) => !knownNames.has(name));
     const mergedList = missingActiveNames.length > 0
-      ? [...rawList, ...missingActiveNames.map((dbname) => ({ dbname, isProfileExists: false }))]
+      ? [...rawList, ...missingActiveNames.map((dbname) => {
+        const activeEntry = (Array.isArray(activeFound) ? activeFound : [activeFound])
+          .find((a) => a && typeof a === 'object' && a.dbname === dbname);
+        return activeEntry && 'isLoggedIn' in activeEntry
+          ? { dbname, isProfileExists: false, isLoggedIn: activeEntry.isLoggedIn }
+          : { dbname, isProfileExists: false };
+      })]
       : rawList;
     if (JSON.stringify(state.databasesByHost[hostUid]) !== JSON.stringify(mergedList)) {
       state.databasesByHost[hostUid] = mergedList;
@@ -208,6 +240,8 @@ const parseDbResponse = (state, payload, hostUid) => {
       state.selectedDatabaseSubItem = null;
     }
   }
+
+  syncLoggedInFromStartInfo(state, payload, hostUid);
 
   // Static ha_db_list membership from cubrid_ha.conf — deliberately separate
   // from any live-heartbeat-based HA signal, which can read "not HA" while

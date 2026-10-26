@@ -10,6 +10,7 @@ import { StartInfoCmsResponse } from '@type/cms-response';
 import { CMS_CONFNAME_HACONF } from '@database/database.constants';
 import { parseHaDbListDbNamesFromHaConf } from '@util';
 import { mapStartInfoToClientResponse } from './start-info.mapper';
+import { DatabaseUserService } from '../user/database-user.service';
 
 /**
  * Service for database information (read-only) used across database modules.
@@ -23,7 +24,8 @@ export class DatabaseInfoService extends BaseService {
   constructor(
     protected readonly hostService: HostService,
     protected readonly cmsClient: CmsHttpsClientService,
-    private readonly cmsConfigService: CmsConfigService
+    private readonly cmsConfigService: CmsConfigService,
+    private readonly databaseUserService: DatabaseUserService
   ) {
     super(hostService, cmsClient);
   }
@@ -65,7 +67,9 @@ export class DatabaseInfoService extends BaseService {
       this.startInfoInternal(userId, hostUid),
       this.getHaDbNames(userId, hostUid),
     ]);
-    return mapStartInfoToClientResponse(cmsStart, host.dbProfiles, haDbNames);
+    return mapStartInfoToClientResponse(cmsStart, host.dbProfiles, haDbNames, (dbname) =>
+      this.databaseUserService.isDbLoginActive(userId, hostUid, dbname, host.token)
+    );
   }
 
   /**
