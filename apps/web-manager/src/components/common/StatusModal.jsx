@@ -6,6 +6,7 @@ import { Button } from '../ds/foundation/Button';
 import { Modal } from '../ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
 import { FailureTable } from '../ds/feedback/FailureTable';
+import { haFollowUpAction } from '../../features/host/hostSlice';
 
 const THEME_STYLES = {
   success: {
@@ -41,16 +42,46 @@ export default function StatusModal() {
   const { isOpen, type, title, message, guidance, detail, tables } = statusModal;
   const tableItems = Array.isArray(tables) ? tables.filter((tb) => tb?.rows?.length > 0) : [];
   const [showDetail, setShowDetail] = useState(false);
+  // Follow-ups already opened from this dialog (row uid/name) — disabled after use.
+  const [openedFollowUps, setOpenedFollowUps] = useState([]);
   const guidanceItems = Array.isArray(guidance) ? guidance : (guidance ? [guidance] : []);
 
   const t = THEME_STYLES[type] || THEME_STYLES.info;
   const tLabel = { success: CM.jobStatusSucceeded, error: CM.jobStatusFailed, info: CM.statusNotice }[type] ?? CM.statusNotice;
 
   useEffect(() => {
-    if (isOpen) setShowDetail(false);
+    if (isOpen) {
+      setShowDetail(false);
+      setOpenedFollowUps([]);
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  // Opens the HA modal a bulk login deferred for this host. This dialog
+  // stays open underneath: the HA modals render at z-[2200], above this
+  // one (z-[2100]), and Modal's own top-most check keeps Escape/focus on
+  // the HA modal — so the user returns here for the next host's follow-up.
+  const followUpLabels = { discovery: CM.haPeersDiscovered, merge: CM.mergeHAPeers, clusterLink: CM.haClusterLinked };
+  const renderHaFollowUp = (row) => {
+    if (!row.followUp) return <span className="text-slate-300 dark:text-slate-600">—</span>;
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        data-testid={`ha-follow-up-${row.name}`}
+        disabled={openedFollowUps.includes(row.uid ?? row.name)}
+        onClick={() => {
+          const action = haFollowUpAction(row.followUp);
+          if (!action) return;
+          setOpenedFollowUps((prev) => [...prev, row.uid ?? row.name]);
+          dispatch(action);
+        }}
+      >
+        {followUpLabels[row.followUp.type] || CM.failureTableHaFollowUp}
+      </Button>
+    );
+  };
 
   return (
     <Modal
@@ -98,7 +129,13 @@ export default function StatusModal() {
 
           {tableItems.length > 0 && (
             <div className="mt-4 w-full flex flex-col gap-3">
-              {tableItems.map((tb, idx) => <FailureTable key={idx} {...tb} />)}
+              {tableItems.map(({ haFollowUps, ...tb }, idx) => (
+                <FailureTable
+                  key={idx}
+                  {...tb}
+                  {...(haFollowUps ? { followUpLabel: CM.failureTableHaFollowUp, renderFollowUp: renderHaFollowUp } : {})}
+                />
+              ))}
             </div>
           )}
 

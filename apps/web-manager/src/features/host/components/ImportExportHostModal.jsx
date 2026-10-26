@@ -17,7 +17,7 @@ import { exportHostsToXml,
   validateSelectedImportRows,
 } from '../hostImportExport';
 import { flattenHostsFromGroups, findNewGroupId } from '../hostGroupUtils';
-import { hostLoginFailureTables } from '../hostLoginReport';
+import { importLoginAllStatusModal } from '../hostLoginReport';
 import { store } from '../../../app/store';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -372,45 +372,13 @@ export default function ImportExportHostModal() {
         }
       }
 
-      let successCount = 0;
-      let loginFailed = [];
-      if (savedUids.length > 0) {
-        const loginResult = await dispatch(loginHostsBatch(savedUids)).unwrap();
-        successCount = loginResult.successCount;
-        loginFailed = loginResult.failed;
-      }
-
-      const messageParts = [];
-      if (savedUids.length > 0) {
-        messageParts.push(CM.passwordSavedCountMsg(savedUids.length));
-      }
-      if (passwordSaveFailed.length > 0) {
-        messageParts.push(CM.passwordNotSavedMsg(passwordSaveFailed.join(', ')));
-      }
-      if (savedUids.length > 0) {
-        messageParts.push(CM.connectedHostsMsg(successCount));
-        if (loginFailed.length > 0) {
-          messageParts.push(CM.hostsFailedToLoginMsg(loginFailed.length));
-        }
-      }
-
-      const hasSaveFailures = passwordSaveFailed.length > 0;
-      const hasLoginFailures = loginFailed.length > 0;
-      let statusType = 'success';
-      if (savedUids.length === 0) {
-        statusType = 'error';
-      } else if (hasSaveFailures || (hasLoginFailures && successCount === 0)) {
-        statusType = 'error';
-      } else if (hasLoginFailures) {
-        statusType = 'info';
-      }
-
-      dispatch(showStatusModal({
-        type: statusType,
-        title: CM.loginAll,
-        message: messageParts.join(' '),
-        tables: hostLoginFailureTables(CM, loginFailed),
-      }));
+      // Same batch login (and single consolidated result, HA follow-ups
+      // included) as the sidebar's Login All — see hostLoginReport.js.
+      const batch = savedUids.length > 0
+        ? await dispatch(loginHostsBatch(savedUids)).unwrap()
+        : null;
+      const report = importLoginAllStatusModal(CM, { savedCount: savedUids.length, passwordSaveFailed, batch });
+      if (report) dispatch(showStatusModal(report));
       dispatch(closeImportExportModal());
     } catch {
       dispatch(showStatusModal({

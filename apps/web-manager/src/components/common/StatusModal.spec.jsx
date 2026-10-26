@@ -12,7 +12,8 @@ import layoutReducer, { showStatusModal } from '../../features/layout/layoutSlic
 import StatusModal from './StatusModal';
 import { CM } from '../../constants/cmLabels';
 import { bulkResultStatusModal } from '../../features/database/databaseBulkActions';
-import { hostLoginFailureTables } from '../../features/host/hostLoginReport';
+import hostReducer from '../../features/host/hostSlice';
+import { hostLoginResultStatusModal, importLoginAllStatusModal } from '../../features/host/hostLoginReport';
 
 // Bulk results used to be one long "Failed: a (reason), b (reason)" sentence
 // (and, for Start/Stop/Restart All, only behind "Show details" under a
@@ -28,7 +29,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   store = configureStore({
-    reducer: { layout: layoutReducer, user: () => ({ preferences: { uiLocale: 'en' } }) },
+    reducer: { layout: layoutReducer, host: hostReducer, user: () => ({ preferences: { uiLocale: 'en' } }) },
   });
 });
 
@@ -86,24 +87,54 @@ it('Start All: no phase column, and nothing to show when every database succeede
   expect(rowsOf('bulk-failed-table')).toEqual([['demodb', 'boom']]);
 });
 
-it('Login All (host import): headline plus a Host | Reason table', async () => {
-  const failed = [
-    { name: 'host-a', reason: 'Error: Invalid password' },
-    { name: 'host-b', reason: 'connect ECONNREFUSED' },
-  ];
-  await renderWith({
-    type: 'info',
-    title: CM.loginAll,
-    message: `${CM.connectedHostsMsg(1)} ${CM.hostsFailedToLoginMsg(failed.length)}`,
-    tables: hostLoginFailureTables(CM, failed),
-  });
+const followUp = {
+  type: 'discovery',
+  payload: { nodes: [{ hostname: 'peer-x', ip: '10.9.9.9', port: 8001 }], groupId: 'g1', anchorHostUid: 'h1' },
+};
+const batch = {
+  successCount: 1,
+  failed: [{ name: 'host-b', reason: 'Error: Invalid password' }],
+  results: [
+    { uid: 'h1', name: 'host-a', status: 'connected', followUp },
+    { uid: 'h2', name: 'host-b', status: 'failed', reason: 'Error: Invalid password' },
+  ],
+};
 
-  expect(document.body.textContent).toContain('Connected 1 host(s). 2 host(s) failed to log in.');
-  expect([...document.querySelectorAll('[data-testid="login-failed-table"] th')].map((th) => th.textContent))
-    .toEqual(['Host', 'Reason']);
-  expect(rowsOf('login-failed-table')).toEqual([
-    ['host-a', 'Invalid password'],
-    ['host-b', 'connect ECONNREFUSED'],
+it('Login All: one dialog — headline, then Host | Result | Reason | HA follow-up', async () => {
+  await renderWith(hostLoginResultStatusModal(CM, { title: CM.loginAll, batch }));
+
+  expect(document.body.textContent)
+    .toContain('Connected 1 host(s). 1 host(s) failed to log in. 1 host(s) have an HA follow-up.');
+  expect([...document.querySelectorAll('[data-testid="login-result-table"] th')].map((th) => th.textContent))
+    .toEqual(['Host', 'Result', 'Reason', 'HA follow-up']);
+  expect(rowsOf('login-result-table')).toEqual([
+    ['host-a', 'Connected', '', CM.haPeersDiscovered],
+    ['host-b', 'Failed', 'Invalid password', '—'],
   ]);
-  expect(hostLoginFailureTables(CM, [])).toBeNull();
+  expect(store.getState().host.isDiscoveryModalOpen).toBe(false);
+});
+
+it('the HA follow-up button opens that deferred modal on demand, once, above the result dialog', async () => {
+  await renderWith(hostLoginResultStatusModal(CM, { title: CM.loginAll, batch }));
+  const button = document.querySelector('[data-testid="ha-follow-up-host-a"]');
+
+  await act(async () => button.click());
+
+  const host = store.getState().host;
+  expect(host.isDiscoveryModalOpen).toBe(true);
+  expect(host.suggestedHaNodes).toEqual(followUp.payload.nodes);
+  expect(host.suggestedHaAnchorHostUid).toBe('h1');
+  // The result dialog stays open underneath (HA modals render above it).
+  expect(store.getState().layout.statusModal.isOpen).toBe(true);
+  expect(button.disabled).toBe(true);
+});
+
+it('Hosts → Import → Login All uses the same consolidated result', async () => {
+  const report = importLoginAllStatusModal(CM, { savedCount: 2, passwordSaveFailed: [], batch });
+  expect(report.tables).toEqual(hostLoginResultStatusModal(CM, { title: CM.loginAll, batch }).tables);
+  await renderWith(report);
+
+  expect(document.body.textContent).toContain('Password saved for 2 host(s). Connected 1 host(s).');
+  expect(rowsOf('login-result-table').map((r) => r[0])).toEqual(['host-a', 'host-b']);
+  expect(importLoginAllStatusModal(CM, { savedCount: 1, passwordSaveFailed: ['host-c'], batch }).type).toBe('error');
 });

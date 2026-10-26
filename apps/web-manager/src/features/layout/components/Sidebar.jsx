@@ -22,6 +22,7 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
+import { hostLoginResultStatusModal } from '../../host/hostLoginReport';
 import { dbKey } from '../../database/dbKey';
 
 import { fetchDatabaseSpaceInfo
@@ -240,16 +241,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
     dispatch(loginHostsBatch(uids))
       .unwrap()
-      .then(({ successCount, failed }) => {
-        let message = CM.connectedHostsMsg(successCount);
-        if (failed.length > 0) {
-          message += CM.failedListSuffix(failed.map((f) => `${f.name} (${f.reason})`).join(', '));
-        }
-        dispatch(showStatusModal({
-          type: failed.length > 0 && successCount === 0 ? 'error' : 'success',
-          title: CM.loginAll,
-          message,
-        }));
+      .then((batch) => {
+        const report = hostLoginResultStatusModal(CM, { title: CM.loginAll, batch });
+        if (report) dispatch(showStatusModal(report));
       })
       .catch(() => {
         dispatch(showStatusModal({
@@ -311,16 +305,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
     dispatch(loginHostsBatch(uids))
       .unwrap()
-      .then(({ successCount, failed }) => {
-        let message = CM.connectedHostsMsg(successCount);
-        if (failed.length > 0) {
-          message += CM.failedListSuffix(failed.map((f) => `${f.name} (${f.reason})`).join(', '));
-        }
-        dispatch(showStatusModal({
-          type: failed.length > 0 && successCount === 0 ? 'error' : 'success',
-          title: CM.loginSelectedHosts,
-          message,
-        }));
+      .then((batch) => {
+        const report = hostLoginResultStatusModal(CM, { title: CM.loginSelectedHosts, batch });
+        if (report) dispatch(showStatusModal(report));
       })
       .catch(() => {
         dispatch(showStatusModal({
