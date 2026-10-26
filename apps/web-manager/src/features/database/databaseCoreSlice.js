@@ -60,8 +60,7 @@ export const stopDatabase = createAsyncThunk(
   }
 );
 
-// Bulk start/stop for the "Start/Stop All Databases" tree actions (Restart
-// All stays per-database — see databaseBulkActions.js).
+// Bulk start/stop for the "Start/Stop/Restart All Databases" tree actions.
 // Goes through the dedicated start-all/stop-all endpoints instead of looping
 // individual startDatabase/stopDatabase calls client-side: the backend
 // already isolates per-database failures there (a database with no stored

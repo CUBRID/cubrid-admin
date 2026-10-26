@@ -13,7 +13,7 @@ import { databaseApi } from './databaseApi';
 import reducer, {
   startDatabase, stopDatabase, startAllDatabases, stopAllDatabases, fetchDatabaseStartInfo,
 } from './databaseCoreSlice';
-import { restartDatabasesIndividually, groupBulkFailures, bulkOutcomeMessages } from './databaseBulkActions';
+import { restartDatabasesInBulk, groupBulkFailures, bulkOutcomeMessages } from './databaseBulkActions';
 import { CM } from '../../constants/cmLabels';
 import { CM_KO } from '../../constants/cmLabels.ko';
 
@@ -113,81 +113,57 @@ describe('a successful start/stop marks the database logged in, not just an expl
   });
 });
 
-describe('Restart All restarts only the requested databases and reports each failed one once', () => {
-  // Bug: Restart All went through the start-all endpoint, which on an HA
-  // host runs a bulk ha_start over every ha_db_list entry regardless of the
-  // dbnames passed — so an HA database stopped on purpose came back up. A
-  // database with no stored login also failed both phases and was then
-  // counted and listed twice.
-  it('stops then starts each requested database individually, never via the bulk endpoints', async () => {
-    databaseApi.stopDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: [] } });
-    databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['hadb1'] } });
-    const store = configureStore({ reducer });
-
-    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['hadb1']);
-
-    expect(failed).toEqual([]);
-    expect(databaseApi.stopDatabase).toHaveBeenCalledWith('hostA', 'hadb1');
-    expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'hadb1');
-    expect(databaseApi.startDatabase).toHaveBeenCalledTimes(1);
-    expect(databaseApi.startAllDatabases).not.toHaveBeenCalled();
-    expect(databaseApi.stopAllDatabases).not.toHaveBeenCalled();
-  });
-
-  it('continues past a failed stop and does not start a database confirmed still running', async () => {
-    databaseApi.stopDatabase.mockImplementation(async (hostUid, dbname) => {
-      if (dbname === 'otherdb') throw { response: { data: { message: 'Missing credentials for otherdb' } } };
-      return { dblist: { dbs: [] }, activelist: { active: [] } };
+describe('Restart All: bulk stop then bulk start, each failed database reported once', () => {
+  // Restart All goes through the same start-all/stop-all endpoints (and HA
+  // rule) as Start/Stop All. A database with no stored login fails in both
+  // phases; it must be counted and listed once, with each phase's reason.
+  it('calls stopAll then startAll with the same list and tags failures with their phase', async () => {
+    const calls = [];
+    databaseApi.stopAllDatabases.mockImplementation(async (hostUid, dbnames) => {
+      calls.push(['stop', hostUid, dbnames]);
+      return { succeeded: ['demodb'], failed: [{ dbname: 'otherdb', error: 'no login' }], skipped: [] };
     });
-    databaseApi.getStartInfo.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['otherdb'] } });
-    databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['demodb'] } });
+    databaseApi.startAllDatabases.mockImplementation(async (hostUid, dbnames) => {
+      calls.push(['start', hostUid, dbnames]);
+      return { succeeded: ['demodb'], failed: [{ dbname: 'otherdb', error: 'no login' }], skipped: [] };
+    });
     const store = configureStore({ reducer });
 
-    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['otherdb', 'demodb']);
+    const { failed, skipped } = await restartDatabasesInBulk(store.dispatch, 'hostA', ['demodb', 'otherdb']);
 
-    expect(failed).toEqual([{ dbname: 'otherdb', phase: 'stop', error: 'Missing credentials for otherdb' }]);
-    expect(databaseApi.startDatabase).toHaveBeenCalledTimes(1);
-    expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'demodb');
+    expect(calls).toEqual([
+      ['stop', 'hostA', ['demodb', 'otherdb']],
+      ['start', 'hostA', ['demodb', 'otherdb']],
+    ]);
+    expect(databaseApi.stopDatabase).not.toHaveBeenCalled();
+    expect(databaseApi.startDatabase).not.toHaveBeenCalled();
+    expect(skipped).toEqual([]);
+    expect(groupBulkFailures(failed)).toEqual([
+      { dbname: 'otherdb', reasons: [{ phase: 'stop', error: 'no login' }, { phase: 'start', error: 'no login' }] },
+    ]);
   });
 
-  // Re-review: a rejected stop doesn't prove the database is still running —
-  // the server only reads start info after the stop command succeeded, so if
-  // that lookup (and the thunk's own re-check) fails, the database is down
-  // and skipping its start would leave it down after "Restart All".
-  it('starts a database whose stop was rejected but which a re-check shows stopped', async () => {
-    databaseApi.stopDatabase.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
-    databaseApi.getStartInfo
-      .mockRejectedValueOnce({ response: { data: { message: 'startinfo failed' } } })
-      .mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: [] } });
-    databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['demodb'] } });
+  it('lists an HA database skipped in both phases (non-admin CMS account) once', async () => {
+    const skip = { dbname: 'hadb1', reason: 'HA bulk start/stop is limited to the CMS admin account' };
+    databaseApi.stopAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [skip] });
+    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [skip] });
     const store = configureStore({ reducer });
 
-    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['demodb']);
+    const { failed, skipped } = await restartDatabasesInBulk(store.dispatch, 'hostA', ['demodb', 'hadb1']);
 
     expect(failed).toEqual([]);
-    expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'demodb');
+    expect(skipped).toEqual([skip]);
+    expect(bulkOutcomeMessages(CM, { skipped }, CM.someDatabasesFailedToRestartMsg).skippedText).toBe(
+      '1 database(s) skipped: hadb1 (HA bulk start/stop requires the CMS admin account).'
+    );
   });
 
-  it('still starts a database whose stop was rejected when its state cannot be re-checked', async () => {
-    databaseApi.stopDatabase.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
-    databaseApi.getStartInfo.mockRejectedValue({ response: { data: { message: 'startinfo failed' } } });
-    databaseApi.startDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['demodb'] } });
+  it('does nothing when no database is active', async () => {
     const store = configureStore({ reducer });
 
-    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['demodb']);
-
-    expect(databaseApi.startDatabase).toHaveBeenCalledWith('hostA', 'demodb');
-    expect(failed).toEqual([{ dbname: 'demodb', phase: 'stop', error: 'startinfo failed' }]);
-  });
-
-  it('records a failed start tagged with its phase', async () => {
-    databaseApi.stopDatabase.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: [] } });
-    databaseApi.startDatabase.mockRejectedValue({ response: { data: { message: 'boom' } } });
-    const store = configureStore({ reducer });
-
-    const { failed } = await restartDatabasesIndividually(store.dispatch, 'hostA', ['demodb']);
-
-    expect(failed).toEqual([{ dbname: 'demodb', phase: 'start', error: 'boom' }]);
+    expect(await restartDatabasesInBulk(store.dispatch, 'hostA', [])).toEqual({ failed: [], skipped: [] });
+    expect(databaseApi.stopAllDatabases).not.toHaveBeenCalled();
+    expect(databaseApi.startAllDatabases).not.toHaveBeenCalled();
   });
 
   it('groupBulkFailures counts a database once and keeps every phase reason', () => {

@@ -1,57 +1,22 @@
-import { fetchDatabaseStartInfo, startDatabase, stopDatabase } from './databaseCoreSlice';
+import { startAllDatabases, stopAllDatabases } from './databaseCoreSlice';
 
-const errorText = (err) => (typeof err === 'string' ? err : err?.message || String(err));
-
-// "Restart All Databases": stop then start exactly the given databases, one
-// at a time, through the individual start/stop endpoints. Deliberately not
-// the start-all/stop-all endpoints: those always act on every `ha_db_list`
-// entry on an HA host regardless of the dbnames passed, so a restart would
-// also start an HA database that was stopped on purpose. Each database's
-// failure is caught and recorded instead of aborting the rest.
-//
-// A rejected stop doesn't prove the database is still running — the stop
-// command itself may have succeeded with only the follow-up status lookup
-// failing — so the active list is re-read once before deciding whom to
-// start. Only a database confirmed still active is skipped; one confirmed
-// stopped had its stop succeed after all; if the state can't be confirmed,
-// it is started anyway so a restart never leaves a database down.
-export async function restartDatabasesIndividually(dispatch, hostUid, dbnames) {
-  let failed = [];
-  for (const dbname of dbnames) {
-    try {
-      await dispatch(stopDatabase({ hostUid, dbname })).unwrap();
-    } catch (err) {
-      failed.push({ dbname, phase: 'stop', error: errorText(err) });
-    }
-  }
-  const stillActive = failed.length > 0 ? await readActiveDbnames(dispatch, hostUid) : null;
-  if (stillActive) {
-    failed = failed.filter((f) => stillActive.has(f.dbname));
-  }
-  const toStart = dbnames.filter((d) => !stillActive?.has(d));
-  for (const dbname of toStart) {
-    try {
-      await dispatch(startDatabase({ hostUid, dbname })).unwrap();
-    } catch (err) {
-      failed.push({ dbname, phase: 'start', error: errorText(err) });
-    }
-  }
-  return { failed };
-}
-
-// Active dbnames per a fresh start-info read, or null if it can't be read
-// (or comes back malformed) — unknown, not "nothing is running".
-async function readActiveDbnames(dispatch, hostUid) {
-  try {
-    const info = await dispatch(fetchDatabaseStartInfo(hostUid)).unwrap();
-    const active = info?.activelist?.active;
-    if (!Array.isArray(active)) return null;
-    const names = active.map((a) => (typeof a === 'string' ? a : a?.dbname));
-    if (!names.every((n) => typeof n === 'string' && n.length > 0)) return null;
-    return new Set(names);
-  } catch (_) {
-    return null;
-  }
+// "Restart All Databases": bulk stop, then bulk start, of the same list —
+// each phase isolates its own per-database failures (same endpoints and HA
+// rule as Start/Stop All). Failures are tagged with their phase; an HA
+// database skipped in both phases (non-admin CMS account) is listed once.
+export async function restartDatabasesInBulk(dispatch, hostUid, dbnames) {
+  if (dbnames.length === 0) return { failed: [], skipped: [] };
+  const stopResult = await dispatch(stopAllDatabases({ hostUid, dbnames })).unwrap();
+  const startResult = await dispatch(startAllDatabases({ hostUid, dbnames })).unwrap();
+  const tag = (list, phase) => (list || []).map(({ dbname, error }) => ({ dbname, phase, error }));
+  const skipped = new Map();
+  [...(stopResult.skipped || []), ...(startResult.skipped || [])].forEach((s) => {
+    if (!skipped.has(s.dbname)) skipped.set(s.dbname, s);
+  });
+  return {
+    failed: [...tag(stopResult.failed, 'stop'), ...tag(startResult.failed, 'start')],
+    skipped: [...skipped.values()],
+  };
 }
 
 // Groups `{ dbname, phase, error }` failures by database (first-seen order)
