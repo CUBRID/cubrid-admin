@@ -1583,6 +1583,7 @@ export const CM = {
   brokerConfigRetrieveError: 'Could not retrieve broker configuration.',
   configSaved: 'Config saved',
   brokerConfigSaveSuccess: 'Broker configuration updated successfully.',
+  brokerConfigRestartRequiredNotice: 'The broker must be restarted for this change to take effect.',
   saveFailed: 'Save failed',
   brokerConfigSaveError: 'An error occurred while saving broker configuration.',
   initializingEditor: 'Initializing Editor...',
