@@ -58,6 +58,7 @@ import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import { useDesktopMenuLanguage } from '../features/desktop/hooks/useDesktopMenuLanguage';
+import { useDesktopMenuActions } from '../features/desktop/hooks/useDesktopMenuActions';
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
@@ -515,6 +516,7 @@ function RootRedirect() {
 function App() {
   const { theme } = useSelector((state) => state.layout, shallowEqual);
   useDesktopMenuLanguage();
+  useDesktopMenuActions();
 
   useEffect(() => {
     if (window.desktopBridge?.onCloseActiveTab) {

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import type { DesktopBridge, DesktopConfig } from './ipc/bridge-types';
 
@@ -18,6 +18,14 @@ const desktopBridge: DesktopBridge = {
     ipcRenderer.invoke('desktop:finish-workspace-setup', workspaceRoot),
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),
   setMenuLanguage: (language) => ipcRenderer.invoke('desktop:set-menu-language', language),
+  setMenuState: (state) => ipcRenderer.invoke('desktop:set-menu-state', state),
+  onMenuAction: (callback) => {
+    const subscription = (_event: IpcRendererEvent, actionId: string) => callback(actionId);
+    ipcRenderer.on('desktop:menu-action', subscription);
+    return () => {
+      ipcRenderer.removeListener('desktop:menu-action', subscription);
+    };
+  },
   onCloseActiveTab: (callback) => {
     const subscription = () => callback();
     ipcRenderer.on('desktop:close-active-tab', subscription);
