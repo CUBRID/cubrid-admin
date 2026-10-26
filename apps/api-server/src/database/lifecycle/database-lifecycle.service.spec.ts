@@ -1312,6 +1312,46 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('createDatabaseInternal extra volume validation message', () => {
+    it('surfaces the specific volume cause instead of the generic volume message', async () => {
+      (fileService as any).checkfileInternal = jest.fn().mockResolvedValue({
+        existfile: undefined,
+      });
+
+      const request = {
+        dbname: 'testdb',
+        numpage: '32768',
+        pagesize: '16384',
+        logsize: '512',
+        logpagesize: '16384',
+        genvolpath: '/path/to/testdb',
+        logvolpath: '/path/to/testdb',
+        charset: 'en_US.utf8',
+        overwrite_config_file: 'YES' as const,
+        exvol: [
+          {
+            testdb_data_x001: {
+              type: 'data',
+              size: 0,
+              pagesize: 16384,
+              volpath: '/path/to/testdb',
+            },
+          },
+        ],
+      };
+
+      const error = await service
+        .createDatabaseInternal(mockUserId, mockHostUid, request as any)
+        .catch((e) => e);
+
+      expect(error).toMatchObject({ code: DatabaseErrorCode.CONVERT_VOLUME_FAILED });
+      expect(error.toProblemDetails().detail).toBe(
+        'Volume "testdb_data_x001": Volume size and pagesize must be positive numbers'
+      );
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createDatabaseInternal no longer owns HA mode config', () => {
     const mockRequest = {
       dbname: 'testdb',

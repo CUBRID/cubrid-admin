@@ -69,6 +69,21 @@ export function parseExvolString(volumeString: string): ParsedExvol {
 }
 
 /**
+ * Carries the specific, fixed-text `message` of a volume validation error
+ * (e.g. InvalidVolumeSize) through to the wrapping Parse/ConvertVolumeFailed
+ * error, so the client sees the actual cause instead of the generic
+ * "Invalid volume information." Only DatabaseError messages built in this
+ * module are forwarded; unknown errors keep the generic fallback.
+ */
+function causeMessageFor(volumeName: string, cause: DatabaseError): { message?: string } {
+  const message = cause.additionalData?.message;
+  if (typeof message !== 'string' || message.trim() === '') {
+    return {};
+  }
+  return { message: `Volume "${volumeName}": ${message.trim()}` };
+}
+
+/**
  * Parses an array of extended volume objects.
  * Each object contains volume names as keys and "type;size;path" strings as values.
  *
@@ -113,7 +128,10 @@ export function parseExvolArray(
         });
       } catch (error) {
         if (error instanceof DatabaseError) {
-          throw DatabaseError.ParseVolumeFailed(volumeName, error, { volumeString });
+          throw DatabaseError.ParseVolumeFailed(volumeName, error, {
+            volumeString,
+            ...causeMessageFor(volumeName, error),
+          });
         }
         throw DatabaseError.ParseVolumeFailed(
           volumeName,
@@ -220,7 +238,10 @@ export function convertExvolArrayToCmsFormat(
         cmsVolumeObj[volumeName] = convertExvolInfoToCmsFormat(volumeInfo);
       } catch (error) {
         if (error instanceof DatabaseError) {
-          throw DatabaseError.ConvertVolumeFailed(volumeName, error, { volumeInfo });
+          throw DatabaseError.ConvertVolumeFailed(volumeName, error, {
+            volumeInfo,
+            ...causeMessageFor(volumeName, error),
+          });
         }
         throw DatabaseError.ConvertVolumeFailed(
           volumeName,
