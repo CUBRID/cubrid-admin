@@ -62,6 +62,8 @@ export const CM_KO = {
   noLocksMsg: '현재 이 데이터베이스에 걸려 있는 잠금이 없습니다.',
   locksUnavailableTitle: '잠금 정보를 사용할 수 없음',
   locksUnavailableMsg: '이 데이터베이스의 잠금 정보를 불러오지 못했습니다.',
+  dataUnavailableTitle: '정보를 사용할 수 없음',
+  dataUnavailableMsg: '이 정보를 불러오지 못했습니다.',
   lockIndex: '인덱스',
   pname: '프로세스명',
   uid: '사용자 ID',

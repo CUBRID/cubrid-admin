@@ -31,6 +31,11 @@ export default function VolumeInfoMonitor({ tabId }) {
   const { spaceInfo, spaceInfoLoading } = useSelector((state) => state.databaseMonitoring || {}, shallowEqual);
   const dbSpace = spaceInfo?.[`${hostUid}:${dbname}`];
   const isLoading = spaceInfoLoading?.[`${hostUid}:${dbname}`];
+  // Space info is cached per db once fetched; before that, tell a still-pending
+  // first fetch apart from a failed one.
+  const spaceInfoFailed = useSelector(
+    (state) => state.databaseMonitoring?.dashboardData?.[`${hostUid}:${dbname}`]?.spaceInfoStatus === 'error'
+  );
 
   const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -50,13 +55,26 @@ export default function VolumeInfoMonitor({ tabId }) {
   const isLogVolume = /LOG|ACTIVE|ARCHIVE/i.test(volume?.type || '');
   const pageSize = parseNumber(isLogVolume ? dbSpace?.logpagesize : dbSpace?.pagesize) || parseNumber(dbSpace?.pagesize) || 4096;
 
-  if (isLoading && !volume) {
+  if (!dbSpace && !spaceInfoFailed) {
     return (
       <div className="flex-1 flex h-full bg-white dark:bg-background-dark">
         <PageLoader
           title={CM.loadingVolumeInfo}
           subtitle={CM.loadingVolumeInfoSub}
           icon="storage"
+        />
+      </div>
+    );
+  }
+
+  if (!dbSpace) {
+    return (
+      <div className="flex-1 flex h-full bg-white dark:bg-background-dark">
+        <EmptyState
+          icon="error"
+          accent="rose"
+          title={CM.dataUnavailableTitle}
+          subtitle={CM.dataUnavailableMsg}
         />
       </div>
     );

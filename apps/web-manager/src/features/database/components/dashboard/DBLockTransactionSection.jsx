@@ -13,6 +13,7 @@ import { Table } from '../../../../components/ds/layout/Table';
 import { Card } from '../../../../components/ds/layout/Card';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { EmptyState } from '../../../../components/ds/feedback/EmptyState';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
 /** lockdb dashboard row → gettransactioninfo / killtransaction shape */
@@ -140,30 +141,20 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
           data={locks}
           onRowContextMenu={handleRowContextMenu}
           emptyState={
-            locksStatus === 'error' ? (
-              <EmptyState
-                icon="error"
-                accent="rose"
-                title={CM.locksUnavailableTitle}
-                subtitle={CM.locksUnavailableMsg}
-                py="py-8"
-              />
-            ) : locksStatus === 'loaded' ? (
-              <EmptyState
-                icon="verified_user"
-                title={CM.noLocksTitle}
-                subtitle={CM.noLocksMsg}
-                py="py-8"
-              />
-            ) : (
-              <EmptyState
-                icon="hourglass_empty"
-                accent="slate"
-                title={CM.lockAndTransaction}
-                subtitle={CM.loadingLabel}
-                py="py-8"
-              />
-            )
+            <FetchEmptyState
+              status={locksStatus}
+              title={CM.lockAndTransaction}
+              errorTitle={CM.locksUnavailableTitle}
+              errorSubtitle={CM.locksUnavailableMsg}
+              empty={
+                <EmptyState
+                  icon="verified_user"
+                  title={CM.noLocksTitle}
+                  subtitle={CM.noLocksMsg}
+                  py="py-8"
+                />
+              }
+            />
           }
         />
       </Card>

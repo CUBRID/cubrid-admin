@@ -7,9 +7,10 @@ import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Card } from '../../../../components/ds/layout/Card';
 import { ProgressBar } from '../../../../components/ds/foundation/ProgressBar';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
-export default function DBVolumesSection({ volumes, pollingProps }) {
+export default function DBVolumesSection({ volumes, volumesStatus, pollingProps }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -123,7 +124,11 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
       isCollapsed={isCollapsed}
       onToggle={(v) => setIsCollapsed(v)}
     >
-      <Table columns={columns} data={volumes} />
+      <Table
+        columns={columns}
+        data={volumes}
+        emptyState={<FetchEmptyState status={volumesStatus} title={CM.storageVolumes} />}
+      />
     </Card>
   );
 }

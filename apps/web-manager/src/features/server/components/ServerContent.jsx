@@ -34,6 +34,9 @@ const Component = function ServerContent({ hostUid }) {
   // multiple simultaneously-open dashboard tabs for different hosts, and the
   // navigator, don't clobber each other's displayed data.
   const [databases, setDatabases] = useState([]);
+  // 'loading' until the first database-list fetch settles, then 'loaded' or
+  // 'error', so sections built on it don't read an empty list as "no databases".
+  const [dbListStatus, setDbListStatus] = useState('loading');
   const [activeDatabases, setActiveDatabases] = useState([]);
   const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
@@ -56,7 +59,14 @@ const Component = function ServerContent({ hostUid }) {
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => async (dispatch) => {
       // 1. First fetch database status to get the current active list
-      const dbInfo = await dispatch(fetchDatabaseStartInfo(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
+      let dbInfo;
+      try {
+        dbInfo = await dispatch(fetchDatabaseStartInfo(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
+      } catch (err) {
+        setDbListStatus('error');
+        throw err;
+      }
+      setDbListStatus('loaded');
       const newDatabases = dbInfo.dblist?.dbs || [];
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
@@ -255,10 +265,10 @@ const Component = function ServerContent({ hostUid }) {
       {/* ── Scrollable Body ── */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <HaClusterStatusSection hostUid={hostUid} />
-        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} />
+        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
         <Brokers hostUid={hostUid} isSection={true} />
         <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} />
-        <DatabaseListSection dbListDisplay={dbListDisplay} />
+        <DatabaseListSection dbListDisplay={dbListDisplay} dbListStatus={dbListStatus} />
         <SystemInfo hostUid={hostUid} />
       </div>
     </div>

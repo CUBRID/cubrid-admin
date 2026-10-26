@@ -29,8 +29,11 @@ export const fetchDatabaseVolumes = createAsyncThunk(
           return null;
         }
       });
-      const responses = await Promise.all(allRequest);
-      return responses.filter(res => res !== null);
+      const responses = await Promise.all(allRequest).then(list => list.filter(res => res !== null));
+      // Every database's request failed: report a failure rather than an
+      // empty list, which would read as "no volumes".
+      if (responses.length === 0) return rejectWithValue('Failed to fetch volume info');
+      return responses;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch volume info');
     }
@@ -157,7 +160,7 @@ export const fetchDashboardData = createAsyncThunk(
       dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
     ]);
 
-    const [volR, lockR, perfR, casR, spaceR] = settled;
+    const [volR, lockR, , , spaceR] = settled;
 
     if (volR.status === 'rejected' && spaceR.status === 'rejected') {
       return rejectWithValue(volR.reason || `Failed to fetch dashboard data for ${dbname}`);
@@ -167,27 +170,9 @@ export const fetchDashboardData = createAsyncThunk(
       console.warn(`[dashboard] lock fetch failed for ${dbname}:`, lockR.reason);
     }
 
-    const vol = volR.status === 'fulfilled' ? volR.value : { volumes: [], pagesize: undefined, logpagesize: undefined };
-    const lock = lockR.status === 'fulfilled' ? lockR.value : { locks: [] };
-    // Lets the lock section tell "no locks held" apart from "lock request failed".
-    const locksStatus = lockR.status === 'fulfilled' ? 'loaded' : 'error';
-    const perf = perfR.status === 'fulfilled' ? perfR.value : { performance: {} };
-    const cas = casR.status === 'fulfilled' ? casR.value : { brokersCAS: [] };
-    const space = spaceR.status === 'fulfilled' ? spaceR.value : { data: {} };
-
-    return {
-      hostUid,
-      dbname,
-      volumes: vol.volumes,
-      locks: lock.locks,
-      locksStatus,
-      performance: perf.performance,
-      brokersCAS: cas.brokersCAS,
-      spaceInfo: space.data?.fileinfo || [],
-      volumeSummary: space.data?.dbinfo || [],
-      pagesize: vol.pagesize,
-      logpagesize: vol.logpagesize,
-    };
+    // Each sub-fetch's own fulfilled/rejected reducer has already merged its
+    // rows and set its section status, so a failed part keeps its last rows.
+    return { hostUid, dbname };
   }
 );
 
@@ -220,6 +205,15 @@ const databaseMonitoringSlice = createSlice({
       volumeSummary: [],
     });
 
+    // Per-section fetch status on the dashboard entry: unset until the first
+    // fetch settles, then 'loaded' or 'error'. Lets a section tell "nothing
+    // there" apart from "still loading" and "request failed".
+    const setSectionStatus = (state, { hostUid, dbname }, field, status) => {
+      const key = dashboardKey(hostUid, dbname);
+      const existing = state.dashboardData[key] || emptyDashboardEntry();
+      state.dashboardData[key] = { ...existing, [field]: status };
+    };
+
     builder
       .addCase(fetchDatabaseVolumes.pending, (state) => {
         state.volumesLoading = true;
@@ -227,6 +221,9 @@ const databaseMonitoringSlice = createSlice({
       .addCase(fetchDatabaseVolumes.fulfilled, (state, action) => {
         state.volumesLoading = false;
         state.volumes = action.payload;
+      })
+      .addCase(fetchDatabaseVolumes.rejected, (state) => {
+        state.volumesLoading = false;
       })
       .addCase(fetchDatabaseSpaceInfo.fulfilled, (state, action) => {
         const { hostUid, dbname, data } = action.payload;
@@ -247,13 +244,20 @@ const databaseMonitoringSlice = createSlice({
           ...existing,
           spaceInfo: data.fileinfo || [],
           volumeSummary: data.dbinfo || [],
+          spaceInfoStatus: 'loaded',
         };
+      })
+      .addCase(fetchDatabaseSpaceInfo.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'spaceInfoStatus', 'error');
       })
       .addCase(fetchDashboardVolumes.fulfilled, (state, action) => {
         const { hostUid, dbname, volumes, pagesize, logpagesize } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, volumes, pagesize, logpagesize };
+        state.dashboardData[key] = { ...existing, volumes, pagesize, logpagesize, volumesStatus: 'loaded' };
+      })
+      .addCase(fetchDashboardVolumes.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'volumesStatus', 'error');
       })
       .addCase(fetchDashboardPerformance.fulfilled, (state, action) => {
         const { hostUid, dbname, performance } = action.payload;
@@ -265,7 +269,10 @@ const databaseMonitoringSlice = createSlice({
         const { hostUid, dbname, brokersCAS } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, brokersCAS };
+        state.dashboardData[key] = { ...existing, brokersCAS, casStatus: 'loaded' };
+      })
+      .addCase(fetchDashboardCAS.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'casStatus', 'error');
       })
       .addCase(fetchDashboardLocks.fulfilled, (state, action) => {
         const { hostUid, dbname, locks } = action.payload;
@@ -274,16 +281,11 @@ const databaseMonitoringSlice = createSlice({
         state.dashboardData[key] = { ...existing, locks, locksStatus: 'loaded' };
       })
       .addCase(fetchDashboardLocks.rejected, (state, action) => {
-        const { hostUid, dbname } = action.meta.arg;
-        const key = dashboardKey(hostUid, dbname);
-        const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, locksStatus: 'error' };
+        setSectionStatus(state, action.meta.arg, 'locksStatus', 'error');
       })
       .addCase(fetchDashboardData.fulfilled, (state, action) => {
-        const { hostUid, dbname, volumes, locks, locksStatus, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize } = action.payload;
-        const key = dashboardKey(hostUid, dbname);
-        state.dashboardData[key] = { volumes, locks, locksStatus, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize };
-        state.dashboardLoading[key] = false;
+        const { hostUid, dbname } = action.payload;
+        state.dashboardLoading[dashboardKey(hostUid, dbname)] = false;
       })
       // Cleanup on tab close to prevent memory leaks
       .addMatcher(

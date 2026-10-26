@@ -22,6 +22,7 @@ import reducer, {
   fetchDashboardData,
   fetchDashboardLocks,
   fetchDatabaseSpaceInfo,
+  fetchDatabaseVolumes,
 } from './databaseMonitoringSlice';
 
 const HOST = 'host1';
@@ -139,5 +140,114 @@ describe('dashboard lock status', () => {
     databaseApi.getLockInfo.mockResolvedValueOnce(lockInfo([]));
     await store.dispatch(fetchDashboardLocks({ hostUid: HOST, dbname: DB }));
     expect(entry(store).locksStatus).toBe('loaded');
+  });
+});
+
+describe('dashboard section status', () => {
+  const okVolumeInfo = (spacename = 'demodb') => ({
+    spaceinfo: [{ spacename }],
+    dbinfo: [{ type: 'PERMANENT' }],
+    fileinfo: [{ data_type: 'INDEX' }],
+    pagesize: '16384',
+    logpagesize: '16384',
+  });
+  const okAll = () => {
+    databaseApi.getVolumeInfo.mockResolvedValue(okVolumeInfo());
+    databaseApi.getLockInfo.mockResolvedValue(lockInfo([]));
+    databaseApi.getStatDump.mockResolvedValue({});
+    brokerApi.getBrokerList.mockResolvedValue([{ broker: [{ name: 'broker1' }] }]);
+    brokerApi.getBrokerStatus.mockResolvedValue(brokerStatus([cas()]));
+  };
+
+  it('leaves every section status unset before the first fetch settles', () => {
+    const store = makeStore();
+    expect(entry(store)).toBeUndefined();
+  });
+
+  it('marks each section loaded after a successful dashboard fetch', async () => {
+    okAll();
+    const store = makeStore();
+
+    await store.dispatch(fetchDashboardData({ hostUid: HOST, dbname: DB })).unwrap();
+
+    expect(entry(store)).toMatchObject({
+      volumesStatus: 'loaded',
+      spaceInfoStatus: 'loaded',
+      casStatus: 'loaded',
+      locksStatus: 'loaded',
+    });
+  });
+
+  it('marks only the failed sections as errored', async () => {
+    okAll();
+    brokerApi.getBrokerList.mockRejectedValue(new Error('timeout'));
+    const store = makeStore();
+
+    await store.dispatch(fetchDashboardData({ hostUid: HOST, dbname: DB })).unwrap();
+
+    expect(entry(store).casStatus).toBe('error');
+    expect(entry(store).volumesStatus).toBe('loaded');
+    expect(entry(store).spaceInfoStatus).toBe('loaded');
+  });
+
+  it('keeps the previously loaded rows when a later refresh of that section fails', async () => {
+    okAll();
+    const store = makeStore();
+    await store.dispatch(fetchDashboardData({ hostUid: HOST, dbname: DB })).unwrap();
+    expect(entry(store).brokersCAS).toHaveLength(1);
+
+    databaseApi.getLockInfo.mockResolvedValue(lockInfo([]));
+    brokerApi.getBrokerList.mockRejectedValue(new Error('timeout'));
+    databaseApi.getStatDump.mockResolvedValue({});
+    // Volume info fails for the volumes sub-fetch only; space info still works.
+    databaseApi.getVolumeInfo
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce(okVolumeInfo());
+    await store.dispatch(fetchDashboardData({ hostUid: HOST, dbname: DB })).unwrap();
+
+    expect(entry(store).casStatus).toBe('error');
+    expect(entry(store).brokersCAS).toHaveLength(1);
+    expect(entry(store).volumesStatus).toBe('error');
+    expect(entry(store).volumes).toEqual([{ spacename: 'demodb' }]);
+  });
+
+  it('flags a failed space-info fetch without creating rows', async () => {
+    databaseApi.getVolumeInfo.mockRejectedValue(new Error('timeout'));
+    const store = makeStore();
+
+    await store.dispatch(fetchDatabaseSpaceInfo({ hostUid: HOST, dbname: DB }));
+
+    expect(entry(store).spaceInfoStatus).toBe('error');
+    expect(entry(store).spaceInfo).toEqual([]);
+    expect(store.getState().databaseMonitoring.spaceInfo[KEY]).toBeUndefined();
+  });
+});
+
+describe('fetchDatabaseVolumes', () => {
+  it('rejects when every database volume request failed', async () => {
+    databaseApi.getVolumeInfo.mockRejectedValue(new Error('timeout'));
+    const store = makeStore();
+
+    const action = await store.dispatch(fetchDatabaseVolumes({ hostUid: HOST, activeDatabases: ['a', 'b'] }));
+
+    expect(action.type).toBe('database/fetchDatabaseVolumes/rejected');
+    expect(store.getState().databaseMonitoring.volumesLoading).toBe(false);
+  });
+
+  it('keeps the databases that answered when only some failed', async () => {
+    databaseApi.getVolumeInfo
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({ spaceinfo: [] });
+    const store = makeStore();
+
+    const result = await store.dispatch(fetchDatabaseVolumes({ hostUid: HOST, activeDatabases: ['a', 'b'] })).unwrap();
+
+    expect(result).toEqual([{ spaceinfo: [], dbname: 'b' }]);
+  });
+
+  it('resolves an empty list when no database is active', async () => {
+    const store = makeStore();
+    const result = await store.dispatch(fetchDatabaseVolumes({ hostUid: HOST, activeDatabases: [] })).unwrap();
+    expect(result).toEqual([]);
   });
 });

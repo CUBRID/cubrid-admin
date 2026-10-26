@@ -498,8 +498,11 @@ const brokerSlice = createSlice({
         state.cmsLogsLoading = false;
         state.cmsLogsByHost[action.payload.hostUid] = action.payload.logs;
       })
-      .addCase(fetchCMSLogs.rejected, (state) => {
+      .addCase(fetchCMSLogs.rejected, (state, action) => {
         state.cmsLogsLoading = false;
+        // null = fetch failed with nothing cached (undefined = not fetched
+        // yet); a failed refresh keeps the last logs.
+        if (state.cmsLogsByHost[action.meta.arg] === undefined) state.cmsLogsByHost[action.meta.arg] = null;
       })
       .addCase(fetchDatabaseLogs.pending, (state) => {
         state.dbLogsLoading = true;

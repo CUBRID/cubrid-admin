@@ -36,6 +36,13 @@ function CMSLogViewer({ hostUid, type }) {
     dispatch(fetchCMSLogs(hostUid));
   };
 
+  // The log tree fetches on expand; a tab restored without that fetch would
+  // otherwise wait forever on the loading state below.
+  useEffect(() => {
+    if (cmsLogs === undefined && !loading) dispatch(fetchCMSLogs(hostUid));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostUid]);
+
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
@@ -62,7 +69,8 @@ function CMSLogViewer({ hostUid, type }) {
     return () => document.removeEventListener('mousedown', closeMenu, true);
   }, [toolbarMenu]);
 
-  if (loading && !cmsLogs) {
+  // undefined = not fetched yet, null = the fetch failed (shown below).
+  if (cmsLogs === undefined) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-bk-main" role="status" aria-live="polite">
         <div className="flex flex-col items-center gap-3">
@@ -181,7 +189,9 @@ function CMSLogViewer({ hostUid, type }) {
 
       {/* Log List - One line format */}
       <div className="flex-1 overflow-auto bg-white dark:bg-bk-side">
-        {!paginatedLogs || paginatedLogs.length === 0 ? (
+        {cmsLogs === null ? (
+          <EmptyState className="h-full" icon="error" title={CM.dataUnavailableTitle} description={CM.dataUnavailableMsg} />
+        ) : !paginatedLogs || paginatedLogs.length === 0 ? (
           <EmptyState className="h-full" icon="inbox" title={CM.noLogEntriesFound} />
         ) : (
           <div className="min-w-[680px]">

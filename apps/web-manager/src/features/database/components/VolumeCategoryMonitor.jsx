@@ -9,6 +9,7 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Table } from '../../../components/ds/layout/Table';
 import { Card } from '../../../components/ds/layout/Card';
+import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
 
 // ── Helpers ──
@@ -136,7 +137,7 @@ const UtilizationBar = memo(({ summary, usageSeverity, pageSize }) => {
   );
 });
 
-const VolumeTableContainer = memo(({ volumes, pageSize }) => {
+const VolumeTableContainer = memo(({ volumes, pageSize, status, title }) => {
   const CM = useCM();
   return (
     <Card bodyClassName="p-0 overflow-hidden" className="border-slate-200 dark:border-white/5 shadow-xs bg-white dark:bg-white/1 rounded-sm">
@@ -201,6 +202,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize }) => {
           }
         ]}
         data={volumes}
+        emptyState={<FetchEmptyState status={status} title={title} />}
       />
     </Card>
   );
@@ -223,6 +225,12 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
 
   const dbSpace = spaceInfo[`${hostUid}:${dbname}`];
   const isLoading = spaceInfoLoading?.[`${hostUid}:${dbname}`];
+  // Space info is cached per db once fetched; before that, tell a still-pending
+  // first fetch apart from a failed one.
+  const spaceInfoFailed = useSelector(
+    (state) => state.databaseMonitoring?.dashboardData?.[`${hostUid}:${dbname}`]?.spaceInfoStatus === 'error'
+  );
+  const spaceInfoStatus = dbSpace ? 'loaded' : spaceInfoFailed ? 'error' : undefined;
   const meta = useMemo(() => {
     const categoryMeta = getCategoryMeta(CM);
     return categoryMeta[category] || categoryMeta.Permanent_PermanentData;
@@ -275,7 +283,7 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
         <div className="max-w-7xl mx-auto space-y-5">
           <CategoryStats volumes={volumes} summary={summary} pageSize={pageSize} />
           <UtilizationBar summary={summary} usageSeverity={usageSeverity} pageSize={pageSize} />
-          <VolumeTableContainer volumes={volumes} pageSize={pageSize} />
+          <VolumeTableContainer volumes={volumes} pageSize={pageSize} status={spaceInfoStatus} title={meta.label} />
         </div>
       </div>
 

@@ -208,10 +208,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
         ) : (
           <div className="space-y-4">
             <DBPerformanceSection dbStats={dbStats} pollingProps={pollingProps} />
-            <DBVolumesSection volumes={mappedVolumes} pollingProps={pollingProps} />
-            <DBSpaceInfoSection spaceInfo={mappedSpaceInfo} pollingProps={pollingProps} />
+            <DBVolumesSection volumes={mappedVolumes} volumesStatus={data.volumesStatus} pollingProps={pollingProps} />
+            <DBSpaceInfoSection spaceInfo={mappedSpaceInfo} spaceInfoStatus={data.spaceInfoStatus} pollingProps={pollingProps} />
             <DBBrokersCASSection
               brokersCAS={mappedBrokers}
+              casStatus={data.casStatus}
               pollingProps={pollingProps}
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}
               onViewSlowQueryLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'slow' })}

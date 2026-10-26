@@ -36,6 +36,9 @@ const Component = function ServiceDashboard() {
   const { hosts, hostGroups, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // Rows come from the registered host list (fetchHosts); while it loads the
+  // table must not say "No data available".
+  const hostsLoading = useSelector((state) => state.host.loading);
 
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const [roleFilter, setRoleFilter] = useState('all');
@@ -525,6 +528,7 @@ const Component = function ServiceDashboard() {
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}
+            loading={hostsLoading}
             className="border-none text-14"
             hoverable
             sortable={false}
