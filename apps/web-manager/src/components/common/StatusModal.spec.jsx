@@ -12,7 +12,8 @@ import layoutReducer, { showStatusModal } from '../../features/layout/layoutSlic
 import StatusModal from './StatusModal';
 import { CM } from '../../constants/cmLabels';
 import { bulkResultStatusModal } from '../../features/database/databaseBulkActions';
-import hostReducer from '../../features/host/hostSlice';
+import hostReducer, { openAddHostModal } from '../../features/host/hostSlice';
+import AddHostModal from '../../features/host/components/AddHostModal';
 import { hostLoginResultStatusModal, importLoginAllStatusModal } from '../../features/host/hostLoginReport';
 
 // Bulk results used to be one long "Failed: a (reason), b (reason)" sentence
@@ -127,6 +128,25 @@ it('the HA follow-up button opens that deferred modal on demand, once, above the
   // The result dialog stays open underneath (HA modals render above it).
   expect(store.getState().layout.statusModal.isOpen).toBe(true);
   expect(button.disabled).toBe(true);
+});
+
+// Discovery → Add opens New Connection while the result dialog stays open;
+// at the default z-2000 it sat behind the result dialog (z-[2100]).
+it('New Connection opened from an HA follow-up stacks above the result dialog', async () => {
+  const layerOf = (testId) => document.querySelector(`[data-testid="${testId}-modal"]`)?.closest('[data-modal-layer="true"]');
+  store.dispatch(showStatusModal(hostLoginResultStatusModal(CM, { title: CM.loginAll, batch })));
+  store.dispatch(openAddHostModal({ alias: 'peer-x', address: '10.9.9.9', port: 8001, id: 'admin', password: '' }));
+  await act(async () => {
+    root.render(
+      <Provider store={store}>
+        <StatusModal />
+        <AddHostModal isOpen onClose={() => undefined} />
+      </Provider>
+    );
+  });
+
+  expect(layerOf('status').className).toContain('z-[2100]');
+  expect(layerOf('add-host').className).toContain('z-[2200]');
 });
 
 it('Hosts → Import → Login All uses the same consolidated result', async () => {

@@ -33,6 +33,9 @@ export default function AddHostModal({ isOpen, onClose }) {
   const [errors, setErrors] = useState({});
   const dispatch = useDispatch();
   const { loading, error: apiError, initialHostData, hostGroups } = useSelector((state) => state.host, shallowEqual);
+  // Opened from an HA follow-up of a bulk-login result dialog, which stays
+  // open (z-[2100]) underneath — stack above it like the HA modals do.
+  const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
 
   const groupOptions = useMemo(() => [
     { value: '', label: CM.noGroupOption },
@@ -159,6 +162,7 @@ export default function AddHostModal({ isOpen, onClose }) {
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      zIndexClass={aboveStatusModal ? 'z-[2200]' : undefined}
       onSubmit={handleSave}
       submitDisabled={loading}
       title={CM.newConnection}

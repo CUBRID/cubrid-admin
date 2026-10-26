@@ -62,7 +62,8 @@ export default function StatusModal() {
 
   // Opens the HA modal a bulk login deferred for this host. This dialog
   // stays open underneath: the HA modals render at z-[2200], above this
-  // one (z-[2100]), and Modal's own top-most check keeps Escape/focus on
+  // one (z-[2100]) — as do New Connection / Edit Host while this dialog is
+  // open (discovery's Add opens them) — and Modal's own top-most check keeps Escape/focus on
   // the HA modal — so the user returns here for the next host's follow-up.
   const followUpLabels = { discovery: CM.haPeersDiscovered, merge: CM.mergeHAPeers, clusterLink: CM.haClusterLinked };
   const renderHaFollowUp = (row) => {
