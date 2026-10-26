@@ -100,6 +100,21 @@ describe('restartFrozenStatdumpWatcher', () => {
     expect(restartFrozenStatdumpWatcher('h1', 'demodb', t0, t0 + FROZEN_RESTART_MS + RESTART_COOLDOWN_MS, api)).toBe(true);
   });
 
+  it('does not start again when the last holder left while the stop was in flight', async () => {
+    const release = acquire();
+    let resolveStop;
+    api.stopStatDumpWatcher.mockReturnValueOnce(new Promise((resolve) => { resolveStop = resolve; }));
+    expect(restartFrozenStatdumpWatcher('h1', 'demodb', 1_000_000, 1_000_000 + FROZEN_RESTART_MS, api)).toBe(true);
+
+    release();
+    await vi.advanceTimersByTimeAsync(STOP_GRACE_MS);
+    expect(api.stopStatDumpWatcher).toHaveBeenCalledTimes(2);
+
+    resolveStop({ running: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing for a database nobody holds', () => {
     expect(restartFrozenStatdumpWatcher('h1', 'other', 1, 1 + FROZEN_RESTART_MS, api)).toBe(false);
     expect(api.stopStatDumpWatcher).not.toHaveBeenCalled();

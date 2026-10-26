@@ -80,13 +80,20 @@ export function acquireStatdumpWatcher(hostUid, dbname, api = databaseApi) {
  * @returns {boolean} whether a restart was issued
  */
 export function restartFrozenStatdumpWatcher(hostUid, dbname, unchangedSince, now = Date.now(), api = databaseApi) {
-  const entry = watchers.get(dbKey(hostUid, dbname));
+  const key = dbKey(hostUid, dbname);
+  const entry = watchers.get(key);
   if (!entry || entry.count === 0 || !unchangedSince) return false;
   if (now - unchangedSince < FROZEN_RESTART_MS) return false;
   if (now - entry.lastRestartAt < RESTART_COOLDOWN_MS) return false;
   entry.lastRestartAt = now;
   api.stopStatDumpWatcher(hostUid, dbname)
     .catch(() => undefined)
-    .then(() => start(api, hostUid, dbname));
+    .then(() => {
+      // Released (or stopped and re-acquired) while the stop was in flight:
+      // starting now would leave a watcher no one stops.
+      if (watchers.get(key) !== entry || entry.count === 0) return;
+      start(api, hostUid, dbname);
+    });
   return true;
 }
+
