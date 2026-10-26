@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useCM } from '../../constants/useCM';
 import { Button } from '../../components/ds/foundation/Button';
-import { getMaintenanceRows, isMaintenanceJob } from './maintenanceDetails';
+import { getMaintenanceRows, isMaintenanceJob } from './maintenanceDetailsUtils';
 
 /** Shared by foreground completion, background notification, and restored job details. */
 export function MaintenanceDetails({ job, preview = false }) {

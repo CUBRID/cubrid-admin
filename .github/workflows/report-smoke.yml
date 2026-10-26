@@ -1,0 +1,71 @@
+# Verify Tier 2's report generation and artifact upload without the private
+# TCP suite or CUBRID. The sample tests use no browser fixtures.
+name: Playwright report smoke test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        result: [pass, fail]
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Prepare sample test
+        run: |
+          mkdir -p app/tcp
+          cd app/tcp
+          npm init -y
+          npm install --save-dev @playwright/test@1.58.2
+          npm pkg set 'scripts.test=playwright test'
+          cat > report.spec.js <<'EOF'
+          const { test, expect } = require('@playwright/test');
+          test('report generation', () => {
+            expect(process.env.EXPECTED_RESULT).toBe('pass');
+          });
+          EOF
+
+      # A failed sample is intentional. Verify the original outcome below so
+      # unexpected failures cannot be hidden by continue-on-error.
+      - name: Run sample test
+        id: tcp
+        continue-on-error: true
+        working-directory: app/tcp
+        run: npm test -- --reporter=line,html
+        env:
+          EXPECTED_RESULT: ${{ matrix.result }}
+          PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/app/tcp/playwright-report
+          PLAYWRIGHT_HTML_OPEN: never
+
+      - name: Verify test outcome and report
+        env:
+          ACTUAL: ${{ steps.tcp.outcome }}
+          EXPECTED: ${{ matrix.result }}
+        run: |
+          expected_outcome=success
+          if [ "$EXPECTED" = fail ]; then
+            expected_outcome=failure
+          fi
+          test "$ACTUAL" = "$expected_outcome"
+          test -f app/tcp/playwright-report/index.html
+
+      - name: Upload Playwright report
+        if: always() && (steps.tcp.outcome == 'success' || steps.tcp.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-smoke-${{ matrix.result }}
+          path: app/tcp/playwright-report/
+          if-no-files-found: error
+          retention-days: 3

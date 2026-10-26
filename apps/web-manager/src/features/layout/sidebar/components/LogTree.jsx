@@ -10,10 +10,14 @@ import { useCM } from '../../../../constants/useCM';
 export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootContextMenu, onBrokerErrorLogContextMenu, onAdminLogContextMenu, onManagerLogContextMenu, onServerLogRootContextMenu }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { databasesByHost } = useSelector((state) => state.database, shallowEqual);
-  const databases = databasesByHost[hostUid] || [];
-  const { brokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
-  const brokers = brokersByHost[hostUid] || [];
+  // navigatorDatabasesByHost/navigatorBrokersByHost, not the raw
+  // databasesByHost/brokersByHost — this tree should only move on an
+  // explicit user action, not every MonitoringProvider interval poll
+  // tick. See databaseCoreSlice.js/brokerSlice.js.
+  const { navigatorDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const databases = navigatorDatabasesByHost[hostUid] || [];
+  const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const brokers = navigatorBrokersByHost[hostUid] || [];
 
   return (
     <div className="space-y-0.5 px-2 py-2">

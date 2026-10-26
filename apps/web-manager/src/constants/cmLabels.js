@@ -1990,6 +1990,12 @@ export const CM = {
   aboutTagline: 'A web-based administration tool for CUBRID.',
   copyrightNotice: '© 2026 CUBRID Corporation',
 
+  // Unsaved changes confirmation
+  discardChangesTitle: 'Discard changes?',
+  discardChangesDesc: 'You have unsaved changes. Closing will discard them.',
+  discardChangesBtn: 'Discard changes',
+  keepEditingBtn: 'Keep editing',
+
   // Breadcrumb
   unsavedChangesTitle: 'Unsaved Changes',
   unsavedChangesDesc: (name) => `You have unsaved changes in "${name}". If you close it, your changes will be lost.`,
