@@ -52,6 +52,7 @@ function buildBufferGroups(databaseParamSchema) {
     if (role === 'pages') {
       byPairKey[pairKey].pagesKey = entry.key;
       byPairKey[pairKey].pagesDefault = entry.default;
+      byPairKey[pairKey].pagesDeprecated = entry.deprecated ?? null;
     } else {
       byPairKey[pairKey].sizeKey = entry.key;
       byPairKey[pairKey].sizeDefault = entry.default;
@@ -96,7 +97,7 @@ function isEffectivelyDefault(guard, value, defaultValue) {
 // explicit conf line can coincidentally match the default; an implicit field
 // is always shown as the default, but not every default-valued field is
 // implicit).
-function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge }) {
+function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge, deprecatedBadge, deprecatedHint }) {
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
@@ -119,6 +120,9 @@ function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, de
           the moment the field holds a real value (typed or loaded). Dashed
           border signals "not actually there", distinct from the solid
           Default badge above. */}
+      {deprecatedBadge && (
+        <DeprecatedBadge label={deprecatedBadge} hint={deprecatedHint} />
+      )}
       {isImplicit && (
         <span
           title={implicitHint}
@@ -128,6 +132,18 @@ function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, de
         </span>
       )}
     </div>
+  );
+}
+
+function DeprecatedBadge({ label, hint }) {
+  return (
+    <span
+      data-testid="param-deprecated-badge"
+      title={hint}
+      className="shrink-0 text-10 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400"
+    >
+      {label}
+    </span>
   );
 }
 
@@ -161,12 +177,21 @@ function BufferChoiceGroup({ group, mode, pagesValue, sizeValue, pagesError, siz
     <div className="rounded-xl border border-slate-100 dark:border-white/6 p-4">
       <p className="text-11 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">{group.groupLabel(CM)}</p>
       <div className="space-y-2.5">
-        <div className={`flex items-center gap-3 ${mode !== 'pages' ? 'opacity-40' : ''}`} title={mode === 'pages' ? pagesError : undefined}>
-          <span className="text-12 font-mono w-[220px] shrink-0 truncate" title={group.pagesKey}>{group.pagesKey}</span>
-          <span className={`text-13 font-mono flex-1 ${pagesError && mode === 'pages' ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
-            {mode === 'pages' ? (pagesValue || group.pagesDefault || '—') : '—'}
-          </span>
-        </div>
+        {/* The pages side is deprecated by the engine (replaced by the size
+            key), so it is only shown when cubrid.conf actually sets it. */}
+        {(mode === 'pages' || !group.pagesDeprecated) && (
+          <div className={`flex items-center gap-3 ${mode !== 'pages' ? 'opacity-40' : ''}`} title={mode === 'pages' ? pagesError : undefined}>
+            <span className="text-12 font-mono w-[220px] shrink-0 truncate flex items-center gap-1.5" title={group.pagesKey}>
+              <span className="truncate">{group.pagesKey}</span>
+              {group.pagesDeprecated && (
+                <DeprecatedBadge label={CM.deprecatedParamBadge} hint={CM.deprecatedParamHint(group.pagesDeprecated.replacedBy)} />
+              )}
+            </span>
+            <span className={`text-13 font-mono flex-1 ${pagesError && mode === 'pages' ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
+              {mode === 'pages' ? (pagesValue || group.pagesDefault || '—') : '—'}
+            </span>
+          </div>
+        )}
         <div className={`flex items-center gap-3 ${mode !== 'size' ? 'opacity-40' : ''}`} title={mode === 'size' ? sizeError : undefined}>
           <span className="text-12 font-mono w-[220px] shrink-0 truncate" title={group.sizeKey}>{group.sizeKey}</span>
           <span className={`text-13 font-mono flex-1 ${sizeError && mode === 'size' ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
@@ -412,6 +437,8 @@ export default function DatabasePropertyModal() {
     // always match instead of showing a field that was never actually
     // readable from here anyway.
     .filter(e => e.category === 'general' && !(e.commonOnly && selectedDatabase))
+    // Deprecated keys only appear when the conf actually sets them.
+    .filter(e => !e.deprecated || (params[e.key] !== undefined && params[e.key] !== ''))
     .map(e => ({
       ...e,
       value: params[e.key],
@@ -428,6 +455,7 @@ export default function DatabasePropertyModal() {
     // ha_port_id) are hidden entirely while a specific database is being
     // edited.
     .filter(e => e.category === 'advanced' && !(e.commonOnly && selectedDatabase))
+    .filter(e => !e.deprecated || (params[e.key] !== undefined && params[e.key] !== ''))
     .map(e => {
       // Non-blocking hint only. Reads the OTHER param's effective value
       // (falling back to its own schema default the same way the field
@@ -470,7 +498,7 @@ export default function DatabasePropertyModal() {
   // Advanced table (and CA itself): the value cell shows the current value,
   // falling back to the default as a placeholder.
   const generalColumns = [
-    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} /> },
+    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} /> },
     {
       header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
       render: (_, row) => {
@@ -497,7 +525,7 @@ export default function DatabasePropertyModal() {
       header: CM.parameter, accessor: 'key', width: '30%',
       className: '!sticky left-0 z-20 bg-slate-100 dark:bg-slate-900',
       cellClassName: 'sticky left-0 z-[1] bg-white dark:bg-slate-900',
-      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} />,
+      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} />,
     },
     {
       header: CM.parameterTypeLabel, accessor: 'scope', width: '16%',

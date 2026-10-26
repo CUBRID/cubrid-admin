@@ -2,6 +2,7 @@ import { ParamSchemaEntry } from './param-schema-entry';
 import { parseConfText } from './parse-conf-text';
 import { validateEffectiveParams } from './validate-effective-params';
 import { EngineKnownKeys } from './engine-known-keys';
+import { DEPRECATED_PARAM_REPLACEMENTS } from './deprecated-param-replacements';
 
 export type ConfFileKind = 'cubridconf' | 'brokerconf';
 
@@ -35,6 +36,7 @@ export function validateConfText(
   const schemaByKey = new Map(schema.map((entry) => [entry.key.toLowerCase(), entry]));
 
   const known = knownKeys && new Set(kind === 'cubridconf' ? knownKeys.database : knownKeys.broker);
+  const deprecated = new Set(kind === 'cubridconf' ? knownKeys?.databaseDeprecated ?? [] : []);
   for (const section of sections) {
     if (known) {
       for (const { key, lineNo } of section.entries) {
@@ -43,7 +45,14 @@ export function validateConfText(
         // parameter there is unknown, and `server=`/`service=` anywhere
         // else is too.
         const lookup = kind === 'cubridconf' && section.name === 'service' ? `service::${key}` : key;
-        if (known.has(lookup.toLowerCase())) continue;
+        if (known.has(lookup.toLowerCase())) {
+          // The engine loads a deprecated key but reports it (PRM_ERR_DEPRICATED).
+          if (deprecated.has(lookup.toLowerCase())) {
+            const replacedBy = DEPRECATED_PARAM_REPLACEMENTS[lookup.toLowerCase()];
+            problems.push({ lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — deprecated${replacedBy ? `; use ${replacedBy} instead` : ''}.` });
+          }
+          continue;
+        }
         problems.push(knownKeys.strict
           ? { lineNo, key, message: `[${section.name ?? commonSection}] ${key} — not a parameter of CUBRID ${knownKeys.catalogVersion}; the engine refuses to load a file with an unknown key.` }
           : { lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — not found in any catalogued engine version close to this host's; the engine refuses to load a file with an unknown key, so check the spelling.` });

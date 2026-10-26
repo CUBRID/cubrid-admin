@@ -1,4 +1,5 @@
 import { ParamSchemaEntry } from './param-schema-entry';
+import { parseGuardInt } from './validate-param-value';
 
 /**
  * Checks every `crossField` constraint in `schema` against `effectiveParams`
@@ -23,8 +24,11 @@ export function validateCrossFieldParams(
     if (!entry.crossField) continue;
     const selfRaw = effectiveParams[entry.key];
     const otherRaw = effectiveParams[entry.crossField.comparedToKey];
-    const selfValue = selfRaw === undefined || selfRaw === '' ? NaN : Number(selfRaw);
-    const otherValue = otherRaw === undefined || otherRaw === '' ? NaN : Number(otherRaw);
+    // Read each side the way its own reader does — broker ini_getint is
+    // strtol base 0, so "010" is 8, not 10.
+    const otherEntry = schema.find((e) => e.key === entry.crossField?.comparedToKey);
+    const selfValue = toComparable(entry, selfRaw);
+    const otherValue = toComparable(otherEntry, otherRaw);
     if (Number.isNaN(selfValue) || Number.isNaN(otherValue)) continue;
     const ok = entry.crossField.rule === 'gte' ? selfValue >= otherValue : selfValue <= otherValue;
     if (!ok) {
@@ -33,4 +37,10 @@ export function validateCrossFieldParams(
     }
   }
   return errors;
+}
+
+function toComparable(entry: ParamSchemaEntry | undefined, raw: unknown): number {
+  if (raw === undefined || raw === null || raw === '') return NaN;
+  if (entry?.guard.kind === 'int') return parseGuardInt(entry.guard, String(raw)) ?? NaN;
+  return Number(raw);
 }

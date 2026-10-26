@@ -3,6 +3,7 @@ import { compareEngineVersions } from '@api-interfaces/param-schema/resolve-para
 import { DATABASE_PARAM_SCHEMA } from '@api-interfaces/param-schema/database-param-schema';
 import { BROKER_PARAM_SCHEMA } from '@api-interfaces/param-schema/broker-param-schema';
 import { ENGINE_PARAM_CATALOG } from '@api-interfaces/param-schema/engine-catalog/engine-param-catalog.generated';
+import { DEPRECATED_PARAM_REPLACEMENTS } from '@api-interfaces/param-schema/deprecated-param-replacements';
 
 // Keeps the hand-written schema honest against the engine's own prm_Def[]
 // (regenerated from source): every key must exist in each engine version
@@ -58,6 +59,53 @@ function findViolations() {
 describe('DATABASE_PARAM_SCHEMA vs the engine catalog', () => {
   it('never accepts a key, type or range the engine would refuse to load', () => {
     expect(findViolations()).toEqual([]);
+  });
+});
+
+describe('deprecated keys', () => {
+  it('a schema entry is flagged deprecated exactly when the engine marks it PRM_DEPRECATED, on every version it resolves for', () => {
+    const mismatches = [];
+    for (const version of ENGINE_PARAM_CATALOG.versions) {
+      const byKey = new Map(version.db.map(c => [c.key.toLowerCase(), c]));
+      for (const entry of DATABASE_PARAM_SCHEMA.filter(e => appliesTo(e, version.engineVersion))) {
+        const c = byKey.get(entry.key.toLowerCase());
+        if (c && Boolean(entry.deprecated) !== c.deprecated) mismatches.push(`${entry.key} @ ${version.label}: schema ${Boolean(entry.deprecated)}, engine ${c.deprecated}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it('every replacement key exists wherever the deprecated key is deprecated', () => {
+    const missing = [];
+    for (const version of ENGINE_PARAM_CATALOG.versions) {
+      const keys = new Set(version.db.map(c => c.key.toLowerCase()));
+      for (const c of version.db.filter(p => p.deprecated)) {
+        const replacedBy = DEPRECATED_PARAM_REPLACEMENTS[c.key.toLowerCase()];
+        if (replacedBy && !keys.has(replacedBy)) missing.push(`${c.key} -> ${replacedBy} @ ${version.label}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('schema replacedBy agrees with the shared replacement map', () => {
+    for (const entry of DATABASE_PARAM_SCHEMA.filter(e => e.deprecated?.replacedBy)) {
+      expect(DEPRECATED_PARAM_REPLACEMENTS[entry.key]).toBe(entry.deprecated.replacedBy);
+    }
+  });
+});
+
+describe('DIFFER_UNIT keys with hand-derived bounds', () => {
+  // The engine converts these to seconds / log pages before range-checking
+  // (prm_check_range), so the generic check above skips them.
+  const entry = key => DATABASE_PARAM_SCHEMA.find(e => e.key === key);
+  it('checkpoint_interval: ceil(ms / 1000) must be >= 60 seconds', () => {
+    expect(entry('checkpoint_interval').guard).toMatchObject({ kind: 'time', min: 59001 });
+  });
+  it('lock_timeout: -1 (forever) is the lowest accepted value', () => {
+    expect(entry('lock_timeout').guard).toMatchObject({ kind: 'time', min: -1 });
+  });
+  it('checkpoint_every_size: >= 10 log pages even at the smallest (4K) log page', () => {
+    expect(entry('checkpoint_every_size').guard).toMatchObject({ kind: 'size', min: 9 * 4096 + 1 });
   });
 });
 

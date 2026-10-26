@@ -20,9 +20,10 @@ import DatabasePropertyModal from './DatabasePropertyModal';
 // size, matching cubrid.conf's real data_buffer_pages/data_buffer_size) and
 // one plain general param (max_clients).
 const DATABASE_PARAM_SCHEMA = [
-  { key: 'data_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1024 }, default: '32768', bufferGroup: { pairKey: 'data', role: 'pages' } },
+  { key: 'data_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1024 }, default: '32768', bufferGroup: { pairKey: 'data', role: 'pages' }, deprecated: { replacedBy: 'data_buffer_size' } },
   { key: 'data_buffer_size', category: 'buffer', guard: { kind: 'size' }, default: '512', bufferGroup: { pairKey: 'data', role: 'size' } },
   { key: 'max_clients', category: 'general', guard: { kind: 'int', min: 10, max: 4000 }, default: '100' },
+  { key: 'lock_timeout_in_secs', category: 'general', guard: { kind: 'int', min: -1 }, default: '-1', deprecated: { replacedBy: 'lock_timeout' } },
 ];
 
 let container;
@@ -186,4 +187,39 @@ it('Server Parameter tables are read-only, so closing from them never prompts', 
   await click(control('cancel-btn'));
   expect(discardControl('modal')).toBeNull();
   expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
+});
+
+async function renderWith(confdata) {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata }] });
+  brokerApi.getBrokerList.mockResolvedValue({ result: [] });
+  const state = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase: 'demodb' },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  await act(async () => root.render(
+    <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+}
+
+it('hides deprecated keys (and the deprecated pages side of a buffer pair) that the conf does not set', async () => {
+  expect(container.textContent).not.toContain('data_buffer_pages');
+  expect(container.textContent).not.toContain('lock_timeout_in_secs');
+  expect(container.querySelector('[data-testid="param-deprecated-badge"]')).toBeNull();
+});
+
+it('shows a deprecated key that the conf does set, labelled with its replacement', async () => {
+  await renderWith(['[@demodb]', 'data_buffer_pages=40000', 'lock_timeout_in_secs=10']);
+  expect(container.textContent).toContain('data_buffer_pages');
+  expect(container.textContent).toContain('40000');
+  expect(container.textContent).toContain('lock_timeout_in_secs');
+  const badges = Array.from(container.querySelectorAll('[data-testid="param-deprecated-badge"]'));
+  expect(badges).toHaveLength(2);
+  expect(badges.map(b => b.getAttribute('title'))).toEqual([
+    expect.stringContaining('use data_buffer_size instead'),
+    expect.stringContaining('use lock_timeout instead'),
+  ]);
 });

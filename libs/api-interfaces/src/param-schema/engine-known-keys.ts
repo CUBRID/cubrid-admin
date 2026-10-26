@@ -26,4 +26,10 @@ export interface EngineKnownKeys {
    * caught. Absent for obsoleted/untyped keys, which the engine skips.
    */
   databaseGuards: Record<string, ParamGuard>;
+  /**
+   * cubrid.conf keys (lowercased) the engine flags PRM_DEPRECATED — it
+   * still loads them but prints a "deprecated" notice. Optional so older
+   * cached getEnv payloads still type-check.
+   */
+  databaseDeprecated?: string[];
 }

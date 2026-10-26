@@ -98,6 +98,15 @@ export interface ParamSchemaEntry {
    * `comparedToKey`.
    */
   crossField?: { comparedToKey: string; rule: 'gte' | 'lte' };
+  /**
+   * The engine still accepts this key but flags it PRM_DEPRECATED (it
+   * prints a "deprecated" notice on load). The property tables only show
+   * it when it is actually present in the conf, labelled with
+   * `replacedBy` — the key that now sets the same value
+   * (system_parameter.c's PARAM_VALUE_SHARE pairs). Kept in sync with the
+   * engine catalog by paramSchemaVsEngineCatalog.spec.js.
+   */
+  deprecated?: { replacedBy?: string };
 }
 
 /**

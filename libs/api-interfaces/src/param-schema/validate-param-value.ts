@@ -39,6 +39,14 @@ function parseCInt(s: string, base: 0 | 10 | 16): number | null {
   return n >= -2147483648 && n <= 2147483647 ? n : null;
 }
 
+/**
+ * An `int` guard's value as its reader parses it (base 10 for cubrid.conf,
+ * strtol base 0 or 16 for broker.conf), or null when it would not parse.
+ */
+export function parseGuardInt(guard: { base?: 0 | 10 | 16 }, value: string): number | null {
+  return parseCInt(value.trim(), guard.base ?? 10);
+}
+
 const BROKER_SIZE_UNIT_KB: Record<string, number> = { B: 1 / 1024, K: 1, KB: 1, M: 1024, MB: 1024, G: 1024 ** 2, GB: 1024 ** 2 };
 
 const SIZE_UNIT_BYTES: Record<string, number> = { '': 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 };

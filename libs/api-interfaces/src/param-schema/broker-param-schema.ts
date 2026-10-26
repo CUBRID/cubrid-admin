@@ -83,6 +83,11 @@ export const BROKER_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   { key: 'RECONNECT_TIME', category: 'advance', guard: { kind: 'brokerTime', truncate: true }, default: '600' },
   { key: 'SLOW_LOG', category: 'advance', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'ON' },
   { key: 'SLOW_LOG_DIR', category: 'advance', guard: { kind: 'string' }, default: '' },
+  // broker_config.c: INI_GETSTR_CHK (s, ini, sec_name, "SSL", DEFAULT_SSL_MODE)
+  // then conf_get_value_table_on_off — only ON/OFF, anything else fails the
+  // whole broker.conf load (PARAM_BAD_VALUE). DEFAULT_SSL_MODE is "OFF" on
+  // release/11.0 through develop.
+  { key: 'SSL', category: 'advance', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'OFF' },
 
   // ── [broker] section only (commonOnly) — broker_config.c:560-607 reads
   // these via SECTION_NAME ("broker") exclusively, never per-broker. ──

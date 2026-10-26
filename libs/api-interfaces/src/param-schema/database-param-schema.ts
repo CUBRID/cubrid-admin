@@ -31,7 +31,7 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // mistakenly copied into the default slot. Live-confirmed via CMS
   // paramdump against a real 11.4.5 host with no conf override for this
   // key: reported value was exactly 100000.
-  { key: 'checkpoint_every_npages', category: 'advanced', scope: 'SERVER', guard: { kind: 'int', min: 10 }, default: '100000' },
+  { key: 'checkpoint_every_npages', category: 'advanced', scope: 'SERVER', guard: { kind: 'int', min: 10 }, default: '100000', deprecated: { replacedBy: 'checkpoint_every_size' } },
   { key: 'data_aout_ratio', category: 'advanced', scope: 'SERVER', guard: { kind: 'float', min: 0.0, max: 3.0 }, default: '0.0' },
   { key: 'data_buffer_flush_ratio', category: 'advanced', scope: 'SERVER', guard: { kind: 'float', min: 0.01, max: 0.95 }, default: '0.01' },
   // Engine default is 0 = "no split limit" (file_io.c only applies the
@@ -61,7 +61,8 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   { key: 'dont_reuse_heap_file', category: 'advanced', scope: 'SERVER', guard: { kind: 'boolean' }, default: 'no' },
   { key: 'error_log', category: 'advanced', scope: 'BOTH', guard: { kind: 'string' }, default: 'cubrid.err' },
   { key: 'file_lock', category: 'advanced', scope: 'SERVER', guard: { kind: 'boolean' }, default: 'yes' },
-  { key: 'garbage_collection', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no' },
+  // PRM_DEPRECATED on every catalogued version, with no replacement key.
+  { key: 'garbage_collection', category: 'advanced', scope: 'CLIENT', guard: { kind: 'boolean' }, default: 'no', deprecated: {} },
   { key: 'group_commit_interval_in_msecs', category: 'advanced', scope: 'SERVER', guard: { kind: 'int', min: 0 }, default: '0' },
   // NOT commonOnly — a [@dbname] override is a real, intentional engine
   // feature: prm_read_and_parse_ini_file (system_parameter.c:6857-6862)
@@ -120,15 +121,53 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   { key: 'unfill_factor', category: 'advanced', scope: 'SERVER', guard: { kind: 'float', min: 0.0, max: 0.3 }, default: '0.1' },
   { key: 'volume_extension_path', category: 'advanced', scope: 'SERVER', guard: { kind: 'string' }, default: '' },
 
+  // PRM_INTEGER [1, 50], default 10, PRM_FOR_SERVER — identical on every
+  // catalogued version (engine-param-catalog.generated.ts).
+  { key: 'vacuum_worker_count', category: 'advanced', scope: 'SERVER', guard: { kind: 'int', min: 1, max: 50 }, default: '10' },
+  // Replaces checkpoint_every_npages (PARAM_VALUE_SHARE). PRM_INTEGER +
+  // SIZE_UNIT + DIFFER_UNIT: bytes are rounded UP to log pages
+  // (prm_size_to_log_pages) and the page count must be >= 10 and fit an
+  // int. Log page size is fixed per database (4K..16K), so — same
+  // convention as data_buffer_size — only bytes the engine rejects on EVERY
+  // log page size are rejected: min = 9 * 4K + 1, max = INT_MAX * 16K.
+  // Default is 100000 log pages; shown in bytes at the default 16K log page
+  // size (100000 * 16K = 1562500K).
+  { key: 'checkpoint_every_size', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 36865, max: 35184372072448 }, default: '1562500K' },
+  // PRM_FOR_HA keys (ha_db_list, ha_copy_sync_mode, ha_apply_max_mem_size,
+  // ha_copy_log_max_archives): accepted in cubrid.conf, but whenever
+  // ha_mode is on the engine re-reads cubrid_ha.conf with no database name
+  // (prm_read_and_parse_ini_file(..., NULL, ...) in
+  // sysprm_load_and_init_internal) and those values win — so, like
+  // ha_node_list, they only make sense in [common] and have no effect
+  // while ha_mode is off. All four are PRM_FOR_CLIENT only (read by the HA
+  // utilities, not cub_server) and identical on every catalogued version.
+  { key: 'ha_db_list', category: 'advanced', scope: 'CLIENT', guard: { kind: 'string' }, default: '', advisory: { dependsOnKey: 'ha_mode', inactiveWhen: ['off', 'no', 'n', '0', 'false'] }, commonOnly: true },
+  { key: 'ha_copy_sync_mode', category: 'advanced', scope: 'CLIENT', guard: { kind: 'string' }, default: '', advisory: { dependsOnKey: 'ha_mode', inactiveWhen: ['off', 'no', 'n', '0', 'false'] }, commonOnly: true },
+  // PRM_INTEGER [0, INT_MAX], default 500 (MB).
+  { key: 'ha_apply_max_mem_size', category: 'advanced', scope: 'CLIENT', guard: { kind: 'int', min: 0, max: 2147483647 }, default: '500', advisory: { dependsOnKey: 'ha_mode', inactiveWhen: ['off', 'no', 'n', '0', 'false'] }, commonOnly: true },
+  // PRM_INTEGER [0, INT_MAX], default 1.
+  { key: 'ha_copy_log_max_archives', category: 'advanced', scope: 'CLIENT', guard: { kind: 'int', min: 0, max: 2147483647 }, default: '1', advisory: { dependsOnKey: 'ha_mode', inactiveWhen: ['off', 'no', 'n', '0', 'false'] }, commonOnly: true },
+
   // ── general ──
   { key: 'lock_escalation', category: 'general', guard: { kind: 'int', min: 5 }, default: '100000' },
-  { key: 'lock_timeout_in_secs', category: 'general', guard: { kind: 'int', min: -1 }, default: '-1' }, // -1 = unlimited sentinel
+  // Replaces lock_timeout_in_secs (PARAM_VALUE_SHARE). PRM_INTEGER +
+  // TIME_UNIT + DIFFER_UNIT: the value is read in ms (no unit = ms) and,
+  // when >= 0, rounded UP to seconds (prm_msec_to_sec), which must fit an
+  // int; a negative value is kept as-is and must be >= -1 (= wait forever).
+  // So in ms: -1 .. INT_MAX * 1000. Default -1, identical on every version.
+  { key: 'lock_timeout', category: 'general', guard: { kind: 'time', min: -1, max: 2147483647000 }, default: '-1' },
+  // Replaces checkpoint_interval_in_mins (PARAM_VALUE_SHARE). Same ms ->
+  // seconds rounding as lock_timeout, lower limit 60 seconds: ceil(ms /
+  // 1000) >= 60 means ms >= 59001; negative values fail the same check.
+  // Default 360 seconds (= 6min), identical on every version.
+  { key: 'checkpoint_interval', category: 'general', guard: { kind: 'time', min: 59001, max: 2147483647000 }, default: '6min' },
+  { key: 'lock_timeout_in_secs', category: 'general', guard: { kind: 'int', min: -1 }, default: '-1', deprecated: { replacedBy: 'lock_timeout' } }, // -1 = unlimited sentinel
   { key: 'deadlock_detection_interval_in_secs', category: 'general', guard: { kind: 'float', min: 0.1 }, default: '1' },
   // Real engine default is 360 SECONDS internally (system_parameter.c:1422,
   // PRM_ID_LOG_CHECKPOINT_INTERVAL_SECS) = 6 minutes via prm_sec_to_min.
   // '1000' had no traceable source. Live-confirmed: a real 11.4.5 host with
   // no conf override for this key reported exactly 6.
-  { key: 'checkpoint_interval_in_mins', category: 'general', guard: { kind: 'int', min: 1 }, default: '6' },
+  { key: 'checkpoint_interval_in_mins', category: 'general', guard: { kind: 'int', min: 1 }, default: '6', deprecated: { replacedBy: 'checkpoint_interval' } },
   // TRAN_REP_CLASS_COMMIT_INSTANCE == TRAN_READ_COMMITTED, the engine's own
   // literal default (system_parameter.c, isolation_level's prm_Def entry).
   // isolation_level_words, plus any integer in [TRAN_READ_COMMITTED,
@@ -189,7 +228,7 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // default below (which was already correct) — live-confirmed too: a
   // real 11.4.5 host with data_buffer_size explicitly set to 512M in conf
   // reported exactly 32768 for this key.
-  { key: 'data_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1024 }, default: '32768', bufferGroup: { pairKey: 'data', role: 'pages' } },
+  { key: 'data_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1024 }, default: '32768', bufferGroup: { pairKey: 'data', role: 'pages' }, deprecated: { replacedBy: 'data_buffer_size' } },
   // PRM_INTEGER + SIZE_UNIT + DIFFER_UNIT: the engine rounds the bytes UP
   // to whole pages (prm_size_to_io_pages / prm_size_to_log_pages) and
   // range-checks the page count, and a page count past INT_MAX fails too.
@@ -203,7 +242,7 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // 16KB IO page size this is exactly 2M, matching sort_buffer_size's
   // default below (already correct) — live-confirmed the same way as
   // data_buffer_pages above.
-  { key: 'sort_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1 }, default: '128', bufferGroup: { pairKey: 'sort', role: 'pages' } },
+  { key: 'sort_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1 }, default: '128', bufferGroup: { pairKey: 'sort', role: 'pages' }, deprecated: { replacedBy: 'sort_buffer_size' } },
   // Same conservative page bounds as data_buffer_size (lower limit 1 page).
   { key: 'sort_buffer_size', category: 'buffer', guard: { kind: 'size', min: 1, max: 35184372072448 }, default: '2M', bufferGroup: { pairKey: 'sort', role: 'size' } },
   // Real engine default is `16 * ONE_K` = 16384 pages (system_parameter.c:1378,
@@ -212,7 +251,7 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // always failing validation the moment this key's effective value (loaded
   // or defaulted) was checked, regardless of which buffer pair side the UI
   // had selected.
-  { key: 'log_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 128 }, default: '16384', bufferGroup: { pairKey: 'log', role: 'pages' } }, // LOGPB_BUFFER_NPAGES_LOWER
+  { key: 'log_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 128 }, default: '16384', bufferGroup: { pairKey: 'log', role: 'pages' }, deprecated: { replacedBy: 'log_buffer_size' } }, // LOGPB_BUFFER_NPAGES_LOWER
   // Byte-equivalent default: the real conversion is log-page-size
   // dependent (same source comment above — 64M/128M/256M depending on
   // that setting), not a fixed ratio, so this can't be universally exact
@@ -226,7 +265,7 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // dynamic_flag in system_parameter.c) exactly like the other three
   // pairs — unlike those, the "pages" side is a float ratio (engine range
   // [0.05, 16.0]), not a page count.
-  { key: 'index_scan_oid_buffer_pages', category: 'buffer', guard: { kind: 'float', min: 0.05, max: 16.0 }, default: '4', bufferGroup: { pairKey: 'indexScanOid', role: 'pages' } },
+  { key: 'index_scan_oid_buffer_pages', category: 'buffer', guard: { kind: 'float', min: 0.05, max: 16.0 }, default: '4', bufferGroup: { pairKey: 'indexScanOid', role: 'pages' }, deprecated: { replacedBy: 'index_scan_oid_buffer_size' } },
   // PRM_FLOAT pages, [0.05, 16.0] after the engine's ceil-to-0.01 rounding
   // of bytes / IO page size. Rejected on every page size (4K..16K) only
   // when bytes <= 0.04 * 4K (163) or bytes > 16 * 16K.

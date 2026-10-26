@@ -14,3 +14,4 @@ export * from './validate-cross-field-params';
 export * from './validate-effective-params';
 export * from './parse-conf-text';
 export * from './validate-conf-text';
+export * from './deprecated-param-replacements';

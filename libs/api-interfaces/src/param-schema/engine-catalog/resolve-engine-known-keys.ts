@@ -40,6 +40,7 @@ function keysOf(versions: EngineCatalogVersion[]): Omit<EngineKnownKeys, 'strict
   const database = new Set<string>();
   const broker = new Set<string>();
   const databaseGuards: Record<string, ParamGuard> = {};
+  const deprecated = new Set<string>();
   for (const v of versions) {
     for (const p of v.db) {
       const key = p.key.toLowerCase();
@@ -48,12 +49,14 @@ function keysOf(versions: EngineCatalogVersion[]): Omit<EngineKnownKeys, 'strict
       const guard = guardFromCatalog(p);
       if (guard) databaseGuards[key] = guard;
       else delete databaseGuards[key];
+      if (p.deprecated && !p.obsoleted) deprecated.add(key);
+      else deprecated.delete(key);
     }
     // buildCondition keys (CGW_*) only exist in the ODBC-gateway build,
     // which reads cubrid_gateway.conf, not cubrid_broker.conf.
     for (const k of v.broker) if (!k.buildCondition) broker.add(k.key.toLowerCase());
   }
-  return { database: [...database].sort(), broker: [...broker].sort(), databaseGuards };
+  return { database: [...database].sort(), broker: [...broker].sort(), databaseGuards, databaseDeprecated: [...deprecated].sort() };
 }
 
 /** Backend-only: pulls in the full generated catalog. */

@@ -65,8 +65,8 @@ describe('keys outside the schema still get the engine\'s own type rules (from t
 
   it('only warns for an uncatalogued host version', () => {
     const loose = resolveEngineKnownKeys('11.4.3');
-    expect(validateConfText(resolveParamSchema(DATABASE_PARAM_SCHEMA, '11.4.3'), '[common]\nvacuum_worker_count=abc', 'cubridconf', loose))
-      .toEqual([expect.objectContaining({ key: 'vacuum_worker_count', severity: 'warning' })]);
+    expect(validateConfText(resolveParamSchema(DATABASE_PARAM_SCHEMA, '11.4.3'), '[common]\ndata_file_os_advise=abc', 'cubridconf', loose))
+      .toEqual([expect.objectContaining({ key: 'data_file_os_advise', severity: 'warning' })]);
   });
 });
 
