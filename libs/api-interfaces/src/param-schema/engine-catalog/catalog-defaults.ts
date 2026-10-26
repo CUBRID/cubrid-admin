@@ -19,7 +19,7 @@ export function catalogVersionFor(engineVersion: string): EngineCatalogVersion {
   });
   const byVersion = (a: EngineCatalogVersion, b: EngineCatalogVersion) =>
     versionParts(a.engineVersion).map(Number).reduce((d, n, i) => d || n - Number(versionParts(b.engineVersion)[i] ?? 0), 0);
-  return [...(sameLine.length > 0 ? sameLine : versions)].sort(byVersion).at(-1) as EngineCatalogVersion;
+  return [...(sameLine.length > 0 ? sameLine : versions)].sort(byVersion).slice(-1)[0] as EngineCatalogVersion;
 }
 
 // Bytes in conf syntax: the largest K/M/G/T unit that divides evenly, else plain bytes.

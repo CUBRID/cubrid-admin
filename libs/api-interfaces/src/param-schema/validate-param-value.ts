@@ -195,7 +195,12 @@ export function validateParamValue(guard: ParamGuard | undefined, rawValue: unkn
       return null;
     }
     case 'float': {
-      const n = Number(value.trim());
+      // The engine reads floats with strtod and rejects anything left over;
+      // Number() also takes forms strtod stops early on, such as 0b1 or 0o7.
+      const text = value.trim();
+      const hex = /^([+-]?)0[xX]([0-9a-fA-F]+)$/.exec(text);
+      const n = hex ? (hex[1] === '-' ? -1 : 1) * parseInt(hex[2], 16)
+        : /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text) ? Number(text) : NaN;
       if (Number.isNaN(n)) return 'Must be a number';
       if (guard.min !== undefined && n < guard.min) return `Must be >= ${guard.min}`;
       if (guard.max !== undefined && n > guard.max) return `Must be <= ${guard.max}`;

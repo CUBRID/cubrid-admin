@@ -96,6 +96,11 @@ function parseKeyValue(line: string): { key: string; value: string } | null {
   return { key, value: '' };
 }
 
+const utf8 = new TextEncoder();
+function utf8Length(text: string): number {
+  return utf8.encode(text).length;
+}
+
 function normalizeSectionName(raw: string): string {
   const trimmed = iniTrim(raw);
   const lead = trimmed[0];
@@ -131,8 +136,9 @@ export function parseConfText(input: string | string[]): ParsedConfText {
     let stripped = raw;
     while (stripped.length > 0 && isIniSpace(stripped[stripped.length - 1])) stripped = stripped.slice(0, -1);
     const accumulated = pending + stripped;
-    if (pending.length + raw.length > INI_MAX_LINE_LENGTH) {
-      syntaxErrors.push({ lineNo, message: `Line is longer than the engine's ${INI_MAX_LINE_LENGTH}-character limit` });
+    // fgets fills a byte buffer, so a non-ASCII line hits the limit sooner.
+    if (utf8Length(pending) + utf8Length(raw) > INI_MAX_LINE_LENGTH) {
+      syntaxErrors.push({ lineNo, message: `Line is longer than the engine's ${INI_MAX_LINE_LENGTH}-byte limit` });
       pending = '';
       continue;
     }

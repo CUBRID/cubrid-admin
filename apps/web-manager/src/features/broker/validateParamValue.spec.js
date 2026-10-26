@@ -126,6 +126,12 @@ describe('validateParamValue', () => {
     it('rejects below min', () => expect(validateParamValue(guard, '0.01')).toBe('Must be >= 0.05'));
     it('rejects above max', () => expect(validateParamValue(guard, '16.5')).toBe('Must be <= 16'));
     it('rejects a non-number', () => expect(validateParamValue(guard, 'abc')).toBe('Must be a number'));
+    it('accepts what strtod reads in full', () => {
+      for (const v of ['1', '+1.5', '.5', '5.', '1e1', '1.5E-1', '0x4']) expect(validateParamValue(guard, v)).toBeNull();
+    });
+    it('rejects forms strtod stops early on', () => {
+      for (const v of ['0b1', '0o7', '1_0', 'Infinity', '1e']) expect(validateParamValue(guard, v)).toBe('Must be a number');
+    });
   });
 
   describe('string', () => {

@@ -5,6 +5,7 @@ import { EngineKnownKeys } from './engine-known-keys';
 import { DEPRECATED_PARAM_REPLACEMENTS } from './deprecated-param-replacements';
 import { validateCmConfText } from './validate-cm-conf-text';
 import { CM_PENDING_PARAM_SCHEMA, CM_TEMPLATE_ONLY_KEYS } from './cm-unreleased-keys';
+import { parseGuardInt } from './validate-param-value';
 
 export type ConfFileKind = 'cubridconf' | 'brokerconf' | 'cmconf';
 
@@ -119,7 +120,43 @@ export function validateConfText(
     problems.push({ message: `Missing [${commonSection}] section — the broker cannot start without it (MASTER_SHM_ID).` });
   }
 
+  if (kind === 'brokerconf') problems.push(...brokerCollisions(sections, commonSection));
+
   return problems.sort((a, b) => (a.lineNo ?? 0) - (b.lineNo ?? 0));
+}
+
+// broker_config.c, on `cubrid broker start`: every broker needs its own
+// BROKER_PORT and APPL_SERVER_SHM_ID, and no APPL_SERVER_SHM_ID may equal
+// MASTER_SHM_ID. Values are compared as the broker parses them (port with
+// strtol base 0, shared memory ids as hex).
+function brokerCollisions(sections: ReturnType<typeof parseConfText>['sections'], commonSection: string): ConfTextProblem[] {
+  const lastEntry = (section: (typeof sections)[number], key: string) =>
+    [...section.entries].reverse().find((e) => e.key.toLowerCase() === key.toLowerCase());
+  const problems: ConfTextProblem[] = [];
+  const common = sections.find((s) => s.name === commonSection);
+  const masterEntry = common && lastEntry(common, 'MASTER_SHM_ID');
+  const masterShmId = masterEntry ? parseGuardInt({ base: 16 }, masterEntry.value) : null;
+  const seenPorts = new Map<number, string>();
+  const seenShmIds = new Map<number, string>();
+  for (const section of sections) {
+    if (!section.name?.startsWith('%')) continue;
+    const port = lastEntry(section, 'BROKER_PORT');
+    const portValue = port ? parseGuardInt({ base: 0 }, port.value) : null;
+    if (port && portValue !== null) {
+      const other = seenPorts.get(portValue);
+      if (other) problems.push({ lineNo: port.lineNo, key: 'BROKER_PORT', message: `[${section.name}] BROKER_PORT — ${portValue} is already used by [${other}]; the broker refuses to start with a duplicated port.` });
+      else seenPorts.set(portValue, section.name);
+    }
+    const shm = lastEntry(section, 'APPL_SERVER_SHM_ID');
+    const shmValue = shm ? parseGuardInt({ base: 16 }, shm.value) : null;
+    if (shm && shmValue !== null) {
+      const other = seenShmIds.get(shmValue);
+      if (other) problems.push({ lineNo: shm.lineNo, key: 'APPL_SERVER_SHM_ID', message: `[${section.name}] APPL_SERVER_SHM_ID — already used by [${other}]; the broker refuses to start with a duplicated shared memory id.` });
+      else seenShmIds.set(shmValue, section.name);
+      if (shmValue === masterShmId) problems.push({ lineNo: shm.lineNo, key: 'APPL_SERVER_SHM_ID', message: `[${section.name}] APPL_SERVER_SHM_ID — same as MASTER_SHM_ID in [${commonSection}]; the broker refuses to start.` });
+    }
+  }
+  return problems;
 }
 
 export function formatConfTextProblem({ lineNo, message }: ConfTextProblem): string {

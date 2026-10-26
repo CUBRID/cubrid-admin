@@ -82,6 +82,11 @@ describe('parseConfText — lines the engine rejects (whole file fails to load)'
     expect(errorsOf(`[common]\nha_node_list=${'a'.repeat(497)}`)).toEqual([]); // 510 chars
     expect(errorsOf(`[common]\nha_node_list=${'a'.repeat(498)}`)).toHaveLength(1); // 511 chars
   });
+
+  it('counts the line length in UTF-8 bytes, as fgets reads it', () => {
+    expect(errorsOf(`[common]\nerror_log=${'가'.repeat(166)}`)).toEqual([]); // 10 + 498 bytes
+    expect(errorsOf(`[common]\nerror_log=${'가'.repeat(167)}`)).toHaveLength(1); // 10 + 501 bytes
+  });
 });
 
 describe('parseConfText — continuation lines', () => {

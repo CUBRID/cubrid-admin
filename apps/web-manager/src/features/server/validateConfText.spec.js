@@ -8,7 +8,7 @@ const DB_SCHEMA = [
 ];
 const BROKER_SCHEMA = [
   { key: 'MASTER_SHM_ID', category: 'common', guard: { kind: 'int', min: 1 }, default: '', commonOnly: true, required: true },
-  { key: 'BROKER_PORT', category: 'common', guard: { kind: 'int', min: 1, max: 65535 }, default: '', instanceOnly: true, required: true },
+  { key: 'BROKER_PORT', category: 'common', guard: { kind: 'int', min: 1, max: 65535, base: 0 }, default: '', instanceOnly: true, required: true },
   { key: 'MIN_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1 }, default: '5' },
   { key: 'MAX_STRING_LENGTH', category: 'advance', guard: { kind: 'int' }, default: '-1' },
   { key: 'SERVICE', category: 'common', guard: { kind: 'enum', options: ['ON', 'OFF'] }, default: 'ON' },
@@ -59,6 +59,16 @@ describe('validateConfText — cubridconf', () => {
 describe('validateConfText — brokerconf', () => {
   it('passes a well-formed file', () => {
     expect(validateConfText(BROKER_SCHEMA, '[broker]\nMASTER_SHM_ID=30001\n[%b1]\nBROKER_PORT=30000', 'brokerconf')).toEqual([]);
+  });
+
+  it('reports brokers sharing a port or shared memory id, compared as the broker parses them', () => {
+    const base = '[broker]\nMASTER_SHM_ID=30001\n[%b1]\nBROKER_PORT=30000\nAPPL_SERVER_SHM_ID=30000\n';
+    expect(validateConfText(BROKER_SCHEMA, `${base}[%b2]\nBROKER_PORT=0x7530\nAPPL_SERVER_SHM_ID=30002`, 'brokerconf'))
+      .toEqual([expect.objectContaining({ lineNo: 7, key: 'BROKER_PORT', message: expect.stringContaining('[%b1]') })]);
+    expect(validateConfText(BROKER_SCHEMA, `${base}[%b2]\nBROKER_PORT=30001\nAPPL_SERVER_SHM_ID=0x30000`, 'brokerconf'))
+      .toEqual([expect.objectContaining({ lineNo: 8, key: 'APPL_SERVER_SHM_ID' })]);
+    expect(validateConfText(BROKER_SCHEMA, `${base}[%b2]\nBROKER_PORT=30001\nAPPL_SERVER_SHM_ID=30001`, 'brokerconf'))
+      .toEqual([expect.objectContaining({ lineNo: 8, message: expect.stringContaining('MASTER_SHM_ID') })]);
   });
 
   it('reports a missing [broker] section', () => {
