@@ -13,6 +13,9 @@ vi.mock('../../broker/brokerApi', () => ({
   brokerApi: {
     getBrokerList: vi.fn(),
     getBrokerStatus: vi.fn(),
+    // Used instead of getBrokerStatus once the bulk status route lands
+    // (fix/broker-status-bulk-fetch); unused before that.
+    getBrokerStatusBulk: vi.fn(),
     startBroker: vi.fn(),
   },
 }));
@@ -29,6 +32,7 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
   brokerApi.getBrokerStatus.mockResolvedValue({});
+  brokerApi.getBrokerStatusBulk.mockImplementation(async (_hostUid, names) => ({ brokers: names.map((bname) => ({ bname })) }));
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
