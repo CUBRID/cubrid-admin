@@ -20,6 +20,13 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   const [loading, setLoading] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // Embedded in the host dashboard (host:<uid> tab), this component is never
+  // the active tab itself, so its own polling below never runs. The host
+  // dashboard (ServerContent.jsx) already fetches this host's broker list into
+  // brokersByHost on every tick — show that instead of fetching it a second
+  // time (a second fetch also doubles the qps/tps rate samples).
+  const sharedBrokers = useSelector((state) => state.broker.brokersByHost[hostUid]);
+  const sharedLoading = useSelector((state) => !!state.broker.loadingByHost[hostUid]);
 
   useEffect(() => {
     setBrokers([]);
@@ -27,11 +34,21 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     setHasLoadedOnce(false);
   }, [hostUid]);
 
+  // brokersByHost[hostUid] is deleted when focus leaves this host
+  // (resetBrokerState); keep showing the last list until the next fetch.
+  useEffect(() => {
+    if (isSection && Array.isArray(sharedBrokers)) {
+      setBrokers(sharedBrokers);
+      setHasLoadedOnce(true);
+    }
+  }, [isSection, sharedBrokers]);
+
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
     tabId: `brokers_status:${hostUid}`,
     pollingIntervalSeconds: preferences.brokerStatusInterval,
     onFetch: () => async (dispatch) => {
+      if (isSection) return;
       setLoading(true);
       try {
         const result = await dispatch(fetchBrokerList(hostUid)).unwrap();
@@ -100,7 +117,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
       <Table
         columns={columns}
         data={brokers}
-        loading={loading && !hasLoadedOnce && !isManualRefreshing}
+        loading={(isSection ? sharedLoading : loading) && !hasLoadedOnce && !isManualRefreshing}
         onRowClick={(row) => dispatch(openTab(`broker_status:${hostUid}:${row.name}`))}
       />
     </Card>
