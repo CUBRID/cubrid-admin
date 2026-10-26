@@ -125,12 +125,14 @@ const Component = function ServerContent({ hostUid }) {
   // full fetchMonitoringData tick every second would cost.
   const isHaAbnormal = isHA && isHaClusterMissingMaster(haHeartbeat);
   const haAbnormalSinceRef = useRef(null);
+  // authorizedHosts still lists a host pending reconnect (preserved so the
+  // reconnect is seamless, see apiClient.js), so it alone can't tell us to
+  // pause here — check reconnectQueue too, otherwise this fast 1s poll
+  // just spins against a host already known to need reconnection. A boolean
+  // (not the array) in the deps, so another host joining/leaving the queue
+  // doesn't tear down and restart this host's timer.
+  const isPendingReconnect = reconnectQueue.includes(hostUid);
   useEffect(() => {
-    // authorizedHosts still lists a host pending reconnect (preserved so the
-    // reconnect is seamless, see apiClient.js), so it alone can't tell us to
-    // pause here — check reconnectQueue too, otherwise this fast 1s poll
-    // just spins against a host already known to need reconnection.
-    const isPendingReconnect = reconnectQueue.includes(hostUid);
     if (!isTabActive || !isHaAbnormal || !authorizedHosts.includes(hostUid) || isPendingReconnect) {
       haAbnormalSinceRef.current = null;
       return;
@@ -147,7 +149,7 @@ const Component = function ServerContent({ hostUid }) {
     }, HA_ABNORMAL_POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [isTabActive, isHaAbnormal, authorizedHosts, reconnectQueue, hostUid, dispatch]);
+  }, [isTabActive, isHaAbnormal, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
 
   const haDbs = React.useMemo(() => {
     const names = new Set();
