@@ -72,20 +72,31 @@ export const Table = ({
     });
   }, [data, sortConfig, columns]);
 
-  const rowCount = sortedData.length;
+  const overLimit = Boolean(maxRows) && sortedData.length > maxRows;
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!maxRows || !el || rowCount <= maxRows) {
+    if (!overLimit || !el) {
+      // At or under the limit the table renders as before, even after a resize.
       setCapHeight(null);
-      return;
+      setUserHeight(null);
+      return undefined;
     }
     // Measured, not assumed: rows can be taller than one line (badges, wrapping).
-    const head = el.querySelector('thead');
-    const rows = el.querySelectorAll('tbody > tr');
-    let height = head ? head.offsetHeight : 0;
-    for (let i = 0; i < maxRows && i < rows.length; i++) height += rows[i].offsetHeight;
-    setCapHeight(height || null);
-  }, [maxRows, rowCount, columns]);
+    const measure = () => {
+      const head = el.querySelector('thead');
+      const rows = el.querySelectorAll('tbody > tr');
+      let height = head ? head.offsetHeight : 0;
+      for (let i = 0; i < maxRows && i < rows.length; i++) height += rows[i].offsetHeight;
+      setCapHeight(height || null);
+    };
+    measure();
+    // Re-measure when cells rewrap (window or column width) or rows change size.
+    const table = el.querySelector('table');
+    if (typeof ResizeObserver === 'undefined' || !table) return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [overLimit, maxRows, sortedData, columns]);
 
   const scrolling = capHeight != null || userHeight != null;
   const minHeight = capHeight != null ? Math.min(capHeight, 120) : 120;
@@ -131,12 +142,13 @@ export const Table = ({
     ? { height: userHeight }
     : capHeight != null ? { maxHeight: capHeight } : undefined;
 
-  return (
-    <div className={`w-full ${selectable ? 'select-text' : 'select-none'} ${className} ${bordered ? 'border-b border-slate-200 dark:border-white/[0.08]' : ''}`}>
+  // The caller's className stays on the element that scrolls, so a caller that
+  // caps the height there (max-h-… overflow-auto) keeps a working stickyHeader.
+  const tableBox = (
     <div
       ref={scrollRef}
       data-testid={scrolling ? 'table-scroll-area' : undefined}
-      className={scrolling ? 'w-full overflow-auto custom-scrollbar' : 'w-full overflow-x-auto'}
+      className={`w-full ${scrolling ? 'overflow-auto custom-scrollbar' : 'overflow-x-auto'} ${selectable ? 'select-text' : 'select-none'} ${className} ${bordered ? 'border-b border-slate-200 dark:border-white/[0.08]' : ''}`}
       style={scrollStyle}
     >
       <table className="w-full text-left border-collapse">
@@ -267,6 +279,13 @@ export const Table = ({
         </tbody>
       </table>
     </div>
+  );
+
+  if (!maxRows) return tableBox;
+
+  return (
+    <div className="w-full">
+      {tableBox}
       {scrolling && (
         <div
           role="separator"

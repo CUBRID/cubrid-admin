@@ -64,9 +64,30 @@ describe('Table maxRows', () => {
     expect(scrollArea().style.maxHeight).toBe(`${ROW_PX * 16}px`);
   });
 
+  it('drops a dragged height once the rows fall to the limit', async () => {
+    await render({ data: rows(40), maxRows: 15 });
+    vi.spyOn(scrollArea(), 'getBoundingClientRect').mockReturnValue({ height: ROW_PX * 16 });
+    await act(() => { grip().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })); });
+
+    await render({ data: rows(5), maxRows: 15 });
+    expect(scrollArea()).toBeNull();
+    expect(grip()).toBeNull();
+
+    await render({ data: rows(40), maxRows: 15 });
+    expect(scrollArea().style.height).toBe('');
+    expect(scrollArea().style.maxHeight).toBe(`${ROW_PX * 16}px`);
+  });
+
   it('does nothing without maxRows', async () => {
     await render({ data: rows(40) });
     expect(scrollArea()).toBeNull();
     expect(grip()).toBeNull();
+  });
+
+  it('keeps the caller className on the element that holds the sticky header', async () => {
+    await render({ data: rows(40), stickyHeader: true, className: 'max-h-[180px] overflow-auto' });
+    const thead = container.querySelector('thead');
+    expect(thead.className).toContain('sticky');
+    expect(thead.closest('table').parentElement.className).toContain('max-h-[180px]');
   });
 });

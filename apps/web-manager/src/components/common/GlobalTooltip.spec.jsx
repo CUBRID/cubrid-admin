@@ -40,7 +40,7 @@ describe('GlobalTooltip', () => {
     const a = host.querySelector('#a');
     await over(host.querySelector('#inner'));
 
-    expect(a.hasAttribute('title')).toBe(false);
+    expect(a.getAttribute('title')).toBe('');
     expect(tooltip()).toBeNull();
 
     await wait(TOOLTIP_DELAY_MS);
@@ -78,6 +78,29 @@ describe('GlobalTooltip', () => {
 
     expect(tooltip()?.textContent).toBe('Second');
     expect(a.getAttribute('title')).toBe('Full host name: production-db-01');
+  });
+
+  it('follows a title changed while hovered and keeps it on leave', async () => {
+    const a = host.querySelector('#a');
+    await over(a);
+    await wait(TOOLTIP_DELAY_MS);
+    await act(async () => { a.setAttribute('title', 'Lock on table t2'); });
+
+    expect(tooltip()?.textContent).toBe('Lock on table t2');
+    await out(a);
+    expect(a.getAttribute('title')).toBe('Lock on table t2');
+  });
+
+  it('hides and does not bring back a title removed while hovered', async () => {
+    const a = host.querySelector('#a');
+    await over(a);
+    await wait(TOOLTIP_DELAY_MS);
+    await act(async () => { a.removeAttribute('title'); });
+
+    expect(tooltip()).toBeNull();
+    await out(a);
+    expect(a.hasAttribute('title')).toBe(false);
+    expect(a.hasAttribute('data-nca-title')).toBe(false);
   });
 
   it('ignores blank titles and hides on click', async () => {

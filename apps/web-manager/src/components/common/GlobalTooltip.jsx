@@ -14,9 +14,10 @@ const STASH_ATTR = 'data-nca-title';
  * browser picks (seconds in Chromium/Electron) in a small system font, and
  * cannot be styled.
  *
- * While the pointer is over an element with a `title`, the title is moved to
- * a data attribute so the native tooltip never shows, and is put back when
- * the pointer leaves. The tooltip is rendered in a portal with fixed
+ * While the pointer is over an element with a `title`, the title is copied to
+ * a data attribute and blanked so the native tooltip never shows, and is put
+ * back when the pointer leaves. A title changed or removed meanwhile is
+ * followed, not overwritten. The tooltip is rendered in a portal with fixed
  * positioning, so containers with overflow: hidden (sidebar, tables) do not
  * clip it.
  */
@@ -33,16 +34,37 @@ export default function GlobalTooltip() {
     const restore = (el) => {
       if (!el) return;
       const stashed = el.getAttribute(STASH_ATTR);
-      if (stashed != null) {
-        // React may have set a new title while it was stashed; keep that one.
-        if (!el.hasAttribute('title')) el.setAttribute('title', stashed);
-        el.removeAttribute(STASH_ATTR);
-      }
+      el.removeAttribute(STASH_ATTR);
+      // Only put back our own blank; a title React removed stays removed.
+      if (stashed != null && el.getAttribute('title') === '') el.setAttribute('title', stashed);
     };
+
+    // While hovered, the title is blanked rather than removed: a blank title
+    // still suppresses the native tooltip, and React's later setAttribute or
+    // removeAttribute on it shows up here, so the tooltip follows the prop.
+    const titleWatcher = new MutationObserver(() => {
+      if (!target) return;
+      if (!target.hasAttribute('title')) {
+        target.removeAttribute(STASH_ATTR);
+        target = null;
+        hide();
+        return;
+      }
+      const text = target.getAttribute('title');
+      if (text === '') return;
+      target.setAttribute('title', '');
+      if (!text.trim()) {
+        hide();
+        return;
+      }
+      target.setAttribute(STASH_ATTR, text);
+      setTip((prev) => (prev ? { ...prev, text } : prev));
+    });
 
     const hide = () => {
       clearTimeout(timer);
       timer = null;
+      titleWatcher.disconnect();
       if (target) {
         restore(target);
         target = null;
@@ -65,7 +87,8 @@ export default function GlobalTooltip() {
       if (!text || !text.trim()) return;
       target = el;
       el.setAttribute(STASH_ATTR, text);
-      el.removeAttribute('title');
+      el.setAttribute('title', '');
+      titleWatcher.observe(el, { attributes: true, attributeFilter: ['title'] });
       const warm = Date.now() - lastHiddenAt < WARM_MS;
       timer = setTimeout(() => show(el), warm ? 0 : TOOLTIP_DELAY_MS);
     };
@@ -109,6 +132,8 @@ export default function GlobalTooltip() {
     if (top + height > vh - EDGE_PX && rect.top - GAP_PX - height >= EDGE_PX) {
       top = rect.top - GAP_PX - height;
     }
+    // Fits neither below nor above: keep it on screen (it may then cover the element).
+    top = Math.max(EDGE_PX, Math.min(top, vh - EDGE_PX - height));
     const centered = rect.left + rect.width / 2 - width / 2;
     const left = Math.min(Math.max(EDGE_PX, centered), Math.max(EDGE_PX, vw - EDGE_PX - width));
     setPos({ top, left });
@@ -121,7 +146,7 @@ export default function GlobalTooltip() {
       ref={tipRef}
       role="tooltip"
       data-testid="global-tooltip"
-      className="fixed z-[10000] pointer-events-none max-w-[480px] px-2.5 py-1.5 rounded-sm shadow-lg bg-slate-800 dark:bg-slate-700 text-white text-13 leading-snug whitespace-pre-wrap break-words"
+      className="fixed z-[10000] pointer-events-none max-w-[480px] max-h-[calc(100vh-16px)] overflow-hidden px-2.5 py-1.5 rounded-sm shadow-lg bg-slate-800 dark:bg-slate-700 text-white text-13 leading-snug whitespace-pre-wrap break-words"
       style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
     >
       {tip.text}
