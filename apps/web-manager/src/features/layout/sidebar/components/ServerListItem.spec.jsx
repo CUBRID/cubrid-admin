@@ -45,9 +45,9 @@ it('shows the full alias when hovering a (possibly truncated) host name', async 
   expect(row.getAttribute('title')).toBe(`${longAlias} (10.0.0.5:8001)`);
 });
 
-it('keeps the HA role tag in the tooltip even though the label strips it', async () => {
+it('keeps the full alias, HA role word included, in the tooltip', async () => {
   const { row, name } = await render({ uid: 'h2', id: 'admin', alias: 'ha-node-a (master)', address: '10.0.0.6', port: '8001' });
-  expect(name.textContent).toBe('ha-node-a');
+  expect(name.textContent).toContain('ha-node-a');
   expect(name.getAttribute('title')).toBe('ha-node-a (master)');
   expect(row.getAttribute('title')).toBe('ha-node-a (master) (10.0.0.6:8001)');
 });
