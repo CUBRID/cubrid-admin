@@ -1151,6 +1151,7 @@ export const CM = {
   slowQueryLogs: 'Slow Query Logs',
   restartCasTitle: 'Restart CAS',
   lockMode: 'Lock Mode',
+  lockCountCol: 'Locks',
   activeLog: 'Active Log',
   archiveLog: 'Archive Log',
   longTran: 'Long-T',

@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { brokerApi } from '../broker/brokerApi';
-import { buildDashboardLockRows } from './lockMappers';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
 import { computeStatdumpRates } from './statdumpRates';
@@ -75,8 +74,9 @@ export const fetchDashboardLocks = createAsyncThunk(
   'database/fetchDashboardLocks',
   async ({ hostUid, dbname }, { rejectWithValue }) => {
     try {
-      const response = await databaseApi.getLockInfo(hostUid, dbname);
-      return { hostUid, dbname, locks: buildDashboardLockRows(response) };
+      const response = await databaseApi.getLockInfo(hostUid, dbname, { summary: true });
+      const summary = response?.summary ?? response?.data?.summary;
+      return { hostUid, dbname, locks: summary?.rows ?? [] };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch locks');
     }

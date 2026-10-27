@@ -121,6 +121,17 @@ describe('dashboard lock status', () => {
     expect(entry(store).locksStatus).toBe('loaded');
   });
 
+  it('asks the server for grouped locks and keeps its rows as they are', async () => {
+    const rows = [{ index: '1', user: 'DBA', host: 'app1', pid: '111', program: 'loader', obj: 'Instance of class = dba.t1', mode: 'X_LOCK', count: 30000 }];
+    databaseApi.getLockInfo.mockResolvedValue({ summary: { rows, totalLocks: 30000 } });
+    const store = makeStore();
+
+    await store.dispatch(fetchDashboardLocks({ hostUid: HOST, dbname: DB })).unwrap();
+
+    expect(databaseApi.getLockInfo).toHaveBeenLastCalledWith(HOST, DB, { summary: true });
+    expect(entry(store).locks).toEqual(rows);
+  });
+
   it('marks locks as errored when only the lock request fails, keeping the rest of the dashboard', async () => {
     mockOtherSections();
     databaseApi.getLockInfo.mockRejectedValue({ response: { data: { message: 'timeout' } } });

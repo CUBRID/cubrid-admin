@@ -114,6 +114,11 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
         );
       }
     },
+    {
+      header: CM.lockCountCol,
+      accessor: 'count',
+      render: (val) => <span className="font-mono text-14 tabular-nums text-slate-500">{Number(val ?? 0).toLocaleString()}</span>,
+    },
   ], [CM]);
 
   return (

@@ -1109,6 +1109,7 @@ export const CM_KO = {
   slowQueryLogs: '느린 쿼리 로그',
   restartCasTitle: 'CAS 재시작',
   lockMode: '잠금 모드',
+  lockCountCol: '잠금 수',
   activeLog: '활성 로그',
   archiveLog: '아카이브 로그',
   longTran: '장기 트랜',

@@ -51,8 +51,10 @@ export const databaseApi = {
   optimizeDatabase: (hostUid, dbname, payload) =>
     apiClient.post(`/${hostUid}/database/optimize/${encodeURIComponent(dbname)}`, payload),
 
-  getLockInfo: (hostUid, dbname) =>
-    apiClient.post(`/${hostUid}/database/lock/${encodeURIComponent(dbname)}`, {}),
+  // { summary: true } returns locks grouped per transaction, table and mode
+  // instead of the raw lock table (one entry per locked row).
+  getLockInfo: (hostUid, dbname, body = {}) =>
+    apiClient.post(`/${hostUid}/database/lock/${encodeURIComponent(dbname)}`, body),
 
   getTransactionInfo: (hostUid, dbname, payload) =>
     apiClient.post(`/${hostUid}/database/transaction-info/${encodeURIComponent(dbname)}`, payload),
