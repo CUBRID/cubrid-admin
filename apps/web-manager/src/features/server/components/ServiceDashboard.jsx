@@ -17,7 +17,6 @@ import { orderedGroupEntries,
   resolveDefaultHostUid,
   sortHostUidsByHaRole,
   inferHaNodeType,
-  stripHaRoleTagFromAlias,
 } from '../../host/hostGroupUtils';
 
 const MetricBar = ({ pct }) => (
@@ -253,7 +252,7 @@ const Component = function ServiceDashboard() {
         const haRole = inferHaNodeType(row, haInfo[row.uid]);
         const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
-        const displayName = stripHaRoleTagFromAlias(val || row.id);
+        const displayName = val || row.id;
 
         return (
           <div className="flex items-center gap-3 py-0.5 w-full">

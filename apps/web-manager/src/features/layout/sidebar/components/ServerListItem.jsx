@@ -1,5 +1,4 @@
 import { useCM } from '../../../../constants/useCM';
-import { stripHaRoleTagFromAlias } from '../../../host/hostGroupUtils';
 
 const HA_ROLE_CONFIG = {
   master:  { cmKey: 'haMaster',  icon: 'star',                    className: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400' },
@@ -33,8 +32,9 @@ export default function ServerListItem({
   const haRole = haInfo?.isHA ? haInfo.currentNodeType : null;
   const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
-  // Strip HA role tags from display name for cleanliness
-  const displayName = stripHaRoleTagFromAlias(host.alias || host.id) || host.id;
+  // Shown as stored: a user-typed alias may itself end in "(master)"; the HA
+  // role is shown by its own badge from live haInfo, not taken from the name.
+  const displayName = host.alias || host.id;
 
   return (
     <div
