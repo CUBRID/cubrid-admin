@@ -194,7 +194,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
         </InfoBanner>
       )}
 
-      <Table columns={columns} data={rows} className="font-mono text-14" />
+      <Table columns={columns} data={rows} className="font-mono text-14" maxRows={15} />
     </Card>
   );
 }

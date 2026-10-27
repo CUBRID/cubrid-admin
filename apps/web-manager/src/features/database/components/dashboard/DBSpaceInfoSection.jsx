@@ -65,7 +65,7 @@ export default function DBSpaceInfoSection({ spaceInfo, pollingProps }) {
       isCollapsed={isCollapsed}
       onToggle={(v) => setIsCollapsed(v)}
     >
-      <Table columns={columns} data={spaceInfo} />
+      <Table columns={columns} data={spaceInfo} maxRows={15} />
     </Card>
   );
 }

@@ -98,6 +98,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
       collapsible
     >
       <Table
+        maxRows={15}
         columns={columns}
         data={brokers}
         loading={loading && !hasLoadedOnce && !isManualRefreshing}

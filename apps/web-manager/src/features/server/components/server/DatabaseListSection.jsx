@@ -72,7 +72,7 @@ export default function DatabaseListSection({ dbListDisplay }) {
       bodyClassName="p-0"
       collapsible
     >
-      <Table columns={columns} data={dbListDisplay} />
+      <Table columns={columns} data={dbListDisplay} maxRows={15} />
     </Card>
   );
 }

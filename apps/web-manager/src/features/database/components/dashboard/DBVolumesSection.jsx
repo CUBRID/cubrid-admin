@@ -123,7 +123,7 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
       isCollapsed={isCollapsed}
       onToggle={(v) => setIsCollapsed(v)}
     >
-      <Table columns={columns} data={volumes} />
+      <Table columns={columns} data={volumes} maxRows={15} />
     </Card>
   );
 }

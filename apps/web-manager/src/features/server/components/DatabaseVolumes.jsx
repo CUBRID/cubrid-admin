@@ -191,6 +191,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       collapsible
     >
       <Table
+        maxRows={15}
         columns={columns}
         data={volumeData}
         loading={loading && !hasLoadedOnce}

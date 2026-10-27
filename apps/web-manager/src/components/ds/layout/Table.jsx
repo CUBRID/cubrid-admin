@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Skeleton } from './Skeleton';
 import { EmptyState } from './EmptyState';
@@ -22,10 +22,17 @@ export const Table = ({
   getRowAriaLabel,
   stickyHeader = false,
   emptyState = null,
+  // With more rows than this, the table keeps the height of this many rows and
+  // scrolls inside; a grip below it drags the height (double-click resets).
+  maxRows,
 }) => {
   const CM = useCM();
   const resolvedEmptyMessage = emptyMessage ?? CM.noDataAvailableMsg;
   const [sortConfig, setSortConfig] = useState(null);
+  const scrollRef = useRef(null);
+  const [capHeight, setCapHeight] = useState(null);
+  const [userHeight, setUserHeight] = useState(null);
+  const dragRef = useRef(null);
 
   const handleSort = (accessor) => {
     if (!accessor) return;
@@ -65,6 +72,47 @@ export const Table = ({
     });
   }, [data, sortConfig, columns]);
 
+  const rowCount = sortedData.length;
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!maxRows || !el || rowCount <= maxRows) {
+      setCapHeight(null);
+      return;
+    }
+    // Measured, not assumed: rows can be taller than one line (badges, wrapping).
+    const head = el.querySelector('thead');
+    const rows = el.querySelectorAll('tbody > tr');
+    let height = head ? head.offsetHeight : 0;
+    for (let i = 0; i < maxRows && i < rows.length; i++) height += rows[i].offsetHeight;
+    setCapHeight(height || null);
+  }, [maxRows, rowCount, columns]);
+
+  const scrolling = capHeight != null || userHeight != null;
+  const minHeight = capHeight != null ? Math.min(capHeight, 120) : 120;
+  const resizeBy = (delta) => {
+    const current = scrollRef.current?.getBoundingClientRect().height ?? capHeight ?? 0;
+    setUserHeight(Math.max(minHeight, current + delta));
+  };
+  const onGripPointerDown = (event) => {
+    if (event.button !== 0 || !scrollRef.current) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { y: event.clientY, height: scrollRef.current.getBoundingClientRect().height };
+  };
+  const onGripPointerMove = (event) => {
+    if (!dragRef.current) return;
+    setUserHeight(Math.max(minHeight, dragRef.current.height + event.clientY - dragRef.current.y));
+  };
+  const onGripPointerUp = (event) => {
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+  const onGripKeyDown = (event) => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); resizeBy(40); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); resizeBy(-40); }
+    else if (event.key === 'Home') { event.preventDefault(); setUserHeight(null); }
+  };
+
   if (loading && data.length === 0) {
     return (
       <div className="w-full space-y-2 p-2">
@@ -79,13 +127,23 @@ export const Table = ({
     return emptyState ?? <EmptyState title={resolvedEmptyMessage} icon="table_chart" />;
   }
 
+  const scrollStyle = userHeight != null
+    ? { height: userHeight }
+    : capHeight != null ? { maxHeight: capHeight } : undefined;
+
   return (
-    <div className={`w-full overflow-x-auto ${selectable ? 'select-text' : 'select-none'} ${className} ${bordered ? 'border-b border-slate-200 dark:border-white/[0.08]' : ''}`}>
+    <div className={`w-full ${selectable ? 'select-text' : 'select-none'} ${className} ${bordered ? 'border-b border-slate-200 dark:border-white/[0.08]' : ''}`}>
+    <div
+      ref={scrollRef}
+      data-testid={scrolling ? 'table-scroll-area' : undefined}
+      className={scrolling ? 'w-full overflow-auto custom-scrollbar' : 'w-full overflow-x-auto'}
+      style={scrollStyle}
+    >
       <table className="w-full text-left border-collapse">
 
         {/* ── Header ── */}
         {headersVisible && (
-          <thead className={stickyHeader ? 'sticky top-0 z-10' : undefined}>
+          <thead className={stickyHeader || scrolling ? 'sticky top-0 z-10 bg-white dark:bg-background-dark' : undefined}>
             <tr className="bg-slate-100 dark:bg-white/3 border-b border-slate-200 dark:border-white/[0.07]">
             {columns.map((col, idx) => {
                 const canSort = col.sortable ?? sortable;
@@ -208,6 +266,26 @@ export const Table = ({
           )}
         </tbody>
       </table>
+    </div>
+      {scrolling && (
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={CM.tableResizeHint}
+          title={CM.tableResizeHint}
+          tabIndex={0}
+          data-testid="table-resize-grip"
+          className="group/grip flex h-3 w-full cursor-row-resize touch-none items-center justify-center border-t border-slate-100 dark:border-white/[0.06] focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500"
+          onPointerDown={onGripPointerDown}
+          onPointerMove={onGripPointerMove}
+          onPointerUp={onGripPointerUp}
+          onPointerCancel={onGripPointerUp}
+          onDoubleClick={() => setUserHeight(null)}
+          onKeyDown={onGripKeyDown}
+        >
+          <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-white/20 group-hover/grip:bg-amber-500" />
+        </div>
+      )}
     </div>
   );
 };

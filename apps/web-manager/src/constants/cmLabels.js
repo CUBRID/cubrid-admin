@@ -2047,6 +2047,7 @@ export const CM = {
   noDataTitle: 'No Data',
   dragToResizeTitle: 'Drag to resize',
   noDataAvailableMsg: 'No data available',
+  tableResizeHint: 'Drag to resize. Double-click to reset.',
 
   // Domain components
   oneHourLabel: '1 Hour',
