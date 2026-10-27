@@ -1,7 +1,7 @@
 import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
-import { fetchHosts,
+import {
   setSelectedHost,
   loginHostsBatch,
   openDeleteHostModal,
@@ -9,6 +9,7 @@ import { fetchHosts,
   openChangePasswordModal,
   revokeHostLogin,
   forgetHostSession,
+  loadHosts,
   openServerVersionModal,
   openCmsUserManagementModal,
   startService,
@@ -196,7 +197,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
 
   useEffect(() => {
-    dispatch(fetchHosts());
+    dispatch(loadHosts());
   }, [dispatch]);
 
   const closeAllContextMenus = useCallback(() => {

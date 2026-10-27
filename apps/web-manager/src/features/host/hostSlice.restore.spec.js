@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import reducer, { fetchHosts, revokeHostLogin } from './hostSlice';
+import { describe, expect, it, vi } from 'vitest';
+import { configureStore } from '@reduxjs/toolkit';
+import reducer, { fetchHosts, loadHosts, revokeHostLogin } from './hostSlice';
+import { hostApi } from './hostApi';
+
+vi.mock('./hostApi', () => ({ hostApi: { getHosts: vi.fn(), getHaInfo: vi.fn() } }));
 
 const host = (uid, cmsSessionExpiresAt) => ({ uid, id: 'admin', alias: uid, address: '10.0.0.1', port: 8001, cmsSessionExpiresAt });
 const groups = (...hosts) => ({ g: { name: 'G', hosts: Object.fromEntries(hosts.map((h) => [h.uid, h])) } });
@@ -24,5 +28,19 @@ describe('restoring host connections on reload', () => {
     state = reducer(state, fetched(groups(live)));
 
     expect(state.authorizedHosts).toEqual([]);
+  });
+});
+
+describe('loadHosts', () => {
+  it('fetches HA info for the hosts it restored, since they skip the login that fills it', async () => {
+    const now = Date.now();
+    hostApi.getHosts.mockResolvedValue({ host_groups: groups(host('live', now + 60_000), host('expired', now - 1)) });
+    hostApi.getHaInfo.mockResolvedValue({ success: true, isHA: true, currentNodeType: 'master', haNodes: [] });
+    const store = configureStore({ reducer: { host: reducer } });
+
+    await store.dispatch(loadHosts());
+
+    expect(hostApi.getHaInfo.mock.calls).toEqual([['live']]);
+    expect(store.getState().host.haInfo.live).toEqual(expect.objectContaining({ isHA: true, currentNodeType: 'master' }));
   });
 });

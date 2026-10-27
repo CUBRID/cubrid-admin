@@ -10,7 +10,7 @@ import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import type { CmsHostLoginClientResponse } from '@api-interfaces';
 import { CMS_CONFNAME_CM, CMS_CONFNAME_CUBRID } from '@database/database.constants';
-import { forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
+import { closeCmsToken, forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
 import {
   flattenHanodelist,
   formatAuditLog,
@@ -144,7 +144,8 @@ export class CmsAuthService {
   /**
    * Marks the host's CMS session as closed by the user, so a reload no longer
    * shows it as connected. CMS has no logout task; the token itself is kept
-   * for other tabs still using it, and their requests reopen the session.
+   * for other tabs still using it, and their requests sent from now on reopen
+   * the session (ones already in flight do not).
    */
   public async disconnect(userId: string, uid: string): Promise<void> {
     await this.repository.atomicUpdateUser(userId, async (user: User) => {
@@ -152,7 +153,7 @@ export class CmsAuthService {
       if (!persisted) {
         throw HostError.NoSuchHost({ uid });
       }
-      forgetCmsToken(persisted.token);
+      closeCmsToken(persisted.token);
       delete persisted.cmsTokenIssuedAt;
       return user;
     });

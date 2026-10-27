@@ -6,6 +6,7 @@ import { HostInfo, User } from '@type/index';
 import { AddHostRequest, GetHostsResponse, HostResponse, UpdateHostRequest } from '@api-interfaces';
 import { SafeHostGroupsMap } from '@type/collections';
 import { v4 as uuidv4 } from 'uuid';
+import { forgetCmsToken } from '@cms-https-client/cms-token-activity';
 import {
   addHostToGroup,
   countAllHosts,
@@ -207,6 +208,17 @@ export class HostService {
         throw HostError.DuplicatedAlias({ duplicatedHostId: duplicateAlias.uid, alias: proposedAlias });
       }
 
+      // A different server or CMS account makes the stored session meaningless.
+      const nextTarget = [
+        hostInfo.address ?? existingHost.address,
+        hostInfo.port ?? existingHost.port,
+        hostInfo.id ?? existingHost.id,
+        hostInfo.password ?? existingHost.password,
+      ];
+      const sameTarget = [existingHost.address, existingHost.port, existingHost.id, existingHost.password]
+        .every((value, i) => String(value) === String(nextTarget[i]));
+      if (!sameTarget) forgetCmsToken(existingHost.token);
+
       ref.group.hosts[hostUid] = {
         uid: hostUid,
         id: hostInfo.id ?? existingHost.id,
@@ -216,8 +228,8 @@ export class HostService {
         initialLogin: existingHost.initialLogin ?? true,
         alias: proposedAlias,
         token: hostInfo.token ?? existingHost.token,
-        cmsTokenIssuedAt: existingHost.cmsTokenIssuedAt,
-        cmsTokenActiveTimeSec: existingHost.cmsTokenActiveTimeSec,
+        cmsTokenIssuedAt: sameTarget ? existingHost.cmsTokenIssuedAt : undefined,
+        cmsTokenActiveTimeSec: sameTarget ? existingHost.cmsTokenActiveTimeSec : undefined,
         dbProfiles: hostInfo.dbProfiles ?? existingHost.dbProfiles ?? {},
       };
 
@@ -250,9 +262,11 @@ export class HostService {
   @HandleHostErrors()
   async deleteHost(userId: string, hostUid: string): Promise<SafeHostGroupsMap> {
     const updatedUser = await this.repository.atomicUpdateUser(userId, async (user: User) => {
+      const removedToken = getHost(user, hostUid)?.token;
       if (!removeHostFromUser(user, hostUid)) {
         throw HostError.NoSuchHost({ hostUid });
       }
+      forgetCmsToken(removedToken);
       return user;
     });
     return sanitizeHostGroups(updatedUser);

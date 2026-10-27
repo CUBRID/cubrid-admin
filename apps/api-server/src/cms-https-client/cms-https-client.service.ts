@@ -152,7 +152,7 @@ export class CmsHttpsClientService {
         const response = await firstValueFrom(this.httpService.post<P>(url, data, config));
         this.logCmsResponse('authenticated', url, data, response.data, Date.now() - startedAt);
         // Any answer but "invalid token" means CMS accepted and renewed the token.
-        noteCmsTokenUse(data.token, isInvalidTokenError(response.data));
+        noteCmsTokenUse(data.token, isInvalidTokenError(response.data), startedAt);
         const cmsResponse = response.data as { status?: string; note?: string };
         if (attempt === 0 && data.task === 'getautoexecquery'
           && ['fail', 'failure'].includes(cmsResponse.status ?? '')

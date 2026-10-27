@@ -301,6 +301,20 @@ export const refreshHaInfo = createAsyncThunk(
   }
 );
 
+// First host list of the tab: fetchHosts restores hosts whose CMS session is
+// still alive (see authorizedHostsHydrated); they skip the login that
+// normally fills haInfo, so re-derive it for them, without a new session.
+export const loadHosts = createAsyncThunk(
+  'host/loadHosts',
+  async (_, { dispatch, getState }) => {
+    const before = new Set(getState().host.authorizedHosts);
+    await dispatch(fetchHosts());
+    const restored = getState().host.authorizedHosts.filter((uid) => !before.has(uid));
+    await Promise.all(restored.map((hostUid) => dispatch(refreshHaInfo(hostUid))));
+    return true;
+  }
+);
+
 // Async thunk for a manual "refresh" of the whole server list: re-fetches
 // the host/group tree, then re-derives HA info for every logged-in host.
 export const refreshServerList = createAsyncThunk(
