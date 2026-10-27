@@ -30,6 +30,7 @@ import {
   HandleCmsErrors,
 } from '@common';
 import { ConfigError } from '@error/config/config-error';
+import { ValidationError } from '@error/validation/validation-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
 import { DatabaseUserService } from '@database/user/database-user.service';
@@ -658,6 +659,8 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: GetAutoAddVolLogRequest
   ): Promise<GetAutoAddVolLogResponse> {
+    const start = parseAutoAddVolLogBound(request.start_time, 'start_time');
+    const end = parseAutoAddVolLogBound(request.end_time, 'end_time');
     const cmsRequest: GetAutoAddVolLogCmsRequest = {
       task: 'getautoaddvollog',
     };
@@ -668,8 +671,6 @@ export class DatabaseConfigService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     const domain = this.extractDomainData(response);
-    const start = request.start_time ? parseCmsLogDateTime(request.start_time) : null;
-    const end = request.end_time ? parseCmsLogDateTime(request.end_time) : null;
 
     return (domain.log ?? []).map(normalizeAutoAddVolLogEntry).filter((entry) => {
       if (start == null && end == null) return true;
@@ -844,6 +845,14 @@ export function parseCmsLogDateTime(value: string | undefined): number | null {
   if (!match) return null;
   const [year, month, day, hours, minutes, seconds] = match.slice(1).map(Number);
   return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
+}
+
+/** A range bound as epoch ms; null when not given. An unreadable one is an input error, not "no limit". */
+function parseAutoAddVolLogBound(value: string | undefined, field: 'start_time' | 'end_time'): number | null {
+  if (value === undefined || value === '') return null;
+  const time = parseCmsLogDateTime(value);
+  if (time == null) throw ValidationError.InvalidFieldFormat(field, 'YYYY-M-D,h:m:s');
+  return time;
 }
 
 /**

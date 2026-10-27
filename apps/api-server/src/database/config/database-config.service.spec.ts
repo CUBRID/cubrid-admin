@@ -1,3 +1,4 @@
+import { ValidationError } from '@error/validation/validation-error';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseConfigService } from './database-config.service';
 import { HostService } from '@host';
@@ -569,6 +570,13 @@ describe('DatabaseConfigService', () => {
         { dbname: 'testdb', volname: 'testdb_x003', purpose: 'data', page: '2048', time: '2026-10-28,9:5:3', outcome: 'start' },
         { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-28,9:6:0', outcome: 'failure' },
       ]);
+    });
+
+    it('rejects a range bound it cannot read instead of dropping the limit', async () => {
+      await expect(
+        service.getAutoAddVolLog(mockUserId, mockHostUid, { start_time: '2026-10-27', end_time: '2026-10-27,23:59:59' })
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 
     it('filters the range by time value, so unpadded hours like 9:x stay in a same-day range', async () => {
