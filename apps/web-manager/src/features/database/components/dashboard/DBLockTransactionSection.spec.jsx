@@ -70,3 +70,14 @@ describe('DBLockTransactionSection empty state', () => {
     expect(container.textContent).not.toContain(CM.locksUnavailableTitle);
   });
 });
+
+describe('DBLockTransactionSection grouped rows', () => {
+  it('shows the program and the lock count of each group', async () => {
+    const locks = [{ index: '4', user: 'DBA', host: 'ha-test-81', pid: '1387760', program: 'broker2_cub_cas_1', obj: 'Instance of class = dba.nca_bulk_lock_t', mode: 'X_LOCK', count: 20000 }];
+    await render({ locks, locksStatus: 'loaded' });
+
+    expect(container.textContent).toContain('broker2_cub_cas_1');
+    expect(container.textContent).toContain('Instance of class = dba.nca_bulk_lock_t');
+    expect(container.textContent).toContain((20000).toLocaleString());
+  });
+});

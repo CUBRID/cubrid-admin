@@ -99,6 +99,8 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
     { header: CM.userNameCol, accessor: 'user', render: (val) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val}</span> },
     { header: CM.host, accessor: 'host', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
     { header: CM.pid, accessor: 'pid', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    // e.g. broker2_cub_cas_1 for a broker session (broker and CAS number), applylogdb/copylogdb for HA
+    { header: CM.programName, accessor: 'program', render: (val) => <span className="font-mono text-14 text-slate-500 max-w-[200px] truncate block" title={val}>{val}</span> },
     { header: CM.objectType, accessor: 'obj', render: (val) => <span className="font-mono text-14 text-slate-500 max-w-[280px] truncate block" title={val}>{val}</span> },
     {
       header: CM.lockMode,
