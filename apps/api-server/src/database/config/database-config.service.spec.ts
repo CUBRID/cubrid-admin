@@ -545,7 +545,7 @@ describe('DatabaseConfigService', () => {
       cmsClient.postAuthenticated.mockResolvedValue(cmsLog([
         { dbname: 'testdb', volname: 'data', purpose: '2048', page: '2026-10-27,9:5:3', time: 'start', outcome: '' },
         { dbname: 'testdb@127.0.0.1', volname: 'data', purpose: '2048', page: '2026-10-27,9:5:4', time: 'success', outcome: 'start' },
-        { dbname: 'demodb', volname: 'demodb_x002', purpose: 'data', page: '2048', time: '2026-10-19,10:12:34', outcome: 'failure' },
+        { dbname: 'demodb', volname: 'none', purpose: 'data', page: '2048', time: '2026-10-19,10:12:34', outcome: 'failure' },
       ]));
 
       const result = await service.getAutoAddVolLog(mockUserId, mockHostUid, {});
@@ -553,7 +553,21 @@ describe('DatabaseConfigService', () => {
       expect(result).toEqual([
         { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-27,9:5:3', outcome: 'start' },
         { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-27,9:5:4', outcome: 'success' },
-        { dbname: 'demodb', volname: 'demodb_x002', purpose: 'data', page: '2048', time: '2026-10-19,10:12:34', outcome: 'failure' },
+        { dbname: 'demodb', volname: '', purpose: 'data', page: '2048', time: '2026-10-19,10:12:34', outcome: 'failure' },
+      ]);
+    });
+
+    it('passes through lines CMS already aligned (CBRD-27682), showing "none" as no volume name', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(cmsLog([
+        { dbname: 'testdb@127.0.0.1', volname: 'testdb_x003', purpose: 'data', page: '2048', time: '2026-10-28,9:5:3', outcome: 'start' },
+        { dbname: 'testdb', volname: 'none', purpose: 'data', page: '2048', time: '2026-10-28,9:6:0', outcome: 'failure' },
+      ]));
+
+      const result = await service.getAutoAddVolLog(mockUserId, mockHostUid, {});
+
+      expect(result).toEqual([
+        { dbname: 'testdb', volname: 'testdb_x003', purpose: 'data', page: '2048', time: '2026-10-28,9:5:3', outcome: 'start' },
+        { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-28,9:6:0', outcome: 'failure' },
       ]);
     });
 

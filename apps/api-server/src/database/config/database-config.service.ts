@@ -858,7 +858,9 @@ export function parseCmsLogDateTime(value: string | undefined): number | null {
 export function normalizeAutoAddVolLogEntry(entry: AutoAddVolLogEntry): AutoAddVolLogEntry {
   const dbname = String(entry.dbname ?? '').split('@')[0];
   const shifted = parseCmsLogDateTime(entry.time) == null && parseCmsLogDateTime(entry.page) != null;
-  if (!shifted) return { ...entry, dbname };
+  // CMS writes "none" when it has no volume name (and, once CBRD-27682 is in,
+  // returns realigned 5-field lines with "none" too); shown as no name.
+  if (!shifted) return { ...entry, dbname, volname: entry.volname === 'none' ? '' : entry.volname };
   return {
     dbname,
     volname: '',
