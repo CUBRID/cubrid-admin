@@ -57,6 +57,7 @@ function makeStore(hostOverrides = {}) {
     reducer: {
       host: () => host,
       user: () => ({ preferences: { uiLocale: 'en' } }),
+      layout: () => ({ statusModal: { isOpen: false } }),
     },
   });
 }
