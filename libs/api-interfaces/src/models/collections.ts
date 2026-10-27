@@ -1,4 +1,4 @@
-import { HostInfo } from './host-info';
+import { HostInfo, SafeHostInfo } from './host-info';
 import { HostGroupInfo } from './host-group-info';
 import { DBInfo } from './db-info';
 
@@ -22,7 +22,7 @@ export type HostList = HashMap<HostInfo>;
  *
  * @category Types
  */
-export type SafeHostList = HashMap<Omit<HostInfo, 'password' | 'token' | 'dbProfiles'>>;
+export type SafeHostList = HashMap<SafeHostInfo>;
 
 export type SafeHostGroupInfo = Omit<HostGroupInfo, 'hosts'> & { hosts: SafeHostList };
 export type SafeHostGroupsMap = HashMap<SafeHostGroupInfo>;
@@ -41,6 +41,6 @@ export type DbList = HashMap<DBInfo>;
  */
 export type SafeDbList = HashMap<Omit<DBInfo, 'password'>>;
 // Re-export commonly used types
-export type { HostInfo } from './host-info';
+export type { HostInfo, SafeHostInfo } from './host-info';
 export type { DBInfo } from './db-info';
 export type { User } from './user';

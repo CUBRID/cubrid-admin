@@ -21,6 +21,7 @@ import {
   moveHostToGroup,
   removeHostFromUser,
   sanitizeHostGroups,
+  toSafeHost,
   updateGroup,
   UNGROUPED_GROUP_ID,
 } from './host-group.util';
@@ -215,6 +216,8 @@ export class HostService {
         initialLogin: existingHost.initialLogin ?? true,
         alias: proposedAlias,
         token: hostInfo.token ?? existingHost.token,
+        cmsTokenIssuedAt: existingHost.cmsTokenIssuedAt,
+        cmsTokenActiveTimeSec: existingHost.cmsTokenActiveTimeSec,
         dbProfiles: hostInfo.dbProfiles ?? existingHost.dbProfiles ?? {},
       };
 
@@ -266,10 +269,7 @@ export class HostService {
   }
 
   async findHost(userId: string, hostUid: string): Promise<HostResponse> {
-    const host = await this.findHostInternal(userId, hostUid);
-    const { password, token, dbProfiles, ...hostResponse } = host;
-    hostResponse.initialLogin = host.initialLogin ?? true;
-    return hostResponse as HostResponse;
+    return toSafeHost(await this.findHostInternal(userId, hostUid));
   }
 
   /** Mark the group containing this host as an HA cluster group. */

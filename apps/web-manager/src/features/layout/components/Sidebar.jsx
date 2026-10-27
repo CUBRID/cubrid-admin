@@ -8,6 +8,7 @@ import { fetchHosts,
   openEditHostModal,
   openChangePasswordModal,
   revokeHostLogin,
+  forgetHostSession,
   openServerVersionModal,
   openCmsUserManagementModal,
   startService,
@@ -1020,6 +1021,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   variant: 'danger',
                   run: () => {
                     dispatch(revokeHostLogin(hostUid));
+                    dispatch(forgetHostSession(hostUid));
                     dispatch(closeHostTabs(hostUid));
                     if (selectedHostUid === hostUid) {
                       dispatch(setSelectedHost(null));

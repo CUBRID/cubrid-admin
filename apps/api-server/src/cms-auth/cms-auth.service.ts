@@ -9,7 +9,8 @@ import { UserRepositoryService } from '@repository';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import type { CmsHostLoginClientResponse } from '@api-interfaces';
-import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
+import { CMS_CONFNAME_CM, CMS_CONFNAME_CUBRID } from '@database/database.constants';
+import { forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
 import {
   flattenHanodelist,
   formatAuditLog,
@@ -104,12 +105,57 @@ export class CmsAuthService {
       if (!persisted) {
         throw HostError.NoSuchHost({ uid });
       }
+      if (persisted.token !== token) forgetCmsToken(persisted.token);
       persisted.token = token;
       persisted.initialLogin = false;
+      persisted.cmsTokenIssuedAt = Date.now();
+      delete persisted.cmsTokenActiveTimeSec;
       return user;
     });
+    await this.rememberTokenActiveTime(userId, uid, token);
 
     return this.getHaInfo(userId, uid);
+  }
+
+  /**
+   * Stores the host's cm.conf token_active_time with its session, so the
+   * host list can tell when an unused token expires. Without it the CMS
+   * default (7200s) is assumed. CMS reads the value at startup, so an edit
+   * not yet followed by a CMS restart is read here before it takes effect.
+   */
+  private async rememberTokenActiveTime(userId: string, uid: string, token: string): Promise<void> {
+    let seconds: number;
+    try {
+      seconds = parseTokenActiveTime(
+        await this.cmsConfigService.getAllSystemParam(userId, uid, CMS_CONFNAME_CM)
+      );
+    } catch (err) {
+      this.logger.warn(`Could not read token_active_time from cm.conf for host ${uid}: ${err}`);
+      return;
+    }
+    await this.repository.atomicUpdateUser(userId, async (user: User) => {
+      const persisted = getHost(user, uid);
+      // Skip if another login replaced the token meanwhile.
+      if (persisted?.token === token) persisted.cmsTokenActiveTimeSec = seconds;
+      return user;
+    });
+  }
+
+  /**
+   * Marks the host's CMS session as closed by the user, so a reload no longer
+   * shows it as connected. CMS has no logout task; the token itself is kept
+   * for other tabs still using it, and their requests reopen the session.
+   */
+  public async disconnect(userId: string, uid: string): Promise<void> {
+    await this.repository.atomicUpdateUser(userId, async (user: User) => {
+      const persisted = getHost(user, uid);
+      if (!persisted) {
+        throw HostError.NoSuchHost({ uid });
+      }
+      forgetCmsToken(persisted.token);
+      delete persisted.cmsTokenIssuedAt;
+      return user;
+    });
   }
 
   /**

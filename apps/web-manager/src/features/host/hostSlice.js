@@ -272,6 +272,19 @@ export const loginToHost = createAsyncThunk(
   }
 );
 
+// After the user disconnects a host: best effort, since the connection is
+// already gone from this tab either way.
+export const forgetHostSession = createAsyncThunk(
+  'host/forgetHostSession',
+  async (hostUid) => {
+    try {
+      await hostApi.disconnectHost(hostUid);
+    } catch {
+      // A failure only means a reload may show the host as connected again.
+    }
+  }
+);
+
 // Async thunk to re-derive a host's HA badge (role/peers) without a full
 // relogin — used after anything that can change HA role server-side
 // (Service Start/Stop's ha_start/ha_stop) and by the manual server-list
@@ -384,14 +397,10 @@ const initialState = {
   hosts: [],
   hostGroups: {},
   authorizedHosts: [], // Array of hostUids that have active forwarded sessions
-  // One-time only (see fetchHosts.fulfilled): whether this tab/session has
-  // already seeded authorizedHosts from the server's own initialLogin
-  // flag. Must not re-run on every later fetchHosts (manual refresh,
-  // after add/edit/delete, etc.) — initialLogin stays false forever once
-  // a host has ever been logged into (server never resets it on
-  // disconnect), so re-seeding on every refetch would silently
-  // "re-authorize" a host the user explicitly disconnected earlier in
-  // this same tab session.
+  // One-time only (see fetchHosts.fulfilled): whether this tab has already
+  // seeded authorizedHosts from the server's cmsSessionExpiresAt. Must not
+  // re-run on every later fetchHosts (manual refresh, after add/edit/delete),
+  // or a host the user disconnected in this tab would come back as connected.
   authorizedHostsHydrated: false,
   hostEnvs: {}, // Cache of environment info (version, paths, etc) indexed by hostUid
   haInfo: JSON.parse(localStorage.getItem('cubrid_ha_info') || '{}'), // Cache of HA info (isHA, currentNodeType, haNodes) indexed by hostUid
@@ -635,23 +644,17 @@ const hostSlice = createSlice({
       .addCase(fetchHosts.fulfilled, (state, action) => {
         state.loading = false;
         applyHostGroupsResponse(state, action.payload);
-        // First fetchHosts of this tab/session only — see
-        // authorizedHostsHydrated's own comment for why this can't just
-        // run on every fetchHosts. A host whose server record already has
-        // initialLogin: false has a previously-established CMS session
-        // token persisted server-side (cms-auth.service.ts's `login`
-        // clears this flag on first successful login and never sets it
-        // back) — optimistically treating it as still-authorized here
-        // means a reload/new tab doesn't show every host as disconnected
-        // even though the backend may still hold a live session for it.
-        // If that token has actually expired, the existing 401 interceptor
-        // (apiClient.js) already opens the reconnect modal on the first
-        // real request against it — the same recovery path an
-        // expired-mid-session token already goes through today, so this
-        // doesn't introduce a new failure mode.
+        // First fetchHosts of this tab only (see authorizedHostsHydrated).
+        // cmsSessionExpiresAt is when the server expects the host's CMS token
+        // to expire: CMS drops a token left unused for its token_active_time
+        // (cm.conf, 7200s by default) and renews it on every request. Before
+        // then a reload restores the host as connected. If the token is gone
+        // anyway (e.g. the same CMS user logged in elsewhere), the first
+        // request gets a 401 and the existing reconnect modal opens (apiClient.js).
         if (!state.authorizedHostsHydrated) {
+          const now = Date.now();
           for (const host of state.hosts) {
-            if (host.initialLogin === false && !state.authorizedHosts.includes(host.uid)) {
+            if (host.cmsSessionExpiresAt > now && !state.authorizedHosts.includes(host.uid)) {
               state.authorizedHosts.push(host.uid);
             }
           }

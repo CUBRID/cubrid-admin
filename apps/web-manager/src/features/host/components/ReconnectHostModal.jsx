@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { loginToHost, closeReconnectModal, clearHostError, revokeHostLogin, setSelectedHost } from '../hostSlice';
+import { loginToHost, closeReconnectModal, clearHostError, revokeHostLogin, forgetHostSession, setSelectedHost } from '../hostSlice';
 import { clearReconnectingHost } from '../../../api/apiClient';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -97,6 +97,7 @@ export default function ReconnectHostModal() {
     // Full cleanup: revoke session, close tabs, reset state
     if (reconnectHostUid) {
       dispatch(revokeHostLogin(reconnectHostUid));
+      dispatch(forgetHostSession(reconnectHostUid));
       try {
         const { closeHostTabs } = await import('../../layout/layoutSlice');
         dispatch(closeHostTabs(reconnectHostUid));

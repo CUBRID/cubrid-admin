@@ -21,6 +21,8 @@ class CmsHttpsAgent extends https.Agent {
 import { HostService } from '@host';
 import { EncryptionService } from '@security';
 import { checkCmsTokenError, checkCmsStatusError } from '@common';
+import { isInvalidTokenError } from '../common/decorators/handle-cms-token-errors.decorator';
+import { noteCmsTokenUse } from './cms-token-activity';
 import { formatAuditLog } from '@util';
 
 /**
@@ -149,6 +151,8 @@ export class CmsHttpsClientService {
         this.logCmsRequest('authenticated', url, data);
         const response = await firstValueFrom(this.httpService.post<P>(url, data, config));
         this.logCmsResponse('authenticated', url, data, response.data, Date.now() - startedAt);
+        // Any answer but "invalid token" means CMS accepted and renewed the token.
+        noteCmsTokenUse(data.token, isInvalidTokenError(response.data));
         const cmsResponse = response.data as { status?: string; note?: string };
         if (attempt === 0 && data.task === 'getautoexecquery'
           && ['fail', 'failure'].includes(cmsResponse.status ?? '')

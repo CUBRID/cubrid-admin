@@ -7,6 +7,13 @@
 export const CMS_CONFNAME_CUBRID = 'cubridconf' as const;
 
 /**
+ * CMS `confname` for cm.conf.
+ *
+ * @category Database
+ */
+export const CMS_CONFNAME_CM = 'cmconf' as const;
+
+/**
  * CMS `confname` for cubrid_ha.conf.
  *
  * @category Database

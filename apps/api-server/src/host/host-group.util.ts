@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { omitHashMap } from '@util';
 import { HashMap } from '@type/collections';
 import { HostGroupInfo, HostInfo, User } from '@type/index';
-import { SafeHostList, SafeHostGroupsMap, SafeHostGroupInfo } from '@type/collections';
+import { SafeHostInfo, SafeHostList, SafeHostGroupsMap, SafeHostGroupInfo } from '@type/collections';
+import { cmsSessionExpiresAt } from '@cms-https-client/cms-token-activity';
 
 export type HostRef = {
   groupId: string;
@@ -116,6 +116,23 @@ export function findDuplicateAlias(
   return found;
 }
 
+/** A host as sent to the client: no credentials or token, plus its expected CMS session expiry. */
+export function toSafeHost(host: HostInfo): SafeHostInfo {
+  const {
+    password: _password,
+    token: _token,
+    dbProfiles: _dbProfiles,
+    cmsTokenIssuedAt: _issuedAt,
+    cmsTokenActiveTimeSec: _activeTime,
+    ...safe
+  } = host;
+  return {
+    ...safe,
+    initialLogin: host.initialLogin ?? true,
+    cmsSessionExpiresAt: cmsSessionExpiresAt(host),
+  };
+}
+
 export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
   const out: SafeHostGroupsMap = {};
   for (const [groupId, group] of Object.entries(readHostGroups(user))) {
@@ -123,7 +140,9 @@ export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
       name: group.name,
       defaultHostUid: group.defaultHostUid,
       createdAt: group.createdAt,
-      hosts: omitHashMap(readGroupHosts(group), ['password', 'token', 'dbProfiles']) as SafeHostList,
+      hosts: Object.fromEntries(
+        Object.entries(readGroupHosts(group)).map(([uid, host]) => [uid, toSafeHost(host)])
+      ) as SafeHostList,
     };
   }
   // Always show the ungrouped bucket, even before any host has ever landed there.
