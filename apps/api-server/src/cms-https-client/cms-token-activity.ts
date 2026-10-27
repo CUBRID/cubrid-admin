@@ -5,9 +5,11 @@ import type { HostInfo } from '@type/index';
 export const CMS_DEFAULT_TOKEN_ACTIVE_TIME_SEC = 7200;
 
 /**
- * Records idle this long are dropped. Losing one only makes a host fall back
- * to its login time, which can make a live session look expired, never the
- * reverse.
+ * Accepted or closed records idle this long are dropped. Losing one only makes
+ * a host fall back to its login time, which can make a live session look
+ * expired, never the reverse. Rejected records are kept, since without them a
+ * long token_active_time would count from the login again; they go when the
+ * host logs in again or is removed.
  */
 export const CMS_TOKEN_ACTIVITY_RETENTION_MS = 24 * 60 * 60 * 1000;
 const SWEEP_EVERY_NOTES = 256;
@@ -36,14 +38,15 @@ let notesSinceSweep = 0;
 
 function sweep(now: number): void {
   for (const [token, entry] of activity) {
-    if (now - entry.touchedAt > CMS_TOKEN_ACTIVITY_RETENTION_MS) activity.delete(token);
+    if (!entry.rejected && now - entry.touchedAt > CMS_TOKEN_ACTIVITY_RETENTION_MS) activity.delete(token);
   }
 }
 
 /**
- * Records CMS's answer to a request made with `token` that was sent at
- * `startedAt`. A request sent before the user disconnected does not reopen
- * the session, even if its answer arrives afterwards.
+ * Records CMS's answer to a request made with `token` that NCA issued at
+ * `startedAt` (before any per-host queueing). A request issued before the user
+ * disconnected does not reopen the session, even if it was sent or answered
+ * afterwards.
  */
 export function noteCmsTokenUse(
   token: string | undefined,

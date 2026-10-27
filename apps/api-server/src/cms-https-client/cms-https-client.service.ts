@@ -137,6 +137,9 @@ export class CmsHttpsClientService {
     data: T,
     options?: { timeoutMs?: number }
   ): Promise<P> {
+    // Before the host queue: a request waiting there when the user disconnects
+    // must not count as use after the disconnect.
+    const issuedAt = Date.now();
     return this.withHostQueue(url, async () => {
       const config = {
         headers: { 'Content-Type': 'application/json' },
@@ -152,7 +155,7 @@ export class CmsHttpsClientService {
         const response = await firstValueFrom(this.httpService.post<P>(url, data, config));
         this.logCmsResponse('authenticated', url, data, response.data, Date.now() - startedAt);
         // Any answer but "invalid token" means CMS accepted and renewed the token.
-        noteCmsTokenUse(data.token, isInvalidTokenError(response.data), startedAt);
+        noteCmsTokenUse(data.token, isInvalidTokenError(response.data), issuedAt);
         const cmsResponse = response.data as { status?: string; note?: string };
         if (attempt === 0 && data.task === 'getautoexecquery'
           && ['fail', 'failure'].includes(cmsResponse.status ?? '')

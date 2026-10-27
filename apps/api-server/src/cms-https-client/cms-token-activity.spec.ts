@@ -69,6 +69,16 @@ describe('token activity retention', () => {
     expect(cmsSessionExpiresAt({ token: 'tok-old' })).toBeNull();
     for (let i = 0; i < 256; i++) forgetCmsToken(`tok-new-${i}`);
   });
+
+  it('keeps a rejected token past the retention, so a long active time does not revive it', () => {
+    noteCmsTokenUse('tok-rej', true, 1_000, 1_000);
+    const later = 1_000 + CMS_TOKEN_ACTIVITY_RETENTION_MS + 1;
+    for (let i = 0; i < 256; i++) noteCmsTokenUse(`tok-new-${i}`, false, later, later);
+
+    expect(cmsSessionExpiresAt({ token: 'tok-rej', cmsTokenIssuedAt: 1_000, cmsTokenActiveTimeSec: 7 * 86400 })).toBeNull();
+    for (let i = 0; i < 256; i++) forgetCmsToken(`tok-new-${i}`);
+    forgetCmsToken('tok-rej');
+  });
 });
 
 describe('parseTokenActiveTime', () => {
