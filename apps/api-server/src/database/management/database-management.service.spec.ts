@@ -1379,6 +1379,18 @@ describe('DatabaseManagementService', () => {
       });
     });
 
+    it('returns only the grouped locks when asked for a summary', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true });
+
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.summary?.totalLocks).toBeGreaterThan(0);
+      expect(result.summary?.rows).toEqual(
+        expect.arrayContaining([expect.objectContaining({ index: '1', obj: 'Class = code', mode: 'IS_LOCK', count: 1 })])
+      );
+    });
+
     it('should successfully get lock information (legacy format without lock_holders)', async () => {
       // Legacy format: no lock_holders, has numallocated and sizelock
       const legacyResponse: LockDatabaseCmsResponse = {

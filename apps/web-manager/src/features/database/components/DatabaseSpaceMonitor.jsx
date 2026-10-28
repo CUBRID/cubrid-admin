@@ -483,7 +483,9 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
   }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
 
-  if (loading && !data) {
+  // Spinner until the first fetch settles (isManualRefreshing is still false
+  // on the first render, before the initial fetch starts).
+  if (!data && !error) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-background-dark gap-3">
         <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />

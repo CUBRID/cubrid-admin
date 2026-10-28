@@ -26,6 +26,7 @@ import {
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
+import { summarizeLocks } from './lock-summary';
 import {
   BaseService,
   HandleCmsErrors,
@@ -680,7 +681,7 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     dbname: string,
-    _request: LockDatabaseRequest
+    request: LockDatabaseRequest
   ): Promise<LockDatabaseResponse> {
     // lockdb takes no dbuser/dbpasswd of its own — it relies entirely on the
     // conlist cache a prior dbmtuserlogin populated.
@@ -697,6 +698,10 @@ export class DatabaseManagementService extends BaseService {
       LockDatabaseCmsRequest,
       LockDatabaseCmsResponse
     >(userId, hostUid, cmsRequest);
+
+    if (request?.summary) {
+      return { summary: summarizeLocks(response.lockinfo) };
+    }
 
     // Return lockinfo only (CMS envelope removed)
     return {

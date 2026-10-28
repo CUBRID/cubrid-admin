@@ -10,6 +10,8 @@ import DBLockTransactionSection from './dashboard/DBLockTransactionSection';
 import DBJobAutomationSection from './dashboard/DBJobAutomationSection';
 import CASLogModal from './CASLogModal';
 import { isDatabaseInHa } from '../../host/haPeerUtils';
+import { useStatdumpWatcher } from '../useStatdumpWatcher';
+import { isLinuxHost } from '../hostOs';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -25,6 +27,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const isHA = hostHaInfo.isHA;
 
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
+  // CMS getenv osinfo ("LINUX", "NT", ...). On Linux the broker never fills
+  // per-CAS CPU (get_psinfo in broker_process_info.c is Solaris/HP-UX only),
+  // so CMS as_cpu is always 0.00 there; unknown OS keeps the CAS sum.
+  const hostOs = useSelector((state) => state.host.hostEnvs?.[hostUid]?.osinfo);
+  const casCpuNotCollected = isLinuxHost(hostOs);
   const haHeartbeat = hostData?.haHeartbeat;
   const isDbInHa = React.useMemo(
     () => isDatabaseInHa(haHeartbeat, dbname),
@@ -49,6 +56,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const activeHost = hosts.find(h => h.uid === selectedHostUid);
   const dashboardKey = `${hostUid}:${dbname}`;
   const data = dashboardData[dashboardKey] || { volumes: [], spaceInfo: [], locks: [], performance: {} };
+
+  // statdump counters only move while a watcher is attached; keep one running
+  // while this dashboard is open so the performance rates are real.
+  useStatdumpWatcher(hostUid, dbname, data.perfSample);
   const isLoading = dashboardLoading[dashboardKey];
 
   // Tabs are always opened as `db:${hostUid}:${dbname}` (DatabaseTree.jsx) —
@@ -92,21 +103,25 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   const totalQps = brokersCAS.reduce((a, c) => a + parseInt(c.qps || 0), 0);
   const totalMemMB = (casStats.memKB / 1024).toFixed(1);
-  const rates = perf.calculatedRates || { tps: 0, qps: 0, fetchPerSec: 0, dirtyPerSec: 0, ioReadPerSec: 0, ioWritePerSec: 0 };
+  // Per-second rates from consecutive statdump samples (statdumpRates.js);
+  // null until two samples exist, or after a counter reset.
+  const rates = perf.calculatedRates || {};
+  const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(1));
   
   const dbStats = [{
-    cpu: casStats.cpu.toFixed(1) + '%', 
-    cpuPct: Math.min(casStats.cpu, 100),
+    cpu: casCpuNotCollected ? '-' : casStats.cpu.toFixed(1) + '%',
+    cpuPct: casCpuNotCollected ? 0 : Math.min(casStats.cpu, 100),
+    cpuNote: casCpuNotCollected ? CM.casCpuNotCollectedLinux : undefined,
     memory: totalMemMB + 'MB', 
     memPct: Math.min((casStats.memKB / 1024) / 4, 100),
-    tps: rates.tps.toFixed(1),
+    tps: formatRate(rates.tps),
     qps: totalQps.toLocaleString(), 
     hitRatio: (perf.data_page_buffer_hit_ratio || '0.00') + '%',
     hitPct: parseFloat(perf.data_page_buffer_hit_ratio || '0'),
-    fetch: rates.fetchPerSec.toFixed(1),
-    dirty: rates.dirtyPerSec.toFixed(1),
-    ioReads: rates.ioReadPerSec.toFixed(1),
-    ioWrites: rates.ioWritePerSec.toFixed(1)
+    fetch: formatRate(rates.fetchPerSec),
+    dirty: formatRate(rates.dirtyPerSec),
+    ioReads: formatRate(rates.ioReadPerSec),
+    ioWrites: formatRate(rates.ioWritePerSec)
   }];
   
   const mappedBrokers = brokersCAS.map(c => ({ broker: c.broker, id: c.id, pid: c.pid, qps: c.qps, lqs: c.lqs, status: c.status, lastConn: c.lastConn, dbname: c.dbname }));
@@ -208,15 +223,16 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
         ) : (
           <div className="space-y-4">
             <DBPerformanceSection dbStats={dbStats} pollingProps={pollingProps} />
-            <DBVolumesSection volumes={mappedVolumes} pollingProps={pollingProps} />
-            <DBSpaceInfoSection spaceInfo={mappedSpaceInfo} pollingProps={pollingProps} />
+            <DBVolumesSection volumes={mappedVolumes} volumesStatus={data.volumesStatus} pollingProps={pollingProps} />
+            <DBSpaceInfoSection spaceInfo={mappedSpaceInfo} spaceInfoStatus={data.spaceInfoStatus} pollingProps={pollingProps} />
             <DBBrokersCASSection
               brokersCAS={mappedBrokers}
+              casStatus={data.casStatus}
               pollingProps={pollingProps}
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}
               onViewSlowQueryLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'slow' })}
             />
-            <DBLockTransactionSection locks={data.locks || []} pollingProps={pollingProps} />
+            <DBLockTransactionSection locks={data.locks || []} locksStatus={data.locksStatus} pollingProps={pollingProps} />
             <DBJobAutomationSection pollingProps={pollingProps} />
           </div>
         )}

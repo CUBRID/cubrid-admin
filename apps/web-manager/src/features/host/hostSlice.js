@@ -452,7 +452,7 @@ const hostSlice = createSlice({
       const hostUid = action.payload;
       state.authorizedHosts = state.authorizedHosts.filter(uid => uid !== hostUid);
       // Reset specific host data
-      if (state.hostEnvs[hostUid]) delete state.hostEnvs[hostUid];
+      delete state.hostEnvs[hostUid];
       if (state.hostAuthErrors[hostUid]) delete state.hostAuthErrors[hostUid];
       // Reset general error if it was likely related to this host
       state.error = null;
@@ -852,6 +852,12 @@ const hostSlice = createSlice({
       .addCase(fetchHostEnv.fulfilled, (state, action) => {
         const { hostUid, env } = action.payload;
         state.hostEnvs[hostUid] = env;
+      })
+      // null marks "fetch failed, nothing cached" (undefined = not fetched
+      // yet); a failed refresh keeps the last environment.
+      .addCase(fetchHostEnv.rejected, (state, action) => {
+        const hostUid = action.meta.arg;
+        if (state.hostEnvs[hostUid] === undefined) state.hostEnvs[hostUid] = null;
       })
       // CMS Users fetching
       .addCase(fetchCmsUsers.pending, (state, action) => {

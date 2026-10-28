@@ -36,6 +36,9 @@ const Component = function ServiceDashboard() {
   const { hosts, hostGroups, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // Rows come from the registered host list (fetchHosts); while it loads the
+  // table must not say "No data available".
+  const hostsLoading = useSelector((state) => state.host.loading);
 
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const [roleFilter, setRoleFilter] = useState('all');
@@ -362,8 +365,9 @@ const Component = function ServiceDashboard() {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.tps : undefined;
-        if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v}</span>;
+        // null = no rate yet (needs two samples), see computeBrokerRates.
+        if (v === undefined || v === null) return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v.toFixed(1)}</span>;
       }
     },
     {
@@ -376,8 +380,8 @@ const Component = function ServiceDashboard() {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.qps : undefined;
-        if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v}</span>;
+        if (v === undefined || v === null) return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v.toFixed(1)}</span>;
       }
     },
     { 
@@ -525,6 +529,7 @@ const Component = function ServiceDashboard() {
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}
+            loading={hostsLoading}
             className="border-none text-14"
             hoverable
             sortable={false}

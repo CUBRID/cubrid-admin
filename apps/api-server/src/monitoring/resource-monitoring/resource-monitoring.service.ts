@@ -2,7 +2,12 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { BaseService, HandleResourceMonitoringErrors } from '@common';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
-import { BaseCmsRequest, BaseCmsResponse, CmsGetHostStatResponse } from '@root/src/type';
+import {
+  BaseCmsRequest,
+  BaseCmsResponse,
+  CmsGetHostStatResponse,
+  CmsGetSysDiskInfoResponse,
+} from '@root/src/type';
 
 /**
  * Service for managing resource monitoring operations.
@@ -35,5 +40,28 @@ export class ResourceMonitoringService extends BaseService {
       cmsRequest
     );
     return this.extractDomainData(response);
+  }
+
+  /**
+   * Disk usage via CMS `getsysdiskinfo` (gethoststat has no disk fields).
+   * Linux reports only the root filesystem ("/").
+   */
+  @HandleResourceMonitoringErrors()
+  async getSysDiskInfo(
+    userId: string,
+    hostUid: string
+  ): Promise<Omit<CmsGetSysDiskInfoResponse, keyof BaseCmsResponse>> {
+    const cmsRequest: BaseCmsRequest = {
+      task: 'getsysdiskinfo',
+    };
+
+    const response = await this.executeCmsRequest<BaseCmsRequest, CmsGetSysDiskInfoResponse>(
+      userId,
+      hostUid,
+      cmsRequest
+    );
+    const { disk_info } = this.extractDomainData(response);
+    // CMS omits the array entirely when there is nothing to report.
+    return { disk_info: Array.isArray(disk_info) ? disk_info : [] };
   }
 }

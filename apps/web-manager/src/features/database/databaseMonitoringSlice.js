@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { brokerApi } from '../broker/brokerApi';
-import { buildDashboardLockRows } from './lockMappers';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
+import { computeStatdumpRates } from './statdumpRates';
 
 // Module-level so the previous-sample baseline survives across polls.
 const casRateTracker = createRateTracker();
@@ -29,8 +29,11 @@ export const fetchDatabaseVolumes = createAsyncThunk(
           return null;
         }
       });
-      const responses = await Promise.all(allRequest);
-      return responses.filter(res => res !== null);
+      const responses = await Promise.all(allRequest).then(list => list.filter(res => res !== null));
+      // Every database's request failed: report a failure rather than an
+      // empty list, which would read as "no volumes".
+      if (responses.length === 0) return rejectWithValue('Failed to fetch volume info');
+      return responses;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch volume info');
     }
@@ -71,8 +74,9 @@ export const fetchDashboardLocks = createAsyncThunk(
   'database/fetchDashboardLocks',
   async ({ hostUid, dbname }, { rejectWithValue }) => {
     try {
-      const response = await databaseApi.getLockInfo(hostUid, dbname);
-      return { hostUid, dbname, locks: buildDashboardLockRows(response) };
+      const response = await databaseApi.getLockInfo(hostUid, dbname, { summary: true });
+      const summary = response?.summary ?? response?.data?.summary;
+      return { hostUid, dbname, locks: summary?.rows ?? [] };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch locks');
     }
@@ -81,10 +85,14 @@ export const fetchDashboardLocks = createAsyncThunk(
 
 export const fetchDashboardPerformance = createAsyncThunk(
   'database/fetchDashboardPerformance',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
+  async ({ hostUid, dbname }, { rejectWithValue, getState }) => {
     try {
       const response = await databaseApi.getStatDump(hostUid, dbname);
-      return { hostUid, dbname, performance: response };
+      // statdump counters are cumulative; derive per-second rates against
+      // this db's previous sample (kept on its dashboard entry).
+      const prevSample = getState().databaseMonitoring?.dashboardData?.[dashboardKey(hostUid, dbname)]?.perfSample;
+      const { sample, rates } = computeStatdumpRates(prevSample, response, Date.now());
+      return { hostUid, dbname, performance: { ...response, calculatedRates: rates }, perfSample: sample };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to fetch performance stats');
     }
@@ -107,9 +115,13 @@ export const fetchDashboardCAS = createAsyncThunk(
       );
 
       brokerDetails.forEach((status, idx) => {
-        if (!status || !status.asinfo) return;
+        // apiClient already unwraps the server's { data, status, note }
+        // envelope, so the CAS list sits directly on the resolved value
+        // (same as fetchBrokerList's statusRes.asinfo).
+        const asinfo = status?.asinfo;
+        if (!asinfo) return;
         const brokerName = actualBrokerList[idx]?.name;
-        status.asinfo.forEach(cas => {
+        asinfo.forEach(cas => {
           if (cas.as_dbname?.toLowerCase() === dbname.toLowerCase()) {
             // as_num_query is a per-AS lifetime total, not a rate — derive a
             // real per-second value from the delta between consecutive polls.
@@ -153,7 +165,7 @@ export const fetchDashboardData = createAsyncThunk(
       dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
     ]);
 
-    const [volR, lockR, perfR, casR, spaceR] = settled;
+    const [volR, lockR, , , spaceR] = settled;
 
     if (volR.status === 'rejected' && spaceR.status === 'rejected') {
       return rejectWithValue(volR.reason || `Failed to fetch dashboard data for ${dbname}`);
@@ -163,24 +175,9 @@ export const fetchDashboardData = createAsyncThunk(
       console.warn(`[dashboard] lock fetch failed for ${dbname}:`, lockR.reason);
     }
 
-    const vol = volR.status === 'fulfilled' ? volR.value : { volumes: [], pagesize: undefined, logpagesize: undefined };
-    const lock = lockR.status === 'fulfilled' ? lockR.value : { locks: [] };
-    const perf = perfR.status === 'fulfilled' ? perfR.value : { performance: {} };
-    const cas = casR.status === 'fulfilled' ? casR.value : { brokersCAS: [] };
-    const space = spaceR.status === 'fulfilled' ? spaceR.value : { data: {} };
-
-    return {
-      hostUid,
-      dbname,
-      volumes: vol.volumes,
-      locks: lock.locks,
-      performance: perf.performance,
-      brokersCAS: cas.brokersCAS,
-      spaceInfo: space.data?.fileinfo || [],
-      volumeSummary: space.data?.dbinfo || [],
-      pagesize: vol.pagesize,
-      logpagesize: vol.logpagesize,
-    };
+    // Each sub-fetch's own fulfilled/rejected reducer has already merged its
+    // rows and set its section status, so a failed part keeps its last rows.
+    return { hostUid, dbname };
   }
 );
 
@@ -213,6 +210,15 @@ const databaseMonitoringSlice = createSlice({
       volumeSummary: [],
     });
 
+    // Per-section fetch status on the dashboard entry: unset until the first
+    // fetch settles, then 'loaded' or 'error'. Lets a section tell "nothing
+    // there" apart from "still loading" and "request failed".
+    const setSectionStatus = (state, { hostUid, dbname }, field, status) => {
+      const key = dashboardKey(hostUid, dbname);
+      const existing = state.dashboardData[key] || emptyDashboardEntry();
+      state.dashboardData[key] = { ...existing, [field]: status };
+    };
+
     builder
       .addCase(fetchDatabaseVolumes.pending, (state) => {
         state.volumesLoading = true;
@@ -220,6 +226,9 @@ const databaseMonitoringSlice = createSlice({
       .addCase(fetchDatabaseVolumes.fulfilled, (state, action) => {
         state.volumesLoading = false;
         state.volumes = action.payload;
+      })
+      .addCase(fetchDatabaseVolumes.rejected, (state) => {
+        state.volumesLoading = false;
       })
       .addCase(fetchDatabaseSpaceInfo.fulfilled, (state, action) => {
         const { hostUid, dbname, data } = action.payload;
@@ -240,37 +249,48 @@ const databaseMonitoringSlice = createSlice({
           ...existing,
           spaceInfo: data.fileinfo || [],
           volumeSummary: data.dbinfo || [],
+          spaceInfoStatus: 'loaded',
         };
+      })
+      .addCase(fetchDatabaseSpaceInfo.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'spaceInfoStatus', 'error');
       })
       .addCase(fetchDashboardVolumes.fulfilled, (state, action) => {
         const { hostUid, dbname, volumes, pagesize, logpagesize } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, volumes, pagesize, logpagesize };
+        state.dashboardData[key] = { ...existing, volumes, pagesize, logpagesize, volumesStatus: 'loaded' };
+      })
+      .addCase(fetchDashboardVolumes.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'volumesStatus', 'error');
       })
       .addCase(fetchDashboardPerformance.fulfilled, (state, action) => {
-        const { hostUid, dbname, performance } = action.payload;
+        const { hostUid, dbname, performance, perfSample } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, performance };
+        state.dashboardData[key] = { ...existing, performance, perfSample };
       })
       .addCase(fetchDashboardCAS.fulfilled, (state, action) => {
         const { hostUid, dbname, brokersCAS } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, brokersCAS };
+        state.dashboardData[key] = { ...existing, brokersCAS, casStatus: 'loaded' };
+      })
+      .addCase(fetchDashboardCAS.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'casStatus', 'error');
       })
       .addCase(fetchDashboardLocks.fulfilled, (state, action) => {
         const { hostUid, dbname, locks } = action.payload;
         const key = dashboardKey(hostUid, dbname);
         const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, locks };
+        state.dashboardData[key] = { ...existing, locks, locksStatus: 'loaded' };
+      })
+      .addCase(fetchDashboardLocks.rejected, (state, action) => {
+        setSectionStatus(state, action.meta.arg, 'locksStatus', 'error');
       })
       .addCase(fetchDashboardData.fulfilled, (state, action) => {
-        const { hostUid, dbname, volumes, locks, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize } = action.payload;
-        const key = dashboardKey(hostUid, dbname);
-        state.dashboardData[key] = { volumes, locks, performance, brokersCAS, spaceInfo, volumeSummary, pagesize, logpagesize };
-        state.dashboardLoading[key] = false;
+        const { hostUid, dbname } = action.payload;
+        state.dashboardLoading[dashboardKey(hostUid, dbname)] = false;
       })
       // Cleanup on tab close to prevent memory leaks
       .addMatcher(

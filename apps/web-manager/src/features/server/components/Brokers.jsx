@@ -8,6 +8,7 @@ import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
+import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
 
 const Component = function Brokers({ hostUid, isSection = false }) {
@@ -19,12 +20,14 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
 
   useEffect(() => {
     setBrokers([]);
     setLoading(false);
     setHasLoadedOnce(false);
+    setLoadFailed(false);
   }, [hostUid]);
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
@@ -36,6 +39,11 @@ const Component = function Brokers({ hostUid, isSection = false }) {
       try {
         const result = await dispatch(fetchBrokerList(hostUid)).unwrap();
         setBrokers(result);
+        setLoadFailed(false);
+      } catch (err) {
+        // Keep the last list; only an empty table shows the failure.
+        setLoadFailed(true);
+        throw err;
       } finally {
         setLoading(false);
         setHasLoadedOnce(true);
@@ -99,6 +107,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     >
       <Table
         columns={columns}
+        emptyState={<FetchEmptyState status={!hasLoadedOnce ? 'loading' : loadFailed ? 'error' : 'loaded'} title={CM.brokerStatus} />}
         data={brokers}
         loading={loading && !hasLoadedOnce && !isManualRefreshing}
         onRowClick={(row) => dispatch(openTab(`broker_status:${hostUid}:${row.name}`))}

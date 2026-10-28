@@ -357,6 +357,7 @@ const initialState = {
   createDatabaseInfoLoading: false,
   backupSchedules: {},
   backupSchedulesLoading: {},
+  backupSchedulesError: {}, // { 'host:db': true } — latest fetch failed
   databaseBackups: {},
   databaseBackupsLoading: {},
   backupDbInfo: {},
@@ -366,6 +367,7 @@ const initialState = {
   logsError: null,
   queryPlans: {},
   queryPlansLoading: {},
+  queryPlansError: {},
   queryPlanLogs: [],
   lockInfo: {},
   transactionInfo: {},
@@ -410,6 +412,12 @@ const databaseOperationSlice = createSlice({
         const key = dbKey(hostUid, dbname);
         state.backupSchedulesLoading[key] = false;
         state.backupSchedules[key] = schedules;
+        delete state.backupSchedulesError[key];
+      })
+      .addCase(fetchBackupSchedule.rejected, (state, action) => {
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        state.backupSchedulesLoading[key] = false;
+        state.backupSchedulesError[key] = true;
       })
 
       .addCase(fetchBackupList.pending, (state, action) => {
@@ -459,6 +467,7 @@ const databaseOperationSlice = createSlice({
         const key = dbKey(hostUid, dbname);
         state.queryPlansLoading[key] = false;
         state.queryPlans[key] = plan;
+        delete state.queryPlansError[key];
       })
       .addCase(fetchLockInfo.fulfilled, (state, action) => {
         const { dbname, info } = action.payload;
@@ -494,6 +503,7 @@ const databaseOperationSlice = createSlice({
       .addCase(fetchQueryPlan.rejected, (state, action) => {
         const { hostUid, dbname } = action.meta.arg;
         state.queryPlansLoading[dbKey(hostUid, dbname)] = false;
+        state.queryPlansError[dbKey(hostUid, dbname)] = true;
         state.error = action.payload;
       })
       
@@ -519,8 +529,10 @@ const databaseOperationSlice = createSlice({
           const key = dbKey(hostUid, dbname);
           delete state.backupSchedules[key];
           delete state.backupSchedulesLoading[key];
+          delete state.backupSchedulesError[key];
           delete state.queryPlans[key];
           delete state.queryPlansLoading[key];
+          delete state.queryPlansError[key];
         }
       );
   }
