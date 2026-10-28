@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs, fetchAdminLogs, fetchCMSLogs, fetchDatabaseLogs } from '../../../broker/brokerSlice';
+import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerList, fetchBrokerLogs, fetchAdminLogs, fetchCMSLogs, fetchDatabaseLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
@@ -18,6 +19,31 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   const databases = navigatorDatabasesByHost[hostUid] || [];
   const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
   const brokers = navigatorBrokersByHost[hostUid] || [];
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessError, setAccessError] = useState(null);
+
+  const loadAccessLogs = async (open) => {
+    if (!open || accessLoading) return;
+    setAccessLoading(true);
+    setAccessError(null);
+    try {
+      // The Log tab can be opened before the Broker tab has loaded its list.
+      const currentBrokers = await dispatch(fetchBrokerList({ hostUid, skipStatusEnrichment: true })).unwrap();
+      // Re-read metadata on expansion: an earlier empty list may predate the
+      // first access-log file (for example after enabling ACCESS_LOG).
+      await Promise.all(currentBrokers.map(broker =>
+        dispatch(fetchBrokerLogs({ hostUid, brokerName: broker.name })).unwrap()
+      ));
+    } catch (error) {
+      setAccessError(String(error));
+    } finally {
+      setAccessLoading(false);
+    }
+  };
+
+  const accessLogs = [...new Map(brokers.flatMap(broker => logsByBroker[broker.name] || [])
+    .filter(log => log.type === 'access' || /\.access(?:\.|$)/i.test(log.path))
+    .map(log => [log.path, log])).values()];
 
   return (
     <div className="space-y-0.5 px-2 py-2">
@@ -36,17 +62,44 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
       >
           {/* Access Logs */}
           <TreeNode
+            id="broker-access-logs"
             label={CM.access}
             icon="login"
             level={2}
             isActive={selectedBrokerSubItem === 'log-access'}
-            hasChildren={false}
+            hasChildren={true}
+            isLoading={accessLoading || logsLoading}
+            onToggle={loadAccessLogs}
             onSelect={() => {
               dispatch(setSelectedBroker(null));
               dispatch(setSelectedBrokerSubItem('log-access'));
             }}
             onContextMenu={(e) => onBrokerLogRootContextMenu && onBrokerLogRootContextMenu(e)}
-          />
+          >
+            {accessLogs.map(log => (
+              <TreeNode
+                key={log.path}
+                label={log.path.split(/[\\/]/).pop()}
+                icon="description"
+                level={3}
+                isActive={selectedBrokerSubItem === log.path}
+                onSelect={() => {
+                  dispatch(setSelectedBroker(null));
+                  dispatch(setSelectedBrokerSubItem(log.path));
+                }}
+                onDoubleClick={() => dispatch(openTab(`log:${hostUid}:${log.path}`))}
+              />
+            ))}
+            {accessError && (
+              <div role="alert" className="px-10 py-3 text-sm text-rose-500">{accessError}</div>
+            )}
+            {!accessLoading && !logsLoading && !accessError && accessLogs.length === 0 && (
+              <div className="px-10 py-3 opacity-60 flex items-center gap-2">
+                <Icon name="block" size="xs" weight={300} />
+                <Typography variant="caption" className="italic">{CM.emptyListLabel}</Typography>
+              </div>
+            )}
+          </TreeNode>
 
           {/* Error Logs */}
           <TreeNode
