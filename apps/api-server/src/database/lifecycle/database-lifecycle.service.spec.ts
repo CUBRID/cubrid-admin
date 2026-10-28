@@ -1533,6 +1533,35 @@ describe('DatabaseLifecycleService', () => {
       ).rejects.toThrow(HostError);
     });
 
+    it('clears the stored login profile + dbmt-login cache for the deleted dbname, so a later database reusing this name cannot inherit it', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        mockDbname
+      );
+    });
+
+    it('does not fail the delete if clearing the stored login profile afterward throws', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
+      databaseUserService.deleteDbProfile.mockRejectedValueOnce(new Error('disk write failed'));
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      const result = await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(result).toEqual(mockStartInfoAfterDelete);
+    });
+
     it('should throw DatabaseError when host is HA (deletedb blocked)', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=ON'] }],

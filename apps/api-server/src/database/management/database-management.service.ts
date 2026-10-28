@@ -508,7 +508,31 @@ export class DatabaseManagementService extends BaseService {
   ): Promise<StartInfoClientResponse> {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
+    await this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename);
     return await this.getDatabaseStartInfo(userId, hostUid);
+  }
+
+  /**
+   * Forgets the stored login profile + ensureDbLogin cache entry for both
+   * the old and new name after a successful rename. Both are keyed by
+   * dbname alone (see DatabaseUserService) — a dbname is just a label CUBRID
+   * lets move between physical databases (rename) or be reused after a
+   * delete, so without this a database could silently inherit a previous,
+   * unrelated database's credentials/login state purely by ending up with
+   * the same name: the old name might later be reused by a different
+   * database, and the new name may have belonged to some other
+   * now-gone-or-elsewhere database before this rename.
+   */
+  async clearDbAliasCachesAfterRename(
+    userId: string,
+    hostUid: string,
+    oldDbname: string,
+    newDbname: string
+  ): Promise<void> {
+    await this.databaseUserService.deleteDbProfile(userId, hostUid, oldDbname);
+    if (newDbname && newDbname !== oldDbname) {
+      await this.databaseUserService.deleteDbProfile(userId, hostUid, newDbname);
+    }
   }
 
   async renameDatabaseCmsResponse(

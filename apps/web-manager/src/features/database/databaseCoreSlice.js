@@ -473,6 +473,21 @@ const databaseCoreSlice = createSlice({
           state.activeHostUid = action.payload;
         }
       )
+      // The backend forgets this dbname's stored login profile + dbmt-login
+      // cache on delete (see DatabaseLifecycleService.deleteDatabase) so a
+      // later database created with this same name never inherits it — mirror
+      // that here, or this client would keep believing the old, now-deleted
+      // database is still "logged in" under that name.
+      .addMatcher(
+        (action) => action.type === 'database/deleteDatabase/fulfilled',
+        (state, action) => {
+          const { hostUid, dbname } = action.meta.arg || {};
+          if (!hostUid || !dbname) return;
+          const key = dbKey(hostUid, dbname);
+          state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
+          delete state.loggingInDatabases[key];
+        }
+      )
       // Dispatched unconditionally on delete/disconnect, regardless of
       // whether this host was the currently selected one — unlike
       // resetDatabaseState, which only fires for the currently-selected

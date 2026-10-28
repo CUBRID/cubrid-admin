@@ -1143,6 +1143,21 @@ export class DatabaseLifecycleService extends BaseService {
       cmsRequest
     );
 
+    // Forget this dbname's stored login profile and ensureDbLogin cache
+    // entry — both are keyed by dbname alone (see DatabaseUserService), so
+    // without this a database later created or renamed to reuse this exact
+    // name would silently inherit this now-deleted database's credentials
+    // and believed-logged-in state instead of needing its own fresh login.
+    try {
+      await this.databaseUserService.deleteDbProfile(userId, hostUid, dbname);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Failed to clear stored login profile/cache for deleted database ${dbname}: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+        { dbname, hostUid }
+      );
+    }
+
     // Remove dbname from server parameter in cubridconf if it exists
     try {
       await this.databaseConfigService.removeAutoStart(userId, hostUid, {
