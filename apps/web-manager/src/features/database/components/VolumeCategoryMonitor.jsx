@@ -32,8 +32,8 @@ const formatMB = (pages, pageSize) => ((parseInt(pages) * pageSize) / (1024 * 10
 const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh, dashboardInterval, isLoading, lastRefreshed, dbname }) => {
   const CM = useCM();
   return (
-  <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
-    <div className="flex items-center gap-3">
+  <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10 min-w-fit">
+    <div className="flex items-center gap-3 shrink-0">
       <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
         <Icon name={meta.icon} size="sm" weight={300} className="text-amber-500" />
       </div>
@@ -59,8 +59,8 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
       </div>
     </div>
 
-    <div className="flex items-center gap-1.5">
-      <div className="hidden lg:flex items-center gap-6 mr-4 opacity-80">
+    <div className="flex items-center gap-1.5 ml-auto shrink-0">
+      <div className="flex items-center gap-6 mr-4 opacity-80 shrink-0 whitespace-nowrap">
         <div className="text-right">
           <Typography variant="label" className="text-10 text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.capacity}</Typography>
           <Typography variant="p" className="text-14 font-black text-slate-700 dark:text-slate-200 font-mono leading-none">{formatPagesToSize(summary.total, pageSize)}</Typography>
@@ -72,7 +72,7 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
         </div>
       </div>
 
-      <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+      <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mr-2 whitespace-nowrap">
         {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
       </Typography>
 
