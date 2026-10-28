@@ -24,6 +24,9 @@ import { useCM } from '../../../constants/useCM';
 // See the HA-abnormal fast-poll effect below.
 const HA_ABNORMAL_POLL_INTERVAL_MS = 1000;
 const HA_ABNORMAL_POLL_MAX_MS = 30000;
+// Stable fallback so a selector without reconnectQueue (older persisted
+// state, a test mock) doesn't crash the .includes() check below.
+const EMPTY_RECONNECT_QUEUE = [];
 
 const Component = function ServerContent({ hostUid }) {
   const CM = useCM();
@@ -38,7 +41,7 @@ const Component = function ServerContent({ hostUid }) {
   // 'error', so sections built on it don't read an empty list as "no databases".
   const [dbListStatus, setDbListStatus] = useState('loading');
   const [activeDatabases, setActiveDatabases] = useState([]);
-  const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, authorizedHosts, haInfo, reconnectQueue = EMPTY_RECONNECT_QUEUE } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
 
@@ -132,8 +135,15 @@ const Component = function ServerContent({ hostUid }) {
   // full fetchMonitoringData tick every second would cost.
   const isHaAbnormal = isHA && isHaClusterMissingMaster(haHeartbeat);
   const haAbnormalSinceRef = useRef(null);
+  // authorizedHosts still lists a host pending reconnect (preserved so the
+  // reconnect is seamless, see apiClient.js), so it alone can't tell us to
+  // pause here — check reconnectQueue too, otherwise this fast 1s poll
+  // just spins against a host already known to need reconnection. A boolean
+  // (not the array) in the deps, so another host joining/leaving the queue
+  // doesn't tear down and restart this host's timer.
+  const isPendingReconnect = reconnectQueue.includes(hostUid);
   useEffect(() => {
-    if (!isTabActive || !isHaAbnormal || !authorizedHosts.includes(hostUid)) {
+    if (!isTabActive || !isHaAbnormal || !authorizedHosts.includes(hostUid) || isPendingReconnect) {
       haAbnormalSinceRef.current = null;
       return;
     }
@@ -149,7 +159,7 @@ const Component = function ServerContent({ hostUid }) {
     }, HA_ABNORMAL_POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [isTabActive, isHaAbnormal, authorizedHosts, hostUid, dispatch]);
+  }, [isTabActive, isHaAbnormal, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
 
   const haDbs = React.useMemo(() => {
     const names = new Set();

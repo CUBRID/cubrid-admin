@@ -90,3 +90,35 @@ it('does not start a new polling tick while the previous one is still in flight'
     await vi.advanceTimersByTimeAsync(0);
   });
 });
+
+it('does not fire an extra fetch or reset the timer when another host joins or leaves the reconnect queue', async () => {
+  const initial = {
+    host: { authorizedHosts: ['host1', 'host2'], reconnectQueue: [] },
+    layout: { refreshCounter: 0, activeMainTab: 'tab1' },
+  };
+  store = configureStore({
+    reducer: (state = initial, action) => (action.type === 'test/setReconnectQueue'
+      ? { ...state, host: { ...state.host, reconnectQueue: action.payload } }
+      : state),
+  });
+  const onFetch = (silent) => () => {
+    fetchCalls.push(silent);
+    return Promise.resolve();
+  };
+
+  await render({ pollingIntervalSeconds: 10, onFetch });
+  expect(fetchCalls.length).toBe(1);
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+    store.dispatch({ type: 'test/setReconnectQueue', payload: ['host2'] });
+    store.dispatch({ type: 'test/setReconnectQueue', payload: [] });
+  });
+  expect(fetchCalls.length).toBe(1);
+
+  // Timer phase is preserved: the next tick still lands 10s after mount.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(fetchCalls.length).toBe(2);
+});
