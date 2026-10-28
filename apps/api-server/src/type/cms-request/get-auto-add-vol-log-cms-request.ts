@@ -5,6 +5,7 @@ import { BaseCmsRequest } from './base-cms-request';
  */
 export type GetAutoAddVolLogCmsRequest = BaseCmsRequest & {
   task: 'getautoaddvollog';
-  start_time: string;
-  end_time: string;
+  /** CMS compares these with strcmp against unpadded timestamps; NCA filters the range itself. */
+  start_time?: string;
+  end_time?: string;
 };

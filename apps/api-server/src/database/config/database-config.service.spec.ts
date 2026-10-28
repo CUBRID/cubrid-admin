@@ -1,3 +1,4 @@
+import { ValidationError } from '@error/validation/validation-error';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseConfigService } from './database-config.service';
 import { HostService } from '@host';
@@ -518,41 +519,85 @@ describe('DatabaseConfigService', () => {
   });
 
   describe('getAutoAddVolLog', () => {
-    it('should send getautoaddvollog task and return log entries', async () => {
-      const mockSuccessResponse = {
-        __EXEC_TIME: '3 ms',
-        note: 'none',
-        status: 'success',
-        task: 'getautoaddvollog',
-        log: [
-          {
-            dbname: 'testdb',
-            volname: 'testdb_x002',
-            purpose: 'data',
-            page: '1024',
-            time: '2012-11-16,10:4:57',
-            outcome: 'success',
-          },
-        ],
-      };
+    const cmsLog = (log: Array<Record<string, string>>) => ({
+      __EXEC_TIME: '3 ms',
+      note: 'none',
+      status: 'success',
+      task: 'getautoaddvollog',
+      log,
+    });
 
-      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+    it('asks CMS for every line instead of sending the range CMS would strcmp', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(cmsLog([]));
 
-      const result = await service.getAutoAddVolLog(mockUserId, mockHostUid, {
-        start_time: '2012-11-16,10:4:57',
-        end_time: '2012-11-16,23:59:59',
+      await service.getAutoAddVolLog(mockUserId, mockHostUid, {
+        start_time: '2026-10-27,0:0:0',
+        end_time: '2026-10-27,23:59:59',
       });
 
-      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          task: 'getautoaddvollog',
-          start_time: '2012-11-16,10:4:57',
-          end_time: '2012-11-16,23:59:59',
-          token: mockHost.token,
-        })
-      );
-      expect(result).toEqual(mockSuccessResponse.log);
+      const sent = cmsClient.postAuthenticated.mock.calls[0][1];
+      expect(sent).toEqual(expect.objectContaining({ task: 'getautoaddvollog', token: mockHost.token }));
+      expect(sent).not.toHaveProperty('start_time');
+      expect(sent).not.toHaveProperty('end_time');
+    });
+
+    it('realigns the 5-field lines CMS writes and strips the HA host from dbname', async () => {
+      // As tsGetAutoaddvolLog returns them: volname holds the type, page the time, time the outcome.
+      cmsClient.postAuthenticated.mockResolvedValue(cmsLog([
+        { dbname: 'testdb', volname: 'data', purpose: '2048', page: '2026-10-27,9:5:3', time: 'start', outcome: '' },
+        { dbname: 'testdb@127.0.0.1', volname: 'data', purpose: '2048', page: '2026-10-27,9:5:4', time: 'success', outcome: 'start' },
+        { dbname: 'demodb', volname: 'none', purpose: 'data', page: '2048', time: '2026-10-19,10:12:34', outcome: 'failure' },
+      ]));
+
+      const result = await service.getAutoAddVolLog(mockUserId, mockHostUid, {});
+
+      expect(result).toEqual([
+        { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-27,9:5:3', outcome: 'start' },
+        { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-27,9:5:4', outcome: 'success' },
+        { dbname: 'demodb', volname: '', purpose: 'data', page: '2048', time: '2026-10-19,10:12:34', outcome: 'failure' },
+      ]);
+    });
+
+    it('passes through lines CMS already aligned (CBRD-27682), showing "none" as no volume name', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(cmsLog([
+        { dbname: 'testdb@127.0.0.1', volname: 'testdb_x003', purpose: 'data', page: '2048', time: '2026-10-28,9:5:3', outcome: 'start' },
+        { dbname: 'testdb', volname: 'none', purpose: 'data', page: '2048', time: '2026-10-28,9:6:0', outcome: 'failure' },
+      ]));
+
+      const result = await service.getAutoAddVolLog(mockUserId, mockHostUid, {});
+
+      expect(result).toEqual([
+        { dbname: 'testdb', volname: 'testdb_x003', purpose: 'data', page: '2048', time: '2026-10-28,9:5:3', outcome: 'start' },
+        { dbname: 'testdb', volname: '', purpose: 'data', page: '2048', time: '2026-10-28,9:6:0', outcome: 'failure' },
+      ]);
+    });
+
+    it('rejects a range bound it cannot read instead of dropping the limit', async () => {
+      await expect(
+        service.getAutoAddVolLog(mockUserId, mockHostUid, { start_time: '2026-10-27', end_time: '2026-10-27,23:59:59' })
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('filters the range by time value, so unpadded hours like 9:x stay in a same-day range', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(cmsLog([
+        { dbname: 'a', volname: 'data', purpose: '1', page: '2026-10-27,9:5:3', time: 'success', outcome: '' },
+        { dbname: 'a', volname: 'data', purpose: '1', page: '2026-10-26,23:59:59', time: 'success', outcome: '' },
+        { dbname: 'a', volname: 'a_x1', purpose: 'data', page: '1', time: '2026-9-30,10:0:0', outcome: 'success' },
+        { dbname: 'a', volname: 'a_x2', purpose: 'data', page: '1', time: 'garbage', outcome: 'success' },
+      ]));
+
+      const sameDay = await service.getAutoAddVolLog(mockUserId, mockHostUid, {
+        start_time: '2026-10-27,0:0:0',
+        end_time: '2026-10-27,23:59:59',
+      });
+      expect(sameDay.map((e) => e.time)).toEqual(['2026-10-27,9:5:3']);
+
+      const acrossMonths = await service.getAutoAddVolLog(mockUserId, mockHostUid, {
+        start_time: '2026-9-1,0:0:0',
+        end_time: '2026-10-31,23:59:59',
+      });
+      expect(acrossMonths.map((e) => e.time)).toEqual(['2026-10-27,9:5:3', '2026-10-26,23:59:59', '2026-9-30,10:0:0']);
     });
   });
 

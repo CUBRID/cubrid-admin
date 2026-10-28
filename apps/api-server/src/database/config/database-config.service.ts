@@ -16,6 +16,7 @@ import {
   GetAutoExecQueryErrLogResponse,
   GetAutoAddVolLogRequest,
   GetAutoAddVolLogResponse,
+  AutoAddVolLogEntry,
   AppendAutoExecQueryPlanRequest,
   RemoveAutoExecQueryPlanRequest,
   UpdateAutoExecQueryPlanRequest,
@@ -29,6 +30,7 @@ import {
   HandleCmsErrors,
 } from '@common';
 import { ConfigError } from '@error/config/config-error';
+import { ValidationError } from '@error/validation/validation-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
 import { DatabaseUserService } from '@database/user/database-user.service';
@@ -641,7 +643,15 @@ export class DatabaseConfigService extends BaseService {
   }
 
   /**
-   * Get auto-add volume log entries for a time range. CMS task: getautoaddvollog.
+   * Get auto-add volume log entries, optionally limited to a time range.
+   * CMS task: getautoaddvollog.
+   *
+   * The range is applied here, not sent to CMS: tsGetAutoaddvolLog compares
+   * the unpadded timestamps it writes ("2026-10-27,9:5:3") with strcmp, which
+   * drops entries that are in range, and it drops every line aj_add_volume
+   * writes with 5 fields (the "start" line, and every completion line since
+   * volname is never filled). Without a range CMS returns all lines, and the
+   * 5-field ones are realigned in normalizeAutoAddVolLogEntry.
    */
   @HandleCmsErrors()
   async getAutoAddVolLog(
@@ -649,11 +659,10 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: GetAutoAddVolLogRequest
   ): Promise<GetAutoAddVolLogResponse> {
-    const { start_time, end_time } = this.resolveAutoAddVolLogRange(request);
+    const start = parseAutoAddVolLogBound(request.start_time, 'start_time');
+    const end = parseAutoAddVolLogBound(request.end_time, 'end_time');
     const cmsRequest: GetAutoAddVolLogCmsRequest = {
       task: 'getautoaddvollog',
-      start_time,
-      end_time,
     };
 
     const response = await this.executeCmsRequest<
@@ -662,7 +671,13 @@ export class DatabaseConfigService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     const domain = this.extractDomainData(response);
-    return domain.log ?? [];
+
+    return (domain.log ?? []).map(normalizeAutoAddVolLogEntry).filter((entry) => {
+      if (start == null && end == null) return true;
+      const time = parseCmsLogDateTime(entry.time);
+      if (time == null) return false;
+      return (start == null || time >= start) && (end == null || time <= end);
+    });
   }
 
   /**
@@ -817,35 +832,50 @@ export class DatabaseConfigService extends BaseService {
       }
     }
   }
+}
 
-  private resolveAutoAddVolLogRange(request: GetAutoAddVolLogRequest): {
-    start_time: string;
-    end_time: string;
-  } {
-    const now = new Date();
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
+const CMS_LOG_DATE_TIME = /^(\d{4})-(\d{1,2})-(\d{1,2}),(\d{1,2}):(\d{1,2}):(\d{1,2})$/;
 
-    return {
-      start_time: request.start_time ?? this.formatCmsLogDateTime(start),
-      end_time: request.end_time ?? this.formatCmsLogDateTime(end),
-    };
-  }
+/**
+ * Parses the "Y-M-D,h:m:s" timestamps CMS writes in autoaddvoldb.log (unpadded,
+ * local time), or the same format with zero padding. Returns epoch ms, or null.
+ */
+export function parseCmsLogDateTime(value: string | undefined): number | null {
+  const match = CMS_LOG_DATE_TIME.exec((value ?? '').trim());
+  if (!match) return null;
+  const [year, month, day, hours, minutes, seconds] = match.slice(1).map(Number);
+  return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
+}
 
-  private formatCmsLogDateTime(date: Date): string {
-    // CMS (tsGetAutoaddvolLog in cm_job_task.cpp) filters log lines with a plain strcmp
-    // against this string, and its own log lines are written with unpadded numbers
-    // (e.g. "2026-9-22,10:4:57"). Zero-padding here would make the lexicographic
-    // comparison wrong for any single-digit month/day/hour/minute/second.
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const seconds = date.getSeconds();
+/** A range bound as epoch ms; null when not given. An unreadable one is an input error, not "no limit". */
+function parseAutoAddVolLogBound(value: string | undefined, field: 'start_time' | 'end_time'): number | null {
+  if (value === undefined || value === '') return null;
+  const time = parseCmsLogDateTime(value);
+  if (time == null) throw ValidationError.InvalidFieldFormat(field, 'YYYY-M-D,h:m:s');
+  return time;
+}
 
-    return `${year}-${month}-${day},${hours}:${minutes}:${seconds}`;
-  }
+/**
+ * aj_add_volume writes "<db> <type> <pages> <time> start" before addvoldb and
+ * "<db> <volname> <type> <pages> <time> <outcome>" after it, but volname is
+ * never filled, so both lines have 5 fields and tsGetAutoaddvolLog's 6-field
+ * sscanf shifts them: volname gets the type, page the time, time the outcome,
+ * and outcome is left over from the previous line. Such entries are put back
+ * in place with an empty volname. The dbname is reported without the
+ * "@127.0.0.1" CMS adds for HA databases, so it matches the database list.
+ */
+export function normalizeAutoAddVolLogEntry(entry: AutoAddVolLogEntry): AutoAddVolLogEntry {
+  const dbname = String(entry.dbname ?? '').split('@')[0];
+  const shifted = parseCmsLogDateTime(entry.time) == null && parseCmsLogDateTime(entry.page) != null;
+  // CMS writes "none" when it has no volume name (and, once CBRD-27682 is in,
+  // returns realigned 5-field lines with "none" too); shown as no name.
+  if (!shifted) return { ...entry, dbname, volname: entry.volname === 'none' ? '' : entry.volname };
+  return {
+    dbname,
+    volname: '',
+    purpose: entry.volname,
+    page: entry.purpose,
+    time: entry.page,
+    outcome: entry.time,
+  };
 }
