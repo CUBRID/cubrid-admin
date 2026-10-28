@@ -1551,6 +1551,7 @@ export const CM_KO = {
   brokerConfigRetrieveError: '브로커 구성을 가져올 수 없습니다.',
   configSaved: '설정 저장됨',
   brokerConfigSaveSuccess: '브로커 구성이 성공적으로 업데이트되었습니다.',
+  brokerConfigRestartRequiredNotice: '이 변경 사항을 적용하려면 브로커를 재시작해야 합니다.',
   saveFailed: '저장 실패',
   brokerConfigSaveError: '브로커 구성을 저장하는 동안 오류가 발생했습니다.',
   initializingEditor: '에디터 초기화 중...',
