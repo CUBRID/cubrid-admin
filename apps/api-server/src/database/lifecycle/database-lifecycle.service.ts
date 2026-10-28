@@ -63,6 +63,15 @@ import { assertValidGeneralVolumeSize } from './database-volume-size';
  */
 const NON_HA_BULK_ACTION_CONCURRENCY = 4;
 
+/** Outcome of startAllDatabases/stopAllDatabases, per database. */
+export type BulkDatabaseActionResult = {
+  succeeded: string[];
+  failed: Array<{ dbname: string; error: string }>;
+  skipped: Array<{ dbname: string; reason: string }>;
+};
+
+export const HA_BULK_ADMIN_ONLY_REASON = 'HA bulk start/stop is limited to the CMS admin account';
+
 /**
  * Service for managing database lifecycle operations.
  * Handles database start, stop, restart, creation, profile management, and space information.
@@ -321,6 +330,46 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
+   * HA half of startAllDatabases/stopAllDatabases. A dbname-less
+   * `ha_start`/`ha_stop` is host-wide (`cubrid heartbeat start|stop`), so it
+   * brings up/down every `ha_db_list` database at once — a per-database
+   * login gate can't hold any one of them back, and reporting one as failed
+   * while it actually started/stopped would be untrue. Instead the whole
+   * HA side is allowed only for the host's CMS `admin` account (no per-db
+   * login gate) and skipped outright for any other account.
+   */
+  private async runHaBulkAction(
+    userId: string,
+    hostUid: string,
+    haTargets: string[],
+    action: 'start' | 'stop',
+    out: BulkDatabaseActionResult
+  ): Promise<void> {
+    if (haTargets.length === 0) return;
+
+    // TODO: check real CMS authority (user_auth / AU_ADMIN) instead of the
+    // account name once the permission logic is reworked — same name-based
+    // convention as CMSUserManagementModal for now.
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    if ((host.id || '').toLowerCase() !== 'admin') {
+      haTargets.forEach((dbname) => out.skipped.push({ dbname, reason: HA_BULK_ADMIN_ONLY_REASON }));
+      return;
+    }
+
+    try {
+      if (action === 'start') {
+        await this.haService.haStart(userId, hostUid);
+      } else {
+        await this.haService.haStop(userId, hostUid);
+      }
+      out.succeeded.push(...haTargets);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err.message : String(err);
+      haTargets.forEach((dbname) => out.failed.push({ dbname, error }));
+    }
+  }
+
+  /**
    * Start every database in `dbnames` on a host, correctly for the whole
    * service (not one database at a time): HA-configured databases are
    * started with a single bulk `ha_start` (no dbname) instead of one
@@ -333,18 +382,20 @@ export class DatabaseLifecycleService extends BaseService {
    * list the way a plain database can — CUBRID itself refuses to start an
    * HA database through the non-HA `server=` autostart list), so every
    * `ha_db_list` entry is started regardless of whether it's also present
-   * in `dbnames`.
+   * in `dbnames` — or, for a non-admin CMS account, every one is reported
+   * in `skipped` instead (see runHaBulkAction).
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
    * @param dbnames Non-HA database names to start (e.g. the auto-start list)
-   * @returns Per-database outcome; never throws for individual failures
+   * @returns Per-database outcome (succeeded/failed/skipped); never throws
+   *   for individual failures
    */
   async startAllDatabases(
     userId: string,
     hostUid: string,
     dbnames: string[]
-  ): Promise<{ succeeded: string[]; failed: Array<{ dbname: string; error: string }> }> {
+  ): Promise<BulkDatabaseActionResult> {
     await this.assertNoActiveJob(userId, hostUid);
 
     const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
@@ -353,37 +404,9 @@ export class DatabaseLifecycleService extends BaseService {
 
     const succeeded: string[] = [];
     const failed: Array<{ dbname: string; error: string }> = [];
+    const skipped: Array<{ dbname: string; reason: string }> = [];
 
-    if (haTargets.length > 0) {
-      // Same standing policy as startNonHaDatabase — bulk ha_start needs no
-      // dbmtuserlogin of its own, but every targeted database still goes
-      // through this gate. A target whose login fails (e.g. no stored
-      // profile) is excluded from the bulk ha_start and reported as its own
-      // failure, same as an individual startdb failure would be.
-      const loginResults = await Promise.allSettled(
-        haTargets.map((dbname) => this.databaseUserService.ensureDbLogin(userId, hostUid, dbname))
-      );
-      const loggedInHaTargets: string[] = [];
-      loginResults.forEach((result, index) => {
-        const dbname = haTargets[index];
-        if (result.status === 'fulfilled') {
-          loggedInHaTargets.push(dbname);
-        } else {
-          const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          failed.push({ dbname, error });
-        }
-      });
-
-      if (loggedInHaTargets.length > 0) {
-        try {
-          await this.haService.haStart(userId, hostUid);
-          succeeded.push(...loggedInHaTargets);
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          loggedInHaTargets.forEach((dbname) => failed.push({ dbname, error }));
-        }
-      }
-    }
+    await this.runHaBulkAction(userId, hostUid, haTargets, 'start', { succeeded, failed, skipped });
 
     const results = await mapWithConcurrency(
       nonHaTargets,
@@ -400,7 +423,7 @@ export class DatabaseLifecycleService extends BaseService {
       }
     });
 
-    return { succeeded, failed };
+    return { succeeded, failed, skipped };
   }
 
   /**
@@ -409,7 +432,7 @@ export class DatabaseLifecycleService extends BaseService {
    * single bulk `ha_stop` (no dbname) instead of one per database.
    *
    * Every `ha_db_list` entry is stopped regardless of whether it's also
-   * present in `dbnames` — see startAllDatabases.
+   * present in `dbnames`, admin account only — see startAllDatabases.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
@@ -420,7 +443,7 @@ export class DatabaseLifecycleService extends BaseService {
     userId: string,
     hostUid: string,
     dbnames: string[]
-  ): Promise<{ succeeded: string[]; failed: Array<{ dbname: string; error: string }> }> {
+  ): Promise<BulkDatabaseActionResult> {
     await this.assertNoActiveJob(userId, hostUid);
 
     const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
@@ -429,34 +452,9 @@ export class DatabaseLifecycleService extends BaseService {
 
     const succeeded: string[] = [];
     const failed: Array<{ dbname: string; error: string }> = [];
+    const skipped: Array<{ dbname: string; reason: string }> = [];
 
-    if (haTargets.length > 0) {
-      // See startAllDatabases's matching comment — same gate, same
-      // exclude-and-report-individually treatment for a failed login.
-      const loginResults = await Promise.allSettled(
-        haTargets.map((dbname) => this.databaseUserService.ensureDbLogin(userId, hostUid, dbname))
-      );
-      const loggedInHaTargets: string[] = [];
-      loginResults.forEach((result, index) => {
-        const dbname = haTargets[index];
-        if (result.status === 'fulfilled') {
-          loggedInHaTargets.push(dbname);
-        } else {
-          const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          failed.push({ dbname, error });
-        }
-      });
-
-      if (loggedInHaTargets.length > 0) {
-        try {
-          await this.haService.haStop(userId, hostUid);
-          succeeded.push(...loggedInHaTargets);
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          loggedInHaTargets.forEach((dbname) => failed.push({ dbname, error }));
-        }
-      }
-    }
+    await this.runHaBulkAction(userId, hostUid, haTargets, 'stop', { succeeded, failed, skipped });
 
     const results = await mapWithConcurrency(
       nonHaTargets,
@@ -473,7 +471,7 @@ export class DatabaseLifecycleService extends BaseService {
       }
     });
 
-    return { succeeded, failed };
+    return { succeeded, failed, skipped };
   }
 
   /**
@@ -527,8 +525,11 @@ export class DatabaseLifecycleService extends BaseService {
       .filter(Boolean);
 
     if (serviceEnabled) {
-      const { failed: dbFailed } = await this.startAllDatabases(userId, hostUid, autoStartServers);
+      const { failed: dbFailed, skipped } = await this.startAllDatabases(userId, hostUid, autoStartServers);
       failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+      // No `skipped` in this response shape — a skipped HA database didn't
+      // start, so it's reported as not started rather than dropped silently.
+      failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
     }
 
     return { failed };
@@ -586,8 +587,10 @@ export class DatabaseLifecycleService extends BaseService {
     // above, so it gets the same treatment instead of losing the brokers
     // failure already collected.
     try {
-      const { failed: dbFailed } = await this.stopAllDatabases(userId, hostUid, dbnames);
+      const { failed: dbFailed, skipped } = await this.stopAllDatabases(userId, hostUid, dbnames);
       failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+      // See startWholeService's matching comment.
+      failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
     } catch (err: unknown) {
       failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
     }

@@ -964,13 +964,30 @@ export const {
   closeReconnectModal,
 } = hostSlice.actions;
 
-/** HA merge / discovery / alias updates after loginToHost stores haInfo. */
+/**
+ * HA merge / discovery / alias updates after loginToHost stores haInfo.
+ *
+ * Arg: a hostUid, or `{ hostUid, collect: true }`. In collect mode (bulk
+ * logins) the HA modal it would have opened is NOT opened — its action is
+ * returned as `followUp` ({ type: 'discovery'|'merge'|'clusterLink',
+ * payload }) for the batch result to offer on demand instead. Every
+ * non-modal side effect (markGroupHa, the awaiting-first-login bookkeeping,
+ * the cluster-linked sessionStorage key) runs the same in both modes, so
+ * nothing is left pending to pop a modal later.
+ */
 export const processHaLoginSideEffects = createAsyncThunk(
   'host/processHaLoginSideEffects',
-  async (hostUid, { dispatch, getState }) => {
+  async (arg, { dispatch, getState }) => {
+    const hostUid = typeof arg === 'string' ? arg : arg?.hostUid;
+    const collect = typeof arg === 'object' && !!arg?.collect;
+    let followUp = null;
+    const show = (type, action) => {
+      if (collect) followUp = { type, payload: action.payload };
+      else dispatch(action);
+    };
     const state = getState().host;
     const response = state.haInfo[hostUid];
-    if (!response) return { hostUid };
+    if (!response) return { hostUid, followUp };
 
     const hosts = state.hosts;
     const awaitingFirstHaLogin = state.hostsAwaitingHaLogin.includes(hostUid);
@@ -994,7 +1011,7 @@ export const processHaLoginSideEffects = createAsyncThunk(
           dispatch(hostSlice.actions.clearSuggestedHaNodes());
         }
         if (awaitingFirstHaLogin && !getState().host.isDiscoveryModalOpen) {
-          dispatch(hostSlice.actions.setSuggestedHaNodes({
+          show('discovery', hostSlice.actions.setSuggestedHaNodes({
             nodes: undiscovered,
             groupId: findGroupIdForHost(hostGroups, hostUid),
             anchorHostUid: hostUid,
@@ -1006,7 +1023,7 @@ export const processHaLoginSideEffects = createAsyncThunk(
       if (!showedHaModal && !getState().host.isHaMergeModalOpen) {
         const mergePlan = findHaPeersNeedingMerge(hostGroups, response.haNodes, hostUid);
         if (mergePlan) {
-          dispatch(hostSlice.actions.setPendingHaMerge(mergePlan));
+          show('merge', hostSlice.actions.setPendingHaMerge(mergePlan));
           showedHaModal = true;
         }
       }
@@ -1022,7 +1039,7 @@ export const processHaLoginSideEffects = createAsyncThunk(
         }
         if (sameGroupPeers.length > 0 && !alreadyNoticed) {
           const targetGroupId = findGroupIdForHost(hostGroups, hostUid);
-          dispatch(hostSlice.actions.setHaClusterLinkNotice({
+          show('clusterLink', hostSlice.actions.setHaClusterLinkNotice({
             anchorHostUid: hostUid,
             targetGroupId,
             targetGroupName: hostGroups[targetGroupId]?.name || 'Group',
@@ -1049,9 +1066,48 @@ export const processHaLoginSideEffects = createAsyncThunk(
     // entirely from live `haInfo` (see inferHaNodeType) instead of mutating
     // stored data to carry that information.
 
-    return { hostUid };
+    return { hostUid, followUp };
   }
 );
+
+/**
+ * Opens, on demand, an HA modal a collect-mode login deferred (see
+ * processHaLoginSideEffects). With `hostState` (the current state.host) the
+ * follow-up is first re-based on the CURRENT groups, since a follow-up the
+ * user opened earlier may already have moved hosts: a merge plan is
+ * recomputed (null once the hosts share a group — otherwise two hosts'
+ * opposite plans, run in turn, would split them again), and discovery /
+ * cluster-link take the anchor host's current group. null = nothing to open.
+ */
+export const haFollowUpAction = (followUp, hostState) => {
+  if (!followUp) return null;
+  const { type, payload } = followUp;
+  const anchorHostUid = payload?.anchorHostUid;
+  if (hostState && anchorHostUid) {
+    const { hostGroups } = hostState;
+    if (type === 'merge') {
+      const plan = findHaPeersNeedingMerge(hostGroups, hostState.haInfo?.[anchorHostUid]?.haNodes, anchorHostUid);
+      return plan ? hostSlice.actions.setPendingHaMerge(plan) : null;
+    }
+    const groupId = findGroupIdForHost(hostGroups, anchorHostUid) ?? payload.groupId ?? null;
+    if (type === 'discovery') {
+      return hostSlice.actions.setSuggestedHaNodes({ ...payload, groupId });
+    }
+    if (type === 'clusterLink') {
+      return hostSlice.actions.setHaClusterLinkNotice({
+        ...payload,
+        targetGroupId: groupId,
+        targetGroupName: hostGroups?.[groupId]?.name || payload.targetGroupName,
+      });
+    }
+  }
+  const creator = {
+    discovery: hostSlice.actions.setSuggestedHaNodes,
+    merge: hostSlice.actions.setPendingHaMerge,
+    clusterLink: hostSlice.actions.setHaClusterLinkNotice,
+  }[type];
+  return creator ? creator(payload) : null;
+};
 
 /** Login + HA side effects — use instead of bare loginToHost for user-initiated logins. */
 export const loginToHostWithSideEffects = createAsyncThunk(
@@ -1067,34 +1123,55 @@ export const loginToHostWithSideEffects = createAsyncThunk(
   }
 );
 
-/** CMS-login for multiple hosts (sequential), then HA side effects per successful login. */
+/**
+ * CMS-login for multiple hosts (sequential), then HA side effects per
+ * successful login in collect mode — no HA modal opens mid-batch; each
+ * host's deferred one comes back in `results[].followUp` for the single
+ * consolidated result dialog (see hostLoginReport.js).
+ *
+ * `results`: one entry per requested host — `{ uid, name, status:
+ * 'connected'|'failed'|'skipped', reason?, followUp? }` ('skipped' = was
+ * already connected). `failed` keeps its `{ name, reason }` shape.
+ */
 export const loginHostsBatch = createAsyncThunk(
   'host/loginHostsBatch',
   async (hostUids, { dispatch, getState }) => {
-    const pending = (hostUids || []).filter(
-      (uid) => uid && !getState().host.authorizedHosts.includes(uid)
-    );
+    const nameOf = (uid) => {
+      const host = getState().host.hosts.find((h) => h.uid === uid);
+      return host?.alias || host?.id || uid;
+    };
+    const requested = (hostUids || []).filter(Boolean);
+    const alreadyAuthorized = new Set(getState().host.authorizedHosts);
+    const pending = requested.filter((uid) => !alreadyAuthorized.has(uid));
+    const results = requested.map((uid) => ({
+      uid,
+      name: nameOf(uid),
+      status: alreadyAuthorized.has(uid) ? 'skipped' : 'pending',
+    }));
+    const byUid = new Map(results.map((r) => [r.uid, r]));
     const failed = [];
-    const succeededUids = [];
     let successCount = 0;
 
     for (const uid of pending) {
       try {
         await dispatch(loginToHost(uid)).unwrap();
-        succeededUids.push(uid);
+        byUid.get(uid).status = 'connected';
         successCount += 1;
       } catch (err) {
-        const host = getState().host.hosts.find((h) => h.uid === uid);
         const reason = typeof err === 'string' ? err : (err?.message || String(err));
-        failed.push({ name: host?.alias || host?.id || uid, reason });
+        Object.assign(byUid.get(uid), { status: 'failed', reason });
+        failed.push({ name: nameOf(uid), reason });
       }
     }
 
-    for (const uid of succeededUids) {
-      await dispatch(processHaLoginSideEffects(uid)).unwrap().catch(() => undefined);
+    for (const r of results) {
+      if (r.status !== 'connected') continue;
+      const out = await dispatch(processHaLoginSideEffects({ hostUid: r.uid, collect: true }))
+        .unwrap().catch(() => null);
+      if (out?.followUp) r.followUp = out.followUp;
     }
 
-    return { successCount, failed, attempted: pending.length };
+    return { successCount, failed, attempted: pending.length, results };
   }
 );
 

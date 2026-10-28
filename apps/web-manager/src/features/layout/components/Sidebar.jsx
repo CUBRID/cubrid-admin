@@ -17,9 +17,12 @@ import { fetchHosts,
   refreshServerList
 } from '../../host/hostSlice';
 import {
-  fetchDatabaseStartInfo, startDatabase, stopDatabase, loginDatabase, logoutDatabase, deleteDatabaseProfile,
+  fetchDatabaseStartInfo, startDatabase, stopDatabase, startAllDatabases, stopAllDatabases,
+  loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
+import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
+import { hostLoginResultStatusModal } from '../../host/hostLoginReport';
 import { dbKey } from '../../database/dbKey';
 
 import { fetchDatabaseSpaceInfo
@@ -238,16 +241,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
     dispatch(loginHostsBatch(uids))
       .unwrap()
-      .then(({ successCount, failed }) => {
-        let message = CM.connectedHostsMsg(successCount);
-        if (failed.length > 0) {
-          message += CM.failedListSuffix(failed.map((f) => `${f.name} (${f.reason})`).join(', '));
-        }
-        dispatch(showStatusModal({
-          type: failed.length > 0 && successCount === 0 ? 'error' : 'success',
-          title: CM.loginAll,
-          message,
-        }));
+      .then((batch) => {
+        const report = hostLoginResultStatusModal(CM, { title: CM.loginAll, batch });
+        if (report) dispatch(showStatusModal(report));
       })
       .catch(() => {
         dispatch(showStatusModal({
@@ -309,16 +305,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
     dispatch(loginHostsBatch(uids))
       .unwrap()
-      .then(({ successCount, failed }) => {
-        let message = CM.connectedHostsMsg(successCount);
-        if (failed.length > 0) {
-          message += CM.failedListSuffix(failed.map((f) => `${f.name} (${f.reason})`).join(', '));
-        }
-        dispatch(showStatusModal({
-          type: failed.length > 0 && successCount === 0 ? 'error' : 'success',
-          title: CM.loginSelectedHosts,
-          message,
-        }));
+      .then((batch) => {
+        const report = hostLoginResultStatusModal(CM, { title: CM.loginSelectedHosts, batch });
+        if (report) dispatch(showStatusModal(report));
       })
       .catch(() => {
         dispatch(showStatusModal({
@@ -1542,13 +1531,18 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.startingAllDatabasesMsg);
                   startAction();
                   try {
-                    for (const db of databases) {
-                      if (!activeDatabases.includes(db.dbname)) {
-                        await dispatch(startDatabase({ hostUid: selectedHostUid, dbname: db.dbname })).unwrap();
-                      }
-                    }
+                    const dbnames = databases
+                      .filter((db) => !activeDatabases.includes(db.dbname))
+                      .map((db) => db.dbname);
+                    const result = dbnames.length > 0
+                      ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
+                      : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
+                    const report = bulkResultStatusModal(CM, {
+                      title: CM.startAllDatabases, failedMsg: CM.someDatabasesFailedToStartMsg, failed: result.failed, skipped: result.skipped,
+                    });
+                    if (report) dispatch(showStatusModal(report));
                   } catch (err) {
                     endError(err);
                   }
@@ -1570,11 +1564,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.stoppingAllDatabasesMsg);
                   startAction();
                   try {
-                    for (const dbname of activeDatabases) {
-                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                    }
+                    const dbnames = [...activeDatabases];
+                    const result = dbnames.length > 0
+                      ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
+                      : { succeeded: [], failed: [] };
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
+                    const report = bulkResultStatusModal(CM, {
+                      title: CM.stopAllDatabases, failedMsg: CM.someDatabasesFailedToStopMsg, failed: result.failed, skipped: result.skipped,
+                    });
+                    if (report) dispatch(showStatusModal(report));
                   } catch (err) {
                     endError(err);
                   }
@@ -1596,16 +1595,18 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.restartingAllDatabasesMsg);
                   startAction();
                   try {
-                    const currentActive = [...activeDatabases];
-                    for (const dbname of currentActive) {
-                      await dispatch(stopDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                    }
-                    for (const dbname of currentActive) {
-                      await dispatch(startDatabase({ hostUid: selectedHostUid, dbname })).unwrap();
-                    }
+                    const { failed, skipped } = await restartDatabasesInBulk(
+                      dispatch, selectedHostUid, [...activeDatabases]
+                    );
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
+                    const report = bulkResultStatusModal(CM, {
+                      title: CM.restartAllDatabases, failedMsg: CM.someDatabasesFailedToRestartMsg,
+                      failed, skipped, showPhase: true,
+                    });
+                    if (report) dispatch(showStatusModal(report));
                   } catch (err) {
+                    dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     endError(err);
                   }
                 },

@@ -5,6 +5,8 @@ import { Icon } from '../ds/foundation/Icon';
 import { Button } from '../ds/foundation/Button';
 import { Modal } from '../ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
+import { FailureTable } from '../ds/feedback/FailureTable';
+import { haFollowUpAction } from '../../features/host/hostSlice';
 
 const THEME_STYLES = {
   success: {
@@ -37,18 +39,52 @@ export default function StatusModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { statusModal } = useSelector((state) => state.layout, shallowEqual);
-  const { isOpen, type, title, message, guidance, detail } = statusModal;
+  // Follow-ups are re-based on the current host groups (see haFollowUpAction).
+  const { hostGroups, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { isOpen, type, title, message, guidance, detail, tables } = statusModal;
+  const tableItems = Array.isArray(tables) ? tables.filter((tb) => tb?.rows?.length > 0) : [];
   const [showDetail, setShowDetail] = useState(false);
+  // Follow-ups already opened from this dialog (row uid/name) — disabled after use.
+  const [openedFollowUps, setOpenedFollowUps] = useState([]);
   const guidanceItems = Array.isArray(guidance) ? guidance : (guidance ? [guidance] : []);
 
   const t = THEME_STYLES[type] || THEME_STYLES.info;
   const tLabel = { success: CM.jobStatusSucceeded, error: CM.jobStatusFailed, info: CM.statusNotice }[type] ?? CM.statusNotice;
 
   useEffect(() => {
-    if (isOpen) setShowDetail(false);
+    if (isOpen) {
+      setShowDetail(false);
+      setOpenedFollowUps([]);
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  // Opens the HA modal a bulk login deferred for this host. This dialog
+  // stays open underneath: the HA modals render at z-[2200], above this
+  // one (z-[2100]) — as do New Connection / Edit Host while this dialog is
+  // open (discovery's Add opens them) — and Modal's own top-most check keeps Escape/focus on
+  // the HA modal — so the user returns here for the next host's follow-up.
+  const followUpLabels = { discovery: CM.haPeersDiscovered, merge: CM.mergeHAPeers, clusterLink: CM.haClusterLinked };
+  const renderHaFollowUp = (row) => {
+    // null once nothing is left to do, e.g. a merge an earlier follow-up already did.
+    const action = haFollowUpAction(row.followUp, { hostGroups, haInfo });
+    if (!action) return <span className="text-slate-300 dark:text-slate-600">—</span>;
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        data-testid={`ha-follow-up-${row.name}`}
+        disabled={openedFollowUps.includes(row.uid ?? row.name)}
+        onClick={() => {
+          setOpenedFollowUps((prev) => [...prev, row.uid ?? row.name]);
+          dispatch(action);
+        }}
+      >
+        {followUpLabels[row.followUp.type] || CM.failureTableHaFollowUp}
+      </Button>
+    );
+  };
 
   return (
     <Modal
@@ -57,7 +93,7 @@ export default function StatusModal() {
       title={title || (type === 'success' ? CM.statusSuccessTitle : type === 'error' ? CM.statusErrorTitle : CM.statusNotice)}
       icon={t.icon}
       iconVariant={type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}
-      maxWidth="380px"
+      maxWidth={tableItems.length > 0 ? '520px' : '380px'}
       zIndexClass="z-[2100]"
       testId="status"
       footer={(
@@ -92,6 +128,18 @@ export default function StatusModal() {
             <p className="text-13 text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-[280px]">
               {message}
             </p>
+          )}
+
+          {tableItems.length > 0 && (
+            <div className="mt-4 w-full flex flex-col gap-3">
+              {tableItems.map(({ haFollowUps, ...tb }, idx) => (
+                <FailureTable
+                  key={idx}
+                  {...tb}
+                  {...(haFollowUps ? { followUpLabel: CM.failureTableHaFollowUp, renderFollowUp: renderHaFollowUp } : {})}
+                />
+              ))}
+            </div>
           )}
 
           {guidanceItems.length > 0 && (

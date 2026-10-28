@@ -350,3 +350,108 @@ describe('database lists are stored per host, not in one shared array', () => {
     expect(store.getState().loadingByHost.hostB).toBe(false);
   });
 });
+
+describe('start-info isLoggedIn syncs the padlock to the server-side DB login state', () => {
+  // The padlock used to stay "logged in" after the CMS token rotated or the
+  // api-server restarted (both drop the server's DB logins). Start-info now
+  // carries isLoggedIn per entry; it is the truth for that host.
+  const info = (dbs, active = []) => ({ dblist: { dbs }, activelist: { active }, haDbNames: [] });
+  const loginOk = async (store, hostUid, dbname) => {
+    databaseApi.loginDatabaseWithProfile.mockResolvedValueOnce({});
+    await store.dispatch(loginDatabase({ hostUid, dbname }));
+  };
+
+  it("sets this host's entries to exactly the logged-in dbs and leaves other hosts alone", async () => {
+    const store = configureStore({ reducer });
+    await loginOk(store, 'hostA', 'stale');
+    await loginOk(store, 'hostB', 'demodb');
+    databaseApi.getStartInfo.mockResolvedValue(info(
+      [{ dbname: 'stale', isLoggedIn: false }, { dbname: 'fresh', isLoggedIn: true }],
+      // Active but missing from dblist (HA replica) — still counted.
+      [{ dbname: 'hadb', isLoggedIn: true }]
+    ));
+
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+
+    expect([...store.getState().loggedInDatabases].sort())
+      .toEqual(['hostA:fresh', 'hostA:hadb', 'hostB:demodb']);
+  });
+
+  it('leaves loggedInDatabases untouched when the field is absent (older server)', async () => {
+    const store = configureStore({ reducer });
+    await loginOk(store, 'hostA', 'demodb');
+    databaseApi.getStartInfo.mockResolvedValue(info([{ dbname: 'demodb', isProfileExists: true }]));
+
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+
+    expect(store.getState().loggedInDatabases).toEqual(['hostA:demodb']);
+  });
+
+  it('applies a background poll, but not a foreground response superseded for the live view', async () => {
+    const store = configureStore({ reducer });
+    await loginOk(store, 'hostA', 'demodb');
+    databaseApi.getStartInfo.mockResolvedValueOnce(info([{ dbname: 'demodb', isLoggedIn: false }]));
+    await store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    expect(store.getState().loggedInDatabases).not.toContain('hostA:demodb');
+
+    const slow = deferred();
+    databaseApi.getStartInfo.mockReturnValueOnce(slow.promise);
+    const foreground = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    databaseApi.getStartInfo.mockResolvedValueOnce(info([{ dbname: 'demodb', isLoggedIn: true }]));
+    await store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    slow.resolve(info([{ dbname: 'demodb', isLoggedIn: false }]));
+    await foreground;
+
+    expect(store.getState().loggedInDatabases).toContain('hostA:demodb');
+  });
+
+  it('does not clear a db whose login is still in flight', async () => {
+    const store = configureStore({ reducer });
+    await loginOk(store, 'hostA', 'demodb');
+    const pending = deferred();
+    databaseApi.loginDatabaseWithProfile.mockReturnValueOnce(pending.promise);
+    const relogin = store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+    databaseApi.getStartInfo.mockResolvedValue(info([{ dbname: 'demodb', isLoggedIn: false }]));
+
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+
+    expect(store.getState().loggedInDatabases).toContain('hostA:demodb');
+    pending.resolve({});
+    await relogin;
+  });
+
+  // A start-info request sent before a login/logout finished carries the
+  // older isLoggedIn; it must not undo that login/logout when it lands later.
+  it('does not let a start-info sent before a login clear that login', async () => {
+    const store = configureStore({ reducer });
+    const slow = deferred();
+    databaseApi.getStartInfo.mockReturnValueOnce(slow.promise);
+    const poll = store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    await loginOk(store, 'hostA', 'demodb');
+
+    slow.resolve(info([{ dbname: 'demodb', isLoggedIn: false }, { dbname: 'otherdb', isLoggedIn: true }]));
+    await poll;
+
+    expect([...store.getState().loggedInDatabases].sort()).toEqual(['hostA:demodb', 'hostA:otherdb']);
+
+    // A request sent after the login is authoritative again.
+    databaseApi.getStartInfo.mockResolvedValueOnce(info([{ dbname: 'demodb', isLoggedIn: false }]));
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    expect(store.getState().loggedInDatabases).toEqual([]);
+  });
+
+  it('does not let a start-info sent before a logout restore that login', async () => {
+    const store = configureStore({ reducer });
+    await loginOk(store, 'hostA', 'demodb');
+    const slow = deferred();
+    databaseApi.getStartInfo.mockReturnValueOnce(slow.promise);
+    const poll = store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    databaseApi.logoutDatabase.mockResolvedValueOnce({ dbname: 'demodb' });
+    await store.dispatch(logoutDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+
+    slow.resolve(info([{ dbname: 'demodb', isLoggedIn: true }]));
+    await poll;
+
+    expect(store.getState().loggedInDatabases).toEqual([]);
+  });
+});

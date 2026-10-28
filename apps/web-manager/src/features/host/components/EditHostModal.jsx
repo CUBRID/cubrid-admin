@@ -17,6 +17,9 @@ export default function EditHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isEditHostModalOpen, hostToEditUid, hosts, hostGroups, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  // Opened from an HA follow-up of a bulk-login result dialog, which stays
+  // open (z-[2100]) underneath — stack above it like the HA modals do.
+  const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
   const isCredentialError = /password/i.test(apiError || '');
 
   const [formData, setFormData] = useState({
@@ -156,6 +159,7 @@ export default function EditHostModal() {
     <Modal
       isOpen={isEditHostModalOpen}
       onClose={handleClose}
+      zIndexClass={aboveStatusModal ? 'z-[2200]' : undefined}
       onSubmit={handleSave}
       submitDisabled={loading}
       title={CM.modifyHost}
