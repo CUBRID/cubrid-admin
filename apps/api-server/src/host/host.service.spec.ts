@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HostService } from './host.service';
 import { UserRepositoryService } from '@repository';
 import { HostError, HostErrorCode } from '@error/index';
-import { User } from '@type/index';
-import { MAX_HOST_ALIAS_LENGTH, UNGROUPED_GROUP_ID } from './host-group.util';
+import { HostInfo, User } from '@type/index';
+import { getHost, MAX_HOST_ALIAS_LENGTH, UNGROUPED_GROUP_ID } from './host-group.util';
 
 describe('HostService', () => {
   let service: HostService;
@@ -102,6 +102,28 @@ describe('HostService', () => {
     it('updateHost without an alias field keeps an existing alias untouched', async () => {
       const groups = await service.updateHost('u1', 'host-a', { port: 8002 });
       expect(groups[UNGROUPED_GROUP_ID].hosts?.['host-a'].alias).toBe('A');
+    });
+  });
+
+  describe('updateHost and the stored CMS session', () => {
+    const saved = () => getHost(user, 'host-a') as HostInfo;
+
+    beforeEach(() => {
+      Object.assign(saved(), { token: 'tok', cmsTokenIssuedAt: 123, cmsTokenActiveTimeSec: 600 });
+    });
+
+    it('keeps it when only the alias changes', async () => {
+      await service.updateHost('u1', 'host-a', { alias: 'renamed' });
+
+      expect(saved().cmsTokenIssuedAt).toBe(123);
+      expect(saved().cmsTokenActiveTimeSec).toBe(600);
+    });
+
+    it('drops it when the server or CMS account changes', async () => {
+      await service.updateHost('u1', 'host-a', { address: '10.0.0.2' });
+
+      expect(saved().cmsTokenIssuedAt).toBeUndefined();
+      expect(saved().cmsTokenActiveTimeSec).toBeUndefined();
     });
   });
 });

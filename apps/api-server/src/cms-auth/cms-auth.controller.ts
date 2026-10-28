@@ -30,6 +30,19 @@ export class CmsAuthController {
   }
 
   /**
+   * Marks the host's CMS session as closed by the user, so a reload no longer
+   * restores it as connected.
+   *
+   * @route POST /:hostUid/cms-auth/disconnect
+   */
+  @Post('disconnect')
+  async disconnect(@Request() request: any, @Param('hostUid') hostUid: string) {
+    const userId = request.user.sub;
+    await this.cmsAuthService.disconnect(userId, hostUid);
+    return { success: true };
+  }
+
+  /**
    * Re-derives a host's HA role/peer payload without re-authenticating —
    * for refreshing the HA badge after something that can change a host's
    * role (e.g. Service Start/Stop's `ha_start`/`ha_stop`).

@@ -272,6 +272,19 @@ export const loginToHost = createAsyncThunk(
   }
 );
 
+// After the user disconnects a host: best effort, since the connection is
+// already gone from this tab either way.
+export const forgetHostSession = createAsyncThunk(
+  'host/forgetHostSession',
+  async (hostUid) => {
+    try {
+      await hostApi.disconnectHost(hostUid);
+    } catch {
+      // A failure only means a reload may show the host as connected again.
+    }
+  }
+);
+
 // Async thunk to re-derive a host's HA badge (role/peers) without a full
 // relogin — used after anything that can change HA role server-side
 // (Service Start/Stop's ha_start/ha_stop) and by the manual server-list
@@ -285,6 +298,20 @@ export const refreshHaInfo = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || `Failed to refresh HA info for ${hostUid}`);
     }
+  }
+);
+
+// First host list of the tab: fetchHosts restores hosts whose CMS session is
+// still alive (see authorizedHostsHydrated); they skip the login that
+// normally fills haInfo, so re-derive it for them, without a new session.
+export const loadHosts = createAsyncThunk(
+  'host/loadHosts',
+  async (_, { dispatch, getState }) => {
+    const before = new Set(getState().host.authorizedHosts);
+    await dispatch(fetchHosts());
+    const restored = getState().host.authorizedHosts.filter((uid) => !before.has(uid));
+    await Promise.all(restored.map((hostUid) => dispatch(refreshHaInfo(hostUid))));
+    return true;
   }
 );
 
@@ -394,6 +421,11 @@ const initialState = {
   hosts: [],
   hostGroups: {},
   authorizedHosts: [], // Array of hostUids that have active forwarded sessions
+  // One-time only (see fetchHosts.fulfilled): whether this tab has already
+  // seeded authorizedHosts from the server's cmsSessionExpiresAt. Must not
+  // re-run on every later fetchHosts (manual refresh, after add/edit/delete),
+  // or a host the user disconnected in this tab would come back as connected.
+  authorizedHostsHydrated: false,
   hostEnvs: {}, // Cache of environment info (version, paths, etc) indexed by hostUid
   haInfo: JSON.parse(localStorage.getItem('cubrid_ha_info') || '{}'), // Cache of HA info (isHA, currentNodeType, haNodes) indexed by hostUid
   suggestedHaNodes: [],
@@ -636,6 +668,22 @@ const hostSlice = createSlice({
       .addCase(fetchHosts.fulfilled, (state, action) => {
         state.loading = false;
         applyHostGroupsResponse(state, action.payload);
+        // First fetchHosts of this tab only (see authorizedHostsHydrated).
+        // cmsSessionExpiresAt is when the server expects the host's CMS token
+        // to expire: CMS drops a token left unused for its token_active_time
+        // (cm.conf, 7200s by default) and renews it on every request. Before
+        // then a reload restores the host as connected. If the token is gone
+        // anyway (e.g. the same CMS user logged in elsewhere), the first
+        // request gets a 401 and the existing reconnect modal opens (apiClient.js).
+        if (!state.authorizedHostsHydrated) {
+          const now = Date.now();
+          for (const host of state.hosts) {
+            if (host.cmsSessionExpiresAt > now && !state.authorizedHosts.includes(host.uid)) {
+              state.authorizedHosts.push(host.uid);
+            }
+          }
+          state.authorizedHostsHydrated = true;
+        }
       })
       .addCase(fetchHosts.rejected, (state, action) => {
         state.loading = false;

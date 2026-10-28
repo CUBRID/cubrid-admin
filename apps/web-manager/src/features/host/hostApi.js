@@ -19,6 +19,11 @@ export const hostApi = {
   loginToHost: (hostUid) => {
     return apiClient.post(`/${hostUid}/cms-auth/login`);
   },
+  // Tells the server the user closed this host's session, so a reload
+  // no longer restores it as connected.
+  disconnectHost: (hostUid) => {
+    return apiClient.post(`/${hostUid}/cms-auth/disconnect`);
+  },
   getHaInfo: (hostUid) => {
     return apiClient.get(`/${hostUid}/cms-auth/ha-info`);
   },
