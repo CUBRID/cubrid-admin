@@ -4,9 +4,10 @@ import { fetchDatabaseSpaceInfo } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Table } from '../../../../components/ds/layout/Table';
 import { Card } from '../../../../components/ds/layout/Card';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
-export default function DBSpaceInfoSection({ spaceInfo, pollingProps }) {
+export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, pollingProps }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -65,7 +66,12 @@ export default function DBSpaceInfoSection({ spaceInfo, pollingProps }) {
       isCollapsed={isCollapsed}
       onToggle={(v) => setIsCollapsed(v)}
     >
-      <Table columns={columns} data={spaceInfo} maxRows={15} />
+      <Table
+        columns={columns}
+        data={spaceInfo}
+        emptyState={<FetchEmptyState status={spaceInfoStatus} title={CM.fileDistribution} />}
+        maxRows={15}
+      />
     </Card>
   );
 }

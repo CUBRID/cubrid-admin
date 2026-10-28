@@ -13,6 +13,7 @@ import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Table } from '../../../../components/ds/layout/Table';
 import { Card } from '../../../../components/ds/layout/Card';
 import { EmptyState } from '../../../../components/ds/feedback/EmptyState';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
 const BACKUP_LEVEL_TITLE_KEY = {
@@ -21,20 +22,26 @@ const BACKUP_LEVEL_TITLE_KEY = {
   '2': 'backupLevelIncrL2Title',
 };
 
+// The list is unset until its first fetch succeeds; a failed refresh keeps
+// the last list (the reducer leaves it in place).
+const fetchStatus = (list, failed) => (failed ? 'error' : list ? 'loaded' : undefined);
+
 export default function DBJobAutomationSection({ pollingProps }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
 
-  const { backupSchedules, backupSchedulesLoading, queryPlans, queryPlansLoading } = useSelector(
+  const { backupSchedules, backupSchedulesLoading, backupSchedulesError, queryPlans, queryPlansLoading, queryPlansError } = useSelector(
     (state) => {
       const key = dbKey(hostUid, dbname);
       return {
         backupSchedules: state.databaseOperation.backupSchedules[key],
         backupSchedulesLoading: state.databaseOperation.backupSchedulesLoading[key],
+        backupSchedulesError: state.databaseOperation.backupSchedulesError[key],
         queryPlans: state.databaseOperation.queryPlans[key],
         queryPlansLoading: state.databaseOperation.queryPlansLoading[key],
+        queryPlansError: state.databaseOperation.queryPlansError[key],
       };
     },
     shallowEqual
@@ -83,7 +90,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
     {
       header: CM.path,
       accessor: 'path',
-      render: (v) => <span className="font-mono text-13 text-slate-500 truncate block max-w-[240px]">{v}</span>,
+      render: (v) => <span title={v} className="font-mono text-13 text-slate-500 truncate block max-w-[240px]">{v}</span>,
     },
     {
       header: CM.backupLevelColumn,
@@ -127,7 +134,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
     {
       header: 'SQL',
       accessor: 'query_string',
-      render: (v) => <span className="font-mono text-13 text-slate-500 truncate block max-w-[280px]">{v}</span>,
+      render: (v) => <span title={v} className="font-mono text-13 text-slate-500 truncate block max-w-[280px]">{v}</span>,
     },
     {
       header: CM.actions,
@@ -166,11 +173,17 @@ export default function DBJobAutomationSection({ pollingProps }) {
         </div>
       </div>
       {(backupSchedules?.length ?? 0) === 0 ? (
-        <EmptyState
-          icon="backup"
-          title={CM.noBackupPlansTitle}
-          subtitle={CM.noBackupPlansMsg}
-          py="py-8"
+        <FetchEmptyState
+          status={fetchStatus(backupSchedules, backupSchedulesError)}
+          title={CM.backupPlan}
+          empty={
+            <EmptyState
+              icon="backup"
+              title={CM.noBackupPlansTitle}
+              subtitle={CM.noBackupPlansMsg}
+              py="py-8"
+            />
+          }
         />
       ) : (
         <Table
@@ -189,11 +202,17 @@ export default function DBJobAutomationSection({ pollingProps }) {
         </div>
       </div>
       {(queryPlans?.length ?? 0) === 0 ? (
-        <EmptyState
-          icon="schema"
-          title={CM.noQueryPlansTitle}
-          subtitle={CM.noQueryPlansMsg}
-          py="py-8"
+        <FetchEmptyState
+          status={fetchStatus(queryPlans, queryPlansError)}
+          title={CM.queryPlan}
+          empty={
+            <EmptyState
+              icon="schema"
+              title={CM.noQueryPlansTitle}
+              subtitle={CM.noQueryPlansMsg}
+              py="py-8"
+            />
+          }
         />
       ) : (
         <Table

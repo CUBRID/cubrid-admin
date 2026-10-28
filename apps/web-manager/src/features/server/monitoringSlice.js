@@ -1,5 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import monitoringApi from './monitoringApi';
+import { computeBrokerRates, mapDiskInfo } from './hostMetrics';
+
+// Disk usage changes slowly and gethoststat has no disk field, so the
+// separate getsysdiskinfo call runs at most this often per host.
+const DISK_REFRESH_MS = 30 * 1000;
 
 // Thunk to fetch all monitoring data in parallel
 export const fetchMonitoringData = createAsyncThunk(
@@ -10,17 +15,20 @@ export const fetchMonitoringData = createAsyncThunk(
       const haInfo = state.host.haInfo[hostUid];
       const isHA = haInfo?.isHA;
 
+      const diskFetchedAt = state.monitoring?.hostsData?.[hostUid]?.diskFetchedAt;
+      const shouldFetchDisk = !diskFetchedAt || Date.now() - diskFetchedAt >= DISK_REFRESH_MS;
+
       const promises = [
         monitoringApi.getHostStat(hostUid),
-        monitoringApi.getBrokerList(hostUid)
+        monitoringApi.getBrokerList(hostUid),
+        isHA ? monitoringApi.getHaHeartbeatList(hostUid) : Promise.resolve(undefined),
+        // A disk failure must not fail the whole status poll: null = tried
+        // and failed (keep the last value), undefined = not due this tick.
+        shouldFetchDisk ? monitoringApi.getSysDiskInfo(hostUid).catch(() => null) : Promise.resolve(undefined),
       ];
 
-      if (isHA) {
-        promises.push(monitoringApi.getHaHeartbeatList(hostUid));
-      }
-
-      const [hostStat, brokers, haHeartbeat] = await Promise.all(promises);
-      return { hostStat, brokers, haHeartbeat };
+      const [hostStat, brokers, haHeartbeat, diskInfo] = await Promise.all(promises);
+      return { hostStat, brokers, haHeartbeat, diskInfo };
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
     }
@@ -59,10 +67,13 @@ const monitoringSlice = createSlice({
           ...state.hostsData[hostUid],
           history: [],
           prevHostStat: null,
+          brokerSample: null,
+          disk: null,
+          diskFetchedAt: null,
           error: null,
           haHeartbeat: null,
-          currentStatus: { cpu: 0, memory: 0, tps: 0, qps: 0, memUsed: 0, memTotal: 0 },
-          averages: { cpu: 0, memory: 0, tps: 0, qps: 0 },
+          currentStatus: { cpu: null, memory: 0, tps: null, qps: null, memUsed: 0, memTotal: 0 },
+          averages: { cpu: null, memory: null, tps: null, qps: null },
         };
       }
     }
@@ -73,10 +84,13 @@ const monitoringSlice = createSlice({
         const hostUid = action.meta.arg;
         if (!state.hostsData[hostUid]) {
           state.hostsData[hostUid] = {
-            currentStatus: { cpu: 0, memory: 0, tps: 0, qps: 0, memUsed: 0, memTotal: 0 },
-            averages: { cpu: 0, memory: 0, tps: 0, qps: 0 },
+            currentStatus: { cpu: null, memory: 0, tps: null, qps: null, memUsed: 0, memTotal: 0 },
+            averages: { cpu: null, memory: null, tps: null, qps: null },
             history: [],
             prevHostStat: null,
+            brokerSample: null,
+            disk: null,
+            diskFetchedAt: null,
             loading: true,
             error: null
           };
@@ -92,21 +106,18 @@ const monitoringSlice = createSlice({
 
         hostData.loading = false;
         hostData.error = null;
-        const { hostStat, brokers, haHeartbeat } = action.payload;
+        const { hostStat, brokers, haHeartbeat, diskInfo } = action.payload;
         const now = Date.now();
 
-        // 1. Calculate TPS/QPS from brokers
-        let totalTps = 0;
-        let totalQps = 0;
-        if (brokers && Array.isArray(brokers)) {
-          brokers.forEach(broker => {
-            totalTps += parseFloat(broker.tran || 0);
-            totalQps += parseFloat(broker.query || 0);
-          });
-        }
+        // 1. TPS/QPS: per-second rates from the brokers' cumulative counters
+        // (null until two samples can be compared).
+        const { sample: brokerSample, rates: brokerRates } = computeBrokerRates(hostData.brokerSample, brokers, now);
+        hostData.brokerSample = brokerSample;
+        const totalTps = brokerRates.tps;
+        const totalQps = brokerRates.qps;
 
-        // 2. Calculate CPU %
-        let cpuUsage = 0;
+        // 2. Calculate CPU % (null on the first sample: no delta yet)
+        let cpuUsage = null;
         if (hostData.prevHostStat) {
           const prev = hostData.prevHostStat;
           const curr = hostStat;
@@ -117,7 +128,7 @@ const monitoringSlice = createSlice({
           const cpuIowaitDelta = parseFloat(curr.cpu_iowait) - parseFloat(prev.cpu_iowait);
 
           const totalDelta = cpuUserDelta + cpuKernelDelta + cpuIdleDelta + cpuIowaitDelta;
-          if (totalDelta > 0) cpuUsage = (cpuUserDelta / totalDelta) * 100;
+          cpuUsage = totalDelta > 0 ? (cpuUserDelta / totalDelta) * 100 : null;
         }
         hostData.prevHostStat = hostStat;
 
@@ -137,14 +148,20 @@ const monitoringSlice = createSlice({
           memTotal: memTotalBytes
         };
 
+        // Disk (root filesystem on Linux), fetched on its own slower cadence.
+        if (diskInfo !== undefined) {
+          hostData.diskFetchedAt = now;
+          const disk = mapDiskInfo(diskInfo);
+          if (disk) hostData.disk = disk;
+        }
+
         // 5. Update History
-        hostData.history.push({ 
-          timestamp: now, 
-          cpu: cpuUsage, 
-          memory: memUsage, 
-          tps: totalTps, 
-          qps: totalQps, 
-          disk: hostStat.disk_usage 
+        hostData.history.push({
+          timestamp: now,
+          cpu: cpuUsage,
+          memory: memUsage,
+          tps: totalTps,
+          qps: totalQps,
         });
         hostData.history = hostData.history.filter(h => now - h.timestamp < MAX_HISTORY_MS);
 
@@ -153,22 +170,18 @@ const monitoringSlice = createSlice({
           hostData.haHeartbeat = haHeartbeat;
         }
 
-        // 6. Calculate Averages
-        const historyLen = hostData.history.length;
-        if (historyLen > 0) {
-          const sums = hostData.history.reduce((a, b) => ({
-            cpu: a.cpu + b.cpu,
-            memory: a.memory + b.memory,
-            tps: a.tps + b.tps,
-            qps: a.qps + b.qps
-          }), { cpu: 0, memory: 0, tps: 0, qps: 0 });
-          hostData.averages = {
-            cpu: sums.cpu / historyLen,
-            memory: sums.memory / historyLen,
-            tps: sums.tps / historyLen,
-            qps: sums.qps / historyLen
-          };
-        }
+        // 6. Calculate Averages — only over samples that had a real value
+        // (a first sample's "no rate yet" must not pull the average to 0).
+        const average = (key) => {
+          const values = hostData.history.map((h) => h[key]).filter((v) => v !== null && v !== undefined);
+          return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+        };
+        hostData.averages = {
+          cpu: average('cpu'),
+          memory: average('memory'),
+          tps: average('tps'),
+          qps: average('qps'),
+        };
       })
       .addCase(fetchMonitoringData.rejected, (state, action) => {
         const hostUid = action.meta.arg;

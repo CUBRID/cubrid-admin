@@ -283,7 +283,7 @@ describe('DatabaseUserService', () => {
             {
               '@id': '163810704',
               '@name': 'yifan',
-              groups: { group: ['public', 'editors'] },
+              groups: [{ group: ['editors'] }],
               authorization: [{ '@name': 'db_class' }, { '@name': 'db_user' }],
             },
           ],
@@ -307,11 +307,40 @@ describe('DatabaseUserService', () => {
           dbname: 'demodb',
           username: 'yifan',
           userpass: '1111',
-          groups: { group: ['public', 'editors'] },
+          groups: [{ group: ['PUBLIC', 'EDITORS'] }],
           authorization: ['db_class', 'db_user'],
         })
       );
       expect(result).toEqual({ success: true });
+    });
+
+    it('keeps PUBLIC when the user has no other groups (CMS no longer re-adds it on updateuser)', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce(dbmtLoginSuccess)
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '20 ms',
+          dbname: 'demodb',
+          note: 'none',
+          status: 'success',
+          task: 'userinfo',
+          user: [{ '@id': '1', '@name': 'yifan', groups: [{ group: ['PUBLIC'] }], authorization: [] }],
+        })
+        .mockResolvedValueOnce(updateUserSuccess);
+
+      await service.updateUser(
+        mockUserId,
+        mockHostUid,
+        'demodb',
+        'yifan',
+        updateParams.userpass,
+        updateParams.groups,
+        updateParams.authorization
+      );
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'updateuser', groups: [{ group: ['PUBLIC'] }] })
+      );
     });
 
     it('should throw CmsError when CMS status is not success', async () => {
@@ -521,6 +550,47 @@ describe('DatabaseUserService', () => {
 
       expect(repository.atomicUpdateUser).not.toHaveBeenCalled();
       expect(mockHost.dbProfiles).toHaveProperty('demodb');
+    });
+  });
+
+  describe('isDbLoginActive', () => {
+    const successResponse = {
+      __EXEC_TIME: '10 ms',
+      note: 'none',
+      status: 'success',
+      task: 'dbmtuserlogin',
+    };
+
+    afterEach(() => jest.useRealTimers());
+
+    it('is false with no cached login', () => {
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+    });
+
+    it('is true after a login under the same host token, without calling CMS', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+      cmsClient.postAuthenticated.mockClear();
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(true);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('is false once the host token changed (CMS conlist is per login connection)', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', 'a-rotated-token')).toBe(false);
+    });
+
+    it('is false once the cached login is over 2h old', async () => {
+      jest.useFakeTimers({ now: new Date('2026-10-26T00:00:00Z') });
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+
+      jest.setSystemTime(new Date('2026-10-26T02:00:01Z'));
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
     });
   });
 

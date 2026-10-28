@@ -51,8 +51,10 @@ export const databaseApi = {
   optimizeDatabase: (hostUid, dbname, payload) =>
     apiClient.post(`/${hostUid}/database/optimize/${encodeURIComponent(dbname)}`, payload),
 
-  getLockInfo: (hostUid, dbname) =>
-    apiClient.post(`/${hostUid}/database/lock/${encodeURIComponent(dbname)}`, {}),
+  // { summary: true } returns locks grouped per transaction, table and mode
+  // instead of the raw lock table (one entry per locked row).
+  getLockInfo: (hostUid, dbname, body = {}) =>
+    apiClient.post(`/${hostUid}/database/lock/${encodeURIComponent(dbname)}`, body),
 
   getTransactionInfo: (hostUid, dbname, payload) =>
     apiClient.post(`/${hostUid}/database/transaction-info/${encodeURIComponent(dbname)}`, payload),
@@ -132,6 +134,16 @@ export const databaseApi = {
   getStatDump: (hostUid, dbname) => {
     return apiClient.get(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}`);
   },
+  // statdump counters only advance while a watcher is attached (see statdumpWatcher.js).
+  startStatDumpWatcher: (hostUid, dbname) =>
+    apiClient.post(`/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/start`, {}),
+  // keepalive: sent while the page is closing (pagehide), so it must outlive it.
+  stopStatDumpWatcher: (hostUid, dbname, { keepalive = false } = {}) =>
+    apiClient.post(
+      `/${hostUid}/cms-config/stat-dump/${encodeURIComponent(dbname)}/watcher/stop`,
+      {},
+      keepalive ? { adapter: 'fetch', fetchOptions: { keepalive: true } } : undefined
+    ),
   getParamDump: (hostUid, dbname, both = 'n') => {
     return apiClient.get(`/${hostUid}/cms-config/param-dump/${encodeURIComponent(dbname)}?both=${both}`);
   },

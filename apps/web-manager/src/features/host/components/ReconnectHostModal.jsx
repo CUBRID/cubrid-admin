@@ -189,7 +189,7 @@ export default function ReconnectHostModal() {
           </div>
           <div className="flex-1 min-w-0">
             <Typography variant="caption" className="font-bold text-amber-600/70 dark:text-amber-400/60 uppercase tracking-widest block mb-0.5">{CM.targetHost || 'Target Host'}</Typography>
-            <Typography variant="span" className="text-sm font-black text-slate-900 dark:text-white truncate block tracking-tight font-mono">
+            <Typography title={currentHost?.alias || currentHost?.id || 'N/A'} variant="span" className="text-sm font-black text-slate-900 dark:text-white truncate block tracking-tight font-mono">
               {currentHost?.alias || currentHost?.id || 'N/A'}
             </Typography>
           </div>

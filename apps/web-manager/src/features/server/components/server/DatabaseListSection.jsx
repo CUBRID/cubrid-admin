@@ -5,9 +5,10 @@ import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { HA_DB_STATE_CONFIG } from '../../../host/haPeerUtils';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
-export default function DatabaseListSection({ dbListDisplay }) {
+export default function DatabaseListSection({ dbListDisplay, dbListStatus = 'loaded' }) {
   const CM = useCM();
   const columns = [
     {
@@ -72,7 +73,12 @@ export default function DatabaseListSection({ dbListDisplay }) {
       bodyClassName="p-0"
       collapsible
     >
-      <Table columns={columns} data={dbListDisplay} maxRows={15} />
+      <Table
+        columns={columns}
+        data={dbListDisplay}
+        emptyState={<FetchEmptyState status={dbListStatus} title={CM.databases} />}
+        maxRows={15}
+      />
     </Card>
   );
 }

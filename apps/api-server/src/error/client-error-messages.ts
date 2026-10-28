@@ -162,6 +162,16 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
   }
 
   if (kind === 'RESOURCE') {
+    // HostErrorCode.INVALID_FORMAT covers many distinct situations (blank
+    // alias, invalid group name, nonexistent group, reserved-ungrouped-
+    // bucket guards, ...) that all used to collapse into the one fixed
+    // string below regardless of which specific `field`/`reason` the
+    // call site already had on hand — same bug class as the CMS-config
+    // fix this is part of a sweep of. `additionalData.message` lets a
+    // call site opt into the specific one instead.
+    if (code === (HostErrorCode.INVALID_FORMAT as string) && typeof additionalData?.message === 'string' && additionalData.message.trim() !== '') {
+      return additionalData.message.trim();
+    }
     switch (code) {
       case HostErrorCode.NO_SUCH_HOST:
         return 'Host not found.';
@@ -195,9 +205,29 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
     if (code === (DatabaseErrorCode.INVALID_PARAMETER as string) && additionalData?.message) {
       return String(additionalData.message);
     }
+    // The volume-related codes and DUPLICATED_FILE are all built with a
+    // specific `message` at their throw site (see DatabaseError.Invalid
+    // Volume*/ParseVolumeFailed/ConvertVolumeFailed/DuplicatedFile in
+    // database-lifecycle.service.ts) that used to be silently dropped in
+    // favor of a fixed "Invalid volume information."/"File already
+    // exists." regardless of which specific problem was found.
+    const volumeAndFileCodes: string[] = [
+      DatabaseErrorCode.INVALID_VOLUME_STRING,
+      DatabaseErrorCode.INVALID_VOLUME_FORMAT,
+      DatabaseErrorCode.INVALID_VOLUME_INFO,
+      DatabaseErrorCode.INVALID_VOLUME_SIZE,
+      DatabaseErrorCode.PARSE_VOLUME_FAILED,
+      DatabaseErrorCode.CONVERT_VOLUME_FAILED,
+      DatabaseErrorCode.DUPLICATED_FILE,
+    ];
+    if (volumeAndFileCodes.includes(code as string) && typeof additionalData?.message === 'string' && additionalData.message.trim() !== '') {
+      return additionalData.message.trim();
+    }
     switch (code as DatabaseErrorCode) {
-      case DatabaseErrorCode.NO_SUCH_DATABASE:
-        return 'Database not found.';
+      case DatabaseErrorCode.NO_SUCH_DATABASE: {
+        const dbname = additionalData?.dbname;
+        return dbname ? `Database "${dbname}" not found.` : 'Database not found.';
+      }
       case DatabaseErrorCode.DUPLICATED_DATABASE_PROFILE:
         return 'A database profile for this entry already exists.';
       case DatabaseErrorCode.GET_START_INFO_FAILED:
@@ -265,6 +295,14 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
   }
 
   if (kind === 'CONFIG') {
+    // ConfigError.ServerParamNotFound (and every other ConfigError.*
+    // factory) is documented to build a specific `additionalData.message`
+    // for exactly this purpose, but this branch never read it for any
+    // code — every call site's specific detail was silently replaced by
+    // one of the fixed per-code strings below regardless.
+    if (typeof additionalData?.message === 'string' && additionalData.message.trim() !== '') {
+      return additionalData.message.trim();
+    }
     switch (code as ConfigErrorCode) {
       case ConfigErrorCode.SERVER_PARAM_NOT_FOUND:
         return 'Server parameter not found.';

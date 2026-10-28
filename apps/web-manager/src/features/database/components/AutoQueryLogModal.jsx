@@ -90,21 +90,21 @@ export default function AutoQueryLogModal() {
                 <span className="flex-shrink-0">
                   <Icon name="check_circle" size="sm" weight={300} className="fill-current" />
                 </span>
-                <span className="truncate">{val}</span>
+                <span title={val} className="truncate">{val}</span>
               </div>
             ) : isStart ? (
               <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
                 <span className="flex-shrink-0">
                   <Icon name="play_circle" size="sm" weight={300} className="animate-pulse" />
                 </span>
-                <span className="truncate">{val}</span>
+                <span title={val} className="truncate">{val}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-rose-500 dark:text-rose-400">
                 <span className="flex-shrink-0">
                   <Icon name="report" size="sm" weight={300} />
                 </span>
-                <span className="truncate">{val}</span>
+                <span title={val} className="truncate">{val}</span>
               </div>
             )}
           </div>

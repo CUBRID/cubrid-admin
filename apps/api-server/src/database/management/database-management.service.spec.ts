@@ -33,6 +33,7 @@ describe('DatabaseManagementService', () => {
   let service: DatabaseManagementService;
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
+  let databaseUserService: { loginDatabase: jest.Mock; ensureDbLogin: jest.Mock; deleteDbProfile: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -68,6 +69,7 @@ describe('DatabaseManagementService', () => {
     const mockDatabaseUserService = {
       loginDatabase: jest.fn().mockResolvedValue(true),
       ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -95,6 +97,7 @@ describe('DatabaseManagementService', () => {
     service = module.get<DatabaseManagementService>(DatabaseManagementService);
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
+    databaseUserService = mockDatabaseUserService;
 
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
@@ -723,7 +726,7 @@ describe('DatabaseManagementService', () => {
         const request: CheckDatabaseRequest = { repairdb: 'n' };
 
         const err = await service.checkDatabase(mockUserId, mockHostUid, mockDbname, request).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -850,7 +853,7 @@ describe('DatabaseManagementService', () => {
         const request: CompactDatabaseRequest = { verbose: 'y' };
 
         const err = await service.compactDatabase(mockUserId, mockHostUid, mockDbname, request).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -1000,6 +1003,21 @@ describe('DatabaseManagementService', () => {
       ).rejects.toThrow(HostError);
     });
 
+    it('clears the stored login profile + dbmt-login cache for both the old and new name, so neither can inherit a stale previous database', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      const request: RenameDatabaseRequest = {
+        rename: 'renamed_db',
+        exvolpath: 'none',
+        advanced: 'off',
+        forcedel: 'n',
+      };
+
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(mockUserId, mockHostUid, 'renamed_db');
+    });
+
     it('should throw CmsError if CMS request fails', async () => {
       cmsClient.postAuthenticated.mockRejectedValue(
         CmsError.RequestFailed({ message: 'CMS request failed' })
@@ -1028,7 +1046,7 @@ describe('DatabaseManagementService', () => {
         };
 
         const err = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, request).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -1187,7 +1205,7 @@ describe('DatabaseManagementService', () => {
         cmsClient.postAuthenticated.mockResolvedValue({ __EXEC_TIME: '0 ms', note: 'Request is rejected due to invalid token. Please reconnect.', status: 'error', task: 'cms' });
 
         const err = await service.addVolDb(mockUserId, mockHostUid, mockDbname, mockRequest).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -1359,6 +1377,18 @@ describe('DatabaseManagementService', () => {
       expect(result).toEqual({
         lockinfo: mockSuccessResponse.lockinfo,
       });
+    });
+
+    it('returns only the grouped locks when asked for a summary', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true });
+
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.summary?.totalLocks).toBeGreaterThan(0);
+      expect(result.summary?.rows).toEqual(
+        expect.arrayContaining([expect.objectContaining({ index: '1', obj: 'Class = code', mode: 'IS_LOCK', count: 1 })])
+      );
     });
 
     it('should successfully get lock information (legacy format without lock_holders)', async () => {

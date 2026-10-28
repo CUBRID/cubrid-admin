@@ -10,6 +10,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
+import { jobElapsedSeconds, formatElapsed } from '../jobElapsed';
 
 // Stable fallback reference — `status.data?.asinfo || []` would otherwise
 // hand the asInfo-rate-tracking effect below a brand-new array on every
@@ -97,8 +98,10 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     })));
   }, [asInfo]);
 
-  /* Loading */
-  if (status.loading && !status.data?.asinfo) {
+  /* Loading — also before the first fetch has dispatched (no entry yet), so
+     the tables don't flash their "no application servers" message. */
+  const hasStatusEntry = Boolean(detailedStatus[brokerName]);
+  if ((!hasStatusEntry || status.loading) && !status.data?.asinfo) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-bk-main h-full">
         <div className="flex flex-col items-center gap-3">
@@ -109,8 +112,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     );
   }
 
-  /* Error */
-  if (status.error) {
+  /* Error — full-page only when there is nothing loaded yet; a failed refresh
+     keeps the last tables and flags them instead (statusStaleBadge). */
+  if (status.error && !status.data?.asinfo) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-bk-main h-full">
         <div className="max-w-sm w-full">
@@ -167,7 +171,15 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     { header: CM.jobId, accessor: 'job_id', width: '100px', render: (v) => <span className="font-mono">{v}</span> },
     { header: CM.priority, accessor: 'job_priority', width: '100px', render: (v) => <span className="font-mono">{v}</span> },
     { header: CM.address, accessor: 'job_ip', render: (v) => <span className="font-mono text-amber-600/80 dark:text-amber-500/70">{v}</span> },
-    { header: CM.elapsed, accessor: 'job_time', width: '100px', render: (v) => <span className="font-mono text-rose-500">{v}s</span> },
+    // job_time is the receive time of day, not a duration — see jobElapsed.js.
+    {
+      header: CM.elapsed, accessor: 'job_time', width: '100px',
+      render: (v) => (
+        <span className="font-mono text-rose-500" title={v ? CM.jobReceivedAt(v) : undefined}>
+          {formatElapsed(jobElapsedSeconds(status.data?.time, v)) ?? '—'}
+        </span>
+      ),
+    },
     { header: CM.request, accessor: 'job_request', render: (v) => <div className="max-w-xs truncate text-slate-500 dark:text-slate-500 font-mono">{v}</div> },
   ];
 
@@ -192,6 +204,16 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   const basicInfoStaleBadge = (
     <span
       title={CM.basicInfoStaleMsg}
+      className="inline-flex items-center gap-1.5 text-9 font-bold text-amber-600 dark:text-amber-400 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-in fade-in transition duration-300"
+    >
+      <Icon name="warning" size="12px" />
+      {CM.staleDataBadge}
+    </span>
+  );
+
+  const statusStaleBadge = (
+    <span
+      title={status.error ? `${CM.failedToLoadStatus}: ${status.error}` : undefined}
       className="inline-flex items-center gap-1.5 text-9 font-bold text-amber-600 dark:text-amber-400 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-in fade-in transition duration-300"
     >
       <Icon name="warning" size="12px" />
@@ -320,7 +342,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               <span className="text-14 font-bold">{CM.applicationServers}</span>
             </div>
           }
-          rightContent={(isCollapsed) => isCollapsed && asActiveBadge}
+          rightContent={(isCollapsed) => (status.error ? statusStaleBadge : isCollapsed && asActiveBadge)}
           bodyClassName="p-0"
           collapsible
         >
@@ -341,7 +363,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               <span className="text-14 font-bold">{CM.jobQueue}</span>
             </div>
           }
-          rightContent={(isCollapsed) => isCollapsed && jobInfo.length > 0 && jobQueuedBadge}
+          rightContent={(isCollapsed) => (status.error ? statusStaleBadge : isCollapsed && jobInfo.length > 0 && jobQueuedBadge)}
           bodyClassName="p-0"
           collapsible
         >

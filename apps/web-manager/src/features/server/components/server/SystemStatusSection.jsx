@@ -23,11 +23,16 @@ const MetricBar = ({ pct }) => (
   </div>
 );
 
+// CPU and TPS/QPS are derived from deltas between polls: null means there is
+// no value yet (first sample), shown as "-" rather than a fake 0.
+const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(2));
+const cpuCell = (value) => (value === null || value === undefined ? null : { display: `${value.toFixed(1)}%`, pct: value });
+
 export default function SystemStatusSection({ hostUid, isTabActive = true }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
-  const { currentStatus = {}, averages = {}, history = [], error = null } = hostData;
+  const { currentStatus = {}, averages = {}, disk = null, error = null } = hostData;
   const { authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = hostUid && authorizedHosts.includes(hostUid);
   const hostHaInfo = haInfo[hostUid] || {};
@@ -71,30 +76,39 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
-  const rows = useMemo(() => [
-    {
-      id: 'now', time: CM.nowLabel,
-      memory: currentStatus?.memTotal ? { 
-        display: `${formatBytes(currentStatus.memUsed)} / ${formatBytes(currentStatus.memTotal)} (${(currentStatus.memory || 0).toFixed(1)}%)`, 
-        pct: currentStatus.memory 
-      } : null,
-      disk: history[history.length - 1]?.disk || '-',
-      cpu: { display: `${(currentStatus?.cpu || 0).toFixed(1)}%`, pct: currentStatus?.cpu || 0 },
-      tps: (currentStatus?.tps || 0).toFixed(2),
-      qps: (currentStatus?.qps || 0).toFixed(2),
-    },
-    {
-      id: 'avg', time: CM.fiveMinAvg,
-      memory: currentStatus?.memTotal ? { 
-        display: `${formatBytes(currentStatus.memTotal * (averages?.memory || 0) / 100)} / ${formatBytes(currentStatus.memTotal)} (${(averages?.memory || 0).toFixed(1)}%)`,
-        pct: averages?.memory || 0 
-      } : { display: `${(averages?.memory || 0).toFixed(1)}%`, pct: averages?.memory || 0 },
-      disk: '-',
-      cpu: { display: `${(averages?.cpu || 0).toFixed(1)}%`, pct: averages?.cpu || 0 },
-      tps: (averages?.tps || 0).toFixed(2),
-      qps: (averages?.qps || 0).toFixed(2),
-    }
-  ], [CM, currentStatus, averages, history]);
+  const rows = useMemo(() => {
+    const diskCell = disk ? {
+      display: `${formatBytes(disk.used)} / ${formatBytes(disk.total)} (${disk.pct.toFixed(1)}%)`,
+      pct: disk.pct,
+      // Linux CMS reports statvfs("/") only — the root filesystem, which is
+      // not necessarily where the database volumes are.
+      label: disk.names.length === 1 && disk.names[0] === '/' ? CM.diskRootFilesystem : disk.names.join(', '),
+    } : null;
+    return [
+      {
+        id: 'now', time: CM.nowLabel,
+        memory: currentStatus?.memTotal ? { 
+          display: `${formatBytes(currentStatus.memUsed)} / ${formatBytes(currentStatus.memTotal)} (${(currentStatus.memory || 0).toFixed(1)}%)`, 
+          pct: currentStatus.memory 
+        } : null,
+        disk: diskCell,
+        cpu: cpuCell(currentStatus?.cpu),
+        tps: formatRate(currentStatus?.tps),
+        qps: formatRate(currentStatus?.qps),
+      },
+      {
+        id: 'avg', time: CM.fiveMinAvg,
+        memory: currentStatus?.memTotal ? { 
+          display: `${formatBytes(currentStatus.memTotal * (averages?.memory || 0) / 100)} / ${formatBytes(currentStatus.memTotal)} (${(averages?.memory || 0).toFixed(1)}%)`,
+          pct: averages?.memory || 0 
+        } : { display: `${(averages?.memory || 0).toFixed(1)}%`, pct: averages?.memory || 0 },
+        disk: null,
+        cpu: cpuCell(averages?.cpu),
+        tps: formatRate(averages?.tps),
+        qps: formatRate(averages?.qps),
+      }
+    ];
+  }, [CM, currentStatus, averages, disk]);
 
   const columns = useMemo(() => [
     { header: CM.period, accessor: 'time', render: (val) => <span className="font-semibold text-14 text-slate-600 dark:text-slate-300">{val}</span> },
@@ -108,7 +122,17 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
         </div>
       ) : <span className="text-slate-300">—</span>
     },
-    { header: CM.disk, accessor: 'disk', render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    {
+      header: CM.disk,
+      accessor: 'disk',
+      render: (val) => val ? (
+        <div className="min-w-[150px]" title={val.label}>
+          <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val.display}</span>
+          <MetricBar pct={val.pct} />
+          <span className="block mt-1 text-12 text-slate-400 font-sans">{val.label}</span>
+        </div>
+      ) : <span className="text-slate-300">—</span>
+    },
     {
       header: CM.cpu,
       accessor: 'cpu',
@@ -124,7 +148,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
       accessor: 'tps', 
       render: (val) => {
         const v = parseFloat(val);
-        const color = v === 0 ? 'text-slate-400 dark:text-slate-600' : v > 500 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400';
+        const color = !(v > 0) ? 'text-slate-400 dark:text-slate-600' : v > 500 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400';
         return <span className={`font-mono text-14 ${color} font-semibold transition-colors duration-500`}>{val}</span>;
       }
     },
@@ -133,7 +157,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
       accessor: 'qps', 
       render: (val) => {
         const v = parseFloat(val);
-        const color = v === 0 ? 'text-slate-400 dark:text-slate-600' : v > 1000 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400';
+        const color = !(v > 0) ? 'text-slate-400 dark:text-slate-600' : v > 1000 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400';
         return <span className={`font-mono text-14 ${color} font-semibold transition-colors duration-500`}>{val}</span>;
       }
     },

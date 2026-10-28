@@ -281,7 +281,7 @@ export default function SetAutomationVolumeModal() {
           </div>
           <div className="min-w-0 flex-1">
             <Typography variant="caption" className="text-11 font-semibold text-amber-600/70 uppercase tracking-widest block">{CM.targetDatabase}</Typography>
-            <Typography variant="p" className="text-14 font-bold text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
+            <Typography title={selectedDatabase} variant="p" className="text-14 font-bold text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <div className={`w-1.5 h-1.5 rounded-full ${combinedEnabled ? 'bg-amber-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
