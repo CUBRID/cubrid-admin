@@ -88,14 +88,14 @@ export default function HaPeerMergeModal() {
                   <Icon name={HA_ROLE_ICON[peer.haRole] || 'dns'} size="17px" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-14 font-bold text-slate-800 dark:text-slate-200 truncate">
+                  <p title={peer.alias} className="text-14 font-bold text-slate-800 dark:text-slate-200 truncate">
                     {peer.alias}
                   </p>
-                  <p className="text-12 text-slate-400 dark:text-slate-500 truncate">
+                  <p title={`${peer.address}:${peer.port}${peer.haRole ? ` · ${HA_ROLE_LABEL[peer.haRole] || peer.haRole}` : ''}`} className="text-12 text-slate-400 dark:text-slate-500 truncate">
                     {peer.address}:{peer.port}
                     {peer.haRole ? ` · ${HA_ROLE_LABEL[peer.haRole] || peer.haRole}` : ''}
                   </p>
-                  <p className="text-12 text-slate-400 truncate">
+                  <p title={CM.fromGroupLabel(peer.fromGroupName)} className="text-12 text-slate-400 truncate">
                     {CM.fromGroupLabel(peer.fromGroupName)}
                   </p>
                 </div>

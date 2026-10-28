@@ -234,7 +234,7 @@ const Component = function ServiceDashboard() {
               </div>
               <div className="flex-1 flex items-center justify-between min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-15 font-black text-slate-800 dark:text-slate-100 truncate">
+                  <span title={row.groupName} className="text-15 font-black text-slate-800 dark:text-slate-100 truncate">
                     {row.groupName}
                   </span>
                   <span className="inline-flex items-center px-1.5 h-[14px] rounded-[3px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-11 font-black tracking-wide leading-none shrink-0 text-slate-500 dark:text-slate-400 uppercase">
@@ -285,7 +285,7 @@ const Component = function ServiceDashboard() {
 
             {/* Name + role */}
             <div className="flex-1 flex items-center justify-between min-w-0">
-              <span className={`text-15 font-medium leading-tight truncate ${
+              <span title={displayName} className={`text-15 font-medium leading-tight truncate ${
                 isConnected ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'
               }`}>{displayName}</span>
               {roleConfig && (

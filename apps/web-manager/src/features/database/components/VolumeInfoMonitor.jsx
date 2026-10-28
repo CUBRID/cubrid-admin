@@ -137,7 +137,7 @@ export default function VolumeInfoMonitor({ tabId }) {
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60" />
-              <Typography variant="label" className="text-12 text-slate-400 font-mono leading-none truncate max-w-sm">
+              <Typography title={volume.location} variant="label" className="text-12 text-slate-400 font-mono leading-none truncate max-w-sm">
                 {volume.location}
               </Typography>
             </div>

@@ -194,10 +194,10 @@ export default function SuggestedHaNodesModal() {
                   />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-14 font-bold text-slate-800 dark:text-slate-200 truncate">
+                  <p title={node.hostname || node.ip} className="text-14 font-bold text-slate-800 dark:text-slate-200 truncate">
                     {node.hostname || node.ip}
                   </p>
-                  <p className="text-12 text-slate-400 dark:text-slate-500 truncate">
+                  <p title={`${node.ip && node.hostname ? `${node.ip} · ` : ''}${HA_ROLE_LABEL[node.state] || node.state}`} className="text-12 text-slate-400 dark:text-slate-500 truncate">
                     {node.ip && node.hostname ? `${node.ip} · ` : ''}{HA_ROLE_LABEL[node.state] || node.state}
                   </p>
                 </div>

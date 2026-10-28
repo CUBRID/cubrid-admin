@@ -131,7 +131,7 @@ export default function CMSUserManagementModal() {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <Typography variant="p" className="font-black text-15 text-slate-800 dark:text-white truncate">
+            <Typography title={username} variant="p" className="font-black text-15 text-slate-800 dark:text-white truncate">
               {username}
             </Typography>
             {isAdmin && (
