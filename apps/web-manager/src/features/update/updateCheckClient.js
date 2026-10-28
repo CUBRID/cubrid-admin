@@ -64,9 +64,3 @@ export async function openUpdateUrl(url) {
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
-
-/** Desktop only: the native Help menu's "Check for Updates" item. */
-export function subscribeToOpenUpdateCheck(callback) {
-  const bridge = getDesktopBridge();
-  return bridge?.onOpenUpdateCheck ? bridge.onOpenUpdateCheck(callback) : () => {};
-}

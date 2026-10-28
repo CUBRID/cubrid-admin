@@ -48,8 +48,8 @@ async function loadRoute(window: BrowserWindow, routePath: string): Promise<void
 }
 
 async function bootstrap(): Promise<void> {
-  registerDesktopIpcHandlers();
   installApplicationMenu();
+  registerDesktopIpcHandlers();
 
   console.log('[desktop] install dir (beside .app / exe):', getPortableAppRoot());
   console.log('[desktop] settings file:', getDesktopSettingsPath());

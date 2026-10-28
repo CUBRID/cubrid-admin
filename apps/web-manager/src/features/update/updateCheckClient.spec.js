@@ -9,7 +9,6 @@ import {
   fetchUpdateStatus,
   isTrustedDownloadUrl,
   openUpdateUrl,
-  subscribeToOpenUpdateCheck,
 } from './updateCheckClient';
 
 const status = {
@@ -75,10 +74,9 @@ describe('updateCheckClient', () => {
       expect(open).not.toHaveBeenCalled();
     });
 
-    it('has no startup notice, dismissal, or native menu subscription', async () => {
+    it('has no startup notice or dismissal', async () => {
       await expect(fetchStartupUpdateNotice()).resolves.toBeNull();
       await expect(dismissUpdate('1.0.0')).resolves.toBeUndefined();
-      expect(typeof subscribeToOpenUpdateCheck(() => undefined)).toBe('function');
     });
   });
 
@@ -91,7 +89,6 @@ describe('updateCheckClient', () => {
         getStartupUpdateNotice: vi.fn().mockResolvedValue(status),
         dismissUpdate: vi.fn().mockResolvedValue({ ok: true }),
         openUpdateDownload: vi.fn().mockResolvedValue(true),
-        onOpenUpdateCheck: vi.fn().mockReturnValue(() => 'unsubscribed'),
       };
       window.desktopBridge = bridge;
     });
@@ -115,14 +112,10 @@ describe('updateCheckClient', () => {
       expect(bridge.openUpdateDownload).not.toHaveBeenCalled();
     });
 
-    it('forwards startup notice, dismissal, and menu subscription', async () => {
-      const callback = () => undefined;
-
+    it('forwards startup notice and dismissal', async () => {
       await expect(fetchStartupUpdateNotice()).resolves.toEqual(status);
       await dismissUpdate('0.1.0-alpha.2');
       expect(bridge.dismissUpdate).toHaveBeenCalledWith('0.1.0-alpha.2');
-      expect(subscribeToOpenUpdateCheck(callback)()).toBe('unsubscribed');
-      expect(bridge.onOpenUpdateCheck).toHaveBeenCalledWith(callback);
     });
   });
 });

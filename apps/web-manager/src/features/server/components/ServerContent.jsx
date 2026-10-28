@@ -24,6 +24,9 @@ import { useCM } from '../../../constants/useCM';
 // See the HA-abnormal fast-poll effect below.
 const HA_ABNORMAL_POLL_INTERVAL_MS = 1000;
 const HA_ABNORMAL_POLL_MAX_MS = 30000;
+// Stable fallback so a selector without reconnectQueue (older persisted
+// state, a test mock) doesn't crash the .includes() check below.
+const EMPTY_RECONNECT_QUEUE = [];
 
 const Component = function ServerContent({ hostUid }) {
   const CM = useCM();
@@ -34,8 +37,11 @@ const Component = function ServerContent({ hostUid }) {
   // multiple simultaneously-open dashboard tabs for different hosts, and the
   // navigator, don't clobber each other's displayed data.
   const [databases, setDatabases] = useState([]);
+  // 'loading' until the first database-list fetch settles, then 'loaded' or
+  // 'error', so sections built on it don't read an empty list as "no databases".
+  const [dbListStatus, setDbListStatus] = useState('loading');
   const [activeDatabases, setActiveDatabases] = useState([]);
-  const { hosts, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, authorizedHosts, haInfo, reconnectQueue = EMPTY_RECONNECT_QUEUE } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
 
@@ -56,7 +62,14 @@ const Component = function ServerContent({ hostUid }) {
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => async (dispatch) => {
       // 1. First fetch database status to get the current active list
-      const dbInfo = await dispatch(fetchDatabaseStartInfo(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
+      let dbInfo;
+      try {
+        dbInfo = await dispatch(fetchDatabaseStartInfo(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
+      } catch (err) {
+        setDbListStatus('error');
+        throw err;
+      }
+      setDbListStatus('loaded');
       const newDatabases = dbInfo.dblist?.dbs || [];
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
@@ -122,8 +135,15 @@ const Component = function ServerContent({ hostUid }) {
   // full fetchMonitoringData tick every second would cost.
   const isHaAbnormal = isHA && isHaClusterMissingMaster(haHeartbeat);
   const haAbnormalSinceRef = useRef(null);
+  // authorizedHosts still lists a host pending reconnect (preserved so the
+  // reconnect is seamless, see apiClient.js), so it alone can't tell us to
+  // pause here — check reconnectQueue too, otherwise this fast 1s poll
+  // just spins against a host already known to need reconnection. A boolean
+  // (not the array) in the deps, so another host joining/leaving the queue
+  // doesn't tear down and restart this host's timer.
+  const isPendingReconnect = reconnectQueue.includes(hostUid);
   useEffect(() => {
-    if (!isTabActive || !isHaAbnormal || !authorizedHosts.includes(hostUid)) {
+    if (!isTabActive || !isHaAbnormal || !authorizedHosts.includes(hostUid) || isPendingReconnect) {
       haAbnormalSinceRef.current = null;
       return;
     }
@@ -139,7 +159,7 @@ const Component = function ServerContent({ hostUid }) {
     }, HA_ABNORMAL_POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [isTabActive, isHaAbnormal, authorizedHosts, hostUid, dispatch]);
+  }, [isTabActive, isHaAbnormal, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
 
   const haDbs = React.useMemo(() => {
     const names = new Set();
@@ -201,8 +221,8 @@ const Component = function ServerContent({ hostUid }) {
     <div data-testid="server-dashboard" className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden">
 
       {/* ── Header ── */}
-      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <div className="flex items-center gap-3">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 min-w-fit sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="dns" size="sm" weight={300} className="text-amber-500" />
           </div>
@@ -224,8 +244,8 @@ const Component = function ServerContent({ hostUid }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-14">
-          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 text-14 ml-auto shrink-0">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mr-2 whitespace-nowrap">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -255,10 +275,10 @@ const Component = function ServerContent({ hostUid }) {
       {/* ── Scrollable Body ── */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <HaClusterStatusSection hostUid={hostUid} />
-        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} />
+        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
         <Brokers hostUid={hostUid} isSection={true} />
         <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} />
-        <DatabaseListSection dbListDisplay={dbListDisplay} />
+        <DatabaseListSection dbListDisplay={dbListDisplay} dbListStatus={dbListStatus} />
         <SystemInfo hostUid={hostUid} />
       </div>
     </div>

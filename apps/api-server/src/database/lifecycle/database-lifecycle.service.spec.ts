@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DatabaseLifecycleService } from './database-lifecycle.service';
+import { DatabaseLifecycleService, HA_BULK_ADMIN_ONLY_REASON } from './database-lifecycle.service';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { UserRepositoryService } from '@repository';
@@ -86,6 +86,7 @@ describe('DatabaseLifecycleService', () => {
       loginDatabase: jest.fn().mockResolvedValue({}),
       getUserInfo: jest.fn().mockResolvedValue({ user: [] }),
       ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      isDbLoginActive: jest.fn().mockReturnValue(false),
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -196,13 +197,14 @@ describe('DatabaseLifecycleService', () => {
     };
 
     const mockStartInfoClientResponse = {
-      activelist: { active: [{ dbname: 'testdb' }] },
+      activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
       dblist: {
         dbs: [
           {
             dbname: 'testdb',
             dbdir: '/path/to/testdb',
             isProfileExists: false,
+            isLoggedIn: false,
           },
         ],
       },
@@ -220,13 +222,14 @@ describe('DatabaseLifecycleService', () => {
       const result = await service.startInfo(mockUserId, mockHostUid);
 
       expect(result).toEqual({
-        activelist: { active: [{ dbname: 'testdb' }] },
+        activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
         dblist: {
           dbs: [
             {
               dbname: 'testdb',
               dbdir: '/path/to/testdb',
               isProfileExists: true,
+              isLoggedIn: false,
             },
           ],
         },
@@ -474,7 +477,8 @@ describe('DatabaseLifecycleService', () => {
       status: 'success',
     };
 
-    it('starts every HA database with a single bulk ha_start, regardless of the passed dbnames', async () => {
+    it('admin account: starts every HA database with a single bulk ha_start, regardless of the passed dbnames', async () => {
+      hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'Admin' });
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
       cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'ha_start' });
 
@@ -492,6 +496,29 @@ describe('DatabaseLifecycleService', () => {
       expect(haStartCalls).toHaveLength(1);
       expect(haStartCalls[0][1]).not.toHaveProperty('dbname');
       expect(result.succeeded).toEqual(expect.arrayContaining(['hadb1', 'hadb2']));
+      // Host-wide ha_start starts every HA db anyway, so no per-db login gate.
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb1');
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb2');
+      expect(result.skipped).toEqual([]);
+    });
+
+    it('non-admin account: never runs ha_start, reports every HA database skipped, non-HA unaffected', async () => {
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
+      cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'startdb' });
+
+      const result = await service.startAllDatabases(mockUserId, mockHostUid, ['nonhadb']);
+
+      const haStartCalls = cmsClient.postAuthenticated.mock.calls.filter(
+        ([, body]) => body.task === 'ha_start'
+      );
+      expect(haStartCalls).toHaveLength(0);
+      expect(result.skipped).toEqual([
+        { dbname: 'hadb1', reason: HA_BULK_ADMIN_ONLY_REASON },
+        { dbname: 'hadb2', reason: HA_BULK_ADMIN_ONLY_REASON },
+      ]);
+      expect(result.succeeded).toEqual(['nonhadb']);
+      expect(result.failed).toEqual([]);
+      expect(databaseUserService.ensureDbLogin).toHaveBeenCalledWith(mockUserId, mockHostUid, 'nonhadb');
     });
 
     it('starts non-HA databases individually with startdb', async () => {
@@ -508,7 +535,8 @@ describe('DatabaseLifecycleService', () => {
       expect(result.failed).toEqual([]);
     });
 
-    it('isolates a failed bulk ha_start from non-HA database results', async () => {
+    it('admin account: reports every HA database failed when the bulk ha_start fails, isolated from non-HA results', async () => {
+      hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'admin' });
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
       cmsClient.postAuthenticated.mockImplementation((_url, body) => {
         if (body.task === 'ha_start') {
@@ -532,7 +560,8 @@ describe('DatabaseLifecycleService', () => {
       status: 'success',
     };
 
-    it('stops every HA database with a single bulk ha_stop, regardless of the passed dbnames', async () => {
+    it('admin account: stops every HA database with a single bulk ha_stop, regardless of the passed dbnames', async () => {
+      hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'admin' });
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
       cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'ha_stop' });
 
@@ -544,6 +573,23 @@ describe('DatabaseLifecycleService', () => {
       expect(haStopCalls).toHaveLength(1);
       expect(haStopCalls[0][1]).not.toHaveProperty('dbname');
       expect(result.succeeded).toEqual(expect.arrayContaining(['hadb1', 'hadb2']));
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb1');
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb2');
+    });
+
+    it('non-admin account: never runs ha_stop, reports every HA database skipped, non-HA unaffected', async () => {
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
+      cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'stopdb' });
+
+      const result = await service.stopAllDatabases(mockUserId, mockHostUid, ['nonhadb']);
+
+      const haStopCalls = cmsClient.postAuthenticated.mock.calls.filter(
+        ([, body]) => body.task === 'ha_stop'
+      );
+      expect(haStopCalls).toHaveLength(0);
+      expect(result.skipped.map((s) => s.dbname)).toEqual(['hadb1', 'hadb2']);
+      expect(result.succeeded).toEqual(['nonhadb']);
+      expect(result.failed).toEqual([]);
     });
 
     it('skips the bulk ha_stop call entirely when the host has no HA databases', async () => {
@@ -593,6 +639,19 @@ describe('DatabaseLifecycleService', () => {
         expect.objectContaining({ task: 'stopdb' }),
         expect.anything()
       );
+    });
+
+    it('reports HA databases skipped for a non-admin account as not stopped, instead of dropping them', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'hadb1' }] },
+      } as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual([{ name: 'hadb1', error: HA_BULK_ADMIN_ONLY_REASON }]);
     });
 
     it('reports a stopAllDatabases failure as its own entry instead of throwing, keeping any broker failure', async () => {
@@ -1312,6 +1371,46 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('createDatabaseInternal extra volume validation message', () => {
+    it('surfaces the specific volume cause instead of the generic volume message', async () => {
+      (fileService as any).checkfileInternal = jest.fn().mockResolvedValue({
+        existfile: undefined,
+      });
+
+      const request = {
+        dbname: 'testdb',
+        numpage: '32768',
+        pagesize: '16384',
+        logsize: '512',
+        logpagesize: '16384',
+        genvolpath: '/path/to/testdb',
+        logvolpath: '/path/to/testdb',
+        charset: 'en_US.utf8',
+        overwrite_config_file: 'YES' as const,
+        exvol: [
+          {
+            testdb_data_x001: {
+              type: 'data',
+              size: 0,
+              pagesize: 16384,
+              volpath: '/path/to/testdb',
+            },
+          },
+        ],
+      };
+
+      const error = await service
+        .createDatabaseInternal(mockUserId, mockHostUid, request as any)
+        .catch((e) => e);
+
+      expect(error).toMatchObject({ code: DatabaseErrorCode.CONVERT_VOLUME_FAILED });
+      expect(error.toProblemDetails().detail).toBe(
+        'Volume "testdb_data_x001": Volume size and pagesize must be positive numbers'
+      );
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createDatabaseInternal no longer owns HA mode config', () => {
     const mockRequest = {
       dbname: 'testdb',
@@ -1531,6 +1630,35 @@ describe('DatabaseLifecycleService', () => {
       await expect(
         service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
       ).rejects.toThrow(HostError);
+    });
+
+    it('clears the stored login profile + dbmt-login cache for the deleted dbname, so a later database reusing this name cannot inherit it', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(
+        mockUserId,
+        mockHostUid,
+        mockDbname
+      );
+    });
+
+    it('does not fail the delete if clearing the stored login profile afterward throws', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
+      databaseUserService.deleteDbProfile.mockRejectedValueOnce(new Error('disk write failed'));
+      const request: DeleteDatabaseRequest = {
+        delbackup: 'y',
+      };
+
+      const result = await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+
+      expect(result).toEqual(mockStartInfoAfterDelete);
     });
 
     it('should throw DatabaseError when host is HA (deletedb blocked)', async () => {

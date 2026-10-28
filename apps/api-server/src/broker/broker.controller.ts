@@ -1,14 +1,15 @@
-import { Body, Controller, Get, Logger, Param, Post, Put, Request } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Logger, Param, Post, Put, Request } from '@nestjs/common';
 import {
   AddDbmtUserClientResponse,
   BrokerListClientResponse,
   BrokerStartStopClientResponse,
+  GetBrokerStatusBulkClientResponse,
   GetBrokerStatusClientResponse,
   StartAllBrokersClientResponse,
   StopAllBrokersClientResponse,
   UpdateDbmtUserClientResponse,
 } from '@api-interfaces';
-import { AddDbmtUserDto, UpdateDbmtUserDto } from '@type/index';
+import { AddDbmtUserDto, GetBrokerStatusBulkDto, UpdateDbmtUserDto } from '@type/index';
 import { BrokerService } from './broker.service';
 
 /**
@@ -207,6 +208,31 @@ export class BrokerController {
     this.logger.log(`Restarting broker: ${bname} on host: ${hostUid}`);
     const response: boolean = await this.brokerService.restartBroker(userId, hostUid, bname);
     return response;
+  }
+
+  /**
+   * Get the status of several brokers in one request (CMS task:
+   * getbrokerstatus with a comma-separated bname, chunked server-side).
+   * POST so hundreds of names fit in the body instead of the URL.
+   *
+   * @route POST /:hostUid/broker/status/bulk
+   * @param req - Request object containing user information
+   * @param hostUid - Host unique identifier from path parameter
+   * @param body - bnames: broker names to query
+   * @returns GetBrokerStatusBulkClientResponse { brokers: [{ bname, time, asinfo?, jobinfo? }] }
+   * @example
+   * // POST /host-uid/broker/status/bulk
+   * // Body: { "bnames": ["query_editor", "broker1"] }
+   */
+  @Post('status/bulk')
+  @HttpCode(200)
+  async getBrokerStatusBulk(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: GetBrokerStatusBulkDto
+  ): Promise<GetBrokerStatusBulkClientResponse> {
+    const userId = req.user.sub;
+    return await this.brokerService.getBrokerStatusBulk(userId, hostUid, body.bnames);
   }
 
   /**

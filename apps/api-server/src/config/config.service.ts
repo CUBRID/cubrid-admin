@@ -16,7 +16,7 @@ import { getLogPath } from '../util/resolve-log-path';
 export class ConfigService {
   public port = '8080';
   public secret_key!: string;
-  public environment = 'development';
+  public environment = 'production';
   public allowedOrigins: string[] = [];
   public cmsRejectUnauthorized!: boolean;
   public cmsForwardEnabled!: boolean;
@@ -43,11 +43,15 @@ export class ConfigService {
     }
     this.secret_key = deriveSecretKeyHexFromSeedSalt(seed, salt);
 
+    // Fails closed: an unset ENVIRONMENT must behave as production (no
+    // wildcard CORS, see setAllowedOrigins below) rather than silently
+    // opening up because someone forgot to set it when running a packaged
+    // build outside the official deploy scripts.
     this.environment = (
       args.ENVIRONMENT ??
       args.ENV ??
       process.env.ENVIRONMENT ??
-      'development'
+      'production'
     ).toLowerCase();
     console.log('[ConfigService] Environment:', this.environment);
 

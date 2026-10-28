@@ -137,7 +137,7 @@ export default function DeleteHostModal() {
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shadow-lg shadow-rose-500/5 mb-4">
             <Icon name="warning" size="lg" weight={300} className="text-rose-500" />
           </div>
-          <Typography variant="p" className="text-15 text-slate-900 dark:text-white font-bold leading-relaxed">
+          <Typography variant="p" className="text-15 text-slate-900 dark:text-white font-bold leading-relaxed break-words max-w-full">
             {CM.deleteHostConfirmTitle(hostToDeleteAlias || hostToDeleteUid)}
           </Typography>
           <Typography variant="caption" className="text-slate-400 dark:text-slate-500 font-medium mt-1 max-w-[300px] leading-relaxed">

@@ -1,8 +1,6 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
-import { openTab, showStatusModal } from '../layoutSlice';
-import { openAddHostModal, openEditHostModal, openServerVersionModal, openImportExportModal, openCmsUserManagementModal } from '../../host/hostSlice';
-import { openUpdateCheck, setAboutCubrid } from '../appBarSlice';
+import { MENU_ACTIONS, getMenuActionEnabled, runMenuAction } from '../menuActions';
 import { useCM } from '../../../constants/useCM';
 
 export default function HeaderMenu() {
@@ -10,13 +8,11 @@ export default function HeaderMenu() {
   const dispatch = useDispatch();
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
 
-  const handleExport = () => {
-    dispatch(openImportExportModal('export'));
-  };
-
-  const handleImport = () => {
-    dispatch(openImportExportModal('import'));
-  };
+  const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts });
+  const action = (id) => ({
+    disabled: !enabled[id],
+    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid }),
+  });
 
   const MenuLabel = ({ children }) => (
     <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 tracking-wide group-hover:text-amber-500 transition-colors">
@@ -30,23 +26,22 @@ export default function HeaderMenu() {
         <MenuItem
           icon="add_box"
           label={CM.addHost}
-          onClick={() => dispatch(openAddHostModal())}
+          {...action(MENU_ACTIONS.addHost)}
         />
         <MenuItem
           icon="edit"
           label={CM.editHost}
-          disabled={!selectedHostUid}
-          onClick={() => dispatch(openEditHostModal(selectedHostUid))}
+          {...action(MENU_ACTIONS.editHost)}
         />
         <MenuItem
           icon="file_upload"
           label={CM.exportHost}
-          onClick={handleExport}
+          {...action(MENU_ACTIONS.exportHosts)}
         />
         <MenuItem
           icon="file_download"
           label={CM.importHost}
-          onClick={handleImport}
+          {...action(MENU_ACTIONS.importHosts)}
         />
       </DropdownMenu>
 
@@ -54,48 +49,29 @@ export default function HeaderMenu() {
         <MenuItem
           icon="space_dashboard"
           label={CM.serviceDashboard}
-          onClick={() => dispatch(openTab('service_dashboard'))}
+          {...action(MENU_ACTIONS.serviceDashboard)}
         />
         <MenuDivider />
         <MenuItem
           icon="supervisor_account"
           label={CM.cmsAccountManagement}
-          disabled={!selectedHostUid || !authorizedHosts.includes(selectedHostUid)}
-          onClick={() => dispatch(openCmsUserManagementModal())}
+          {...action(MENU_ACTIONS.cmsAccountManagement)}
         />
         <SubMenu icon="settings" label={CM.configParam} width="w-56" gap="ml-3">
           <MenuItem
             icon="edit_document"
             label={CM.editCubridConfig}
-            onClick={() => {
-              if (selectedHostUid) {
-                dispatch(openTab(`edit_config:${selectedHostUid}:cubridconf`));
-              } else {
-                dispatch(showStatusModal({ type: 'info', title: CM.noHostSelected, message: CM.selectHostHint }));
-              }
-            }}
+            {...action(MENU_ACTIONS.editCubridConfig)}
           />
           <MenuItem
             icon="edit_note"
             label={CM.editBrokerConfig}
-            onClick={() => {
-              if (selectedHostUid) {
-                dispatch(openTab(`broker_config:${selectedHostUid}`));
-              } else {
-                dispatch(showStatusModal({ type: 'info', title: CM.noHostSelected, message: CM.selectHostHint }));
-              }
-            }}
+            {...action(MENU_ACTIONS.editBrokerConfig)}
           />
           <MenuItem
             icon="manage_accounts"
             label={CM.editCmConfig}
-            onClick={() => {
-              if (selectedHostUid) {
-                dispatch(openTab(`edit_config:${selectedHostUid}:cmconf`));
-              } else {
-                dispatch(showStatusModal({ type: 'info', title: CM.noHostSelected, message: CM.selectHostHint }));
-              }
-            }}
+            {...action(MENU_ACTIONS.editCmConfig)}
           />
         </SubMenu>
       </DropdownMenu>
@@ -125,18 +101,17 @@ export default function HeaderMenu() {
         <MenuItem
           icon="update"
           label={CM.checkForUpdates}
-          onClick={() => dispatch(openUpdateCheck({ source: 'manual' }))}
+          {...action(MENU_ACTIONS.checkForUpdates)}
         />
         <MenuItem
           icon="info"
           label={CM.serverVersion}
-          disabled={!selectedHostUid}
-          onClick={() => dispatch(openServerVersionModal(selectedHostUid))}
+          {...action(MENU_ACTIONS.serverVersion)}
         />
         <MenuItem
           icon="admin_panel_settings"
           label={CM.aboutCubridAdmin}
-          onClick={() => dispatch(setAboutCubrid(true))}
+          {...action(MENU_ACTIONS.about)}
         />
       </DropdownMenu>
     </nav>

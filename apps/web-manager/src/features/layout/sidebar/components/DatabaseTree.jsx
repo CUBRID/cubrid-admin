@@ -26,8 +26,14 @@ import { useCM } from '../../../../constants/useCM';
 // per selectedHostUid (see Sidebar.jsx's `key={selectedHostUid}`), so a
 // factory bound to that host keeps a stale fetch for a DIFFERENT host (one
 // the user has since switched away from) from ever being read here.
-const selectDatabases = (hostUid) => (state) => state.database.databasesByHost[hostUid] || [];
-const selectActiveDatabases = (hostUid) => (state) => state.database.activeDatabasesByHost[hostUid] || [];
+//
+// Reads the navigator* mirror, not databasesByHost/activeDatabasesByHost
+// directly — those are also kept live by MonitoringProvider's dashboard
+// interval poll, and this tree should only move on an explicit user
+// action (initial load, manual refresh, or an operation's own refetch),
+// not every poll tick. See databaseCoreSlice.js's parseDbResponse.
+const selectDatabases = (hostUid) => (state) => state.database.navigatorDatabasesByHost[hostUid] || [];
+const selectActiveDatabases = (hostUid) => (state) => state.database.navigatorActiveDatabasesByHost[hostUid] || [];
 const selectLoading = (hostUid) => (state) => state.database.loadingByHost[hostUid] || false;
 const selectSelection = (state) => ({
   selectedDatabase: state.database.selectedDatabase,
@@ -239,7 +245,7 @@ export default function DatabaseTree({
         const haDbState = isDbInHa ? HA_DB_STATE_CONFIG[haDbServerModes.get(db.dbname)] : null;
         const label = (
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate">{db.dbname}</span>
+            <span title={db.dbname} className="truncate">{db.dbname}</span>
             {isDbInHa && (
               <span className="px-0.5 py-[0.5px] text-9 font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
                 HA

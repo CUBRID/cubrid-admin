@@ -524,6 +524,47 @@ describe('DatabaseUserService', () => {
     });
   });
 
+  describe('isDbLoginActive', () => {
+    const successResponse = {
+      __EXEC_TIME: '10 ms',
+      note: 'none',
+      status: 'success',
+      task: 'dbmtuserlogin',
+    };
+
+    afterEach(() => jest.useRealTimers());
+
+    it('is false with no cached login', () => {
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+    });
+
+    it('is true after a login under the same host token, without calling CMS', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+      cmsClient.postAuthenticated.mockClear();
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(true);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('is false once the host token changed (CMS conlist is per login connection)', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', 'a-rotated-token')).toBe(false);
+    });
+
+    it('is false once the cached login is over 2h old', async () => {
+      jest.useFakeTimers({ now: new Date('2026-10-26T00:00:00Z') });
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+
+      jest.setSystemTime(new Date('2026-10-26T02:00:01Z'));
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+    });
+  });
+
   describe('deleteDbProfile', () => {
     it('removes the stored profile', async () => {
       await service.deleteDbProfile(mockUserId, mockHostUid, 'demodb');

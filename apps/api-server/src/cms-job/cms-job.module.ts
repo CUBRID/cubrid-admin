@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseManagementService } from '@database/management/database-management.service';
 import { DatabaseLifecycleService } from '@database/lifecycle/database-lifecycle.service';
 import { DatabaseBackupService } from '@database/backup/database-backup.service';
-import { DatabaseUserService } from '@database/user/database-user.service';
+import { DatabaseUserModule } from '@database/user/database-user.module';
 import { DatabaseConfigService } from '@database/config/database-config.service';
 import { DatabaseInfoModule } from '@database/info/database-info.module';
 import { HostModule } from '@host';
@@ -35,6 +35,10 @@ import { CmsJobStore } from './cms-job.store';
     // (see its class doc — duplicated here to avoid a real cycle with
     // DatabaseModule) and now needs CmsJobLockService itself.
     CmsJobLockModule,
+    // The shared DatabaseUserService, not a private copy: its dbLoginCache
+    // must be the same one start-info reads for each database's isLoggedIn,
+    // or a login made inside a job (e.g. createdb) would read as logged out.
+    DatabaseUserModule,
   ],
   controllers: [CmsJobController],
   providers: [
@@ -43,7 +47,6 @@ import { CmsJobStore } from './cms-job.store';
     DatabaseManagementService,
     DatabaseLifecycleService,
     DatabaseBackupService,
-    DatabaseUserService,
     DatabaseConfigService,
   ],
   exports: [CmsJobService],
