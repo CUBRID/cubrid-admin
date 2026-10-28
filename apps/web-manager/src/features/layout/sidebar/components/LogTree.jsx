@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerList, fetchBrokerLogs, fetchAdminLogs, fetchCMSLogs, fetchDatabaseLogs } from '../../../broker/brokerSlice';
+import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs, fetchAdminLogs, fetchCMSLogs, fetchDatabaseLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
+import { brokerApi } from '../../../broker/brokerApi';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Typography } from '../../../../components/ds/foundation/Typography';
@@ -19,6 +20,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   const databases = navigatorDatabasesByHost[hostUid] || [];
   const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
   const brokers = navigatorBrokersByHost[hostUid] || [];
+  const [accessBrokers, setAccessBrokers] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessError, setAccessError] = useState(null);
 
@@ -27,21 +29,24 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
     setAccessLoading(true);
     setAccessError(null);
     try {
-      // The Log tab can be opened before the Broker tab has loaded its list.
-      const currentBrokers = await dispatch(fetchBrokerList({ hostUid, skipStatusEnrichment: true })).unwrap();
+      // Discover independently: the monitoring thunk replaces dashboard data
+      // and would erase QPS/TPS when fetching a list without status enrichment.
+      const response = await brokerApi.getBrokerList(hostUid);
+      const currentBrokers = response.result || (Array.isArray(response) ? response[0]?.broker : []) || [];
+      setAccessBrokers(currentBrokers);
       // Re-read metadata on expansion: an earlier empty list may predate the
       // first access-log file (for example after enabling ACCESS_LOG).
       await Promise.all(currentBrokers.map(broker =>
         dispatch(fetchBrokerLogs({ hostUid, brokerName: broker.name })).unwrap()
       ));
     } catch (error) {
-      setAccessError(String(error));
+      setAccessError(error?.response?.data?.message || error?.message || String(error));
     } finally {
       setAccessLoading(false);
     }
   };
 
-  const accessLogs = [...new Map(brokers.flatMap(broker => logsByBroker[broker.name] || [])
+  const accessLogs = [...new Map((accessBrokers ?? brokers).flatMap(broker => logsByBroker[broker.name] || [])
     .filter(log => log.type === 'access' || /\.access(?:\.|$)/i.test(log.path))
     .map(log => [log.path, log])).values()];
 

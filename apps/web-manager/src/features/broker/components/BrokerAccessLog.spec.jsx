@@ -41,6 +41,7 @@ beforeEach(() => {
     preloadedState: { broker: {
       ...brokerReducer(undefined, { type: 'init' }),
       navigatorBrokersByHost: { h1: [{ name: 'query_editor' }] },
+      brokersByHost: { h1: [{ name: 'query_editor', qps: 12.5, tps: 4.25 }] },
       logsByBroker: { unrelated: [{ path: '/other/other.access', type: 'access' }] },
     } },
     middleware: getDefault => getDefault().concat(() => next => action => {
@@ -93,6 +94,22 @@ describe('broker access logs', () => {
     });
     expect(brokerApi.getBrokerList).toHaveBeenCalledWith('h1');
     expect(node.textContent).toContain('query_editor.access');
+  });
+
+  it.each([false, true])('preserves dashboard rates and monitoring request tracking when discovery fails: %s', async fails => {
+    const before = store.getState().broker;
+    const liveBrokers = before.brokersByHost.h1;
+    if (fails) brokerApi.getBrokerList.mockRejectedValue(new Error('CMS unavailable'));
+    brokerApi.getBrokerLogs.mockResolvedValue({ logfileinfo: [{ logfile: files }] });
+    await render(<LogTree hostUid="h1" />);
+    const node = container.querySelector('#broker-access-logs');
+    await act(async () => { node.open = true; node.dispatchEvent(new Event('toggle')); });
+    const after = store.getState().broker;
+    expect(after.brokersByHost.h1).toBe(liveBrokers);
+    expect(after.latestBrokerListRequestIdByHost).toEqual(before.latestBrokerListRequestIdByHost);
+    expect(after.brokerListFailedByHost).toEqual(before.brokerListFailedByHost);
+    if (fails) expect(node.querySelector('[role="alert"]')).not.toBeNull();
+    else expect(node.textContent).toContain('query_editor.access');
   });
 
   it('reloads cached empty metadata when access files are created later', async () => {
