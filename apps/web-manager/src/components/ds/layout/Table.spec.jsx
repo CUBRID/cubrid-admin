@@ -78,6 +78,26 @@ describe('Table maxRows', () => {
     expect(scrollArea().style.maxHeight).toBe(`${ROW_PX * 16}px`);
   });
 
+  it('keeps the header in view while the page scrolls the table out of view', async () => {
+    container.style.overflowY = 'auto';
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({ top: 100 });
+    await render({ data: rows(40), maxRows: 15 });
+    const box = scrollArea();
+    const thead = container.querySelector('thead');
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: ROW_PX * 16 });
+    const scrollTo = (top) => act(() => {
+      vi.spyOn(box, 'getBoundingClientRect').mockReturnValue({ top });
+      container.dispatchEvent(new Event('scroll'));
+    });
+
+    await scrollTo(40);
+    expect(thead.style.top).toBe('60px');
+    await scrollTo(-1000);
+    expect(thead.style.top).toBe(`${ROW_PX * 15}px`);
+    await scrollTo(120);
+    expect(thead.style.top).toBe('');
+  });
+
   it('does nothing without maxRows', async () => {
     await render({ data: rows(40) });
     expect(scrollArea()).toBeNull();

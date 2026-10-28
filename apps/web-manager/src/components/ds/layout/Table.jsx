@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Skeleton } from './Skeleton';
 import { EmptyState } from './EmptyState';
@@ -98,6 +98,33 @@ export const Table = ({
     return () => observer.disconnect();
   }, [overLimit, maxRows, sortedData, columns]);
 
+  // The page scrolls too. When the top of the table goes under the top edge of
+  // the page's scroll area, push the sticky header down by that much so it stays
+  // over the visible rows, but never past the bottom of the table box.
+  const followPage = Boolean(maxRows);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!followPage || !el) return undefined;
+    let page = el.parentElement;
+    while (page && !/auto|scroll/.test(getComputedStyle(page).overflowY)) page = page.parentElement;
+    const update = () => {
+      const head = el.querySelector('thead');
+      if (!head) return;
+      const edge = page ? page.getBoundingClientRect().top + page.clientTop : 0;
+      const hidden = Math.max(edge - el.getBoundingClientRect().top, 0);
+      const offset = Math.min(hidden, Math.max(el.clientHeight - head.offsetHeight, 0));
+      head.style.top = offset ? `${offset}px` : '';
+    };
+    update();
+    const target = page ?? window;
+    target.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      target.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [followPage, sortedData, capHeight, userHeight]);
+
   const scrolling = capHeight != null || userHeight != null;
   const minHeight = capHeight != null ? Math.min(capHeight, 120) : 120;
   const resizeBy = (delta) => {
@@ -155,7 +182,7 @@ export const Table = ({
 
         {/* ── Header ── */}
         {headersVisible && (
-          <thead className={stickyHeader || scrolling ? 'sticky top-0 z-10 bg-white dark:bg-background-dark' : undefined}>
+          <thead className={stickyHeader || scrolling || followPage ? 'sticky top-0 z-10 bg-white dark:bg-background-dark' : undefined}>
             <tr className="bg-slate-100 dark:bg-white/3 border-b border-slate-200 dark:border-white/[0.07]">
             {columns.map((col, idx) => {
                 const canSort = col.sortable ?? sortable;
