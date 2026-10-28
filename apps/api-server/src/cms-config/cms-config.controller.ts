@@ -232,7 +232,7 @@ export class CmsConfigController {
       `Setting system parameters for host: ${hostUid}, confname: ${body.confname}`,
       'CmsConfigController'
     );
-    const response = await this.cmsConfigService.setSystemParam(
+    const response = await this.cmsConfigService.setSystemParamFromRawEdit(
       userId,
       hostUid,
       body.confname,
@@ -261,6 +261,7 @@ export class CmsConfigController {
       `Setting broker param for host: ${hostUid}`,
       'CmsConfigController'
     );
-    return await this.cmsConfigService.setBrokerParam(userId, hostUid, body.confdata);
+    return await this.cmsConfigService.setBrokerParamFromRawEdit(userId, hostUid, body.confdata);
   }
+
 }

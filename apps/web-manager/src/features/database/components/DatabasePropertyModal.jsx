@@ -3,6 +3,8 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { fetchHostEnv } from '../../host/hostSlice';
+import { openTab } from '../../layout/layoutSlice';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -13,223 +15,219 @@ import { TabGroup } from '../../../components/ds/layout/TabGroup';
 import { Table } from '../../../components/ds/layout/Table';
 import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
-import { Radio } from '../../../components/ds/forms/Radio';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
-import { useActionState } from '../../../infrastructure/hooks/useActionState';
-import { useToast } from '../../../infrastructure/hooks/useToast';
-import { getModifiedKeys } from '../databasePropertyUtils';
-import {
-  ModalStatusLoading,
-  ModalStatusError
-} from '../../../components/ds/feedback/ActionStatus';
+import { parseConfText, parseEngineSizeToBytes, validateEffectiveParams } from '@api-interfaces';
 
-// View states
-const VIEW_FORM    = 'form';
-const VIEW_LOADING = 'loading';
-const VIEW_SUCCESS = 'success';
-const VIEW_ERROR   = 'error';
-
-const ADVANCED_PARAMS_SCHEMA = [
-  { key: 'access_ip_control', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'access_ip_control_file', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'async_commit', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'backup_volume_max_size_bytes', type: 'int', default: '-1', scope: 'SERVER' },
-  { key: 'block_ddl_statement', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'block_nowhere_statement', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'call_stack_dump_activation_list', type: 'string', default: '', scope: 'BOTH' },
-  { key: 'call_stack_dump_deactivation_list', type: 'string', default: '', scope: 'BOTH' },
-  { key: 'call_stack_dump_on_error', type: 'bool(yes|no)', default: 'no', scope: 'BOTH' },
-  { key: 'compactdb_page_reclaim_only', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'compat_numeric_division_scale', type: 'bool(yes|no)', default: 'no', scope: 'BOTH' },
-  { key: 'compat_primary_key', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'csql_history_num', type: 'int', default: '50', scope: 'CLIENT' },
-  { key: 'db_hosts', type: 'string', default: '', scope: 'CLIENT' },
-  { key: 'dont_reuse_heap_file', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'error_log', type: 'string', default: 'cubrid.err', scope: 'BOTH' },
-  { key: 'file_lock', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
-  { key: 'garbage_collection', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'group_commit_interval_in_msecs', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'ha_mode', type: 'string(on|off|yes|no|replica)', default: 'off', scope: 'SERVER' },
-  { key: 'ha_node_list', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'ha_port_id', type: 'int', default: '', scope: 'SERVER' },
-  { key: 'hostvar_late_binding', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'index_scan_in_oid_order', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'index_scan_oid_buffer_pages', type: 'int', default: '4', scope: 'SERVER' },
-  { key: 'index_scan_oid_buffer_size', type: 'int', default: '65536', scope: 'SERVER' },
-  { key: 'insert_execution_mode', type: 'int', default: '1', scope: 'CLIENT' },
-  { key: 'intl_mbs_support', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'lock_timeout_message_type', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'max_plan_cache_entries', type: 'int', default: '1000', scope: 'BOTH' },
-  { key: 'max_query_cache_entries', type: 'int', default: '-1', scope: 'SERVER' },
-  { key: 'media_failure_support', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
-  { key: 'oracle_style_empty_string', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'oracle_style_outerjoin', type: 'bool(yes|no)', default: 'no', scope: 'CLIENT' },
-  { key: 'pthread_scope_process', type: 'bool(yes|no)', default: 'yes', scope: 'SERVER' },
-  { key: 'query_cache_mode', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'query_cache_size_in_pages', type: 'int', default: '-1', scope: 'SERVER' },
-  { key: 'single_byte_compare', type: 'bool(yes|no)', default: 'no', scope: 'SERVER' },
-  { key: 'temp_file_max_size_in_pages', type: 'int', default: '-1', scope: 'SERVER' },
-  { key: 'temp_file_memory_size_in_pages', type: 'int', default: '4', scope: 'SERVER' },
-  { key: 'temp_volume_path', type: 'string', default: '', scope: 'SERVER' },
-  { key: 'uj_job_timeout', type: 'int', default: '0', scope: 'SERVER' },
-  { key: 'unfill_factor', type: 'float', default: '0.1', scope: 'SERVER' },
-  { key: 'volume_extension_path', type: 'string', default: '', scope: 'SERVER' }
-];
-
-// General params table schema — excludes the six buffer pages/size keys,
-// which get their own CUBRID Admin-style radio (pages vs size) groups above
-// the table instead of flat rows (see BUFFER_GROUPS / BufferChoiceGroup).
-const GENERAL_PARAMS_SCHEMA = {
-  lock_escalation: '100000',
-  lock_timeout_in_secs: '-1',
-  deadlock_detection_interval_in_secs: '1',
-  checkpoint_interval_in_mins: '1000',
-  isolation_level: 'TRAN_REP_CLASS_UNCOMMIT_INSTANCE',
-  cubrid_port_id: '1523',
-  max_clients: '100',
-  auto_restart_server: 'no',
-  replication: 'no'
+// The param list itself — which keys exist, their category/type/guard/
+// default — no longer lives here. It comes from the connected host's
+// `getEnv` response (`paramSchemas.database`, cached in Redux's
+// `hostEnvs`), already resolved for that host's actual engine version by
+// the server (see libs/api-interfaces/src/param-schema and
+// CmsConfigService.getEnv). This modal only keeps the purely
+// presentational pieces a version-aware server schema has no business
+// owning: i18n label text and the buffer radio groups' fixed 4-pair UI
+// layout (see `BUFFER_GROUP_LABELS` and `useBufferGroups` below).
+const BUFFER_GROUP_LABELS = {
+  data: CM => CM.dataBufferAllocLabel,
+  sort: CM => CM.sortBufferAllocLabel,
+  log: CM => CM.logBufferAllocLabel,
+  indexScanOid: CM => CM.indexScanOidBufferAllocLabel,
 };
+const DEFAULT_BUFFER_MODE = { data: 'size', sort: 'size', log: 'size', indexScanOid: 'size' };
 
-const GENERAL_PARAMS_KEYS = Object.keys(GENERAL_PARAMS_SCHEMA);
-
-// Mirrors CA's PageSizeChoiceComposite: one radio picks pages, the other
-// picks size (+ unit); default page-count/size defaults from dbBaseParameters.
-const BUFFER_GROUPS = [
-  { type: 'data', groupLabel: CM => CM.dataBufferAllocLabel, pagesKey: 'data_buffer_pages', sizeKey: 'data_buffer_size', pagesDefault: '25000', sizeDefault: '512' },
-  { type: 'sort', groupLabel: CM => CM.sortBufferAllocLabel, pagesKey: 'sort_buffer_pages', sizeKey: 'sort_buffer_size', pagesDefault: '16', sizeDefault: '2' },
-  { type: 'log',  groupLabel: CM => CM.logBufferAllocLabel,  pagesKey: 'log_buffer_pages',  sizeKey: 'log_buffer_size',  pagesDefault: '50', sizeDefault: '4' },
-];
-const BUFFER_UNITS = ['KB', 'MB', 'GB', 'TB'];
-const BUFFER_UNIT_LETTER = { KB: 'K', MB: 'M', GB: 'G', TB: 'T' };
-const DEFAULT_BUFFER_MODE = { data: 'size', sort: 'size', log: 'size' };
-const DEFAULT_BUFFER_UNIT = { data: 'MB', sort: 'MB', log: 'MB' };
-
-function getEffectiveParams(params, bufferMode, bufferUnit) {
-  const effectiveParams = { ...params };
-  BUFFER_GROUPS.forEach(({ type, pagesKey, sizeKey }) => {
-    if (bufferMode[type] === 'pages') {
-      delete effectiveParams[sizeKey];
+/**
+ * Groups the schema's `buffer`-category entries (pages/size pairs) by
+ * `bufferGroup.pairKey`, attaching each pair's display-label function —
+ * `groupLabel` is called as `group.groupLabel(CM)` at render time, same
+ * as the old hardcoded BUFFER_GROUPS did.
+ */
+function buildBufferGroups(databaseParamSchema) {
+  const byPairKey = {};
+  for (const entry of databaseParamSchema) {
+    if (entry.category !== 'buffer' || !entry.bufferGroup) continue;
+    const { pairKey, role } = entry.bufferGroup;
+    byPairKey[pairKey] ??= { type: pairKey, groupLabel: BUFFER_GROUP_LABELS[pairKey] ?? (() => pairKey) };
+    if (role === 'pages') {
+      byPairKey[pairKey].pagesKey = entry.key;
+      byPairKey[pairKey].pagesDefault = entry.default;
+      byPairKey[pairKey].pagesDeprecated = entry.deprecated ?? null;
     } else {
-      const value = params[sizeKey];
-      if (value) effectiveParams[sizeKey] = `${value}${BUFFER_UNIT_LETTER[bufferUnit[type]]}`;
-      delete effectiveParams[pagesKey];
+      byPairKey[pairKey].sizeKey = entry.key;
+      byPairKey[pairKey].sizeDefault = entry.default;
     }
+  }
+  return Object.values(byPairKey);
+}
+
+// Values stay exactly as written in cubrid.conf ("512M", "536870912",
+// "0.5G" ...) — the engine reads a unitless size as bytes, so re-attaching
+// a display unit would change what's validated.
+function getEffectiveParams(params, bufferMode, bufferGroups) {
+  const effectiveParams = { ...params };
+  bufferGroups.forEach(({ type, pagesKey, sizeKey }) => {
+    delete effectiveParams[bufferMode[type] === 'pages' ? sizeKey : pagesKey];
   });
   return effectiveParams;
 }
 
-const ISOLATION_LEVEL_OPTIONS = ['TRAN_SERIALIZABLE', 'TRAN_REP_CLASS_REP_INSTANCE', 'TRAN_REP_CLASS_COMMIT_INSTANCE', 'TRAN_REP_CLASS_UNCOMMIT_INSTANCE', 'TRAN_COMMIT_CLASS_COMMIT_INSTANCE', 'TRAN_COMMIT_CLASS_UNCOMMIT_INSTANCE'];
-const YES_NO_OPTIONS = ['yes', 'no'];
-
-// Keys whose value is picked from a fixed option list rather than free text.
-const SELECT_OPTIONS_BY_KEY = {
-  isolation_level: ISOLATION_LEVEL_OPTIONS,
-  auto_restart_server: YES_NO_OPTIONS,
-  replication: YES_NO_OPTIONS,
-};
+// A blank field falls back to the schema default as its displayed value, so
+// it's trivially "the default". Otherwise compare the way the engine reads
+// the value — "512M" and "536870912" are the same size, "ON" and "yes" the
+// same boolean. Whether it's actually written anywhere is a separate
+// question (see `isImplicit` at each call site).
+const TRUE_WORDS = ['yes', 'y', '1', 'true', 'on'];
+function canonicalValue(guard, value) {
+  const text = String(value ?? '').trim();
+  if (guard?.kind === 'size') return parseEngineSizeToBytes(text) ?? text;
+  if (guard?.kind === 'time') {
+    // util_time_string_to_msec units; no unit = ms, negatives as-is.
+    const m = /^(-?\d+(?:\.\d+)?)\s*(ms|msec|s|sec|min|h)?$/i.exec(text);
+    if (!m) return text;
+    const n = Number(m[1]);
+    return n < 0 ? Math.trunc(n) : Math.trunc(n * ({ ms: 1, msec: 1, s: 1000, sec: 1000, min: 60000, h: 3600000 }[(m[2] ?? 'ms').toLowerCase()]));
+  }
+  if (guard?.kind === 'boolean') return TRUE_WORDS.includes(text.toLowerCase());
+  if (guard?.kind === 'enum') return text.toLowerCase();
+  return text;
+}
+function isEffectivelyDefault(guard, value, defaultValue) {
+  const effective = (value !== undefined && value !== '') ? value : defaultValue;
+  return canonicalValue(guard, effective) === canonicalValue(guard, defaultValue);
+}
 
 /* ─── ParamNameCell — shared "modified" dot + mono key label ─── */
-function ParamNameCell({ label, isModified }) {
+// Two independent, non-exclusive badges — conflating them used to make one
+// badge mean both "this value happens to equal the default" and "nothing is
+// actually written here", which are different facts that can disagree (an
+// explicit conf line can coincidentally match the default; an implicit field
+// is always shown as the default, but not every default-valued field is
+// implicit).
+function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge, deprecatedBadge, deprecatedHint }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 min-w-0">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
       <span className={`text-13 font-mono font-medium truncate ${isModified ? 'text-amber-500' : 'text-slate-600 dark:text-slate-400'}`}>
         {label}
       </span>
+      {/* The effective value (explicit or not) matches the schema's own
+          default — purely informational, says nothing about whether it's
+          actually written in the conf file. */}
+      {isDefaultValue && (
+        <span
+          title={defaultValueHint}
+          className="shrink-0 text-10 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500"
+        >
+          {defaultValueBadge}
+        </span>
+      )}
+      {/* Not in the conf file at all — the value shown is purely the
+          engine's own built-in default, not something anyone set. Hidden
+          the moment the field holds a real value (typed or loaded). Dashed
+          border signals "not actually there", distinct from the solid
+          Default badge above. */}
+      {deprecatedBadge && (
+        <DeprecatedBadge label={deprecatedBadge} hint={deprecatedHint} />
+      )}
+      {isImplicit && (
+        <span
+          title={implicitHint}
+          className="shrink-0 text-10 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-dashed border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500"
+        >
+          {implicitBadge}
+        </span>
+      )}
     </div>
   );
 }
 
-/* ─── ParamValueCell — select for fixed-option keys, else free-text input ─── */
-function ParamValueCell({ paramKey, value, defaultValue, onChange, disabled, disabledHint }) {
-  const options = SELECT_OPTIONS_BY_KEY[paramKey];
-  if (options) {
-    return (
-      <div className="w-full max-w-none" title={disabled ? disabledHint : undefined}>
-        <Select
-          size="sm"
-          value={value ?? defaultValue}
-          options={options.map(o => ({ value: o, label: o }))}
-          onChange={e => onChange(e.target.value)}
-          className="w-full max-w-none"
-          disabled={disabled}
-        />
-      </div>
-    );
-  }
+function DeprecatedBadge({ label, hint }) {
   return (
-    <Input
-      size="sm"
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value)}
-      placeholder={defaultValue || '—'}
-      className="w-full max-w-none"
-    />
+    <span
+      data-testid="param-deprecated-badge"
+      title={hint}
+      className="shrink-0 text-10 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400"
+    >
+      {label}
+    </span>
   );
 }
 
-/* ─── BufferChoiceGroup — CA's PageSizeChoiceComposite: radio(pages)/radio(size+unit) ─── */
-function BufferChoiceGroup({ group, mode, unit, pagesValue, sizeValue, onModeChange, onUnitChange, onPagesChange, onSizeChange }) {
+/* ─── ParamValueCell — read-only display; editing happens in the text editor ─── */
+// Values here are never writable from this table — see the Server
+// Parameter panel's banner/button that opens the raw text editor instead.
+// `error` is still surfaced (a currently-stored value that fails its own
+// guard) purely as a passive diagnostic, same rule engine as the text
+// editor's own save-time check.
+function ParamValueCell({ value, defaultValue, error, hint }) {
+  const hasValue = value !== undefined && value !== '';
+  return (
+    <div className="w-full max-w-none" title={error}>
+      <span className={`text-13 font-mono ${hasValue ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500 italic'}`}>
+        {hasValue ? value : (defaultValue || '—')}
+      </span>
+      {error && <p className="text-11 text-rose-500 mt-0.5">{error}</p>}
+      {!error && hint && <p className="text-11 text-slate-400 dark:text-slate-500 italic mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+/* ─── BufferChoiceGroup — read-only display of the active pages/size choice ─── */
+// Mirrors CA's PageSizeChoiceComposite layout (pages row, size+unit row),
+// but neither row is editable here — only whichever side is currently
+// active in cubrid.conf is shown with a real value; the inactive side
+// stays dimmed. Editing happens in the text editor.
+function BufferChoiceGroup({ group, mode, pagesValue, sizeValue, pagesError, sizeError }) {
   const CM = useCM();
   return (
     <div className="rounded-xl border border-slate-100 dark:border-white/6 p-4">
       <p className="text-11 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">{group.groupLabel(CM)}</p>
       <div className="space-y-2.5">
-        <div className="flex items-center gap-3">
-          <Radio
-            name={`${group.type}-buffer-mode`}
-            value="pages"
-            checked={mode === 'pages'}
-            onChange={() => onModeChange('pages')}
-            label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.pagesKey}</span>}
-          />
-          <Input
-            size="sm"
-            type="number"
-            value={pagesValue ?? ''}
-            onChange={e => onPagesChange(e.target.value)}
-            placeholder={group.pagesDefault}
-            disabled={mode !== 'pages'}
-            className={`flex-1 max-w-[200px] ${mode !== 'pages' ? 'opacity-40' : ''}`}
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <Radio
-            name={`${group.type}-buffer-mode`}
-            value="size"
-            checked={mode === 'size'}
-            onChange={() => onModeChange('size')}
-            label={<span className="text-12 font-mono w-[140px] shrink-0 inline-block">{group.sizeKey}</span>}
-          />
-          <Input
-            size="sm"
-            type="number"
-            value={sizeValue ?? ''}
-            onChange={e => onSizeChange(e.target.value)}
-            placeholder={group.sizeDefault}
-            disabled={mode !== 'size'}
-            className={`flex-1 ${mode !== 'size' ? 'opacity-40' : ''}`}
-          />
-          {/* FormField (shared by Input/Select) always includes a base
-              "w-full" class, which beats a plain width class passed in from
-              here — constrain via an outer sized wrapper instead, same as
-              the rest of this modal's other Select usages. */}
-          <div className={`w-[92px] shrink-0 ${mode !== 'size' ? 'opacity-40' : ''}`}>
-            <Select
-              size="sm"
-              value={unit}
-              options={BUFFER_UNITS.map(u => ({ value: u, label: u }))}
-              onChange={e => onUnitChange(e.target.value)}
-              disabled={mode !== 'size'}
-              className="w-full"
-            />
+        {/* The pages side is deprecated by the engine (replaced by the size
+            key), so it is only shown when cubrid.conf actually sets it. */}
+        {(mode === 'pages' || !group.pagesDeprecated) && (
+          <div className={`flex items-center gap-3 ${mode !== 'pages' ? 'opacity-40' : ''}`} title={mode === 'pages' ? pagesError : undefined}>
+            <span className="text-12 font-mono w-[220px] shrink-0 truncate flex items-center gap-1.5" title={group.pagesKey}>
+              <span className="truncate">{group.pagesKey}</span>
+              {group.pagesDeprecated && (
+                <DeprecatedBadge label={CM.deprecatedParamBadge} hint={CM.deprecatedParamHint(group.pagesDeprecated.replacedBy)} />
+              )}
+            </span>
+            <span className={`text-13 font-mono flex-1 ${pagesError && mode === 'pages' ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
+              {mode === 'pages' ? (pagesValue || group.pagesDefault || '—') : '—'}
+            </span>
           </div>
+        )}
+        <div className={`flex items-center gap-3 ${mode !== 'size' ? 'opacity-40' : ''}`} title={mode === 'size' ? sizeError : undefined}>
+          <span className="text-12 font-mono w-[220px] shrink-0 truncate" title={group.sizeKey}>{group.sizeKey}</span>
+          <span className={`text-13 font-mono flex-1 ${sizeError && mode === 'size' ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
+            {mode === 'size' ? (sizeValue || group.sizeDefault || '—') : '—'}
+          </span>
         </div>
       </div>
     </div>
+  );
+}
+
+/* ─── ReadOnlyTableNotice — points the user at the raw text editor for edits ─── */
+function ReadOnlyTableNotice({ onOpenEditor, CM }) {
+  return (
+    <InfoBanner variant="info">
+      <div className="flex items-center justify-between gap-4">
+        <span>{CM.paramTableReadOnlyNotice}</span>
+        <Button
+          data-testid="database-property-open-editor-inline-btn"
+          variant="secondary"
+          size="sm"
+          icon="edit"
+          onClick={onOpenEditor}
+          className="shrink-0"
+        >
+          {CM.openInTextEditorBtn}
+        </Button>
+      </div>
+    </InfoBanner>
   );
 }
 
@@ -240,49 +238,54 @@ export default function DatabasePropertyModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
-  const toast = useToast();
-  const {
-    error: actionError,
-    startAction,
-    endError,
-    resetAction,
-    isLoading,
-    isError
-  } = useActionState();
+  // Resolved per this host's actual engine version by the server (see
+  // CmsConfigService.getEnv) — populated into `hostEnvs` by whatever
+  // already triggers `fetchHostEnv` on host activation/login. The
+  // defensive dispatch below only matters if this modal somehow opens
+  // before that's happened.
+  const hostEnv = useSelector((state) => state.host.hostEnvs[selectedHostUid]);
+  const databaseParamSchema = useMemo(() => hostEnv?.paramSchemas?.database ?? [], [hostEnv]);
+  const bufferGroups = useMemo(() => buildBufferGroups(databaseParamSchema), [databaseParamSchema]);
 
   const [activeTab, setActiveTab] = useState('General');
   const [activeSidebar, setActiveSidebar] = useState('Server Parameter');
   const [fetching, setFetching] = useState(false);
+  // Read-only display state — loaded once per (host, database) and never
+  // mutated by the user; actual edits happen only in the raw text editor
+  // (see the "Edit in Text Editor" banner below).
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
-  const [initialParams, setInitialParams] = useState({});
   const [params, setParams] = useState({});
-  const [rawLines, setRawLines] = useState([]);
-  const [initialBufferMode, setInitialBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
-  const [initialBufferUnit, setInitialBufferUnit] = useState(DEFAULT_BUFFER_UNIT);
-  const [bufferUnit, setBufferUnit] = useState(DEFAULT_BUFFER_UNIT);
   const [brokers, setBrokers] = useState([]);
   const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
+  // Connection Information is the only editable part of this modal, so it is
+  // also the only thing the "discard changes?" confirmation guards. The
+  // Server Parameter tables are read-only and have nothing to discard.
+  const [connectionDirty, setConnectionDirty] = useState(false);
+  const updateConnectionInfo = patch => {
+    setConnectionInfo(prev => ({ ...prev, ...patch }));
+    setConnectionDirty(true);
+  };
   // Tracks which (host, database) the Server Parameter config has already
-  // been fetched for, so switching to Connection Information and back
-  // doesn't re-fetch and clobber unsaved edits — see the fetch effect below.
+  // been fetched for, so switching tabs and back doesn't needlessly re-fetch.
   const fetchedConfigKeyRef = useRef(null);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
       setShowDiscardConfirm(false);
-      resetAction();
-      setInitialParams({});
+      setConnectionDirty(false);
       setParams({});
-      setInitialBufferMode(DEFAULT_BUFFER_MODE);
       setBufferMode(DEFAULT_BUFFER_MODE);
-      setInitialBufferUnit(DEFAULT_BUFFER_UNIT);
-      setBufferUnit(DEFAULT_BUFFER_UNIT);
-      setRawLines([]);
       setActiveSidebar('Server Parameter');
       fetchedConfigKeyRef.current = null;
     }
-  }, [isDatabasePropertyModalOpen, selectedDatabase, resetAction]);
+  }, [isDatabasePropertyModalOpen, selectedDatabase]);
+
+  useEffect(() => {
+    if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && !hostEnv) {
+      dispatch(fetchHostEnv(selectedHostUid));
+    }
+  }, [isDatabasePropertyModalOpen, selectedHostUid, isAuthorized, hostEnv, dispatch]);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized) {
@@ -306,6 +309,7 @@ export default function DatabasePropertyModal() {
     if (
       isDatabasePropertyModalOpen && selectedHostUid && isAuthorized &&
       activeSidebar !== 'Connection Information' &&
+      databaseParamSchema.length > 0 &&
       fetchedConfigKeyRef.current !== configKey
     ) {
       fetchedConfigKeyRef.current = configKey;
@@ -314,50 +318,36 @@ export default function DatabasePropertyModal() {
         try {
           const response = await hostApi.getHostConfig(selectedHostUid, 'cubridconf');
           const lines = response?.conflist?.[0]?.confdata || [];
-          setRawLines(lines);
-          let currentSection = '';
           const newParams = {};
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#')) continue;
-            if (trimmed.startsWith('[') && trimmed.endsWith(']')) { currentSection = trimmed.slice(1, -1).toLowerCase(); continue; }
-            const target = selectedDatabase ? `@${selectedDatabase.toLowerCase()}` : 'common';
-            if (currentSection === 'common' || (selectedDatabase && currentSection === target)) {
-              const [key, ...valueParts] = trimmed.split('=');
-              const k = key?.trim();
-              const v = valueParts.join('=').trim();
-              if (k) newParams[k] = v;
-            }
+          // Deliberately NOT merged: engine inheritance between [common]
+          // and [@dbname] is real (unlike broker.conf's [broker]), but
+          // showing a [common] value as if it were explicitly present in
+          // this db's own section is still a UI fiction here - it made a
+          // hidden commonOnly field (e.g. cubrid_port_id, filtered out of
+          // the individual-properties view entirely) carry a non-blank
+          // value anyway, which validateEffectiveParams then correctly
+          // flagged as "set in the wrong section" even though nothing was
+          // ever actually written there. [common] and [@dbname] are
+          // edited as fully separate targets, same as
+          // BrokerPropertyModal's identical [broker]/[%name] split.
+          // The engine matches [@dbname] case-sensitively against the
+          // database name (prm_section_cmp with ignore_case=false), so
+          // [@DemoDB] and [@demodb] are different sections to it.
+          const target = selectedDatabase ? `@${selectedDatabase}` : 'common';
+          // Same engine-faithful parser the raw editor validates with, so
+          // this view and the editor never disagree about what a line says.
+          const section = parseConfText(lines).sections.find(s => s.name === target);
+          for (const { key, value } of section?.entries ?? []) {
+            newParams[key.toLowerCase()] = value;
           }
 
           // Mirrors CA's PageSizeChoiceComposite#initBtnState: prefer the
-          // pages key if it has a value, else fall back to size (+ unit
-          // parsed off the trailing letter, e.g. "512M" -> 512 / MB).
-          const nextMode = {}, nextUnit = {};
-          BUFFER_GROUPS.forEach(({ type, pagesKey, sizeKey }) => {
-            const pagesVal = newParams[pagesKey];
-            const sizeVal = newParams[sizeKey];
-            if (pagesVal && pagesVal.trim() !== '') {
-              nextMode[type] = 'pages';
-            } else if (sizeVal && sizeVal.trim() !== '') {
-              nextMode[type] = 'size';
-              const letter = sizeVal.slice(-1).toUpperCase();
-              const unitEntry = Object.entries(BUFFER_UNIT_LETTER).find(([, l]) => l === letter);
-              if (unitEntry) {
-                nextUnit[type] = unitEntry[0];
-                newParams[sizeKey] = sizeVal.slice(0, -1);
-              }
-            } else {
-              nextMode[type] = 'size';
-            }
+          // pages key if it has a value, else fall back to size.
+          const nextMode = {};
+          bufferGroups.forEach(({ type, pagesKey }) => {
+            nextMode[type] = newParams[pagesKey]?.trim() ? 'pages' : 'size';
           });
-          const loadedBufferMode = { ...DEFAULT_BUFFER_MODE, ...nextMode };
-          const loadedBufferUnit = { ...DEFAULT_BUFFER_UNIT, ...nextUnit };
-          setInitialBufferMode(loadedBufferMode);
-          setBufferMode(loadedBufferMode);
-          setInitialBufferUnit(loadedBufferUnit);
-          setBufferUnit(loadedBufferUnit);
-          setInitialParams({ ...newParams });
+          setBufferMode({ ...DEFAULT_BUFFER_MODE, ...nextMode });
           setParams({ ...newParams });
         } catch (err) {
           console.error('Failed to fetch config:', err);
@@ -377,103 +367,59 @@ export default function DatabasePropertyModal() {
       };
       fetchParams();
     }
-  }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized]);
+  }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized, databaseParamSchema, bufferGroups]);
 
-  const handleApply = async () => {
-    if (activeSidebar === 'Connection Information') { handleClose(); return; }
-    startAction();
-    try {
-      // Reconcile the pages/size radio choice per buffer group: only the
-      // selected side is written, and the size value gets its unit letter
-      // suffixed back on (e.g. 512 + MB -> "512M"), matching cubrid.conf.
-      const saveParams = getEffectiveParams(params, bufferMode, bufferUnit);
-
-      const sectionName = selectedDatabase ? `[@${selectedDatabase.toLowerCase()}]` : '[common]';
-      const lines = [...rawLines];
-      let sectionStartIndex = -1, sectionEndIndex = -1;
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim().toLowerCase() === sectionName.toLowerCase()) {
-          sectionStartIndex = i;
-          for (let j = i + 1; j < lines.length; j++) {
-            if (lines[j].trim().startsWith('[') && lines[j].trim().endsWith(']')) { sectionEndIndex = j; break; }
-          }
-          if (sectionEndIndex === -1) sectionEndIndex = lines.length;
-          break;
-        }
-      }
-      if (sectionStartIndex === -1) { lines.push(''); lines.push(sectionName); sectionStartIndex = lines.length - 1; sectionEndIndex = lines.length; }
-      const sectionLines = lines.slice(sectionStartIndex + 1, sectionEndIndex);
-      const otherBefore = lines.slice(0, sectionStartIndex + 1);
-      const otherAfter = lines.slice(sectionEndIndex);
-      const updatedSection = [...sectionLines];
-      Object.entries(saveParams).forEach(([key, value]) => {
-        let found = false;
-        for (let i = 0; i < updatedSection.length; i++) {
-          const trimmed = updatedSection[i].trim();
-          if (trimmed.startsWith('#')) continue;
-          if (trimmed.split('=')[0].trim().toLowerCase() === key.toLowerCase()) { updatedSection[i] = `${key}=${value}`; found = true; break; }
-        }
-        if (!found) updatedSection.push(`${key}=${value}`);
-      });
-      const nextLines = [...otherBefore, ...updatedSection, ...otherAfter];
-      await hostApi.setHostConfig(selectedHostUid, { confname: 'cubridconf', confdata: nextLines });
-      // Stay on the form view showing the values that were just applied,
-      // instead of closing the modal — the user asked to keep editing
-      // without having to reopen it. `params`/`bufferMode`/`bufferUnit`
-      // already hold exactly what `saveParams` persisted (`saveParams` is
-      // only their effective on-disk form — pages vs size reconciled, with
-      // the unit letter suffixed back on for cubrid.conf — so reusing it
-      // here would bake that suffix into the raw, unsuffixed state the
-      // buffer inputs expect). Promoting the current values to the
-      // "initial" baseline is what correctly zeroes out modifiedCount and
-      // makes a subsequent "Reset to original" target these just-applied
-      // values instead of the pre-session ones.
-      setRawLines(nextLines);
-      setInitialParams({ ...params });
-      setInitialBufferMode({ ...bufferMode });
-      setInitialBufferUnit({ ...bufferUnit });
-      resetAction();
-      toast.success(CM.configurationAppliedMsg(selectedDatabase));
-    } catch (err) {
-      endError(typeof err === 'string' ? err : (err.message || CM.configPatchRejectedMsg));
-    }
+  // Connection Information is the only thing this modal can still write —
+  // it's local-only (how this web manager instance reaches the broker),
+  // never a cubrid.conf value, so it was never part of the read-only pivot.
+  // Server Parameter values are edited exclusively through the raw text
+  // editor now (see handleOpenTextEditor below).
+  const handleApply = () => {
+    closeModal();
   };
 
-  useEffect(() => {
-    if (!isDatabasePropertyModalOpen) {
-      setTimeout(() => resetAction(), 300);
-    }
-  }, [isDatabasePropertyModalOpen, resetAction]);
+  const handleOpenTextEditor = () => {
+    dispatch(openTab(`edit_config:${selectedHostUid}:cubridconf`));
+    dispatch(closeDatabasePropertyModal());
+  };
 
   const closeModal = () => {
     setShowDiscardConfirm(false);
+    setConnectionDirty(false);
     dispatch(closeDatabasePropertyModal());
-    setInitialParams({});
     setParams({});
-    setInitialBufferMode(DEFAULT_BUFFER_MODE);
     setBufferMode(DEFAULT_BUFFER_MODE);
-    setInitialBufferUnit(DEFAULT_BUFFER_UNIT);
-    setBufferUnit(DEFAULT_BUFFER_UNIT);
   };
 
-  const handleReset = () => {
-    setParams({ ...initialParams });
-    setBufferMode({ ...initialBufferMode });
-    setBufferUnit({ ...initialBufferUnit });
-  };
-
-  const modifiedKeys = useMemo(
-    () => getModifiedKeys(
-      getEffectiveParams(initialParams, initialBufferMode, initialBufferUnit),
-      getEffectiveParams(params, bufferMode, bufferUnit)
-    ),
-    [initialParams, params, initialBufferMode, bufferMode, initialBufferUnit, bufferUnit]
+  // Keyed lookup of each schema entry's own default — isImplicit/isDefaultValue
+  // both need to compare the loaded value against it.
+  const schemaDefaults = useMemo(
+    () => Object.fromEntries(databaseParamSchema.map(e => [e.key, e.default])),
+    [databaseParamSchema]
   );
-  const modifiedKeySet = useMemo(() => new Set(modifiedKeys), [modifiedKeys]);
-  const modifiedCount = modifiedKeys.length;
+
+  // One shared rule engine (required/guard/section-placement/cross-field) —
+  // see validateEffectiveParams's own doc comment. Nothing here is editable
+  // any more, so this only ever flags a value that's ALREADY stored in
+  // cubrid.conf and fails its own guard — a passive diagnostic pointing at
+  // the text editor, not something Apply can block.
+  const reconciledParams = useMemo(
+    () => getEffectiveParams(params, bufferMode, bufferGroups),
+    [params, bufferMode, bufferGroups]
+  );
+  const guardErrors = useMemo(
+    () => validateEffectiveParams(databaseParamSchema, reconciledParams, {
+      isCommonSection: !selectedDatabase,
+      commonSectionLabel: 'common',
+      emptyValueIsError: true,
+      sysprmKeywords: true,
+    }),
+    [databaseParamSchema, reconciledParams, selectedDatabase]
+  );
+  const guardErrorCount = Object.keys(guardErrors).length;
 
   const handleClose = () => {
-    if (modifiedCount > 0) {
+    if (connectionDirty) {
       setShowDiscardConfirm(true);
       return;
     }
@@ -482,26 +428,68 @@ export default function DatabasePropertyModal() {
 
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
-  // server should fail over via HA, not blindly self-restart in place), so
-  // leaving this editable here would show a "yes" that the running server
-  // silently ignores. Mirrors the off-keyword set system_parameter.c itself
-  // recognizes for ha_mode (only "on" would previously have been detected).
-  const HA_MODE_OFF_KEYWORDS = ['off', 'no', 'n', '0', 'false'];
+  // server should fail over via HA, not blindly self-restart in place).
+  // Mirrors the off-keyword set system_parameter.c itself recognizes for
+  // ha_mode (only "on" would previously have been detected).
+  const HA_MODE_OFF_KEYWORDS = ['off', 'no', 'n', '0', 'false', 'default'];
   const isHaEnabled = params.ha_mode !== undefined
     && !HA_MODE_OFF_KEYWORDS.includes(String(params.ha_mode).trim().toLowerCase());
 
-  const generalRows = useMemo(() => GENERAL_PARAMS_KEYS.map(key => ({
-    key,
-    default: GENERAL_PARAMS_SCHEMA[key],
-    value: params[key],
-    isModified: modifiedKeySet.has(key),
-  })), [params, modifiedKeySet]);
+  const generalRows = useMemo(() => databaseParamSchema
+    // commonOnly keys (cubrid_port_id, auto_restart_server on 11.4+) only
+    // belong in [common] — hidden entirely while editing a specific
+    // database, same as advancedRows below and BrokerPropertyModal's
+    // identical commonOnly filter, so the entry point you opened (공통
+    // 속성 편집 vs 개별 속성 편집) and the param set you actually see
+    // always match instead of showing a field that was never actually
+    // readable from here anyway.
+    .filter(e => e.category === 'general' && !(e.commonOnly && selectedDatabase))
+    // Deprecated keys only appear when the conf actually sets them.
+    .filter(e => !e.deprecated || (params[e.key] !== undefined && params[e.key] !== ''))
+    .map(e => ({
+      ...e,
+      value: params[e.key],
+      error: guardErrors[e.key],
+      isDefaultValue: isEffectivelyDefault(e.guard, params[e.key], e.default),
+      // Never in the conf file — the value shown is purely e.default, not
+      // anything anyone actually set.
+      isImplicit: params[e.key] === undefined || params[e.key] === '',
+    }))
+  , [databaseParamSchema, params, guardErrors, selectedDatabase]);
 
-  const advancedRows = useMemo(() => ADVANCED_PARAMS_SCHEMA
-    .filter(p => !GENERAL_PARAMS_KEYS.includes(p.key))
-    .map(p => ({ ...p, value: params[p.key] !== undefined ? params[p.key] : p.default, isModified: modifiedKeySet.has(p.key) }))
-  , [params, modifiedKeySet]);
+  const advancedRows = useMemo(() => databaseParamSchema
+    // See generalRows' comment — commonOnly keys (ha_mode/ha_node_list/
+    // ha_port_id) are hidden entirely while a specific database is being
+    // edited.
+    .filter(e => e.category === 'advanced' && !(e.commonOnly && selectedDatabase))
+    .filter(e => !e.deprecated || (params[e.key] !== undefined && params[e.key] !== ''))
+    .map(e => {
+      // Non-blocking hint only. Reads the OTHER param's effective value
+      // (falling back to its own schema default the same way the field
+      // itself does) to decide whether this one currently has no real
+      // engine effect — see the entry's `advisory` field (ParamSchemaEntry's
+      // own doc comment for why).
+      const dep = e.advisory;
+      const isInactive = dep
+        ? dep.inactiveWhen.includes(
+            String(params[dep.dependsOnKey] !== undefined ? params[dep.dependsOnKey] : schemaDefaults[dep.dependsOnKey])
+              .trim().toLowerCase()
+          )
+        : false;
+      return {
+        ...e,
+        value: params[e.key] !== undefined ? params[e.key] : e.default,
+        error: guardErrors[e.key],
+        inactiveHint: isInactive ? CM.paramInactiveWhileHint(dep.dependsOnKey) : null,
+        isDefaultValue: isEffectivelyDefault(e.guard, params[e.key], e.default),
+        isImplicit: params[e.key] === undefined || params[e.key] === '',
+      };
+    })
+  , [databaseParamSchema, params, guardErrors, schemaDefaults, CM, selectedDatabase]);
 
+  // Connection Information configures how this web manager instance itself
+  // reaches the broker for a specific database — meaningless while editing
+  // [common], so only offered once a specific database is selected.
   const navItems = selectedDatabase
     ? [{ id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }, { id: 'Connection Information', icon: 'cable', label: CM.connectionNavLabel }]
     : [{ id: 'Server Parameter', icon: 'tune', label: CM.serverNavLabel }];
@@ -513,48 +501,24 @@ export default function DatabasePropertyModal() {
 
   if (!isDatabasePropertyModalOpen) return null;
 
-  /* ─── LOADING VIEW ─── */
-  if (isLoading) return (
-    <Modal isOpen title={CM.applyingConfigTitle} icon="settings" onClose={handleClose} maxWidth="900px" showCloseButton={false}>
-      <ModalStatusLoading
-        title={CM.updatingConfigTitle}
-        subtitle={CM.updatingConfigSubtitle}
-      />
-    </Modal>
-  );
-
-  /* ─── ERROR VIEW ─── */
-  if (isError) return (
-    <Modal isOpen title={CM.updateRejected} icon="error" iconVariant="danger" onClose={resetAction} maxWidth="900px">
-      <ModalStatusError
-        title={CM.applyFailedTitle}
-        error={actionError}
-        guidance={CM.databasePropertyGuidance}
-        onRetry={handleApply}
-        onCancel={resetAction}
-        retryText={CM.retryPatch}
-        cancelText={CM.cancel}
-      />
-    </Modal>
-  );
-
   // No separate Default column here either — same convention as the
   // Advanced table (and CA itself): the value cell shows the current value,
   // falling back to the default as a placeholder.
   const generalColumns = [
-    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} /> },
+    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} /> },
     {
       header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
-      render: (_, row) => (
-        <ParamValueCell
-          paramKey={row.key}
-          value={row.key === 'auto_restart_server' && isHaEnabled ? 'no' : row.value}
-          defaultValue={row.default}
-          onChange={(val) => setParams({ ...params, [row.key]: val })}
-          disabled={row.key === 'auto_restart_server' && isHaEnabled}
-          disabledHint={CM.autoRestartHaDisabledHint}
-        />
-      ),
+      render: (_, row) => {
+        const isHaForcedOff = row.key === 'auto_restart_server' && isHaEnabled;
+        return (
+          <ParamValueCell
+            value={isHaForcedOff ? 'no' : row.value}
+            defaultValue={row.default}
+            error={row.error}
+            hint={isHaForcedOff ? CM.autoRestartHaDisabledHint : null}
+          />
+        );
+      },
     },
   ];
 
@@ -568,7 +532,7 @@ export default function DatabasePropertyModal() {
       header: CM.parameter, accessor: 'key', width: '30%',
       className: '!sticky left-0 z-20 bg-slate-100 dark:bg-slate-900',
       cellClassName: 'sticky left-0 z-[1] bg-white dark:bg-slate-900',
-      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} />,
+      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} />,
     },
     {
       header: CM.parameterTypeLabel, accessor: 'scope', width: '16%',
@@ -581,32 +545,12 @@ export default function DatabasePropertyModal() {
         return <span className={`text-11 font-medium uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
       },
     },
-    { header: CM.valueTypeLabel, accessor: 'type', width: '18%', render: (val) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{val}</span> },
+    { header: CM.valueTypeLabel, accessor: 'guard', width: '18%', render: (guard) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{guard.kind}</span> },
     {
       header: CM.parameterValueLabel, accessor: 'value', width: '36%', cellClassName: 'w-[36%]', sortable: false,
-      render: (_, row) => {
-        const hasBoolOptions = row.type.includes('yes|no') || row.type.includes('on|off');
-        const boolOptions = row.type.includes('on|off') && row.type.includes('yes|no')
-          ? (row.type.includes('replica') ? ['on', 'off', 'yes', 'no', 'replica'] : ['on', 'off', 'yes', 'no'])
-          : row.type.includes('on|off') ? ['on', 'off'] : ['yes', 'no'];
-        return hasBoolOptions ? (
-          <Select
-            size="sm"
-            value={row.value}
-            options={boolOptions.map(o => ({ value: o, label: o.toUpperCase() }))}
-            onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-none"
-          />
-        ) : (
-          <Input
-            type={['int', 'short', 'numeric', 'float', 'double'].some(t => row.type.toLowerCase().startsWith(t)) ? 'number' : 'text'}
-            size="sm"
-            value={row.value}
-            onChange={e => setParams({ ...params, [row.key]: e.target.value })}
-            className="w-full max-w-none"
-          />
-        );
-      },
+      render: (_, row) => (
+        <ParamValueCell value={row.value} defaultValue={row.default} error={row.error} hint={row.inactiveHint} />
+      ),
     },
   ];
 
@@ -621,38 +565,34 @@ export default function DatabasePropertyModal() {
         : (selectedDatabase ? CM.registrySubtitle(selectedDatabase) : CM.kernelParamsTitle)}
       subtitle={activeSidebar === 'Connection Information'
         ? CM.brokerCharsetConfigDesc
-        : CM.deepSystemConfigDesc}
+        : (selectedDatabase ? CM.instancePropertiesScopeDescDb(selectedDatabase) : CM.commonPropertiesScopeDescDb)}
       icon={activeSidebar === 'Connection Information' ? 'cable' : 'tune'}
       maxWidth="1200px"
       testId="database-property"
       footer={
-        <div className="flex justify-between items-center w-full">
-          <div>
-            {activeSidebar === 'Server Parameter' && modifiedCount > 0 && (
-              <Button
-                data-testid="database-property-reset-btn"
-                variant="ghost"
-                icon="restart_alt"
-                onClick={handleReset}
-                className="text-amber-500 hover:bg-amber-500/5"
-              >
-                {CM.resetToOriginalBtn}
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2.5">
-            <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
+        <div className="flex justify-end items-center w-full gap-2.5">
+          <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
+          {activeSidebar === 'Server Parameter' ? (
+            <Button
+              data-testid="database-property-open-editor-btn"
+              variant="primary"
+              onClick={handleOpenTextEditor}
+              icon="edit"
+              className="min-w-[140px]"
+            >
+              {CM.openInTextEditorBtn}
+            </Button>
+          ) : (
             <Button
               data-testid="database-property-apply-btn"
               variant="primary"
               onClick={handleApply}
               icon="save"
               className="min-w-[140px]"
-              disabled={activeSidebar === 'Server Parameter' && modifiedCount === 0}
             >
               {CM.applyChanges}
             </Button>
-          </div>
+          )}
         </div>
       }
     >
@@ -715,10 +655,12 @@ export default function DatabasePropertyModal() {
                 onChange={setActiveTab}
                 fullWidth={false}
               />
-              {/* Modified indicator */}
-              {modifiedCount > 0 && (
-                <div data-testid="database-property-modified-count">
-                  <StatusBadge label={`${modifiedCount} modified`} variant="amber" pulse={true} className="rounded-full" />
+              {/* Passive diagnostic only — nothing here is editable, so this
+                  flags a value already stored in cubrid.conf that fails its
+                  own guard, not something blocking an Apply. */}
+              {guardErrorCount > 0 && (
+                <div data-testid="database-property-guard-error-count">
+                  <StatusBadge label={`${guardErrorCount} invalid`} variant="rose" className="rounded-full" />
                 </div>
               )}
             </div>
@@ -752,7 +694,7 @@ export default function DatabasePropertyModal() {
                     <div className="flex-1">
                       <Input
                         value={connectionInfo.brokerIp}
-                        onChange={e => setConnectionInfo({ ...connectionInfo, brokerIp: e.target.value })}
+                        onChange={e => updateConnectionInfo({ brokerIp: e.target.value })}
                         size="sm"
                         icon="dns"
                       />
@@ -768,7 +710,7 @@ export default function DatabasePropertyModal() {
                       <Select
                         value={connectionInfo.brokerPort}
                         options={brokers.map(b => ({ value: b.label, label: b.label }))}
-                        onChange={e => setConnectionInfo({ ...connectionInfo, brokerPort: e.target.value })}
+                        onChange={e => updateConnectionInfo({ brokerPort: e.target.value })}
                         size="sm"
                       />
                     </div>
@@ -783,7 +725,7 @@ export default function DatabasePropertyModal() {
                       <Select
                         value={connectionInfo.charset}
                         options={['UTF-8', 'EUC-KR', 'ISO-8859-1', 'UHC'].map(o => ({ value: o, label: o }))}
-                        onChange={e => setConnectionInfo({ ...connectionInfo, charset: e.target.value })}
+                        onChange={e => updateConnectionInfo({ charset: e.target.value })}
                         size="sm"
                       />
                     </div>
@@ -798,25 +740,27 @@ export default function DatabasePropertyModal() {
             ) : activeTab === 'General' ? (
               /* ─── GENERAL PARAMETERS ─── */
               <div className="p-6 space-y-6">
+                <ReadOnlyTableNotice onOpenEditor={handleOpenTextEditor} CM={CM} />
+
                 <div className="flex flex-col gap-3">
-                  {BUFFER_GROUPS.map(group => (
+                  {bufferGroups.map(group => (
                     <BufferChoiceGroup
                       key={group.type}
                       group={group}
                       mode={bufferMode[group.type]}
-                      unit={bufferUnit[group.type]}
                       pagesValue={params[group.pagesKey]}
                       sizeValue={params[group.sizeKey]}
-                      onModeChange={(m) => setBufferMode(prev => ({ ...prev, [group.type]: m }))}
-                      onUnitChange={(u) => setBufferUnit(prev => ({ ...prev, [group.type]: u }))}
-                      onPagesChange={(v) => setParams({ ...params, [group.pagesKey]: v })}
-                      onSizeChange={(v) => setParams({ ...params, [group.sizeKey]: v })}
+                      pagesError={guardErrors[group.pagesKey]}
+                      sizeError={guardErrors[group.sizeKey]}
                     />
                   ))}
                 </div>
 
                 <div className="space-y-3">
                   <SectionHeader title={CM.standardParameters} icon="settings" />
+                  <InfoBanner variant="info">
+                    {CM.usingDefaultExplainerBanner}
+                  </InfoBanner>
                   <Table columns={generalColumns} data={generalRows} bordered showEmptyStateAsRow className="[&_th]:font-medium" />
                 </div>
               </div>
@@ -824,7 +768,11 @@ export default function DatabasePropertyModal() {
             ) : (
               /* ─── ADVANCED PARAMETERS TABLE ─── */
               <div className="h-full min-h-0 flex flex-col">
-                <div className="shrink-0 px-6 py-6">
+                <div className="shrink-0 px-6 py-6 space-y-3">
+                  <ReadOnlyTableNotice onOpenEditor={handleOpenTextEditor} CM={CM} />
+                  <InfoBanner variant="info">
+                    {CM.usingDefaultExplainerBanner}
+                  </InfoBanner>
                   <InfoBanner>
                     {CM.advancedParamsWarning}
                   </InfoBanner>

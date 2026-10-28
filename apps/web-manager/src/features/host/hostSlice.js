@@ -289,13 +289,23 @@ export const refreshHaInfo = createAsyncThunk(
 );
 
 // Async thunk for a manual "refresh" of the whole server list: re-fetches
-// the host/group tree, then re-derives HA info for every logged-in host.
+// the host/group tree, re-derives HA info, and re-resolves each host's
+// param schema (paramSchemas, part of fetchHostEnv's response) for every
+// logged-in host. The schema is otherwise only fetched once per host (at
+// activation/login) and cached in `hostEnvs` — this manual refresh is the
+// one place it's deliberately re-pulled, in case the connected engine's
+// version changed since then (e.g. the DBA upgraded it without the user
+// re-logging in to this app). Scoped to this explicit, infrequent action
+// only — NOT to the background-polling broker/db list refreshes
+// (MonitoringProvider etc.), which would otherwise re-resolve the schema
+// on every poll tick for no reason.
 export const refreshServerList = createAsyncThunk(
   'host/refreshServerList',
   async (_, { dispatch, getState }) => {
     await dispatch(fetchHosts());
     const { authorizedHosts } = getState().host;
     await Promise.all(authorizedHosts.map((hostUid) => dispatch(refreshHaInfo(hostUid))));
+    await Promise.all(authorizedHosts.map((hostUid) => dispatch(fetchHostEnv(hostUid))));
     return true;
   }
 );
