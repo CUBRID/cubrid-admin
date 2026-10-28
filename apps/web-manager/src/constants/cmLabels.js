@@ -300,6 +300,7 @@ export const CM = {
   passwordsDoNotMatch: 'Passwords do not match',
   hostNameRequired: 'Host name is required',
   hostNameDuplicate: 'This name is already used by another host. Choose a different name.',
+  hostNameTooLong: (max) => `Host name must be ${max} characters or fewer.`,
   addressRequired: 'Address is required',
   portRequired: 'Port is required',
   usernameRequired: 'Username is required',

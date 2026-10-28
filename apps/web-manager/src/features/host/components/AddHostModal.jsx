@@ -11,7 +11,7 @@ import { addHost,
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
-import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups } from '../hostGroupUtils';
+import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
@@ -76,6 +76,8 @@ export default function AddHostModal({ isOpen, onClose }) {
     const trimmedAlias = formData.alias.trim();
     if (!trimmedAlias) {
       errs.alias = CM.hostNameRequired;
+    } else if (trimmedAlias.length > MAX_HOST_ALIAS_LENGTH) {
+      errs.alias = CM.hostNameTooLong(MAX_HOST_ALIAS_LENGTH);
     } else if (flattenHostsFromGroups(hostGroups).some((h) => h.alias?.trim() === trimmedAlias)) {
       errs.alias = CM.hostNameDuplicate;
     }
@@ -225,6 +227,7 @@ export default function AddHostModal({ isOpen, onClose }) {
             error={errors.alias}
             placeholder={CM.friendlyNamePlaceholder}
             icon="label"
+            maxLength={MAX_HOST_ALIAS_LENGTH}
             disabled={loading}
             required
           />

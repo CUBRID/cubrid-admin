@@ -10,7 +10,7 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
-import { findGroupIdForHost, orderedGroupEntries, UNGROUPED_GROUP_ID } from '../hostGroupUtils';
+import { findGroupIdForHost, orderedGroupEntries, UNGROUPED_GROUP_ID, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { useCM } from '../../../constants/useCM';
 
 export default function EditHostModal() {
@@ -71,6 +71,8 @@ export default function EditHostModal() {
     const trimmedAlias = formData.alias.trim();
     if (!trimmedAlias) {
       errs.alias = CM.hostNameRequired;
+    } else if (trimmedAlias.length > MAX_HOST_ALIAS_LENGTH) {
+      errs.alias = CM.hostNameTooLong(MAX_HOST_ALIAS_LENGTH);
     } else if (hosts.some((h) => h.uid !== hostToEditUid && h.alias?.trim() === trimmedAlias)) {
       errs.alias = CM.hostNameDuplicate;
     }
@@ -224,6 +226,7 @@ export default function EditHostModal() {
             error={errors.alias}
             placeholder={CM.friendlyNamePlaceholder}
             icon="label"
+            maxLength={MAX_HOST_ALIAS_LENGTH}
             disabled={loading}
             required
           />
