@@ -53,13 +53,16 @@ import { fetchBrokerList,
   fetchAdminLogs,
   fetchCMSLogs,
   fetchDatabaseLogs,
-  startBroker,
-  stopBroker,
-  startAllBrokers,
-  stopAllBrokers,
   openBrokerPropertyModal,
   resetBrokerState
 } from '../../broker/brokerSlice';
+import {
+  startBrokerAndRefresh,
+  stopBrokerAndRefresh,
+  startAllBrokersAndRefresh,
+  stopAllBrokersAndRefresh,
+  restartAllBrokersAndRefresh,
+} from '../../broker/brokerSidebarActions';
 import { setActiveMainTab, openTab, closeHostTabs, showStatusModal } from '../layoutSlice';
 import { fetchDatabaseUsers, openCreateUserModal, openEditUserModal, openDropUserModal } from '../../user/userSlice';
 import { clearHostSummary } from '../../server/globalMonitoringSlice';
@@ -1655,7 +1658,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.startingAllBrokersMsg);
                   startAction();
                   try {
-                    await dispatch(startAllBrokers(selectedHostUid)).unwrap();
+                    await dispatch(startAllBrokersAndRefresh(selectedHostUid));
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1678,7 +1681,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.stoppingAllBrokersMsg);
                   startAction();
                   try {
-                    await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
+                    await dispatch(stopAllBrokersAndRefresh(selectedHostUid));
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1701,8 +1704,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   setLoadingText(CM.restartingAllBrokersMsg);
                   startAction();
                   try {
-                    await dispatch(stopAllBrokers(selectedHostUid)).unwrap();
-                    await dispatch(startAllBrokers(selectedHostUid)).unwrap();
+                    await dispatch(restartAllBrokersAndRefresh(selectedHostUid));
                     resetAction();
                   } catch (err) {
                     endError(err);
@@ -1768,8 +1770,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     setLoadingText(`${CM.stoppingBrokerNamed(bName)} ...`);
                     startAction();
                     try {
-                      await dispatch(stopBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
-                      dispatch(fetchBrokerList(selectedHostUid));
+                      await dispatch(stopBrokerAndRefresh({ hostUid: selectedHostUid, brokerName: bName }));
                       resetAction();
                     } catch (err) {
                       endError(err);
@@ -1794,8 +1795,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     setLoadingText(`${CM.startingBrokerNamed(bName)} ...`);
                     startAction();
                     try {
-                      await dispatch(startBroker({ hostUid: selectedHostUid, brokerName: bName })).unwrap();
-                      dispatch(fetchBrokerList(selectedHostUid));
+                      await dispatch(startBrokerAndRefresh({ hostUid: selectedHostUid, brokerName: bName }));
                       resetAction();
                     } catch (err) {
                       endError(err);

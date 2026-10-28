@@ -201,6 +201,28 @@ describe('broker lists are stored per host, not in one shared array', () => {
     expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
   });
 
+  it("an after-action response from before a disconnect is not shown after the host reconnects", async () => {
+    const before = deferred();
+    const after = deferred();
+    brokerApi.getBrokerList.mockImplementationOnce(() => before.promise).mockImplementationOnce(() => after.promise);
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    const stale = store.dispatch(fetchBrokerList({ hostUid: 'hostA', afterAction: true, skipStatusEnrichment: true }));
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    // Reconnected: a new list request is in flight for the same host.
+    const fresh = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+
+    before.resolve({ result: [{ name: 'old-broker', pid: '1' }] });
+    await stale;
+    expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
+
+    after.resolve({ result: [{ name: 'new-broker', pid: '2' }] });
+    await fresh;
+    expect(store.getState().broker.brokersByHost.hostA).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'new-broker' })])
+    );
+  });
+
   it('clears loading when its host is deleted/disconnected mid-fetch, instead of leaving it stuck', async () => {
     const hostA = deferred();
     brokerApi.getBrokerList.mockImplementation(() => hostA.promise);
@@ -243,5 +265,48 @@ describe('broker lists are stored per host, not in one shared array', () => {
     hostB.resolve({ result: [{ name: 'hostB-broker', pid: '2' }] });
     await dispatchB;
     expect(store.getState().broker.loadingByHost.hostB).toBe(false);
+  });
+});
+
+describe('fetchBrokerList after a broker action', () => {
+  // Hold each getBrokerList call until released, to control response order.
+  const holdListCalls = () => {
+    const held = [];
+    brokerApi.getBrokerList.mockImplementation(() => new Promise((resolve) => held.push(resolve)));
+    return held;
+  };
+  const list = (state) => ({ result: [{ ...rawBroker('broker1'), state }] });
+  // skipStatusEnrichment keeps these independent of how statuses are fetched.
+  const fetchAfterAction = () => fetchBrokerList({ hostUid: 'host1', afterAction: true, skipStatusEnrichment: true });
+  const backgroundPoll = () => fetchBrokerList({ hostUid: 'host1', isBackground: true, skipStatusEnrichment: true });
+  const shownState = (store) => store.getState().broker.brokersByHost.host1?.[0]?.state;
+
+  it('is shown even when a background poll started while it was in flight', async () => {
+    const held = holdListCalls();
+    const store = makeStore();
+    const afterAction = store.dispatch(fetchAfterAction());
+    const poll = store.dispatch(backgroundPoll());
+
+    held[0](list('OFF'));
+    await afterAction;
+    expect(shownState(store)).toBe('OFF');
+
+    held[1](list('OFF'));
+    await poll;
+    expect(shownState(store)).toBe('OFF');
+  });
+
+  it('does not overwrite a newer response that was already shown', async () => {
+    const held = holdListCalls();
+    const store = makeStore();
+    const afterAction = store.dispatch(fetchAfterAction());
+    const poll = store.dispatch(backgroundPoll());
+
+    held[1](list('ON'));
+    await poll;
+    held[0](list('OFF'));
+    await afterAction;
+
+    expect(shownState(store)).toBe('ON');
   });
 });

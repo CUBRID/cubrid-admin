@@ -167,3 +167,27 @@ describe('BrokerStatus basic information refresh', () => {
     expect(container.textContent).not.toContain('40000');
   });
 });
+
+describe('BrokerStatus job queue', () => {
+  it('shows how long each job has waited, with its receive time as the tooltip', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({
+      ...statusResponse(),
+      time: '2026/10/27 00:00:03',
+      jobinfo: [
+        { job_id: '1', job_priority: '0', job_ip: '10.0.0.1', job_time: '23:59:58', job_request: ':cub_cas' },
+        { job_id: '2', job_priority: '0', job_ip: '10.0.0.2', job_time: '', job_request: ':cub_cas' },
+      ],
+    });
+
+    await render();
+    await flush();
+
+    const cell = container.querySelector(`span[title="${CM.jobReceivedAt('23:59:58')}"]`);
+    expect(cell).not.toBeNull();
+    expect(cell.textContent).toBe('5s');
+    // A job without a receive time shows a dash and no tooltip.
+    const elapsedCells = [...container.querySelectorAll('span.text-rose-500')].map((el) => [el.textContent, el.title]);
+    expect(elapsedCells).toEqual([['5s', CM.jobReceivedAt('23:59:58')], ['—', '']]);
+  });
+});

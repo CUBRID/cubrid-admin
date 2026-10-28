@@ -28,11 +28,16 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  const state = {
+  const initialState = {
     host: { authorizedHosts: ['host1'] },
     layout: { refreshCounter: 0, activeMainTab: 'tab1' },
   };
-  store = configureStore({ reducer: () => state });
+  // Stand-in for layoutSlice's triggerRefreshActiveTab.
+  store = configureStore({
+    reducer: (state = initialState, action) => (action.type === 'refresh'
+      ? { ...state, layout: { ...state.layout, refreshCounter: state.layout.refreshCounter + 1 } }
+      : state),
+  });
 });
 
 afterEach(async () => {
@@ -48,6 +53,81 @@ const render = async (props) => act(async () => {
       <Harness {...props} />
     </Provider>
   );
+});
+
+const hangingFetch = (pending) => (silent) => () => {
+  const d = deferred();
+  pending.push(d);
+  fetchCalls.push(silent);
+  return d.promise;
+};
+
+it('runs a refresh requested during an in-flight fetch once that fetch settles', async () => {
+  const pending = [];
+  await render({ pollingIntervalSeconds: 0, onFetch: hangingFetch(pending) });
+  expect(fetchCalls.length).toBe(1);
+
+  // e.g. a broker start/stop finishing while the initial load (sent before
+  // it) is still in flight — that load may return pre-action data.
+  await act(async () => { store.dispatch({ type: 'refresh' }); });
+  expect(fetchCalls.length).toBe(1);
+
+  await act(async () => {
+    pending[0].resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetchCalls.length).toBe(2);
+
+  // Only one follow-up — settling it doesn't start yet another fetch.
+  await act(async () => {
+    pending[1].resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetchCalls.length).toBe(2);
+});
+
+it('runs a refresh requested while the browser window is hidden', async () => {
+  const pending = [];
+  await render({ pollingIntervalSeconds: 0, onFetch: hangingFetch(pending) });
+  await act(async () => {
+    pending[0].resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetchCalls.length).toBe(1);
+
+  // e.g. a broker start/stop finishing after the user switched browser tabs:
+  // with polling off, nothing would refetch once the window is shown again.
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  try {
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await act(async () => { store.dispatch({ type: 'refresh' }); });
+    expect(fetchCalls.length).toBe(2);
+  } finally {
+    visibility.mockRestore();
+  }
+
+  await act(async () => {
+    pending.forEach((d) => d.resolve());
+    await vi.advanceTimersByTimeAsync(0);
+  });
+});
+
+it('does not queue polling ticks that land during an in-flight fetch', async () => {
+  const pending = [];
+  await render({ pollingIntervalSeconds: 1, onFetch: hangingFetch(pending) });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  await act(async () => {
+    pending[0].resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetchCalls.length).toBe(1);
+
+  await act(async () => {
+    pending.forEach((d) => d.resolve());
+    await vi.advanceTimersByTimeAsync(0);
+  });
 });
 
 it('does not start a new polling tick while the previous one is still in flight', async () => {

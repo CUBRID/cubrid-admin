@@ -951,6 +951,7 @@ export const CM_KO = {
   jobId: '작업 ID',
   priority: '우선순위',
   elapsed: '경과',
+  jobReceivedAt: (t) => `수신 시각: ${t}`,
   request: '요청',
   activeCount: (n) => `${n}개 활성`,
   queuedCount: (n) => `${n}개 대기`,

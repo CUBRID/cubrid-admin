@@ -34,6 +34,14 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   // global refresh, online recovery) against overlapping with an
   // already-in-flight fetch — see handleRefresh for why this matters.
   const isFetchingRef = useRef(false);
+  // A global refresh (F5 / triggerRefreshActiveTab) that lands while a fetch
+  // is in flight can't just be skipped like a poll tick: that fetch may have
+  // been sent before whatever the refresh was asked for (e.g. a broker
+  // start/stop) and return pre-action data. Run one more fetch once it settles.
+  const pendingRefreshRef = useRef(false);
+  // Kept pointing at the latest handleRefresh (see below) — also lets
+  // handleRefresh run the queued refresh with the latest onFetch closure.
+  const handleRefreshRef = useRef(null);
 
   // 1. Browser Visibility Listener
   useEffect(() => {
@@ -72,6 +80,10 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
     } finally {
       isFetchingRef.current = false;
       if (!silent) setIsManualRefreshing(false);
+      if (pendingRefreshRef.current) {
+        pendingRefreshRef.current = false;
+        handleRefreshRef.current?.();
+      }
     }
   }, [dispatch, hostUid, authorizedHosts, reconnectQueue, onFetch, tabId]);
 
@@ -80,21 +92,29 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   // below that need to fire the LATEST refresh without tearing down and
   // rebuilding a live timer/listener on every unrelated re-render read this
   // ref instead of depending on `handleRefresh` directly.
-  const handleRefreshRef = useRef(handleRefresh);
   useEffect(() => {
     handleRefreshRef.current = handleRefresh;
   }, [handleRefresh]);
 
   const lastProcessedCounterRef = useRef(refreshCounter);
-  // 2. Global Refresh (F5 / Ctrl+R) Listener
+  // 2. Global Refresh (F5 / Ctrl+R) Listener — gated on this being the
+  // foreground app tab, not on browser visibility. F5 can't land while the
+  // window is hidden, so a refresh requested then comes from code (e.g. a
+  // broker start/stop finishing, see refreshAfterBrokerAction); skipping it
+  // would consume the request, and with polling off nothing refetches later.
+  const isForegroundTab = activeMainTab === tabId;
   useEffect(() => {
     if (refreshCounter > lastProcessedCounterRef.current) {
       lastProcessedCounterRef.current = refreshCounter;
-      if (isTabActive) {
-        handleRefresh();
+      if (isForegroundTab) {
+        if (isFetchingRef.current) pendingRefreshRef.current = true;
+        else handleRefresh();
       }
     }
-  }, [refreshCounter, handleRefresh, isTabActive]);
+  }, [refreshCounter, handleRefresh, isForegroundTab]);
+
+  // Don't fire a queued refresh from a fetch that settles after unmount.
+  useEffect(() => () => { pendingRefreshRef.current = false; }, []);
 
   // 3. Initial Load & Recovery
   const wasAuthorizedRef = useRef(false);
