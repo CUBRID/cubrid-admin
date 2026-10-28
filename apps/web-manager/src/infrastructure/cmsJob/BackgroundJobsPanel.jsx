@@ -4,7 +4,6 @@ import { Icon } from '../../components/ds/foundation/Icon';
 import { Typography } from '../../components/ds/foundation/Typography';
 import { Modal } from '../../components/ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
-import { stripHaRoleTagFromAlias } from '../../features/host/hostGroupUtils';
 import { MaintenanceDetails } from './MaintenanceDetails';
 import { isMaintenanceJob } from './maintenanceDetailsUtils';
 import {
@@ -212,7 +211,7 @@ export function BackgroundJobsPanel({
   const hostLabelFor = (hostUid) => {
     const host = hosts.find((h) => h.uid === hostUid);
     if (!host) return null;
-    return stripHaRoleTagFromAlias(host.alias || host.id) || host.id;
+    return host.alias || host.id;
   };
 
   return (

@@ -1,23 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripHaRoleTagFromAlias, inferHaNodeType } from './hostGroupUtils';
-
-describe('stripHaRoleTagFromAlias', () => {
-  it('strips a trailing (master)/(slave)/(replica) tag', () => {
-    expect(stripHaRoleTagFromAlias('myhost (master)')).toBe('myhost');
-    expect(stripHaRoleTagFromAlias('myhost (slave)')).toBe('myhost');
-    expect(stripHaRoleTagFromAlias('myhost (replica)')).toBe('myhost');
-  });
-
-  it('does not touch a user-typed alias with the tag in the middle, not at the end', () => {
-    // e.g. "cglee1_(master)_prod" — a genuine user-chosen alias, not an
-    // auto-appended tag. Only a real trailing tag should ever be stripped.
-    expect(stripHaRoleTagFromAlias('cglee1_(master)_prod')).toBe('cglee1_(master)_prod');
-  });
-
-  it('passes through an alias with no tag unchanged', () => {
-    expect(stripHaRoleTagFromAlias('plain-host')).toBe('plain-host');
-  });
-});
+import { inferHaNodeType } from './hostGroupUtils';
 
 describe('inferHaNodeType', () => {
   it('reads the role from live haInfo', () => {
