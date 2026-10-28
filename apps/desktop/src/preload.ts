@@ -34,6 +34,14 @@ const desktopBridge: DesktopBridge = {
     };
   },
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
+  getAppVersion: () => ipcRenderer.invoke('desktop:get-app-version'),
+  getUpdateStatus: () => ipcRenderer.invoke('desktop:get-update-status'),
+  getStartupUpdateNotice: () => ipcRenderer.invoke('desktop:get-startup-update-notice'),
+  dismissUpdate: (version) => ipcRenderer.invoke('desktop:dismiss-update', version),
+  openUpdateDownload: (url) => ipcRenderer.invoke('desktop:open-update-download', url),
+  getCheckForUpdatesOnStartup: () => ipcRenderer.invoke('desktop:get-check-updates-on-startup'),
+  setCheckForUpdatesOnStartup: (enabled) =>
+    ipcRenderer.invoke('desktop:set-check-updates-on-startup', enabled),
 };
 
 contextBridge.exposeInMainWorld('desktopConfig', {

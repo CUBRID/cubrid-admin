@@ -20,7 +20,7 @@ const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
  *
  * Mounted in App rather than in HeaderMenu so a full reload (logout, View >
  * Reload) re-reports the state; whenever no dashboard, and so none of the
- * modals they open, is shown, only About stays enabled.
+ * modals they open, is shown, only About and Check for Updates stay enabled.
  */
 export function useDesktopMenuActions() {
   const CM = useCM();

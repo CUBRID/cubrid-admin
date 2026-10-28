@@ -7,6 +7,7 @@ vi.mock('./layoutSlice', () => ({
 }));
 vi.mock('./appBarSlice', () => ({
   setAboutCubrid: (payload) => ({ type: 'appBar/setAboutCubrid', payload }),
+  openUpdateCheck: (payload) => ({ type: 'appBar/openUpdateCheck', payload }),
 }));
 vi.mock('../host/hostSlice', () => Object.fromEntries(
   ['openAddHostModal', 'openEditHostModal', 'openServerVersionModal', 'openImportExportModal', 'openCmsUserManagementModal']
@@ -43,7 +44,7 @@ describe('getMenuActionEnabled', () => {
 
     const authorized = getMenuActionEnabled({ selectedHostUid: 'h1', authorizedHosts: ['h1'] });
     expect(authorized[MENU_ACTIONS.cmsAccountManagement]).toBe(true);
-    expect(authorized[MENU_ACTIONS.checkForUpdates]).toBe(false);
+    expect(authorized[MENU_ACTIONS.checkForUpdates]).toBe(true);
   });
 
   it('covers every action id, as does the all-disabled state', () => {
@@ -53,10 +54,10 @@ describe('getMenuActionEnabled', () => {
     expect(Object.values(ALL_MENU_ACTIONS_DISABLED).every((v) => v === false)).toBe(true);
   });
 
-  it('leaves only About enabled while no dashboard is shown', () => {
+  it('leaves only About and Check for Updates enabled while no dashboard is shown', () => {
     expect(Object.keys(NO_DASHBOARD_MENU_ACTIONS).sort()).toEqual(Object.values(MENU_ACTIONS).sort());
-    expect(Object.entries(NO_DASHBOARD_MENU_ACTIONS).filter(([, on]) => on).map(([id]) => id))
-      .toEqual([MENU_ACTIONS.about]);
+    expect(Object.entries(NO_DASHBOARD_MENU_ACTIONS).filter(([, on]) => on).map(([id]) => id).sort())
+      .toEqual([MENU_ACTIONS.about, MENU_ACTIONS.checkForUpdates].sort());
   });
 });
 
@@ -89,8 +90,13 @@ describe('runMenuAction', () => {
     ]);
   });
 
-  it('ignores unknown ids and the not-yet-available update check', () => {
+  it('ignores unknown ids', () => {
     expect(run('bogus')).toEqual({ handled: false, actions: [] });
-    expect(run(MENU_ACTIONS.checkForUpdates)).toEqual({ handled: false, actions: [] });
+  });
+
+  it('opens the update check', () => {
+    const { handled, actions } = run(MENU_ACTIONS.checkForUpdates);
+    expect(handled).toBe(true);
+    expect(actions).toEqual([expect.objectContaining({ type: 'appBar/openUpdateCheck', payload: { source: 'manual' } })]);
   });
 });

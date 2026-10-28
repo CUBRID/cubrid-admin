@@ -63,6 +63,9 @@ import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
 import AboutModal from '../features/layout/components/AboutModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
+import UpdateCheckModal from '../features/layout/components/UpdateCheckModal';
+import { openUpdateCheck } from '../features/layout/appBarSlice';
+import { fetchStartupUpdateNotice } from '../features/update/updateCheckClient';
 import LogViewer from '../features/broker/components/LogViewer';
 import CMSLogViewer from '../features/broker/components/CMSLogViewer';
 import AllLogsViewer from '../features/broker/components/AllLogsViewer';
@@ -527,9 +530,28 @@ function RootRedirect() {
 }
 
 function App() {
+  const dispatch = useDispatch();
   const { theme } = useSelector((state) => state.layout, shallowEqual);
   useDesktopMenuLanguage();
   useDesktopMenuActions();
+
+  // Desktop only (a no-op in a browser): the once-per-24h startup update
+  // notice. Mounted here rather than in DashboardLayout so it also works on
+  // /login. The native Help menu's "Check for Updates" item goes through
+  // useDesktopMenuActions, which keeps it enabled while signed out.
+  useEffect(() => {
+    let cancelled = false;
+    fetchStartupUpdateNotice()
+      .then((status) => {
+        if (!cancelled && status) {
+          dispatch(openUpdateCheck({ source: 'startup', preloadedStatus: status }));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   useEffect(() => {
     if (window.desktopBridge?.onCloseActiveTab) {
@@ -572,8 +594,9 @@ function App() {
           }
         />
       </Routes>
-      {/* Outside the routes so the desktop menu's About also works on /login. */}
+      {/* Outside the routes so the desktop menu's About and update check also work on /login. */}
       <AboutModal />
+      <UpdateCheckModal />
     </>
   );
 }

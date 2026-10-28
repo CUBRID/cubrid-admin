@@ -6,7 +6,7 @@ import {
   openImportExportModal,
   openCmsUserManagementModal,
 } from '../host/hostSlice';
-import { setAboutCubrid } from './appBarSlice';
+import { openUpdateCheck, setAboutCubrid } from './appBarSlice';
 
 /**
  * In-app menu actions shared by the header menu (HeaderMenu) and the desktop
@@ -36,12 +36,14 @@ export const ALL_MENU_ACTIONS_DISABLED = Object.freeze(
 );
 
 /**
- * While no dashboard is shown (login, register, workspace setup): only About,
- * whose modal App renders on every route. Every other action opens a modal
- * or tab that only exists inside the dashboard.
+ * While no dashboard is shown (login, register, workspace setup): only About
+ * and Check for Updates, whose modals App renders on every route and which
+ * need no host or session. Every other action opens a modal or tab that only
+ * exists inside the dashboard.
  */
 export const NO_DASHBOARD_MENU_ACTIONS = Object.freeze({
   ...ALL_MENU_ACTIONS_DISABLED,
+  [MENU_ACTIONS.checkForUpdates]: true,
   [MENU_ACTIONS.about]: true,
 });
 
@@ -59,7 +61,7 @@ export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [] }) 
     [MENU_ACTIONS.editCubridConfig]: true,
     [MENU_ACTIONS.editBrokerConfig]: true,
     [MENU_ACTIONS.editCmConfig]: true,
-    [MENU_ACTIONS.checkForUpdates]: false,
+    [MENU_ACTIONS.checkForUpdates]: true,
     [MENU_ACTIONS.serverVersion]: Boolean(selectedHostUid),
     [MENU_ACTIONS.about]: true,
   };
@@ -105,6 +107,9 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
       return true;
     case MENU_ACTIONS.editCmConfig:
       openHostTab(dispatch, CM, selectedHostUid, `edit_config:${selectedHostUid}:cmconf`);
+      return true;
+    case MENU_ACTIONS.checkForUpdates:
+      dispatch(openUpdateCheck({ source: 'manual' }));
       return true;
     case MENU_ACTIONS.serverVersion:
       dispatch(openServerVersionModal(selectedHostUid));
