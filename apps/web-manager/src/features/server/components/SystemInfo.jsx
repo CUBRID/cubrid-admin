@@ -27,7 +27,12 @@ export default function SystemInfo({ hostUid }) {
 
   return (
     <Card testId="server-dashboard-system-info" title={cardTitle} collapsible defaultCollapsed>
-      {!envData ? (
+      {envData === undefined ? (
+        <div className="flex flex-col items-center justify-center py-8 opacity-70">
+          <Icon name="hourglass_empty" size="md" className="mb-2" weight={300} />
+          <Typography variant="caption">{CM.loadingLabel}</Typography>
+        </div>
+      ) : !envData ? (
         <div className="flex flex-col items-center justify-center py-8 opacity-70">
           <Icon name="cloud_off" size="md" className="mb-2"  weight={300} />
           <Typography variant="caption">{CM.environmentUnavailable}</Typography>

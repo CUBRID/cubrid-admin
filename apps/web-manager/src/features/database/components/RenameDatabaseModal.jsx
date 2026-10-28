@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeRenameDatabaseModal, fetchDatabaseStartInfo } from '../databaseSlice';
+import { clearDatabaseLogin } from '../databaseCoreSlice';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
@@ -92,9 +93,12 @@ export default function RenameDatabaseModal() {
   const handleRename = async () => {
     if (!selectedHostUid || !selectedDatabase || !isFormValid) return;
     startAction();
+    const hostUid = selectedHostUid;
+    const oldName = selectedDatabase;
+    const renameTo = newDbName.trim();
     try {
       const payload = {
-        rename: newDbName.trim(),
+        rename: renameTo,
         exvolpath: getParentDirectory(currentDb?.dbdir || '').trim(),
         advanced: 'off',
         forcedel: forcedel ? 'y' : 'n',
@@ -103,6 +107,11 @@ export default function RenameDatabaseModal() {
         () => databaseJobApi.submitRename(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
+      // Mirrors the backend clearing both names' stored login (see
+      // DatabaseManagementService.clearDbAliasCachesAfterRename). Runs even
+      // if backgrounded — it uses the names captured at submit time above.
+      dispatch(clearDatabaseLogin({ hostUid, dbname: oldName }));
+      dispatch(clearDatabaseLogin({ hostUid, dbname: renameTo }));
       // This job may have been backgrounded (and the modal reopened for a
       // different database) by the time it settles — its outcome then
       // belongs to the global job tray, not this now-reused modal instance.

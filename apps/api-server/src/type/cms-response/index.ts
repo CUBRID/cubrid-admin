@@ -67,3 +67,4 @@ export * from './kill-transaction-cms-response';
 export * from './delete-database-cms-response';
 export * from './add-dbmt-user-cms-response';
 export * from './update-dbmt-user-cms-response';
+export * from './get-sys-disk-info-cms-response';

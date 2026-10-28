@@ -35,8 +35,21 @@ const reconnectingHosts = new Set();
 // invalidates its (now superseded) token, so its 401 lands after the fresh
 // login already succeeded — without this, that stale rejection alone pops a
 // confusing reconnect prompt for a host the user just finished reconnecting.
+//
+// Root cause of the "modal opens twice for one takeover" bug: this used to be
+// guarded by a fixed STALE_TOKEN_GRACE_MS (5s) window measured from "now" —
+// `Date.now() - lastLoginSuccessAt.get(hostUid) < 5000`. Any straggler
+// request that was in flight at the moment of takeover but didn't itself
+// land its 401 until more than 5s after the user reconnected (slow query,
+// a queue of concurrent polls, etc.) fell outside that window and was
+// treated as a brand-new takeover, reopening the modal right after it had
+// just been closed. Comparing the request's own issue time against the
+// login timestamp instead removes the arbitrary window entirely: any
+// request issued before the last successful login is unconditionally stale,
+// regardless of how long it took to fail.
 const lastLoginSuccessAt = new Map();
-const STALE_TOKEN_GRACE_MS = 5000;
+const isStaleHostRequest = (hostUid, originalRequest) =>
+  (originalRequest?.__issuedAt || 0) < (lastLoginSuccessAt.get(hostUid) || 0);
 
 // Directly export so ReconnectHostModal can clear the guard on close.
 export const clearReconnectingHost = (hostUid) => {
@@ -86,6 +99,13 @@ apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined' && window.location.protocol === 'app:') {
     config.adapter = 'fetch';
   }
+  // Stamp when THIS attempt was actually sent (re-stamped on every retry,
+  // since apiClient(originalRequest) re-enters this interceptor). Lets the
+  // 401 handler below tell a stale straggler — issued before a reconnect
+  // that has since succeeded — from a genuinely new failure, no matter how
+  // long that straggler took to come back. See STALE_TOKEN_GRACE_MS removal
+  // note further down for why a fixed time window isn't enough.
+  config.__issuedAt = Date.now();
   return config;
 });
 
@@ -323,11 +343,10 @@ apiClient.interceptors.response.use(
 
         if (isInvalidTokenError) {
           // (Already-reconnecting hosts are dropped by the guard above.)
-          // A request in flight before a fresh (re)login can still land its 401
+          // A request issued before a fresh (re)login can still land its 401
           // after that login already succeeded — that's a stale race, not an
           // actual takeover, so don't second-guess the session that's already valid.
-          const sinceLogin = Date.now() - (lastLoginSuccessAt.get(hostUid) || 0);
-          if (sinceLogin < STALE_TOKEN_GRACE_MS) {
+          if (isStaleHostRequest(hostUid, originalRequest)) {
             return Promise.reject(error);
           }
           console.warn(`Host token for ${hostUid} was invalidated (session taken over). Showing reconnect modal.`);
@@ -340,6 +359,16 @@ apiClient.interceptors.response.use(
             reconnectingHosts.delete(hostUid);
             console.error('Failed to dispatch reconnect modal:', e);
           }
+          return Promise.reject(error);
+        }
+
+        // Same staleness check as above: a straggler 401 issued before the
+        // last successful (re)login shouldn't feed the circuit breaker below
+        // either — it's not a new failure, and letting it count (or, once
+        // the count trips, reopen the modal) reproduces the same
+        // already-reconnected-but-modal-pops-again bug via this branch
+        // instead of the INVALID_TOKEN one above.
+        if (isStaleHostRequest(hostUid, originalRequest)) {
           return Promise.reject(error);
         }
 
@@ -389,7 +418,7 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } catch {
           refreshingHosts.delete(hostUid);
-          if (reconnectingHosts.has(hostUid)) {
+          if (reconnectingHosts.has(hostUid) || isStaleHostRequest(hostUid, originalRequest)) {
             return Promise.reject(error);
           }
           reconnectingHosts.add(hostUid);

@@ -98,11 +98,8 @@ export class DatabaseUserService extends BaseService {
     dbname: string
   ): Promise<{ reauthenticated: boolean }> {
     const host = await this.hostService.findHostInternal(userId, hostUid);
-    const key = `${userId}:${hostUid}:${dbname}`;
-    const cached = this.dbLoginCache.get(key);
-    const now = Date.now();
 
-    if (cached && cached.hostToken === host.token && now - cached.loggedInAt < DBMT_LOGIN_TTL_MS) {
+    if (this.isDbLoginActive(userId, hostUid, dbname, host.token)) {
       return { reauthenticated: false };
     }
 
@@ -123,6 +120,17 @@ export class DatabaseUserService extends BaseService {
     }
 
     return { reauthenticated: true };
+  }
+
+  /**
+   * Read-only: whether ensureDbLogin would treat this (host, db) as already
+   * logged in — the exact same cache-hit condition (same host token, within
+   * DBMT_LOGIN_TTL_MS), with no side effects. CMS's conlist is keyed to the
+   * login connection, so a rotated host token starts with no DB logins.
+   */
+  isDbLoginActive(userId: string, hostUid: string, dbname: string, hostToken: string | undefined): boolean {
+    const cached = this.dbLoginCache.get(`${userId}:${hostUid}:${dbname}`);
+    return !!cached && cached.hostToken === hostToken && Date.now() - cached.loggedInAt < DBMT_LOGIN_TTL_MS;
   }
 
   /**
@@ -276,12 +284,22 @@ export class DatabaseUserService extends BaseService {
       });
     }
 
-    const fetchedGroups: string[] = [];
-    const rawGroups = (existingUser as Record<string, unknown>).groups as any;
-    if (Array.isArray(rawGroups?.group)) {
-      fetchedGroups.push(...rawGroups.group.filter((g: unknown) => typeof g === 'string'));
+    // CMS returns groups as [{ group: [...] }] (an open/close section), and
+    // updateuser only reads groups sent back in that same array shape. It
+    // drops every existing group before re-adding the requested ones and no
+    // longer re-adds PUBLIC itself, so PUBLIC is always included here.
+    const fetchedGroups = new Set<string>(['PUBLIC']);
+    const rawGroups = (existingUser as Record<string, unknown>).groups;
+    const groupSections = Array.isArray(rawGroups) ? rawGroups : [rawGroups];
+    for (const section of groupSections) {
+      const names = (section as { group?: unknown } | null | undefined)?.group;
+      for (const name of Array.isArray(names) ? names : [names]) {
+        if (typeof name === 'string' && name) {
+          fetchedGroups.add(name.toUpperCase());
+        }
+      }
     }
-    const preservedGroups = { group: fetchedGroups };
+    const preservedGroups = [{ group: [...fetchedGroups] }];
 
     const fetchedAuthorization: string[] = [];
     const rawAuthorization = (existingUser as Record<string, unknown>).authorization;

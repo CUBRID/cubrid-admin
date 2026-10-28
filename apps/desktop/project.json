@@ -7,8 +7,9 @@
   "targets": {
     "build": {
       "executor": "nx:run-commands",
+      "dependsOn": [{ "target": "build", "projects": "update-check" }],
       "options": {
-        "command": "tsc -p apps/desktop/tsconfig.json",
+        "command": "tsc -p apps/desktop/tsconfig.json && npx tsc-alias -p apps/desktop/tsconfig.json",
         "cwd": "{workspaceRoot}"
       }
     },

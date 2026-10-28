@@ -20,6 +20,7 @@ const initialState = {
     message: '',
     guidance: null, // string[] — curated "things to check" for error type
     detail: null, // raw CMS/server error text, shown behind a "Show details" toggle
+    tables: null, // FailureTable props[] — per-item bulk outcomes, shown directly
   },
   refreshCounter: 0,
   refreshTabId: null,
@@ -124,6 +125,7 @@ const layoutSlice = createSlice({
         message: action.payload.message || '',
         guidance: action.payload.guidance || null,
         detail: action.payload.detail || null,
+        tables: action.payload.tables || null,
       };
     },
     closeStatusModal: (state) => {

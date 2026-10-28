@@ -638,7 +638,7 @@ export default function DatabasePropertyModal() {
           {selectedDatabase && (
             <div className="px-4 py-3 border-t border-white/5">
               <p className="text-10 uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
-              <p className="text-12 font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
+              <p title={selectedDatabase} className="text-12 font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
             </div>
           )}
         </div>

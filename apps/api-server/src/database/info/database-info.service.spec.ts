@@ -6,6 +6,7 @@ import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { CmsError } from '@error/cms/cms-error';
+import { DatabaseUserService } from '../user/database-user.service';
 
 // Real GetEnv values (e.g. BROKERVER, CUBRIDVER) vary by host; tests use fixed mock data only.
 const mockGetEnvForCreatedb: GetEnvClientResponse = {
@@ -33,6 +34,7 @@ describe('DatabaseInfoService', () => {
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let cmsConfigService: jest.Mocked<CmsConfigService>;
+  let databaseUserService: { isDbLoginActive: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -64,6 +66,7 @@ describe('DatabaseInfoService', () => {
         { provide: HostService, useValue: mockHostService },
         { provide: CmsHttpsClientService, useValue: mockCmsClient },
         { provide: CmsConfigService, useValue: mockCmsConfigService },
+        { provide: DatabaseUserService, useValue: { isDbLoginActive: jest.fn().mockReturnValue(false) } },
       ],
     }).compile();
 
@@ -71,6 +74,7 @@ describe('DatabaseInfoService', () => {
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
     cmsConfigService = module.get(CmsConfigService);
+    databaseUserService = module.get(DatabaseUserService);
 
     hostService.findHostInternal.mockResolvedValue(mockHost);
   });
@@ -138,12 +142,30 @@ describe('DatabaseInfoService', () => {
         CMS_CONFNAME_HACONF
       );
       expect(result).toEqual({
-        activelist: { active: [{ dbname: 'testdb' }] },
+        activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
         dblist: {
-          dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false }],
+          dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false, isLoggedIn: false }],
         },
         haDbNames: [],
       });
+    });
+
+    it('reports isLoggedIn from the server-side DB login state for the current host token', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        __EXEC_TIME: '10 ms',
+        note: 'none',
+        status: 'success',
+        task: 'startinfo',
+        dblist: [{ dbs: [{ dbname: 'testdb', dbdir: '/path' }, { dbname: 'otherdb', dbdir: '/path2' }] }],
+        activelist: [{ active: [{ dbname: 'testdb' }] }],
+      });
+      databaseUserService.isDbLoginActive.mockImplementation((_u, _h, dbname) => dbname === 'testdb');
+
+      const result = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(databaseUserService.isDbLoginActive).toHaveBeenCalledWith(mockUserId, mockHostUid, 'testdb', 'test-token');
+      expect(result.dblist.dbs.map((d) => [d.dbname, d.isLoggedIn])).toEqual([['testdb', true], ['otherdb', false]]);
+      expect(result.activelist.active).toEqual([{ dbname: 'testdb', isLoggedIn: true }]);
     });
   });
 

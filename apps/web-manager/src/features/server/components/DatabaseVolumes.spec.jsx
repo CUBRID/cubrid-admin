@@ -7,6 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 vi.mock('../../database/databaseSlice', () => ({ fetchDatabaseVolumes: vi.fn() }));
 import { fetchDatabaseVolumes } from '../../database/databaseSlice';
 import DatabaseVolumes from './DatabaseVolumes';
+import { CM } from '../../../constants/cmLabels';
 
 const deferred = () => {
   let resolve;
@@ -44,11 +45,11 @@ const makeStore = () => configureStore({
   reducer: (state = baseState, action) => (action.type === 'SET_STATE' ? action.payload : state),
 });
 
-const render = async (store, activeDatabases = ['demodb']) => act(async () => {
+const render = async (store, activeDatabases = ['demodb'], dbListStatus = 'loaded') => act(async () => {
   root.render(
     <StrictMode>
       <Provider store={store}>
-        <DatabaseVolumes hostUid="host1" activeDatabases={activeDatabases} />
+        <DatabaseVolumes hostUid="host1" activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
       </Provider>
     </StrictMode>
   );
@@ -127,4 +128,42 @@ it('stops the loading spinner when logging out clears the table while a fetch is
   // Resolving the stale request afterwards must not bring the spinner back.
   await act(async () => request.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
   expect(volumeCard().querySelector('.animate-spin')).toBeFalsy();
+});
+
+it('stays loading (not "requires a running database") until the host database list has loaded', async () => {
+  const request = deferred();
+  mockFetchReturning(request.promise);
+  const store = makeStore();
+
+  await render(store, [], 'loading');
+  expect(fetchDatabaseVolumes).not.toHaveBeenCalled();
+  expect(volumeCard().textContent).not.toContain(CM.storageVolumesRequireOnlineDbMsg);
+  expect(volumeCard().querySelector('.animate-pulse')).toBeTruthy();
+
+  await render(store, ['demodb'], 'loaded');
+  expect(fetchDatabaseVolumes).toHaveBeenCalled();
+  expect(volumeCard().textContent).not.toContain(CM.storageVolumesRequireOnlineDbMsg);
+
+  await act(async () => request.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+  expect(volumeCard().textContent).toContain('demodb');
+});
+
+it('shows "requires a running database" only once the list loaded with none logged in', async () => {
+  const store = makeStore();
+  await render(store, [], 'loaded');
+  expect(volumeCard().textContent).toContain(CM.storageVolumesRequireOnlineDbMsg);
+});
+
+it('shows an unavailable state when the database list failed to load', async () => {
+  const store = makeStore();
+  await render(store, [], 'error');
+  expect(volumeCard().textContent).toContain(CM.dataUnavailableTitle);
+  expect(volumeCard().textContent).not.toContain(CM.storageVolumesRequireOnlineDbMsg);
+});
+
+it('shows an unavailable state when the volume fetch failed with nothing loaded yet', async () => {
+  mockFetchReturning(Promise.reject(new Error('timeout')));
+  const store = makeStore();
+  await render(store);
+  expect(volumeCard().textContent).toContain(CM.dataUnavailableTitle);
 });
