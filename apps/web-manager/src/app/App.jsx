@@ -57,8 +57,11 @@ import EditHostModal from '../features/host/components/EditHostModal';
 import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
+import { useDesktopMenuLanguage } from '../features/desktop/hooks/useDesktopMenuLanguage';
+import { useDesktopMenuActions } from '../features/desktop/hooks/useDesktopMenuActions';
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
+import AboutModal from '../features/layout/components/AboutModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import LogViewer from '../features/broker/components/LogViewer';
 import CMSLogViewer from '../features/broker/components/CMSLogViewer';
@@ -525,6 +528,8 @@ function RootRedirect() {
 
 function App() {
   const { theme } = useSelector((state) => state.layout, shallowEqual);
+  useDesktopMenuLanguage();
+  useDesktopMenuActions();
 
   useEffect(() => {
     if (window.desktopBridge?.onCloseActiveTab) {
@@ -552,20 +557,24 @@ function App() {
   }, [theme]);
 
   return (
-    <Routes>
-      <Route path="/" element={<RootRedirect />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+      {/* Outside the routes so the desktop menu's About also works on /login. */}
+      <AboutModal />
+    </>
   );
 }
 

@@ -19,6 +19,9 @@ export type DesktopBridge = {
   resetWorkspaceRoot: () => Promise<{ ok: true }>;
   finishWorkspaceSetup: (workspaceRoot: string) => Promise<{ ok: boolean }>;
   revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
+  setMenuLanguage: (language: 'en' | 'ko') => Promise<{ ok: true }>;
+  setMenuState: (state: Record<string, boolean>) => Promise<{ ok: true }>;
+  onMenuAction: (callback: (actionId: string) => void) => () => void;
   onCloseActiveTab: (callback: () => void) => () => void;
   closeWindow: () => Promise<void>;
 };
