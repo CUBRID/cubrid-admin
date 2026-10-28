@@ -726,7 +726,7 @@ describe('DatabaseManagementService', () => {
         const request: CheckDatabaseRequest = { repairdb: 'n' };
 
         const err = await service.checkDatabase(mockUserId, mockHostUid, mockDbname, request).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -853,7 +853,7 @@ describe('DatabaseManagementService', () => {
         const request: CompactDatabaseRequest = { verbose: 'y' };
 
         const err = await service.compactDatabase(mockUserId, mockHostUid, mockDbname, request).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -1046,7 +1046,7 @@ describe('DatabaseManagementService', () => {
         };
 
         const err = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, request).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
@@ -1205,7 +1205,7 @@ describe('DatabaseManagementService', () => {
         cmsClient.postAuthenticated.mockResolvedValue({ __EXEC_TIME: '0 ms', note: 'Request is rejected due to invalid token. Please reconnect.', status: 'error', task: 'cms' });
 
         const err = await service.addVolDb(mockUserId, mockHostUid, mockDbname, mockRequest).catch((e) => e);
-          expect(err.originalError?.message).toMatch(/did not finish within/);
+          expect(err.additionalData?.message).toMatch(/did not finish within/);
       } finally {
         delete process.env.CMS_JOB_LONG_TIMEOUT_HOURS;
       }
