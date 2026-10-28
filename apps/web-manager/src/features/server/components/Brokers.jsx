@@ -8,6 +8,7 @@ import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
+import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
 
 const Component = function Brokers({ hostUid, isSection = false }) {
@@ -19,23 +20,49 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // Embedded in the host dashboard (host:<uid> tab), this component is never
+  // the active tab itself, so its own polling below never runs. The host
+  // dashboard (ServerContent.jsx) already fetches this host's broker list into
+  // brokersByHost on every tick — show that instead of fetching it a second
+  // time (a second fetch also doubles the qps/tps rate samples).
+  const sharedBrokers = useSelector((state) => state.broker.brokersByHost[hostUid]);
+  const sharedLoading = useSelector((state) => !!state.broker.loadingByHost[hostUid]);
+  const sharedFailed = useSelector((state) => !!state.broker.brokerListFailedByHost[hostUid]);
 
   useEffect(() => {
     setBrokers([]);
     setLoading(false);
     setHasLoadedOnce(false);
+    setLoadFailed(false);
   }, [hostUid]);
+
+  // brokersByHost[hostUid] is deleted when focus leaves this host
+  // (resetBrokerState) and blanked when a fetch fails; keep showing the last
+  // list until the next successful fetch.
+  useEffect(() => {
+    if (isSection && Array.isArray(sharedBrokers) && !sharedFailed) {
+      setBrokers(sharedBrokers);
+      setHasLoadedOnce(true);
+    }
+  }, [isSection, sharedBrokers, sharedFailed]);
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
     tabId: `brokers_status:${hostUid}`,
     pollingIntervalSeconds: preferences.brokerStatusInterval,
     onFetch: () => async (dispatch) => {
+      if (isSection) return;
       setLoading(true);
       try {
         const result = await dispatch(fetchBrokerList(hostUid)).unwrap();
         setBrokers(result);
+        setLoadFailed(false);
+      } catch (err) {
+        // Keep the last list; only an empty table shows the failure.
+        setLoadFailed(true);
+        throw err;
       } finally {
         setLoading(false);
         setHasLoadedOnce(true);
@@ -99,8 +126,9 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     >
       <Table
         columns={columns}
+        emptyState={<FetchEmptyState status={!hasLoadedOnce ? 'loading' : loadFailed ? 'error' : 'loaded'} title={CM.brokerStatus} />}
         data={brokers}
-        loading={loading && !hasLoadedOnce && !isManualRefreshing}
+        loading={(isSection ? sharedLoading : loading) && !hasLoadedOnce && !isManualRefreshing}
         onRowClick={(row) => dispatch(openTab(`broker_status:${hostUid}:${row.name}`))}
       />
     </Card>
@@ -112,8 +140,8 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-bk-main overflow-hidden">
       
       {/* ── Top bar ── */}
-      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-white dark:bg-bk-side/40">
-        <div className="flex items-center gap-3">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 min-w-fit sticky top-0 z-20 bg-white dark:bg-bk-side/40">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="hub" size="sm" weight={300} className="text-amber-500" />
           </div>
@@ -134,8 +162,8 @@ const Component = function Brokers({ hostUid, isSection = false }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <span className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          <span className="text-12 text-slate-400 font-mono tracking-tight mr-2 whitespace-nowrap">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </span>
 

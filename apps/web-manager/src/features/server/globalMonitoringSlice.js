@@ -3,6 +3,7 @@ import { hostApi } from '../host/hostApi';
 import { databaseApi } from '../database/databaseApi';
 import { brokerApi } from '../broker/brokerApi';
 import monitoringApi from './monitoringApi';
+import { computeBrokerRates, extractBrokerList } from './hostMetrics';
 
 /**
  * Thunk to fetch comprehensive summary for a single host
@@ -70,24 +71,28 @@ export const fetchHostSummary = createAsyncThunk(
         });
       });
 
-      // 4. Process Broker Data
-      let totalTps = 0, totalQps = 0, totalErrorQ = 0;
+      // 4. Process Broker Data — tran/query are cumulative counters, so
+      // TPS/QPS are per-second rates against this host's previous sample
+      // (null until two samples can be compared, or if the list failed).
+      const prev = getState().globalMonitoring.snapshots[hostUid];
+      let totalErrorQ = 0;
       let brokerPorts = [];
-      const brokerList = brokersResponse?.result || (Array.isArray(brokersResponse) ? brokersResponse[0]?.broker : []) || [];
+      const brokerList = extractBrokerList(brokersResponse);
       brokerList.forEach(b => {
-        totalTps += parseFloat(b.tran || 0);
-        totalQps += parseFloat(b.query || 0);
         totalErrorQ += parseFloat(b.error_query || 0);
         if (b.port) brokerPorts.push(b.port);
       });
+      const { sample: brokerSample, rates: brokerRates } = brokersResponse
+        ? computeBrokerRates(prev?.brokerSample, brokersResponse, Date.now())
+        : { sample: prev?.brokerSample ?? null, rates: { tps: null, qps: null } };
 
       // 5. CPU Delta Calculation (Legacy Parity)
-      const prev = getState().globalMonitoring.snapshots[hostUid];
       const snapshot = {
         user: parseInt(hostStat.cpu_user || 0, 10),
         kernel: parseInt(hostStat.cpu_kernel || 0, 10),
         idle: parseInt(hostStat.cpu_idle || 0, 10),
         iowait: parseInt(hostStat.cpu_iowait || 0, 10),
+        brokerSample,
       };
 
       let cpuPercent = 0;
@@ -113,8 +118,8 @@ export const fetchHostSummary = createAsyncThunk(
           memUsed: parseFloat(hostStat.mem_phy_total || 0) - parseFloat(hostStat.mem_phy_free || 0),
           disk: hostStat.disk_usage || '0/0',
           freespaceOnStorage,
-          tps: totalTps,
-          qps: totalQps,
+          tps: brokerRates.tps,
+          qps: brokerRates.qps,
           errorQ: totalErrorQ,
           dbOn: dbInfo?.activelist?.active?.length || 0,
           dbOff: (dbInfo?.dblist?.dbs?.length || 0) - (dbInfo?.activelist?.active?.length || 0),

@@ -72,3 +72,4 @@ export * from './get-auto-add-vol-log-cms-request';
 export * from './get-transaction-info-cms-request';
 export * from './kill-transaction-cms-request';
 export * from './delete-database-cms-request';
+export * from './statdump-watcher-cms-request';

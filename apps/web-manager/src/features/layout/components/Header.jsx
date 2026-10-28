@@ -6,7 +6,6 @@ import UserProfileModal from '../../user/components/UserProfileModal';
 
 
 import { Icon } from '../../../components/ds/foundation/Icon';
-import AboutModal from './AboutModal';
 import HeaderMenu from './HeaderMenu';
 import LanguageToggle from './LanguageToggle';
 import { useCM } from '../../../constants/useCM';
@@ -35,16 +34,28 @@ export default function Header({ theme, toggleTheme }) {
 
   return (
     <>
-      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center justify-center px-6 z-40 shrink-0 select-none relative">
-        <div className="w-full flex items-center justify-between">
+      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center px-6 z-40 shrink-0 min-w-fit select-none relative">
+        {/* No justify-between: with both sides pinned to opposite edges,
+            squeezing the row below their combined natural width makes the
+            left side run straight into the right side's space instead of
+            yielding it — flexbox only avoids that via shrinking, which none
+            of these items do. ml-auto gets the same flush-right look while
+            there's room, but once there isn't, it just settles to 0 instead
+            of going negative, so the row grows past the header's own width
+            instead of the two sides overlapping — the resulting horizontal
+            overflow is handled one level up by <main>'s own scroll
+            container (App.jsx), so the header, tab bar, and dashboard body
+            all scroll together as one unit instead of each getting its own
+            independent scrollbar. */}
+        <div className="w-full flex items-center">
           {/* ── Left: logo + menus ── */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Dropdown menus */}
             <HeaderMenu />
           </div>
 
           {/* ── Right: theme toggle + user + logout ── */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto shrink-0">
             <LanguageToggle />
 
             <div className="w-px h-5 bg-slate-200 dark:bg-white/8 mx-1" />
@@ -62,7 +73,7 @@ export default function Header({ theme, toggleTheme }) {
 
             {/* User profile pill */}
             <button
-              className={`${btnBase} px-2 gap-2 bg-slate-100 dark:bg-white/4 border-slate-200 dark:border-white/[0.07] hover:bg-slate-200 dark:hover:bg-white/8 group min-w-[120px] justify-between`}
+              className={`${btnBase} px-2 gap-2 bg-slate-100 dark:bg-white/4 border-slate-200 dark:border-white/[0.07] hover:bg-slate-200 dark:hover:bg-white/8 group shrink-0 justify-between`}
               onClick={() => setIsProfileOpen(true)}
             >
               {authLoading ? (
@@ -80,7 +91,7 @@ export default function Header({ theme, toggleTheme }) {
                       className={authError ? 'text-white' : 'text-bk-side'}
                     />
                   </div>
-                  <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight flex-1 text-left px-1 truncate">
+                  <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight text-left px-1 whitespace-nowrap">
                     {user?.id || CM.admin}
                   </span>
                   <Icon name="expand_more" size="15px" className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
@@ -90,19 +101,18 @@ export default function Header({ theme, toggleTheme }) {
 
             {/* Logout */}
             <button
-              className="h-8 flex items-center justify-center rounded-sm border transition-all active:scale-[0.98] gap-2 px-4 bg-rose-500/5 border-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
+              className="h-8 flex items-center justify-center rounded-sm border transition-all active:scale-[0.98] gap-2 px-4 shrink-0 bg-rose-500/5 border-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
               onClick={handleLogout}
               title={CM.logout}
             >
               <Icon name="logout" size="19px" weight={400} />
-              <span className="text-15 font-bold tracking-tight">{CM.logout}</span>
+              <span className="text-15 font-bold tracking-tight whitespace-nowrap">{CM.logout}</span>
             </button>
           </div>
         </div>
       </header>
 
       <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-      <AboutModal />
     </>
   );
 }

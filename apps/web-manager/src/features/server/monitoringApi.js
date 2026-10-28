@@ -13,6 +13,14 @@ export const monitoringApi = {
     apiClient.get(`/${hostUid}/resource-monitoring/get-host-stat`),
 
   /**
+   * Get disk usage (CMS getsysdiskinfo): `disk_info: [{ name, total_size, free_size }]`
+   * @param {string} hostUid
+   * @returns {Promise<any>}
+   */
+  getSysDiskInfo: (hostUid) =>
+    apiClient.get(`/${hostUid}/resource-monitoring/get-sys-disk-info`),
+
+  /**
    * Get broker list (includes TPS/QPS)
    * @param {string} hostUid
    * @returns {Promise<any>}

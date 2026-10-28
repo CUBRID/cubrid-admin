@@ -1,15 +1,18 @@
-import { dialog, ipcMain, shell } from 'electron';
+import { app, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import { getApiProcess, restartApiForCurrentWorkspace } from '../api/api-runtime';
 import {
   clearConfiguredWorkspaceRoot,
   getDesktopSettingsPath,
+  isCheckForUpdatesOnStartupEnabled,
   loadDesktopSettings,
   markWorkspaceSetupComplete,
   needsWorkspaceSetup,
+  setCheckForUpdatesOnStartup,
   setWorkspaceRoot,
 } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
+import { installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import {
   assertWorkspaceWritable,
@@ -17,6 +20,12 @@ import {
 } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { getMainWindow } from '../window/window-registry';
+import {
+  dismissUpdate,
+  getStartupUpdateNotice,
+  getUpdateStatus,
+  openUpdateDownload,
+} from '../update/check-for-update';
 
 async function applyWorkspaceChange(): Promise<{ ok: true }> {
   if (getApiProcess()) {
@@ -46,6 +55,16 @@ export function registerDesktopIpcHandlers(): void {
       shell.openPath(portableRoot);
     }
     return { settingsPath, portableRoot };
+  });
+
+  ipcMain.handle('desktop:set-menu-language', (_event, language: unknown) => {
+    installApplicationMenu(language);
+    return { ok: true };
+  });
+
+  ipcMain.handle('desktop:set-menu-state', (_event, state: unknown) => {
+    setApplicationMenuState(state);
+    return { ok: true };
   });
 
   ipcMain.handle('desktop:get-workspace-info', () => {
@@ -108,6 +127,29 @@ export function registerDesktopIpcHandlers(): void {
     refreshWorkspacePaths();
     markWorkspaceSetupComplete();
     notifyWorkspaceSetupComplete();
+    return { ok: true };
+  });
+
+  ipcMain.handle('desktop:get-app-version', () => app.getVersion());
+
+  ipcMain.handle('desktop:get-update-status', () => getUpdateStatus());
+
+  ipcMain.handle('desktop:get-startup-update-notice', () => getStartupUpdateNotice());
+
+  ipcMain.handle('desktop:dismiss-update', (_event, version: unknown) => {
+    dismissUpdate(version);
+    return { ok: true };
+  });
+
+  ipcMain.handle('desktop:open-update-download', (_event, url: unknown) => openUpdateDownload(url));
+
+  ipcMain.handle('desktop:get-check-updates-on-startup', () => isCheckForUpdatesOnStartupEnabled());
+
+  ipcMain.handle('desktop:set-check-updates-on-startup', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('enabled must be a boolean');
+    }
+    setCheckForUpdatesOnStartup(enabled);
     return { ok: true };
   });
 

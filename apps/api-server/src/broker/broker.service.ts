@@ -1,6 +1,8 @@
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { BaseService, HandleCmsErrors } from '@common';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
+import { CmsError } from '@error/cms/cms-error';
+import { CmsErrorCode } from '@error/cms/cms-error-code';
 import { DatabaseError } from '@error/database/database-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
@@ -8,6 +10,7 @@ import {
   AddDbmtUserClientResponse,
   AddDbmtUserRequest,
   BrokerStartStopClientResponse,
+  GetBrokerStatusBulkClientResponse,
   GetBrokerStatusClientResponse,
   StartAllBrokersClientResponse,
   StopAllBrokersClientResponse,
@@ -18,8 +21,10 @@ import {
   AddDbmtUserCmsRequest,
   BaseCmsRequest,
   BaseCmsResponse,
+  BrokerStatusEntry,
   GetBrokerStatusCmsRequest,
   GetBrokerStatusCmsResponse,
+  GetBrokerStatusMultiCmsResponse,
   GetBrokersInfoCmsResponse,
   HandleBrokerCmsRequest,
   StartAllBrokersCmsRequest,
@@ -32,6 +37,13 @@ import {
   StopAllBrokersCmsResponse,
   UpdateDbmtUserCmsResponse,
 } from '@type/cms-response';
+
+/**
+ * Broker names per bulk `getbrokerstatus` call. CMS has no length limit on
+ * `bname` (dynamic nvplist strings, no HTTP body cap); this only bounds the
+ * size of one response (~6 KB per broker with 20 CAS) and CMS time per call.
+ */
+export const BROKER_STATUS_BULK_CHUNK_SIZE = 50;
 
 /**
  * Service for managing broker operations.
@@ -212,6 +224,60 @@ export class BrokerService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     return this.extractDomainData(response);
+  }
+
+  /**
+   * Get the status of many brokers with one `getbrokerstatus` call per
+   * chunk of BROKER_STATUS_BULK_CHUNK_SIZE names (CMS accepts a
+   * comma-separated `bname`), instead of one call per broker.
+   *
+   * CMS returns `{ broker: [...] }` when `bname` contains a comma and the
+   * flat single-broker shape otherwise; both are normalized to a list here.
+   *
+   * A failed chunk only drops its own brokers: the other chunks' results are
+   * kept. An invalid CMS token, or every chunk failing, still throws.
+   */
+  @HandleCmsErrors()
+  async getBrokerStatusBulk(
+    userId: string,
+    hostUid: string,
+    bnames: string[]
+  ): Promise<GetBrokerStatusBulkClientResponse> {
+    const names = [...new Set(bnames.map((name) => name.trim()).filter(Boolean))];
+    const brokers: BrokerStatusEntry[] = [];
+    let firstError: unknown;
+    let succeeded = 0;
+
+    // Sequential on purpose: CMS serves one host's requests one at a time.
+    for (let i = 0; i < names.length; i += BROKER_STATUS_BULK_CHUNK_SIZE) {
+      const chunk = names.slice(i, i + BROKER_STATUS_BULK_CHUNK_SIZE);
+      let response: GetBrokerStatusCmsResponse & GetBrokerStatusMultiCmsResponse;
+      try {
+        response = await this.executeCmsRequest<
+          GetBrokerStatusCmsRequest,
+          GetBrokerStatusCmsResponse & GetBrokerStatusMultiCmsResponse
+        >(userId, hostUid, { task: 'getbrokerstatus', bname: chunk.join(',') });
+      } catch (err) {
+        if (err instanceof CmsError && err.code === CmsErrorCode.INVALID_TOKEN) throw err;
+        firstError ??= err;
+        this.logger.warn(
+          `getbrokerstatus failed for ${chunk.length} broker(s) on host ${hostUid}, keeping the other chunks: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+        );
+        continue;
+      }
+      succeeded++;
+
+      if (chunk.length === 1) {
+        const { bname, time, asinfo, jobinfo } = response;
+        brokers.push({ bname, time, asinfo, jobinfo });
+      } else {
+        brokers.push(...(response.broker ?? []).filter((entry) => entry?.bname));
+      }
+    }
+
+    if (succeeded === 0 && firstError !== undefined) throw firstError;
+    return { brokers };
   }
 
   @HandleCmsErrors()

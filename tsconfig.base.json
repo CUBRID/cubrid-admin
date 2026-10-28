@@ -65,6 +65,8 @@
       "@token/*": ["apps/api-server/src/token/*"],
       "@type": ["apps/api-server/src/type/index"],
       "@type/*": ["apps/api-server/src/type/*"],
+      "@update-check": ["libs/update-check/src"],
+      "@update-check/*": ["libs/update-check/src/*"],
       "@user": ["apps/api-server/src/user/index"],
       "@user/*": ["apps/api-server/src/user/*"],
       "@util": ["apps/api-server/src/util/index"],

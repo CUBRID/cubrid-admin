@@ -86,6 +86,9 @@ export class AppError extends Error {
       'parameter',
       'requestedSizeBytes',
       'maximumSizeBytes',
+      // Per-line reasons from the conf text check (validateConfText) —
+      // { lineNo, key, message }, no host data.
+      'problems',
     ];
 
     const sensitiveFields = [

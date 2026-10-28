@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { closeLockInformationModal } from '../databaseSlice';
 import { databaseApi } from '../databaseApi';
@@ -11,6 +11,9 @@ import { MetricCard } from '../../../components/ds/foundation/MetricCard';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { ProgressBar } from '../../../components/ds/foundation/ProgressBar';
 import { Table } from '../../../components/ds/layout/Table';
+import { Icon } from '../../../components/ds/foundation/Icon';
+import { Typography } from '../../../components/ds/foundation/Typography';
+import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLoadingOverlay';
 import { useCM } from '../../../constants/useCM';
 
 function buildObjectLockRows(lot) {
@@ -49,17 +52,24 @@ export default function LockInformationModal() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // False until the first fetch succeeds: the tables only render once there
+  // is real data, so an empty list never flashes before the first response.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  // Drops a response that lands after the modal was closed or retargeted.
+  const requestIdRef = useRef(0);
 
   const fetchLockInfo = useCallback(async () => {
     if (!selectedHostUid || !selectedDatabase) return;
+    const requestId = ++requestIdRef.current;
     if (!isActive) {
       setError('Database is stopped. Locking information is only available when the database is running.');
+      setLoading(false);
       return;
     }
     setLoading(true);
-    setError(null);
     try {
       const response = await databaseApi.getLockInfo(selectedHostUid, selectedDatabase);
+      if (requestId !== requestIdRef.current) return;
       if (response?.lockinfo?.length > 0) {
         const { dinterval, esc, lot: lotArr, transaction } = response.lockinfo[0];
         setSettings({ dinterval, esc });
@@ -70,17 +80,30 @@ export default function LockInformationModal() {
         setLot({});
         setTransactions([]);
       }
+      setHasLoaded(true);
+      setError(null);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err.response?.data?.note || err.response?.data?.message || CM.failedToGetLockInfo);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [selectedHostUid, selectedDatabase]);
+  }, [selectedHostUid, selectedDatabase, isActive, CM]);
 
   useEffect(() => {
     if (isLockInfoModalOpen) {
       setActiveTab('sessions');
       fetchLockInfo();
+    } else {
+      // Reset while hidden so the next open starts on the loading state
+      // rather than the previous database's locks.
+      requestIdRef.current += 1;
+      setSettings({});
+      setLot({});
+      setTransactions([]);
+      setHasLoaded(false);
+      setLoading(false);
+      setError(null);
     }
   }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase]);
 
@@ -107,6 +130,11 @@ export default function LockInformationModal() {
 
   const handleClose = () => dispatch(closeLockInformationModal());
 
+  // Spinner from the first frame of the first open (before the fetch effect
+  // runs) and over the current content on every refresh.
+  const showSpinner = loading || (!hasLoaded && !error);
+  const showError = Boolean(error) && !loading;
+
   const TABS = [
     { id: 'sessions', label: CM.lockSettingClientInfo, icon: 'person', badge: transactions.length },
     { id: 'objects', label: CM.objectLockTable, icon: 'lock', badge: objectRows.length || null },
@@ -121,29 +149,42 @@ export default function LockInformationModal() {
       subtitle={selectedDatabase}
       icon="lock"
       maxWidth="max-w-[900px]"
-      loading={loading && transactions.length === 0}
-      error={error}
-      onErrorClose={() => setError(null)}
-      onErrorRetry={fetchLockInfo}
       testId="lock-information"
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="lock-information-close-btn" variant="ghost" onClick={handleClose} disabled={loading}>{CM.close}</Button>
-          <Button data-testid="lock-information-refresh-btn" variant="primary" onClick={fetchLockInfo} loading={loading} icon="refresh">{CM.refresh}</Button>
+          <Button data-testid="lock-information-refresh-btn" variant="primary" onClick={fetchLockInfo} loading={loading} disabled={showSpinner} icon="refresh">{CM.refresh}</Button>
         </div>
       }
     >
       <div className="space-y-4">
         <TabGroup tabs={TABS} active={activeTab} onChange={setActiveTab} testId="lock-information-tab" />
 
-        <div className="min-h-[300px]">
-          {activeTab === 'sessions' && (
+        {/* Fixed minimum height so the first load and the empty/error states
+            don't make the modal jump; real rows may still grow it. */}
+        <div className="relative min-h-[300px]">
+          <ContentLoadingOverlay show={showSpinner} testId="lock-information-loading" />
+          {showError && (
+            <div data-testid="lock-information-error" className="min-h-[300px] flex flex-col items-center justify-center gap-4 text-center">
+              <Icon name="error" size="md" weight={300} className="text-rose-500" />
+              <Typography variant="p" className="text-15 text-slate-600 dark:text-slate-300">
+                {CM.failedToGetLockInfo}
+              </Typography>
+              {error !== CM.failedToGetLockInfo && (
+                <Typography variant="caption" className="text-rose-500 font-mono block break-words px-4">
+                  {error}
+                </Typography>
+              )}
+              <Button data-testid="lock-information-retry-btn" variant="primary" icon="refresh" onClick={fetchLockInfo}>{CM.refresh}</Button>
+            </div>
+          )}
+          {!showError && hasLoaded && activeTab === 'sessions' && (
             <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
               <Table columns={sessionColumns} data={transactions} emptyMessage={CM.noActiveTransactions} stickyHeader selectable showEmptyStateAsRow />
             </div>
           )}
 
-          {activeTab === 'objects' && (
+          {!showError && hasLoaded && activeTab === 'objects' && (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 <MetricCard icon="lock" label={CM.currentLockedObjNum} value={lot.numlocked ?? 0} unit="" accent="amber" isLoading={loading} />
@@ -156,7 +197,7 @@ export default function LockInformationModal() {
             </div>
           )}
 
-          {activeTab === 'params' && (
+          {!showError && hasLoaded && activeTab === 'params' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <MetricCard icon="timer" label={CM.runDeadlockInterval} value={settings.dinterval ?? '-'} unit="ms" accent="sky" isLoading={loading} />

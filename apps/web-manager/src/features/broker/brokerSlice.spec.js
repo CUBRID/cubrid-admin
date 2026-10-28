@@ -5,6 +5,7 @@ vi.mock('./brokerApi', () => ({
   brokerApi: {
     getBrokerList: vi.fn(),
     getBrokerStatus: vi.fn(),
+    getBrokerStatusBulk: vi.fn(),
   },
 }));
 
@@ -35,6 +36,7 @@ describe('fetchBrokerList skipStatusEnrichment', () => {
     const result = await store.dispatch(fetchBrokerList({ hostUid: 'host1', skipStatusEnrichment: true })).unwrap();
 
     expect(brokerApi.getBrokerStatus).not.toHaveBeenCalled();
+    expect(brokerApi.getBrokerStatusBulk).not.toHaveBeenCalled();
     expect(result).toHaveLength(2);
     // Basic Information's fields must all already be present without enrichment.
     expect(result[0]).toMatchObject({
@@ -50,15 +52,18 @@ describe('fetchBrokerList skipStatusEnrichment', () => {
     expect(store.getState().broker.brokersByHost.host1).toHaveLength(2);
   });
 
-  it('still enriches with per-broker status when the flag is not set (default, unchanged behavior)', async () => {
+  it('still enriches with broker status when the flag is not set (default behavior)', async () => {
     brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker('broker1')] });
-    brokerApi.getBrokerStatus.mockResolvedValue({ asinfo: [{ as_id: '1', as_num_query: '10', as_num_tran: '2' }] });
+    brokerApi.getBrokerStatusBulk.mockResolvedValue({
+      brokers: [{ bname: 'broker1', asinfo: [{ as_id: '1', as_num_query: '10', as_num_tran: '2' }] }],
+    });
     const store = makeStore();
 
     await store.dispatch(fetchBrokerList({ hostUid: 'host1' })).unwrap();
 
-    expect(brokerApi.getBrokerStatus).toHaveBeenCalledTimes(1);
-    expect(brokerApi.getBrokerStatus).toHaveBeenCalledWith('host1', 'broker1');
+    expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledTimes(1);
+    expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledWith('host1', ['broker1']);
+    expect(brokerApi.getBrokerStatus).not.toHaveBeenCalled();
   });
 
   it('skipping enrichment still issues only a single list call, unaffected by broker count', async () => {
@@ -71,13 +76,91 @@ describe('fetchBrokerList skipStatusEnrichment', () => {
 
     expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
     expect(brokerApi.getBrokerStatus).not.toHaveBeenCalled();
+    expect(brokerApi.getBrokerStatusBulk).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchBrokerList bulk status enrichment', () => {
+  const asinfo = (numQuery, numTran) => [{ as_id: '1', as_num_query: String(numQuery), as_num_tran: String(numTran) }];
+
+  it('fetches every broker status with one bulk request instead of one per broker', async () => {
+    const names = Array.from({ length: 30 }, (_, i) => `broker${i}`);
+    brokerApi.getBrokerList.mockResolvedValue({ result: names.map(rawBroker) });
+    brokerApi.getBrokerStatusBulk.mockResolvedValue({
+      brokers: names.map((bname) => ({ bname, time: 't', asinfo: asinfo(1, 1) })),
+    });
+
+    const result = await makeStore().dispatch(fetchBrokerList({ hostUid: 'bulk-host-1' })).unwrap();
+
+    expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledTimes(1);
+    expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledWith('bulk-host-1', names);
+    expect(brokerApi.getBrokerStatus).not.toHaveBeenCalled();
+    expect(result.map((b) => b.name)).toEqual(names);
+  });
+
+  it('computes qps/tps per broker from consecutive polls of the bulk response', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-26T00:00:00Z'));
+      brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker('b1'), rawBroker('b2')] });
+      brokerApi.getBrokerStatusBulk.mockResolvedValueOnce({
+        brokers: [{ bname: 'b1', asinfo: asinfo(100, 10) }, { bname: 'b2', asinfo: asinfo(0, 0) }],
+      });
+      const store = makeStore();
+      const first = await store.dispatch(fetchBrokerList({ hostUid: 'bulk-host-2' })).unwrap();
+      expect(first.map((b) => b.qps)).toEqual([null, null]);
+
+      vi.setSystemTime(new Date('2026-10-26T00:00:10Z'));
+      brokerApi.getBrokerStatusBulk.mockResolvedValueOnce({
+        brokers: [{ bname: 'b1', asinfo: asinfo(200, 30) }, { bname: 'b2', asinfo: asinfo(50, 5) }],
+      });
+      const second = await store.dispatch(fetchBrokerList({ hostUid: 'bulk-host-2' })).unwrap();
+
+      expect(second).toEqual([
+        expect.objectContaining({ name: 'b1', qps: '10.0', tps: '2.0' }),
+        expect.objectContaining({ name: 'b2', qps: '5.0', tps: '0.5' }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a broker that is in the response without asinfo (stopped) and drops one missing from it', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker('running'), rawBroker('stopped'), rawBroker('missing')] });
+    brokerApi.getBrokerStatusBulk.mockResolvedValue({
+      brokers: [{ bname: 'running', time: 't', asinfo: asinfo(1, 1) }, { bname: 'stopped', time: 't' }],
+    });
+
+    const result = await makeStore().dispatch(fetchBrokerList({ hostUid: 'bulk-host-3' })).unwrap();
+
+    expect(result.map((b) => b.name)).toEqual(['running', 'stopped']);
+    expect(result[1]).not.toHaveProperty('qps');
+  });
+
+  it('treats a failed bulk request like every per-broker status request failing', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker('b1'), rawBroker('b2')] });
+    brokerApi.getBrokerStatusBulk.mockRejectedValue(new Error('CMS down'));
+
+    const result = await makeStore().dispatch(fetchBrokerList({ hostUid: 'bulk-host-4' })).unwrap();
+
+    expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([]);
+  });
+
+  it('makes no status request when the host has no brokers', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [] });
+
+    const result = await makeStore().dispatch(fetchBrokerList({ hostUid: 'bulk-host-5' })).unwrap();
+
+    expect(result).toEqual([]);
+    expect(brokerApi.getBrokerStatusBulk).not.toHaveBeenCalled();
   });
 });
 
 describe('fetchBrokerList.rejected', () => {
   it('clears brokersByHost[hostUid] on failure (documents existing shared behavior relied on elsewhere)', async () => {
     brokerApi.getBrokerList.mockResolvedValueOnce({ result: [rawBroker('broker1')] });
-    brokerApi.getBrokerStatus.mockResolvedValue({ asinfo: [] });
+    brokerApi.getBrokerStatusBulk.mockResolvedValue({ brokers: [{ bname: 'broker1', asinfo: [] }] });
     const store = makeStore();
     await store.dispatch(fetchBrokerList({ hostUid: 'host1' })).unwrap();
     expect(store.getState().broker.brokersByHost.host1).toHaveLength(1);
@@ -201,6 +284,28 @@ describe('broker lists are stored per host, not in one shared array', () => {
     expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
   });
 
+  it("an after-action response from before a disconnect is not shown after the host reconnects", async () => {
+    const before = deferred();
+    const after = deferred();
+    brokerApi.getBrokerList.mockImplementationOnce(() => before.promise).mockImplementationOnce(() => after.promise);
+    const store = configureStore({ reducer: { broker: reducer } });
+
+    const stale = store.dispatch(fetchBrokerList({ hostUid: 'hostA', afterAction: true, skipStatusEnrichment: true }));
+    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    // Reconnected: a new list request is in flight for the same host.
+    const fresh = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+
+    before.resolve({ result: [{ name: 'old-broker', pid: '1' }] });
+    await stale;
+    expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
+
+    after.resolve({ result: [{ name: 'new-broker', pid: '2' }] });
+    await fresh;
+    expect(store.getState().broker.brokersByHost.hostA).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'new-broker' })])
+    );
+  });
+
   it('clears loading when its host is deleted/disconnected mid-fetch, instead of leaving it stuck', async () => {
     const hostA = deferred();
     brokerApi.getBrokerList.mockImplementation(() => hostA.promise);
@@ -243,5 +348,48 @@ describe('broker lists are stored per host, not in one shared array', () => {
     hostB.resolve({ result: [{ name: 'hostB-broker', pid: '2' }] });
     await dispatchB;
     expect(store.getState().broker.loadingByHost.hostB).toBe(false);
+  });
+});
+
+describe('fetchBrokerList after a broker action', () => {
+  // Hold each getBrokerList call until released, to control response order.
+  const holdListCalls = () => {
+    const held = [];
+    brokerApi.getBrokerList.mockImplementation(() => new Promise((resolve) => held.push(resolve)));
+    return held;
+  };
+  const list = (state) => ({ result: [{ ...rawBroker('broker1'), state }] });
+  // skipStatusEnrichment keeps these independent of how statuses are fetched.
+  const fetchAfterAction = () => fetchBrokerList({ hostUid: 'host1', afterAction: true, skipStatusEnrichment: true });
+  const backgroundPoll = () => fetchBrokerList({ hostUid: 'host1', isBackground: true, skipStatusEnrichment: true });
+  const shownState = (store) => store.getState().broker.brokersByHost.host1?.[0]?.state;
+
+  it('is shown even when a background poll started while it was in flight', async () => {
+    const held = holdListCalls();
+    const store = makeStore();
+    const afterAction = store.dispatch(fetchAfterAction());
+    const poll = store.dispatch(backgroundPoll());
+
+    held[0](list('OFF'));
+    await afterAction;
+    expect(shownState(store)).toBe('OFF');
+
+    held[1](list('OFF'));
+    await poll;
+    expect(shownState(store)).toBe('OFF');
+  });
+
+  it('does not overwrite a newer response that was already shown', async () => {
+    const held = holdListCalls();
+    const store = makeStore();
+    const afterAction = store.dispatch(fetchAfterAction());
+    const poll = store.dispatch(backgroundPoll());
+
+    held[1](list('ON'));
+    await poll;
+    held[0](list('OFF'));
+    await afterAction;
+
+    expect(shownState(store)).toBe('ON');
   });
 });

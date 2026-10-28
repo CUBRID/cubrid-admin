@@ -44,3 +44,25 @@ export type GetBrokerStatusCmsResponse = BaseCmsResponse & {
   bname: string;
   time: string;
 };
+
+/**
+ * One broker block of a multi-broker `getbrokerstatus` response.
+ * `asinfo`/`jobinfo` are absent when the broker has no running AS
+ * (stopped) or the name is unknown to CMS.
+ */
+export type BrokerStatusEntry = {
+  bname: string;
+  time: string;
+  asinfo?: ApplicationServerInfo[];
+  jobinfo?: BrokerJobInfo[];
+};
+
+/**
+ * CMS response for `getbrokerstatus` when `bname` is a comma-separated list:
+ * CMS wraps each broker in its own `broker` block (cm_job_task.cpp
+ * ts2_get_broker_status). A list with no comma gets the flat
+ * GetBrokerStatusCmsResponse shape instead.
+ */
+export type GetBrokerStatusMultiCmsResponse = BaseCmsResponse & {
+  broker?: BrokerStatusEntry[];
+};

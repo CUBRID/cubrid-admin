@@ -29,7 +29,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   state = {
-    host: { hosts: [] },
+    host: { hosts: [], hostEnvs: {} },
     layout: { refreshCounter: 0, refreshTabId: null },
     user: { preferences: { uiLocale: 'en' } },
   };

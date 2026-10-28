@@ -16,6 +16,11 @@ export type HostRef = {
  */
 export const UNGROUPED_GROUP_ID = '__ungrouped__';
 
+/** Host alias is a free-form webmanager-only label (unlike DB/user names, it
+ * has no engine-imposed identifier limit), so it needs its own cap to stop
+ * pathologically long values from overflowing the sidebar/menus. */
+export const MAX_HOST_ALIAS_LENGTH = 100;
+
 /** Lazily creates the reserved ungrouped bucket. Idempotent. */
 export function ensureUngroupedGroup(user: User): HostGroupInfo {
   const groups = ensureHostGroupsWritable(user);

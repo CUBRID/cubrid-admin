@@ -56,9 +56,15 @@ import EditHostModal from '../features/host/components/EditHostModal';
 import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
+import { useDesktopMenuLanguage } from '../features/desktop/hooks/useDesktopMenuLanguage';
+import { useDesktopMenuActions } from '../features/desktop/hooks/useDesktopMenuActions';
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
+import AboutModal from '../features/layout/components/AboutModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
+import UpdateCheckModal from '../features/layout/components/UpdateCheckModal';
+import { openUpdateCheck } from '../features/layout/appBarSlice';
+import { fetchStartupUpdateNotice } from '../features/update/updateCheckClient';
 import LogViewer from '../features/broker/components/LogViewer';
 import CMSLogViewer from '../features/broker/components/CMSLogViewer';
 import AllLogsViewer from '../features/broker/components/AllLogsViewer';
@@ -230,7 +236,18 @@ function DashboardLayout() {
             onAddHost={() => dispatch(openAddHostModal())}
           />
 
-          <main className="w-full h-full flex flex-col bg-background-light dark:bg-bk-main overflow-hidden">
+          {/* overflow-x-auto (not hidden): min-w-fit on the inner wrapper
+              makes its floor width exactly whatever Header actually needs
+              (Header.jsx's own min-w-fit) — not a guessed pixel number. The
+              tab bar and dashboard body stretch to fill that same width
+              (flex-col default is align-items:stretch), so they're never
+              asked to render narrower than the point where the header
+              itself would start overflowing. Below that width, main is the
+              scroll container that picks up the difference, so header, tab
+              bar, and dashboard body scroll together as one unit instead of
+              wrapping/squishing internally. */}
+          <main className="w-full h-full bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
+          <div className="h-full min-w-fit flex flex-col">
 
             <Header theme={theme} toggleTheme={() => dispatch(toggleTheme())} />
           <div className="shrink-0 bg-slate-50 dark:bg-bk-main">
@@ -420,6 +437,7 @@ function DashboardLayout() {
           )}
 
           <Footer />
+          </div>
           </main>
         </SplitPane>
 
@@ -511,7 +529,28 @@ function RootRedirect() {
 }
 
 function App() {
+  const dispatch = useDispatch();
   const { theme } = useSelector((state) => state.layout, shallowEqual);
+  useDesktopMenuLanguage();
+  useDesktopMenuActions();
+
+  // Desktop only (a no-op in a browser): the once-per-24h startup update
+  // notice. Mounted here rather than in DashboardLayout so it also works on
+  // /login. The native Help menu's "Check for Updates" item goes through
+  // useDesktopMenuActions, which keeps it enabled while signed out.
+  useEffect(() => {
+    let cancelled = false;
+    fetchStartupUpdateNotice()
+      .then((status) => {
+        if (!cancelled && status) {
+          dispatch(openUpdateCheck({ source: 'startup', preloadedStatus: status }));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   useEffect(() => {
     if (window.desktopBridge?.onCloseActiveTab) {
@@ -539,20 +578,25 @@ function App() {
   }, [theme]);
 
   return (
-    <Routes>
-      <Route path="/" element={<RootRedirect />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+      {/* Outside the routes so the desktop menu's About and update check also work on /login. */}
+      <AboutModal />
+      <UpdateCheckModal />
+    </>
   );
 }
 

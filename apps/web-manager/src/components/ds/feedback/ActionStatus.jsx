@@ -19,9 +19,9 @@ export const ModalStatusLoading = ({ title, subtitle, onBackground }) => {
         </div>
       </div>
 
-      <div className="space-y-1.5 px-8">
-        <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white">{displayTitle}</Typography>
-        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 max-w-[320px] mx-auto leading-relaxed">
+      <div className="w-full min-w-0 space-y-1.5 px-8">
+        <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white break-words">{displayTitle}</Typography>
+        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 max-w-[320px] mx-auto leading-relaxed break-words">
           {displaySubtitle}
         </Typography>
       </div>
@@ -62,9 +62,9 @@ export const ModalStatusSuccess = ({
         </div>
       </div>
 
-      <div className="space-y-2 px-8">
-        <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white">{displayTitle}</Typography>
-        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[360px] mx-auto">
+      <div className="w-full min-w-0 space-y-2 px-8">
+        <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white break-words">{displayTitle}</Typography>
+        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[360px] mx-auto break-words">
           {displayMessage}
         </Typography>
       </div>
@@ -105,9 +105,9 @@ export const ModalStatusError = ({
         </div>
       </div>
 
-      <div className="space-y-2 px-6">
-        <Typography variant="h4" className="text-17 font-bold text-rose-600 dark:text-rose-400">{displayTitle}</Typography>
-        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 leading-relaxed">
+      <div className="w-full min-w-0 space-y-2 px-6">
+        <Typography variant="h4" className="text-17 font-bold text-rose-600 dark:text-rose-400 break-words">{displayTitle}</Typography>
+        <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 leading-relaxed break-words">
           {message || CM.operationCouldNotBeCompleted}
         </Typography>
       </div>

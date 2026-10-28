@@ -6,7 +6,7 @@ import {
   StartInfoClientResponse,
 } from '@api-interfaces';
 import { SaveDatabaseProfileDto, DeleteDatabaseDto, CreateDatabaseWithConfigDto, StartStopAllDatabasesDto } from '@type/index';
-import { DatabaseLifecycleService } from './database-lifecycle.service';
+import { BulkDatabaseActionResult, DatabaseLifecycleService } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
 
@@ -158,7 +158,7 @@ export class DatabaseLifecycleController {
    * @param req Express request (contains authenticated user)
    * @param hostUid Host unique identifier from path parameter
    * @param body Database names to start
-   * @returns Per-database succeeded/failed outcome
+   * @returns Per-database succeeded/failed/skipped outcome
    * @example
    * // POST /host-uid/database/start-all
    * // Body: { "dbnames": ["demodb", "testdb"] }
@@ -168,7 +168,7 @@ export class DatabaseLifecycleController {
     @Request() req,
     @Param('hostUid') hostUid: string,
     @Body() body: StartStopAllDatabasesDto
-  ): Promise<{ succeeded: string[]; failed: Array<{ dbname: string; error: string }> }> {
+  ): Promise<BulkDatabaseActionResult> {
     const userId = req.user.sub;
 
     this.logger.log(`Starting all databases (${body.dbnames.join(', ')}) on host: ${hostUid}`);
@@ -184,7 +184,7 @@ export class DatabaseLifecycleController {
    * @param req Express request (contains authenticated user)
    * @param hostUid Host unique identifier from path parameter
    * @param body Database names to stop
-   * @returns Per-database succeeded/failed outcome
+   * @returns Per-database succeeded/failed/skipped outcome
    * @example
    * // POST /host-uid/database/stop-all
    * // Body: { "dbnames": ["demodb", "testdb"] }
@@ -194,7 +194,7 @@ export class DatabaseLifecycleController {
     @Request() req,
     @Param('hostUid') hostUid: string,
     @Body() body: StartStopAllDatabasesDto
-  ): Promise<{ succeeded: string[]; failed: Array<{ dbname: string; error: string }> }> {
+  ): Promise<BulkDatabaseActionResult> {
     const userId = req.user.sub;
 
     this.logger.log(`Stopping all databases (${body.dbnames.join(', ')}) on host: ${hostUid}`);
