@@ -9,6 +9,7 @@ import {
   PlandumpClientResponse,
   SetSysParamClientResponse,
   StatdumpClientResponse,
+  StatdumpWatcherClientResponse,
 } from '@api-interfaces';
 
 /**
@@ -124,6 +125,37 @@ export class CmsConfigController {
     );
     const response = await this.cmsConfigService.getStatDump(userId, hostUid, dbname);
     return response;
+  }
+
+  /**
+   * Start (or confirm) the statdump watcher for a database (CMS `start_statdump`).
+   * statdump counters only advance while a watcher is attached.
+   *
+   * @route POST /:hostUid/cms-config/stat-dump/:dbname/watcher/start
+   */
+  @Post('stat-dump/:dbname/watcher/start')
+  async startStatDumpWatcher(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('dbname') dbname: string
+  ): Promise<StatdumpWatcherClientResponse> {
+    const userId = req.user.sub;
+    return await this.cmsConfigService.startStatDumpWatcher(userId, hostUid, dbname);
+  }
+
+  /**
+   * Stop the statdump watcher for a database (CMS `stop_statdump`).
+   *
+   * @route POST /:hostUid/cms-config/stat-dump/:dbname/watcher/stop
+   */
+  @Post('stat-dump/:dbname/watcher/stop')
+  async stopStatDumpWatcher(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('dbname') dbname: string
+  ): Promise<StatdumpWatcherClientResponse> {
+    const userId = req.user.sub;
+    return await this.cmsConfigService.stopStatDumpWatcher(userId, hostUid, dbname);
   }
 
   /**

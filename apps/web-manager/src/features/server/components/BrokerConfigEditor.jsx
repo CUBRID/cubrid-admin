@@ -89,7 +89,11 @@ export default function BrokerConfigEditor({ hostUid }) {
       dispatch(showStatusModal({
         type: 'success',
         title: CM.configSaved,
-        message: CM.brokerConfigSaveSuccess
+        message: CM.brokerConfigSaveSuccess,
+        // CMS's broker_setparam (ts2_set_broker_conf) only rewrites
+        // broker.conf on disk and never notifies the running broker, so
+        // nothing saved here is live until the broker restarts.
+        guidance: [CM.brokerConfigRestartRequiredNotice],
       }));
     } catch (err) {
       if (isAmbiguousFailure(err)) fetchConfig();

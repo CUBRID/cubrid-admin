@@ -6,6 +6,8 @@ export type StartInfoClientResponse = {
   activelist: {
     active: {
       dbname: string;
+      /** See dblist's isLoggedIn. */
+      isLoggedIn: boolean;
     }[];
   };
   dblist: {
@@ -13,6 +15,11 @@ export type StartInfoClientResponse = {
       dbdir: string;
       dbname: string;
       isProfileExists: boolean;
+      /**
+       * Whether the server currently holds a live DB login (dbmtuserlogin)
+       * for this database — same test as ensureDbLogin's cache hit.
+       */
+      isLoggedIn: boolean;
     }[];
   };
   /**

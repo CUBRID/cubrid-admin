@@ -7,9 +7,10 @@ import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Card } from '../../../../components/ds/layout/Card';
 import { ProgressBar } from '../../../../components/ds/foundation/ProgressBar';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
-export default function DBVolumesSection({ volumes, pollingProps }) {
+export default function DBVolumesSection({ volumes, volumesStatus, pollingProps }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -54,7 +55,7 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
         return (
           <div className="flex items-center gap-2 min-w-0">
             <Icon name="draft" size="sm" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0" />
-            <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200 truncate">{name}</span>
+            <span title={val} className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200 truncate">{name}</span>
           </div>
         );
       }
@@ -123,7 +124,11 @@ export default function DBVolumesSection({ volumes, pollingProps }) {
       isCollapsed={isCollapsed}
       onToggle={(v) => setIsCollapsed(v)}
     >
-      <Table columns={columns} data={volumes} />
+      <Table
+        columns={columns}
+        data={volumes}
+        emptyState={<FetchEmptyState status={volumesStatus} title={CM.storageVolumes} />}
+      />
     </Card>
   );
 }

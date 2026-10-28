@@ -1,5 +1,6 @@
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
+import { CmsError } from '@error/cms/cms-error';
 import { isInvalidTokenError } from './decorators/handle-cms-token-errors.decorator';
 import {
   CMS_ASYNC_JOB_FIRST_POLL_INTERVAL_MS,
@@ -54,7 +55,19 @@ export async function pollCmsAsyncJob(
   let polls = 0;
   while (response?.['job-status'] === 'running' || isInvalidTokenError(response)) {
     if (Date.now() > deadline) {
-      throw new Error(`CMS async job for task "${task}" did not finish within ${timeoutMs}ms`);
+      // A plain Error here used to get swallowed by @HandleCmsErrors() —
+      // it only passes through this codebase's own AppError subclasses
+      // unchanged, wrapping anything else into an opaque "CMS request
+      // failed" with no indication it was actually a timeout. This is hit
+      // on essentially every long-running CMS write path (createdb,
+      // backupdb, copydb, broker/HA start-stop, ...) whenever a job
+      // genuinely outlives its deadline, so it was the single
+      // highest-impact instance of this bug.
+      throw CmsError.RequestFailed({
+        message: `CMS async job for task "${task}" did not finish within ${timeoutMs}ms.`,
+        task,
+        timeoutMs,
+      });
     }
     await sleep(polls === 0 ? CMS_ASYNC_JOB_FIRST_POLL_INTERVAL_MS : CMS_ASYNC_JOB_POLL_INTERVAL_MS);
     polls += 1;

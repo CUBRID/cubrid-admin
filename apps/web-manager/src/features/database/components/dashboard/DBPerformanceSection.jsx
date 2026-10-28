@@ -42,7 +42,9 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
     {
       header: CM.cpu,
       accessor: 'cpu',
-      render: (val, row) => (
+      render: (val, row) => row.cpuNote ? (
+        <span className="font-mono text-14 text-slate-400 cursor-help" title={row.cpuNote} aria-label={row.cpuNote}>{val}</span>
+      ) : (
         <div className="min-w-[90px] pr-4">
           <ProgressBar 
             pct={row.cpuPct} 

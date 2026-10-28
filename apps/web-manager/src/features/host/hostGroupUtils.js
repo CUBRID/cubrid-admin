@@ -4,6 +4,9 @@ export const UNGROUPED_GROUP_ID = '__ungrouped__';
 /** Drag payload MIME type used when dragging a host row in the sidebar tree. */
 export const HOST_DRAG_MIME = 'application/x-cubrid-host';
 
+/** Mirrors apps/api-server/src/host/host-group.util.ts MAX_HOST_ALIAS_LENGTH. */
+export const MAX_HOST_ALIAS_LENGTH = 100;
+
 /** Flatten nested host_groups into a host array (no groupId on host objects). */
 export function flattenHostsFromGroups(hostGroups) {
   const hosts = [];
