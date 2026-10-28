@@ -39,7 +39,6 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     name: '',
     password: '',
     confirmPassword: '',
-    memo: '',
   });
   const [errors, setErrors] = useState({});
 
@@ -64,7 +63,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     }
 
     if (!isEditMode) {
-      setFormData({ name: '', password: '', confirmPassword: '', memo: '' });
+      setFormData({ name: '', password: '', confirmPassword: '' });
     }
   }, [isOpen, dbname, selectedHostUid, isEditMode, resetAction]);
 
@@ -84,7 +83,6 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
       name: userToEdit.name || userToEdit,
       password: '',
       confirmPassword: '',
-      memo: userToEdit.comment || '',
     });
   }, [isOpen, databaseUsers, isEditMode, editingUser]);
 
@@ -100,12 +98,14 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  // Password is required when creating a new user; when editing, blank means
-  // "leave unchanged" (see the leaveBlankToKeep hint), so it's optional there.
+  // CMS createuser/updateuser only accept a username and password, so editing
+  // an existing user can only change the password — it's required in both modes.
+  const isSaveDisabled = !formData.name || (isEditMode && !formData.password);
+
   const validate = () => {
     const errs = {};
     if (!formData.name.trim()) errs.name = CM.usernameRequired;
-    if (!isEditMode && !formData.password) errs.password = CM.passwordRequired;
+    if (!formData.password) errs.password = CM.passwordRequired;
     if (formData.password && formData.password !== formData.confirmPassword) {
       errs.confirmPassword = CM.passwordsDoNotMatch;
     }
@@ -125,7 +125,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     try {
       if (isEditMode) {
         await dispatch(updateDatabaseUser({ hostUid: selectedHostUid, dbname, userName: editingUser, payload: { userpass: formData.password, groups: { group: [] }, authorization: [] } })).unwrap();
-        endSuccess(CM.userUpdatedSuccessMsg(editingUser));
+        endSuccess(CM.dbUserPasswordChangedMsg(editingUser));
       } else {
         await dispatch(createDatabaseUser({ hostUid: selectedHostUid, dbname, payload: { username: formData.name, userpass: formData.password, groups: { group: [] }, authorization: [] } })).unwrap();
         endSuccess(CM.userCreatedSuccessMsg(formData.name));
@@ -149,8 +149,8 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     return (
       <Modal isOpen title={CM.success} icon="check_circle" iconVariant="success" onClose={onClose} maxWidth="max-w-[520px]" testId="create-user">
         <ModalStatusSuccess
-          title={isEditMode ? CM.userUpdated : CM.userCreated}
-          message={`@${isEditMode ? editingUser : formData.name}`}
+          title={isEditMode ? CM.dbUserPasswordChanged : CM.userCreated}
+          message={isEditMode ? CM.dbUserPasswordChangedMsg(editingUser) : `@${formData.name}`}
           onConfirm={onClose}
           confirmText={CM.ok}
         />
@@ -171,7 +171,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
       isOpen={isOpen}
       onClose={onClose}
       onSubmit={handleSave}
-      submitDisabled={!formData.name}
+      submitDisabled={isSaveDisabled}
       title={isEditMode ? CM.editUser : CM.createUser}
       subtitle={dbname}
       icon={isEditMode ? 'manage_accounts' : 'person_add'}
@@ -185,7 +185,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
           </div>
           <div className="flex gap-2">
             <Button data-testid="create-user-cancel-btn" variant="ghost" onClick={onClose}>{CM.cancel}</Button>
-            <Button data-testid="create-user-save-btn" onClick={handleSave} icon={isEditMode ? 'save' : 'person_add'} disabled={!formData.name} className="min-w-[140px]">
+            <Button data-testid="create-user-save-btn" onClick={handleSave} icon={isEditMode ? 'save' : 'person_add'} disabled={isSaveDisabled} className="min-w-[140px]">
               {isEditMode ? CM.saveChanges : CM.createUser}
             </Button>
           </div>
@@ -219,7 +219,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
               {CM.accountSectionLabel}
             </Typography>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <Input
               data-testid="create-user-username-input"
               label={CM.username}
@@ -231,13 +231,6 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
               disabled={isEditMode}
               required
             />
-            <Input
-              label={CM.description}
-              name="memo"
-              value={formData.memo}
-              onChange={handleInputChange}
-              placeholder={CM.rolePurposePlaceholder}
-            />
           </div>
         </section>
 
@@ -248,15 +241,10 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             <Typography variant="caption" className="font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest text-12">
               {CM.password}
             </Typography>
-            {isEditMode && (
-              <span className="text-11 font-bold text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
-                {CM.leaveBlankToKeep}
-              </span>
-            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" required={!isEditMode} />
-            <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" required={!isEditMode} />
+            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" required />
+            <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" required />
           </div>
           {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
             <div className="flex items-center gap-2 text-13 text-rose-500 font-bold px-1">

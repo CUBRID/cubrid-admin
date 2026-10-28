@@ -1494,7 +1494,7 @@ export const CM = {
 
   // CreateUserModal
   createUser: 'Create User',
-  userUpdated: 'User Updated',
+  dbUserPasswordChanged: 'Password Changed',
   userCreated: 'User Created',
 
   // UserProfileModal
@@ -1833,11 +1833,10 @@ export const CM = {
   selectAnObject: 'Select an object',
   identitySyncFailedMsg: 'Failed to create user. Please check the host connection.',
   newDatabaseUserTitle: 'New Database User',
-  updateCredentialsSubtitle: 'Update credentials and group memberships below.',
+  updateCredentialsSubtitle: 'Enter a new password for this user.',
   defineIdentitySubtitle: 'Define identity, credentials, and role membership.',
   accountSectionLabel: 'Account',
   usernamePlaceholderHint: 'e.g. sys_auditor',
-  rolePurposePlaceholder: 'Role or purpose',
   groupsAndMembersLabel: 'Groups & Members',
   dragOrDoubleClickHint: 'Drag or double-click to assign',
   searchPlaceholder: 'Search...',
@@ -1953,6 +1952,7 @@ export const CM = {
   passcodeChangedSuccessMsg: (host) => `The manager access password for ${host} has been successfully changed.`,
   passcodeUpdateNote: 'This changes the CMS account password for the currently logged-in user. It also updates the manager access password stored locally for this connection.',
   userUpdatedSuccessMsg: (username) => `User @${username} successfully updated.`,
+  dbUserPasswordChangedMsg: (username) => `Password for user @${username} was changed.`,
   userCreatedSuccessMsg: (username) => `User @${username} successfully created.`,
   synchronizationFailed: 'Failed to save changes.',
   savingChanges: 'Saving Changes',

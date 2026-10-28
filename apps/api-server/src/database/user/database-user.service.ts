@@ -284,12 +284,22 @@ export class DatabaseUserService extends BaseService {
       });
     }
 
-    const fetchedGroups: string[] = [];
-    const rawGroups = (existingUser as Record<string, unknown>).groups as any;
-    if (Array.isArray(rawGroups?.group)) {
-      fetchedGroups.push(...rawGroups.group.filter((g: unknown) => typeof g === 'string'));
+    // CMS returns groups as [{ group: [...] }] (an open/close section), and
+    // updateuser only reads groups sent back in that same array shape. It
+    // drops every existing group before re-adding the requested ones and no
+    // longer re-adds PUBLIC itself, so PUBLIC is always included here.
+    const fetchedGroups = new Set<string>(['PUBLIC']);
+    const rawGroups = (existingUser as Record<string, unknown>).groups;
+    const groupSections = Array.isArray(rawGroups) ? rawGroups : [rawGroups];
+    for (const section of groupSections) {
+      const names = (section as { group?: unknown } | null | undefined)?.group;
+      for (const name of Array.isArray(names) ? names : [names]) {
+        if (typeof name === 'string' && name) {
+          fetchedGroups.add(name.toUpperCase());
+        }
+      }
     }
-    const preservedGroups = { group: fetchedGroups };
+    const preservedGroups = [{ group: [...fetchedGroups] }];
 
     const fetchedAuthorization: string[] = [];
     const rawAuthorization = (existingUser as Record<string, unknown>).authorization;

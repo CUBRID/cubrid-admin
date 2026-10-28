@@ -1452,7 +1452,7 @@ export const CM_KO = {
 
   // CreateUserModal
   createUser: '사용자 생성',
-  userUpdated: '사용자 업데이트됨',
+  dbUserPasswordChanged: '비밀번호 변경됨',
   userCreated: '사용자 생성됨',
 
   // UserProfileModal
@@ -1791,11 +1791,10 @@ export const CM_KO = {
   selectAnObject: '객체 선택',
   identitySyncFailedMsg: '사용자 생성에 실패했습니다. 호스트 연결 상태를 확인하세요.',
   newDatabaseUserTitle: '새 데이터베이스 사용자',
-  updateCredentialsSubtitle: '아래에서 자격 증명과 그룹 소속을 수정하세요.',
+  updateCredentialsSubtitle: '이 사용자의 새 비밀번호를 입력하세요.',
   defineIdentitySubtitle: '아이덴티티, 자격 증명, 역할 소속을 정의하세요.',
   accountSectionLabel: '계정',
   usernamePlaceholderHint: '예: sys_auditor',
-  rolePurposePlaceholder: '역할 또는 용도',
   groupsAndMembersLabel: '그룹 및 멤버',
   dragOrDoubleClickHint: '드래그하거나 더블클릭하여 할당',
   searchPlaceholder: '검색...',
@@ -1911,6 +1910,7 @@ export const CM_KO = {
   passcodeChangedSuccessMsg: (host) => `${host}의 관리자 비밀번호 변경을 성공적으로 완료하였습니다.`,
   passcodeUpdateNote: '현재 로그인 중인 사용자의 CMS 계정 비밀번호를 변경합니다. 이 작업은 이 연결에 대해 로컬에 저장된 관리자 접속 비밀번호도 함께 업데이트합니다.',
   userUpdatedSuccessMsg: (username) => `사용자 @${username}이(가) 성공적으로 수정되었습니다.`,
+  dbUserPasswordChangedMsg: (username) => `사용자 @${username}의 비밀번호가 변경되었습니다.`,
   userCreatedSuccessMsg: (username) => `사용자 @${username}이(가) 성공적으로 생성되었습니다.`,
   synchronizationFailed: '변경사항 저장에 실패했습니다.',
   savingChanges: '변경 사항 저장 중',
