@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { brokerApi } from './brokerApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { createRateTracker } from './rateTracker';
+import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
 
 
 
@@ -15,10 +16,9 @@ export const fetchBrokerList = createAsyncThunk(
     const hostUid = typeof arg === 'string' ? arg : arg.hostUid;
     // Callers that only need the plain list fields (pid/port/jq/auto/sqll/
     // long_tran_time/long_query_time — e.g. BrokerStatus.jsx's "Basic
-    // Information" panel) can skip the per-broker getBrokerStatus enrichment
-    // loop below, which issues one extra request per broker on this host
-    // just to compute qps/tps. Those fields are all already present on
-    // `formattedBrokers` before enrichment runs.
+    // Information" panel) can skip the bulk broker status request below,
+    // which is only needed to compute qps/tps. Those fields are all already
+    // present on `formattedBrokers` before enrichment runs.
     const skipStatusEnrichment = typeof arg === 'object' && !!arg.skipStatusEnrichment;
     try {
       const response = await brokerApi.getBrokerList(hostUid);
@@ -44,16 +44,14 @@ export const fetchBrokerList = createAsyncThunk(
 
       if (skipStatusEnrichment) return formattedBrokers;
 
-      const responses = await Promise.all(
-        formattedBrokers.map(async (b) => {
-          try {
-            const statusRes = await brokerApi.getBrokerStatus(hostUid, b.name);
-            return { b, statusRes, success: true };
-          } catch {
-            return { b, success: false };
-          }
-        })
-      );
+      // One bulk request for every broker's status. A broker missing from
+      // the response (or a failed request) counts as a failed status fetch.
+      const statusByName = await fetchBrokerStatusMap(hostUid, formattedBrokers.map((b) => b.name));
+      const responses = formattedBrokers.map((b) => (
+        statusByName.has(b.name)
+          ? { b, statusRes: statusByName.get(b.name), success: true }
+          : { b, success: false }
+      ));
 
       const dataSource = responses.map((r) => {
         if (!r.success) return null;

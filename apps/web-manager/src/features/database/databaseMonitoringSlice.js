@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { brokerApi } from '../broker/brokerApi';
+import { fetchBrokerStatusMap } from '../broker/fetchBrokerStatusMap';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
 import { computeStatdumpRates } from './statdumpRates';
@@ -107,12 +108,10 @@ export const fetchDashboardCAS = createAsyncThunk(
       const actualBrokerList = brokerList?.[0]?.broker || [];
       const brokersCAS = [];
 
-      const brokerDetails = await Promise.all(
-        actualBrokerList.map(b => {
-          if (!b?.name) return Promise.resolve(null);
-          return brokerApi.getBrokerStatus(hostUid, b.name).catch(() => null);
-        })
-      );
+      // One bulk status request; brokerDetails stays index-aligned with
+      // actualBrokerList (null = no status for that broker).
+      const statusByName = await fetchBrokerStatusMap(hostUid, actualBrokerList.map(b => b?.name));
+      const brokerDetails = actualBrokerList.map(b => statusByName.get(b?.name) ?? null);
 
       brokerDetails.forEach((status, idx) => {
         // apiClient already unwraps the server's { data, status, note }

@@ -7,6 +7,10 @@ export const brokerApi = {
   getBrokerStatus: (hostUid, brokerName) => {
     return apiClient.get(`/${hostUid}/broker/status/${brokerName}`);
   },
+  // One request for many brokers; resolves to { brokers: [{ bname, time, asinfo?, jobinfo? }] }.
+  getBrokerStatusBulk: (hostUid, brokerNames) => {
+    return apiClient.post(`/${hostUid}/broker/status/bulk`, { bnames: brokerNames });
+  },
   startBroker: (hostUid, brokerName) => {
     return apiClient.post(`/${hostUid}/broker/start/${brokerName}`);
   },
