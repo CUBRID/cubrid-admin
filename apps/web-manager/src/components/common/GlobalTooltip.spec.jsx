@@ -103,6 +103,15 @@ describe('GlobalTooltip', () => {
     expect(a.hasAttribute('data-nca-title')).toBe(false);
   });
 
+  it('hides when a refresh removes the hovered element', async () => {
+    await over(host.querySelector('#a'));
+    await wait(TOOLTIP_DELAY_MS);
+    expect(tooltip()).not.toBeNull();
+
+    await act(async () => { host.querySelector('#a').remove(); });
+    expect(tooltip()).toBeNull();
+  });
+
   it('ignores blank titles and hides on click', async () => {
     await over(host.querySelector('#blank'));
     await wait(TOOLTIP_DELAY_MS);

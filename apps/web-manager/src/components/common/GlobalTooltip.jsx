@@ -60,11 +60,17 @@ export default function GlobalTooltip() {
       target.setAttribute(STASH_ATTR, text);
       setTip((prev) => (prev ? { ...prev, text } : prev));
     });
+    // A refresh can remove the hovered element (e.g. a row that is gone);
+    // no mouseout follows, so the tooltip would stay over whatever replaced it.
+    const removalWatcher = new MutationObserver(() => {
+      if (target && !target.isConnected) hide();
+    });
 
     const hide = () => {
       clearTimeout(timer);
       timer = null;
       titleWatcher.disconnect();
+      removalWatcher.disconnect();
       if (target) {
         restore(target);
         target = null;
@@ -89,6 +95,7 @@ export default function GlobalTooltip() {
       el.setAttribute(STASH_ATTR, text);
       el.setAttribute('title', '');
       titleWatcher.observe(el, { attributes: true, attributeFilter: ['title'] });
+      removalWatcher.observe(document.body, { childList: true, subtree: true });
       const warm = Date.now() - lastHiddenAt < WARM_MS;
       timer = setTimeout(() => show(el), warm ? 0 : TOOLTIP_DELAY_MS);
     };
