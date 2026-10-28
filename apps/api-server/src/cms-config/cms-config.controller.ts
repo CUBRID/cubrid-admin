@@ -9,6 +9,7 @@ import {
   PlandumpClientResponse,
   SetSysParamClientResponse,
   StatdumpClientResponse,
+  StatdumpWatcherClientResponse,
 } from '@api-interfaces';
 
 /**
@@ -127,6 +128,37 @@ export class CmsConfigController {
   }
 
   /**
+   * Start (or confirm) the statdump watcher for a database (CMS `start_statdump`).
+   * statdump counters only advance while a watcher is attached.
+   *
+   * @route POST /:hostUid/cms-config/stat-dump/:dbname/watcher/start
+   */
+  @Post('stat-dump/:dbname/watcher/start')
+  async startStatDumpWatcher(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('dbname') dbname: string
+  ): Promise<StatdumpWatcherClientResponse> {
+    const userId = req.user.sub;
+    return await this.cmsConfigService.startStatDumpWatcher(userId, hostUid, dbname);
+  }
+
+  /**
+   * Stop the statdump watcher for a database (CMS `stop_statdump`).
+   *
+   * @route POST /:hostUid/cms-config/stat-dump/:dbname/watcher/stop
+   */
+  @Post('stat-dump/:dbname/watcher/stop')
+  async stopStatDumpWatcher(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Param('dbname') dbname: string
+  ): Promise<StatdumpWatcherClientResponse> {
+    const userId = req.user.sub;
+    return await this.cmsConfigService.stopStatDumpWatcher(userId, hostUid, dbname);
+  }
+
+  /**
    * Plan / XASL dump (`plandump`) from a CMS host.
    * Response includes flattened `lines` and `text` (CMS returns nested `log[].line[]`).
    *
@@ -200,7 +232,7 @@ export class CmsConfigController {
       `Setting system parameters for host: ${hostUid}, confname: ${body.confname}`,
       'CmsConfigController'
     );
-    const response = await this.cmsConfigService.setSystemParam(
+    const response = await this.cmsConfigService.setSystemParamFromRawEdit(
       userId,
       hostUid,
       body.confname,
@@ -229,6 +261,7 @@ export class CmsConfigController {
       `Setting broker param for host: ${hostUid}`,
       'CmsConfigController'
     );
-    return await this.cmsConfigService.setBrokerParam(userId, hostUid, body.confdata);
+    return await this.cmsConfigService.setBrokerParamFromRawEdit(userId, hostUid, body.confdata);
   }
+
 }

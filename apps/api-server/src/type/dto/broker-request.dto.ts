@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 /**
  * Validated request bodies for BrokerController's DBMT (CMS) user endpoints.
@@ -67,4 +67,11 @@ export class SetDbmtPasswdDto {
   @IsString()
   @IsNotEmpty()
   newpassword: string;
+}
+
+export class GetBrokerStatusBulkDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  bnames: string[];
 }

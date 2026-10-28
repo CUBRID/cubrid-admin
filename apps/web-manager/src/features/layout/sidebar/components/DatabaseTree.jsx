@@ -245,7 +245,7 @@ export default function DatabaseTree({
         const haDbState = isDbInHa ? HA_DB_STATE_CONFIG[haDbServerModes.get(db.dbname)] : null;
         const label = (
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate">{db.dbname}</span>
+            <span title={db.dbname} className="truncate">{db.dbname}</span>
             {isDbInHa && (
               <span className="px-0.5 py-[0.5px] text-9 font-black leading-none bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-sm scale-90 shrink-0 uppercase">
                 HA

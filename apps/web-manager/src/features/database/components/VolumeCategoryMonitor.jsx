@@ -9,6 +9,7 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Table } from '../../../components/ds/layout/Table';
 import { Card } from '../../../components/ds/layout/Card';
+import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
 
 // ── Helpers ──
@@ -31,8 +32,8 @@ const formatMB = (pages, pageSize) => ((parseInt(pages) * pageSize) / (1024 * 10
 const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh, dashboardInterval, isLoading, lastRefreshed, dbname }) => {
   const CM = useCM();
   return (
-  <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10">
-    <div className="flex items-center gap-3">
+  <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 bg-white dark:bg-background-dark sticky top-0 z-10 min-w-fit">
+    <div className="flex items-center gap-3 shrink-0">
       <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
         <Icon name={meta.icon} size="sm" weight={300} className="text-amber-500" />
       </div>
@@ -58,8 +59,8 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
       </div>
     </div>
 
-    <div className="flex items-center gap-1.5">
-      <div className="hidden lg:flex items-center gap-6 mr-4 opacity-80">
+    <div className="flex items-center gap-1.5 ml-auto shrink-0">
+      <div className="flex items-center gap-6 mr-4 opacity-80 shrink-0 whitespace-nowrap">
         <div className="text-right">
           <Typography variant="label" className="text-10 text-slate-400 font-bold uppercase tracking-widest block mb-0.5">{CM.capacity}</Typography>
           <Typography variant="p" className="text-14 font-black text-slate-700 dark:text-slate-200 font-mono leading-none">{formatPagesToSize(summary.total, pageSize)}</Typography>
@@ -71,7 +72,7 @@ const CategoryHeader = memo(({ meta, summary, usageSeverity, pageSize, onRefresh
         </div>
       </div>
 
-      <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2">
+      <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mr-2 whitespace-nowrap">
         {CM.syncedAt(lastRefreshed.toLocaleTimeString('en-US', { hour12: true }))}
       </Typography>
 
@@ -136,7 +137,7 @@ const UtilizationBar = memo(({ summary, usageSeverity, pageSize }) => {
   );
 });
 
-const VolumeTableContainer = memo(({ volumes, pageSize }) => {
+const VolumeTableContainer = memo(({ volumes, pageSize, status, title }) => {
   const CM = useCM();
   return (
     <Card bodyClassName="p-0 overflow-hidden" className="border-slate-200 dark:border-white/5 shadow-xs bg-white dark:bg-white/1 rounded-sm">
@@ -201,6 +202,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize }) => {
           }
         ]}
         data={volumes}
+        emptyState={<FetchEmptyState status={status} title={title} />}
       />
     </Card>
   );
@@ -223,6 +225,12 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
 
   const dbSpace = spaceInfo[`${hostUid}:${dbname}`];
   const isLoading = spaceInfoLoading?.[`${hostUid}:${dbname}`];
+  // Space info is cached per db once fetched; before that, tell a still-pending
+  // first fetch apart from a failed one.
+  const spaceInfoFailed = useSelector(
+    (state) => state.databaseMonitoring?.dashboardData?.[`${hostUid}:${dbname}`]?.spaceInfoStatus === 'error'
+  );
+  const spaceInfoStatus = dbSpace ? 'loaded' : spaceInfoFailed ? 'error' : undefined;
   const meta = useMemo(() => {
     const categoryMeta = getCategoryMeta(CM);
     return categoryMeta[category] || categoryMeta.Permanent_PermanentData;
@@ -275,7 +283,7 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
         <div className="max-w-7xl mx-auto space-y-5">
           <CategoryStats volumes={volumes} summary={summary} pageSize={pageSize} />
           <UtilizationBar summary={summary} usageSeverity={usageSeverity} pageSize={pageSize} />
-          <VolumeTableContainer volumes={volumes} pageSize={pageSize} />
+          <VolumeTableContainer volumes={volumes} pageSize={pageSize} status={spaceInfoStatus} title={meta.label} />
         </div>
       </div>
 

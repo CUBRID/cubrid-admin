@@ -10,13 +10,16 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
-import { findGroupIdForHost, orderedGroupEntries, UNGROUPED_GROUP_ID } from '../hostGroupUtils';
+import { findGroupIdForHost, orderedGroupEntries, UNGROUPED_GROUP_ID, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { useCM } from '../../../constants/useCM';
 
 export default function EditHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isEditHostModalOpen, hostToEditUid, hosts, hostGroups, loading, error: apiError } = useSelector((state) => state.host, shallowEqual);
+  // Opened from an HA follow-up of a bulk-login result dialog, which stays
+  // open (z-[2100]) underneath — stack above it like the HA modals do.
+  const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
   const isCredentialError = /password/i.test(apiError || '');
 
   const [formData, setFormData] = useState({
@@ -68,6 +71,8 @@ export default function EditHostModal() {
     const trimmedAlias = formData.alias.trim();
     if (!trimmedAlias) {
       errs.alias = CM.hostNameRequired;
+    } else if (trimmedAlias.length > MAX_HOST_ALIAS_LENGTH) {
+      errs.alias = CM.hostNameTooLong(MAX_HOST_ALIAS_LENGTH);
     } else if (hosts.some((h) => h.uid !== hostToEditUid && h.alias?.trim() === trimmedAlias)) {
       errs.alias = CM.hostNameDuplicate;
     }
@@ -156,6 +161,7 @@ export default function EditHostModal() {
     <Modal
       isOpen={isEditHostModalOpen}
       onClose={handleClose}
+      zIndexClass={aboveStatusModal ? 'z-[2200]' : undefined}
       onSubmit={handleSave}
       submitDisabled={loading}
       title={CM.modifyHost}
@@ -220,6 +226,7 @@ export default function EditHostModal() {
             error={errors.alias}
             placeholder={CM.friendlyNamePlaceholder}
             icon="label"
+            maxLength={MAX_HOST_ALIAS_LENGTH}
             disabled={loading}
             required
           />

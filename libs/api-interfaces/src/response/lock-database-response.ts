@@ -177,7 +177,32 @@ export type LockInfo = {
  */
 export type LockDatabaseResponse = {
   /**
-   * Array of lock information
+   * Array of lock information. Omitted when the request asked for `summary`.
    */
-  lockinfo: LockInfo[];
+  lockinfo?: LockInfo[];
+  /**
+   * Locks grouped per transaction, table and mode, when the request asked for `summary`.
+   */
+  summary?: LockSummary;
+};
+
+/** One group of locks: one transaction's locks of one mode on one table. */
+export type LockSummaryRow = {
+  /** Transaction index */
+  index: string;
+  user: string;
+  host: string;
+  pid: string;
+  program: string;
+  /** Lock object without its OID, e.g. "Instance of class = dba.t1" or "Class = dba.t1" */
+  obj: string;
+  mode: string;
+  /** Number of lock objects in the group */
+  count: number;
+};
+
+export type LockSummary = {
+  rows: LockSummaryRow[];
+  /** Lock objects with at least one holder, before grouping */
+  totalLocks: number;
 };

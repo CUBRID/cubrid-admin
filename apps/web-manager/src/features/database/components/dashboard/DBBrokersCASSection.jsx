@@ -5,9 +5,10 @@ import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Table } from '../../../../components/ds/layout/Table';
 import { Card } from '../../../../components/ds/layout/Card';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
-export default function DBBrokersCASSection({ brokersCAS, pollingProps, onViewSQLLog, onViewSlowQueryLog, onRestartCAS }) {
+export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProps, onViewSQLLog, onViewSlowQueryLog, onRestartCAS }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -103,7 +104,12 @@ export default function DBBrokersCASSection({ brokersCAS, pollingProps, onViewSQ
       isCollapsed={isCollapsed}
       onToggle={(v) => setIsCollapsed(v)}
     >
-      <Table columns={columns} data={brokersCAS} sortable />
+      <Table
+        columns={columns}
+        data={brokersCAS}
+        sortable
+        emptyState={<FetchEmptyState status={casStatus} title={CM.casBrokers} />}
+      />
     </Card>
   );
 }

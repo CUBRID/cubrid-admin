@@ -4,6 +4,7 @@ import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
 import { getPortableAppRoot } from './config/portable-root';
 import { registerDesktopIpcHandlers } from './ipc/handlers';
+import { installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
 import { getRendererDistDir, getWorkspacePaths, refreshWorkspacePaths } from './workspace/paths';
 import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
@@ -47,6 +48,7 @@ async function loadRoute(window: BrowserWindow, routePath: string): Promise<void
 }
 
 async function bootstrap(): Promise<void> {
+  installApplicationMenu();
   registerDesktopIpcHandlers();
 
   console.log('[desktop] install dir (beside .app / exe):', getPortableAppRoot());

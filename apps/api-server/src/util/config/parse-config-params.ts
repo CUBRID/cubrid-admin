@@ -3,6 +3,13 @@ import {
   ParsedSystemParameter,
   SystemParametersBySection,
 } from '@type/cms-response/get-all-sys-param-cms-response';
+import { parseConfText } from '@api-interfaces';
+
+// Both parsers read conf text with the engine's own INI rules
+// (parseConfText): section names lowercased except a case-sensitive
+// [@dbname], keys lowercased (the engine matches them case-insensitively),
+// quotes and inline ;/# comments stripped, repeated sections merged.
+
 
 /**
  * Parses configuration file content and extracts system parameters.
@@ -22,46 +29,13 @@ import {
  * ```
  */
 export function parseConfigParams(response: GetAllSysParamCmsResponse): ParsedSystemParameter[] {
+  const confdata = response.conflist?.[0]?.confdata ?? [];
   const params: ParsedSystemParameter[] = [];
-  let currentSection = '';
-
-  if (!response.conflist || response.conflist.length === 0) {
-    return params;
-  }
-
-  const confdata = response.conflist[0]?.confdata || [];
-
-  for (let i = 0; i < confdata.length; i++) {
-    const line = confdata[i].trim();
-
-    if (!line) {
-      continue;
-    }
-
-    if (line.startsWith('#')) {
-      continue;
-    }
-
-    const sectionMatch = line.match(/^\[([^\]]+)\]$/);
-    if (sectionMatch) {
-      currentSection = sectionMatch[1];
-      continue;
-    }
-
-    const paramMatch = line.match(/^([^=]+)=(.*)$/);
-    if (paramMatch) {
-      const key = paramMatch[1].trim();
-      const value = paramMatch[2].trim();
-
-      params.push({
-        key,
-        value,
-        section: currentSection,
-        lineNumber: i + 1,
-      });
+  for (const section of parseConfText(confdata).sections) {
+    for (const { key, value, lineNo } of section.entries) {
+      params.push({ key: key.toLowerCase(), value, section: section.name ?? '', lineNumber: lineNo });
     }
   }
-
   return params;
 }
 
@@ -93,48 +67,12 @@ export function parseConfigParamsBySection(
   response: GetAllSysParamCmsResponse
 ): SystemParametersBySection {
   const grouped: SystemParametersBySection = {};
-  let currentSection = '';
-
-  if (!response.conflist || response.conflist.length === 0) {
-    return grouped;
+  const confdata = response.conflist?.[0]?.confdata ?? [];
+  for (const section of parseConfText(confdata).sections) {
+    if (section.name === null) continue;
+    const params = (grouped[section.name] ??= {});
+    for (const { key, value } of section.entries) params[key.toLowerCase()] = value;
   }
-
-  const confdata = response.conflist[0]?.confdata || [];
-
-  for (const line of confdata) {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      continue;
-    }
-
-    if (trimmed.startsWith('#')) {
-      continue;
-    }
-
-    const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
-    if (sectionMatch) {
-      currentSection = sectionMatch[1];
-      if (!grouped[currentSection]) {
-        grouped[currentSection] = {};
-      }
-      continue;
-    }
-
-    const paramMatch = trimmed.match(/^([^=]+)=(.*)$/);
-    if (paramMatch) {
-      const key = paramMatch[1].trim();
-      const value = paramMatch[2].trim();
-
-      if (currentSection) {
-        if (!grouped[currentSection]) {
-          grouped[currentSection] = {};
-        }
-        grouped[currentSection][key] = value;
-      }
-    }
-  }
-
   return grouped;
 }
 

@@ -60,6 +60,37 @@ export const stopDatabase = createAsyncThunk(
   }
 );
 
+// Bulk start/stop for the "Start/Stop/Restart All Databases" tree actions.
+// Goes through the dedicated start-all/stop-all endpoints instead of looping
+// individual startDatabase/stopDatabase calls client-side: the backend
+// already isolates per-database failures there (a database with no stored
+// login profile is reported in `failed` instead of aborting every other
+// database in the batch), which a client-side loop awaiting each call in
+// turn cannot do once any one of them throws.
+export const startAllDatabases = createAsyncThunk(
+  'database/startAllDatabases',
+  async ({ hostUid, dbnames }, { rejectWithValue }) => {
+    try {
+      const response = await databaseApi.startAllDatabases(hostUid, dbnames);
+      return response;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to start databases');
+    }
+  }
+);
+
+export const stopAllDatabases = createAsyncThunk(
+  'database/stopAllDatabases',
+  async ({ hostUid, dbnames }, { rejectWithValue }) => {
+    try {
+      const response = await databaseApi.stopAllDatabases(hostUid, dbnames);
+      return response;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to stop databases');
+    }
+  }
+);
+
 export const loginDatabase = createAsyncThunk(
   'database/loginDatabase',
   async ({ hostUid, dbname, payload }, { rejectWithValue }) => {
@@ -110,6 +141,62 @@ export const deleteDatabaseProfile = createAsyncThunk(
   }
 );
 
+// The client just changed its own belief about this db's login (login,
+// logout, a gated start/stop, ...). Remember which start-info request was
+// the latest for the host at that moment: that request was sent before the
+// change, so its isLoggedIn is older than what the client now knows and
+// must not overwrite this db (see syncLoggedInFromStartInfo).
+const noteLoginChange = (state, hostUid, dbname) => {
+  if (!hostUid || !dbname) return;
+  state.loginChangedDuringStartInfo[dbKey(hostUid, dbname)] = state.latestStartInfoRequestIdByHost[hostUid] ?? null;
+};
+
+// A non-HA database in a start-all/stop-all `succeeded` list went through
+// the backend's ensureDbLogin gate, so it is logged in now. An HA one did
+// not — the host-wide ha_start/ha_stop runs without a per-database login —
+// so it is left as it was.
+const markBulkSucceededLoggedIn = (state, hostUid, succeeded) => {
+  if (!hostUid) return;
+  const haDbNames = state.haDbNamesByHost[hostUid] || [];
+  (succeeded || []).forEach((dbname) => {
+    if (haDbNames.includes(dbname)) return;
+    const key = dbKey(hostUid, dbname);
+    if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+    noteLoginChange(state, hostUid, dbname);
+  });
+};
+
+// Start-info's per-entry `isLoggedIn` is the server's real DB-login state
+// (same test as its ensureDbLogin cache hit — invalidated by a rotated CMS
+// token or a server restart), so this host's padlocks are set to exactly
+// that, even from a background poll. Other hosts are left untouched; so is
+// everything when the field is absent (older server) or there are no
+// entries to read it from, and so is any db with a login in flight or whose
+// login state the client changed after this start-info request was sent
+// (`requestId`; only fetchDatabaseStartInfo responses carry one).
+const syncLoggedInFromStartInfo = (state, payload, hostUid, requestId) => {
+  if (!hostUid) return;
+  const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+  const entries = [...toArray(payload.dblist?.dbs), ...toArray(payload.activelist?.active)]
+    .filter((e) => e && typeof e === 'object' && typeof e.dbname === 'string' && 'isLoggedIn' in e);
+  if (entries.length === 0) return;
+
+  const loggedIn = new Set(entries.filter((e) => e.isLoggedIn === true).map((e) => e.dbname));
+  const prefix = dbKey(hostUid, '');
+  const inFlight = (key) => state.loggingInDatabases[key] === true;
+  const changedSinceRequest = (key) => !!requestId && state.loginChangedDuringStartInfo[key] === requestId;
+  const next = state.loggedInDatabases.filter(
+    (key) => !key.startsWith(prefix) || inFlight(key) || changedSinceRequest(key)
+  );
+  loggedIn.forEach((dbname) => {
+    const key = dbKey(hostUid, dbname);
+    if (!next.includes(key) && !changedSinceRequest(key)) next.push(key);
+  });
+  if (JSON.stringify(next) !== JSON.stringify(state.loggedInDatabases)) {
+    state.loggedInDatabases = next;
+  }
+};
+
 // Helper to parse the shared response format. hostUid identifies which
 // host's per-host slot this response belongs to — every list this writes
 // lives in a {hostUid: [...]} map (see initialState) rather than a single
@@ -134,7 +221,7 @@ export const deleteDatabaseProfile = createAsyncThunk(
 // general per-host staleness slot. Every OTHER caller (start/stop database,
 // login, etc. - never background-tagged) omits the options object entirely
 // and gets the old all-or-nothing behavior unchanged.
-const parseDbResponse = (state, payload, hostUid, isBackground = false, { updateLive = !isBackground, updateNavigator = !isBackground } = {}) => {
+const parseDbResponse = (state, payload, hostUid, isBackground = false, { updateLive = !isBackground, updateNavigator = !isBackground, requestId } = {}) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
   const activeFound = payload.activelist?.active;
@@ -163,7 +250,13 @@ const parseDbResponse = (state, payload, hostUid, isBackground = false, { update
     const activeNames = newActive ?? state.activeDatabasesByHost[hostUid] ?? [];
     const missingActiveNames = activeNames.filter((name) => !knownNames.has(name));
     const mergedList = missingActiveNames.length > 0
-      ? [...rawList, ...missingActiveNames.map((dbname) => ({ dbname, isProfileExists: false }))]
+      ? [...rawList, ...missingActiveNames.map((dbname) => {
+        const activeEntry = (Array.isArray(activeFound) ? activeFound : [activeFound])
+          .find((a) => a && typeof a === 'object' && a.dbname === dbname);
+        return activeEntry && 'isLoggedIn' in activeEntry
+          ? { dbname, isProfileExists: false, isLoggedIn: activeEntry.isLoggedIn }
+          : { dbname, isProfileExists: false };
+      })]
       : rawList;
     if (updateLive && JSON.stringify(state.databasesByHost[hostUid]) !== JSON.stringify(mergedList)) {
       state.databasesByHost[hostUid] = mergedList;
@@ -186,6 +279,12 @@ const parseDbResponse = (state, payload, hostUid, isBackground = false, { update
       state.selectedDatabaseSubItem = null;
     }
   }
+
+  // The padlock follows the server's truth, so background polls count too —
+  // but only a response that is still the latest for this host's live view
+  // (updateLive); one superseded by a newer request would overwrite the
+  // fresher login state that newer response carries.
+  if (updateLive) syncLoggedInFromStartInfo(state, payload, hostUid, requestId);
 
   // Static ha_db_list membership from cubrid_ha.conf — deliberately separate
   // from any live-heartbeat-based HA signal, which can read "not HA" while
@@ -221,6 +320,7 @@ const initialState = {
   selectedDatabaseSubItem: null,
   loggedInDatabases: [],
   loggingInDatabases: {},
+  loginChangedDuringStartInfo: {}, // { dbKey: requestId|null } — see noteLoginChange
   loadingByHost: {}, // { hostUid: boolean } — fetchDatabaseStartInfo's own
   // loading, kept per host like databasesByHost itself: a single shared
   // flag meant closing one host's tabs while fetchDatabaseStartInfo was
@@ -308,6 +408,7 @@ const databaseCoreSlice = createSlice({
       const key = dbKey(hostUid, dbname);
       state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
       delete state.loggingInDatabases[key];
+      noteLoginChange(state, hostUid, dbname);
     }
   },
   extraReducers: (builder) => {
@@ -344,6 +445,7 @@ const databaseCoreSlice = createSlice({
         parseDbResponse(state, action.payload, hostUid, isBackground, {
           updateLive: isLatestLive,
           updateNavigator: isLatestNavigator,
+          requestId,
         });
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
@@ -374,7 +476,21 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(startDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
-        parseDbResponse(state, action.payload, action.meta.arg?.hostUid);
+        const { hostUid, dbname } = action.meta.arg || {};
+        parseDbResponse(state, action.payload, hostUid);
+        // startDatabase only succeeds once the backend's own ensureDbLogin
+        // gate has (re-)established a dbmtuserlogin for this database — sync
+        // that belief here too, not just when the explicit loginDatabase
+        // thunk runs. Otherwise a database started via a bulk action (which
+        // never dispatches loginDatabase itself) stays marked "not logged
+        // in" here, which disables this database's own individual
+        // start/stop menu items from then on even though the backend will
+        // happily service them.
+        if (hostUid && dbname) {
+          const key = dbKey(hostUid, dbname);
+          if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+          noteLoginChange(state, hostUid, dbname);
+        }
       })
       .addCase(startDatabase.rejected, (state, action) => {
         state.actionLoading = false;
@@ -386,9 +502,40 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(stopDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
-        parseDbResponse(state, action.payload, action.meta.arg?.hostUid);
+        const { hostUid, dbname } = action.meta.arg || {};
+        parseDbResponse(state, action.payload, hostUid);
+        // See startDatabase.fulfilled's matching comment.
+        if (hostUid && dbname) {
+          const key = dbKey(hostUid, dbname);
+          if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
+          noteLoginChange(state, hostUid, dbname);
+        }
       })
       .addCase(stopDatabase.rejected, (state, action) => {
+        state.actionLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(startAllDatabases.pending, (state) => {
+        state.actionLoading = true;
+        state.error = null;
+      })
+      .addCase(startAllDatabases.fulfilled, (state, action) => {
+        state.actionLoading = false;
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded);
+      })
+      .addCase(startAllDatabases.rejected, (state, action) => {
+        state.actionLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(stopAllDatabases.pending, (state) => {
+        state.actionLoading = true;
+        state.error = null;
+      })
+      .addCase(stopAllDatabases.fulfilled, (state, action) => {
+        state.actionLoading = false;
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded);
+      })
+      .addCase(stopAllDatabases.rejected, (state, action) => {
         state.actionLoading = false;
         state.error = action.payload;
       })
@@ -407,6 +554,7 @@ const databaseCoreSlice = createSlice({
         if (!state.loggedInDatabases.includes(key)) {
           state.loggedInDatabases.push(key);
         }
+        noteLoginChange(state, hostUid, dbname);
       })
       .addCase(loginDatabase.rejected, (state, action) => {
         const { hostUid, dbname } = action.meta.arg || {};
@@ -424,6 +572,7 @@ const databaseCoreSlice = createSlice({
         state.actionLoading = false;
         const key = dbKey(hostUid, dbname);
         state.loggedInDatabases = state.loggedInDatabases.filter((d) => d !== key);
+        noteLoginChange(state, hostUid, dbname);
       })
       .addCase(logoutDatabase.rejected, (state, action) => {
         state.actionLoading = false;
@@ -455,6 +604,7 @@ const databaseCoreSlice = createSlice({
         const { hostUid } = action.meta.arg || {};
         const key = dbKey(hostUid, action.payload.dbname);
         state.loggedInDatabases = state.loggedInDatabases.filter((d) => d !== key);
+        noteLoginChange(state, hostUid, action.payload.dbname);
         if (action.payload.response) {
           parseDbResponse(state, action.payload.response, hostUid);
         }
@@ -471,6 +621,21 @@ const databaseCoreSlice = createSlice({
         (action) => action.type === 'host/setSelectedHost',
         (state, action) => {
           state.activeHostUid = action.payload;
+        }
+      )
+      // The backend forgets this dbname's stored login profile + dbmt-login
+      // cache on delete (see DatabaseLifecycleService.deleteDatabase) so a
+      // later database created with this same name never inherits it — mirror
+      // that here, or this client would keep believing the old, now-deleted
+      // database is still "logged in" under that name.
+      .addMatcher(
+        (action) => action.type === 'database/deleteDatabase/fulfilled',
+        (state, action) => {
+          const { hostUid, dbname } = action.meta.arg || {};
+          if (!hostUid || !dbname) return;
+          const key = dbKey(hostUid, dbname);
+          state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
+          delete state.loggingInDatabases[key];
         }
       )
       // Dispatched unconditionally on delete/disconnect, regardless of

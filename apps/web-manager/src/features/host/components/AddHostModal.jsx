@@ -11,7 +11,7 @@ import { addHost,
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
-import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups } from '../hostGroupUtils';
+import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
 import { Select } from '../../../components/ds/forms/Select';
@@ -33,6 +33,9 @@ export default function AddHostModal({ isOpen, onClose }) {
   const [errors, setErrors] = useState({});
   const dispatch = useDispatch();
   const { loading, error: apiError, initialHostData, hostGroups } = useSelector((state) => state.host, shallowEqual);
+  // Opened from an HA follow-up of a bulk-login result dialog, which stays
+  // open (z-[2100]) underneath — stack above it like the HA modals do.
+  const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
 
   const groupOptions = useMemo(() => [
     { value: '', label: CM.noGroupOption },
@@ -73,6 +76,8 @@ export default function AddHostModal({ isOpen, onClose }) {
     const trimmedAlias = formData.alias.trim();
     if (!trimmedAlias) {
       errs.alias = CM.hostNameRequired;
+    } else if (trimmedAlias.length > MAX_HOST_ALIAS_LENGTH) {
+      errs.alias = CM.hostNameTooLong(MAX_HOST_ALIAS_LENGTH);
     } else if (flattenHostsFromGroups(hostGroups).some((h) => h.alias?.trim() === trimmedAlias)) {
       errs.alias = CM.hostNameDuplicate;
     }
@@ -159,6 +164,7 @@ export default function AddHostModal({ isOpen, onClose }) {
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      zIndexClass={aboveStatusModal ? 'z-[2200]' : undefined}
       onSubmit={handleSave}
       submitDisabled={loading}
       title={CM.newConnection}
@@ -221,6 +227,7 @@ export default function AddHostModal({ isOpen, onClose }) {
             error={errors.alias}
             placeholder={CM.friendlyNamePlaceholder}
             icon="label"
+            maxLength={MAX_HOST_ALIAS_LENGTH}
             disabled={loading}
             required
           />

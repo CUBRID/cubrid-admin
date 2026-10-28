@@ -1,5 +1,4 @@
 import { useCM } from '../../../../constants/useCM';
-import { stripHaRoleTagFromAlias } from '../../../host/hostGroupUtils';
 
 const HA_ROLE_CONFIG = {
   master:  { cmKey: 'haMaster',  icon: 'star',                    className: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400' },
@@ -33,12 +32,14 @@ export default function ServerListItem({
   const haRole = haInfo?.isHA ? haInfo.currentNodeType : null;
   const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
-  // Strip HA role tags from display name for cleanliness
-  const displayName = stripHaRoleTagFromAlias(host.alias || host.id) || host.id;
+  // Shown as stored: a user-typed alias may itself end in "(master)"; the HA
+  // role is shown by its own badge from live haInfo, not taken from the name.
+  const fullAlias = host.alias || host.id;
+  const displayName = fullAlias;
 
   return (
     <div
-      title={`${host.address}:${host.port}`}
+      title={`${fullAlias} (${host.address}:${host.port})`}
       data-testid={`host-item-${host.uid}`}
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
@@ -111,8 +112,9 @@ export default function ServerListItem({
         )}
       </div>
 
-      {/* Server name */}
-      <span className={`flex-1 min-w-0 text-14 leading-none truncate font-medium transition-colors ${
+      {/* Server name. Its own title (the full, unstripped alias) wins over the
+          row's on hover, so a truncated name can always be read in full. */}
+      <span title={fullAlias} className={`flex-1 min-w-0 text-14 leading-none truncate font-medium transition-colors ${
         isSelected
           ? 'text-amber-700 dark:text-amber-400 font-semibold'
           : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200'

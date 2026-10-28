@@ -8,10 +8,11 @@ directories:
   buildResources: apps/desktop/build-resources
 files:
   - dist/apps/desktop/**/*
+  - dist/libs/update-check/**/*
   - package.json
 extraMetadata:
   name: cubrid-web-manager-desktop
-  version: 0.0.1
+  version: 0.1.0-alpha.1
   main: dist/apps/desktop/main.js
 extraResources:
   - from: dist/apps/web-manager

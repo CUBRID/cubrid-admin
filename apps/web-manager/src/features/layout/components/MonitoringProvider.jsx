@@ -16,7 +16,7 @@ const EMPTY_LIST = [];
 export default function MonitoringProvider({ children }) {
   const dispatch = useDispatch();
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { selectedHostUid, authorizedHosts, reconnectQueue = EMPTY_LIST } = useSelector((state) => state.host, shallowEqual);
   const { activeDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   // activeDatabasesByHost is keyed by hostUid — this provider only ever
   // polls the currently selected host, so read straight out of its slot
@@ -48,6 +48,15 @@ export default function MonitoringProvider({ children }) {
   }, []);
 
   const MAX_IDLE_TIME = 10 * 60 * 1000; // 10 minutes
+  // A host in reconnectQueue is waiting on ReconnectHostModal to resolve a
+  // CMS session takeover; authorizedHosts still lists it (preserved so the
+  // reconnect is seamless, see apiClient.js), so that check alone doesn't
+  // pause polling here. Keep this host paused until the queue clears
+  // instead of hammering it with requests it's already known to 401 on.
+  // Derived as a boolean so the effects below only restart when THIS host
+  // enters/leaves the queue — depending on the whole array would restart
+  // both timers (and their immediate refresh()) whenever any other host did.
+  const isPendingReconnect = Boolean(selectedHostUid && reconnectQueue.includes(selectedHostUid));
   const isMonitoringTab = activeMainTab?.startsWith('host:') || activeMainTab?.startsWith('db:');
 
   // Dashboard Interval Refresh (Databases & Volumes)
@@ -60,7 +69,7 @@ export default function MonitoringProvider({ children }) {
     const hostUid = selectedHostUid;
     const interval = preferences.dashboardInterval;
 
-    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid)) {
+    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
           dispatch(fetchDatabaseStartInfo({ hostUid, isBackground: true }));
@@ -77,7 +86,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (dashboardTimer.current) clearInterval(dashboardTimer.current);
     };
-  }, [dispatch, preferences.dashboardInterval, selectedHostUid, authorizedHosts, activeDatabases, loggedInActiveDatabases, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.dashboardInterval, selectedHostUid, authorizedHosts, isPendingReconnect, activeDatabases, loggedInActiveDatabases, activeMainTab, isMonitoringTab]);
 
   // Broker Interval Refresh
   useEffect(() => {
@@ -89,7 +98,7 @@ export default function MonitoringProvider({ children }) {
     const hostUid = selectedHostUid;
     const interval = preferences.brokerStatusInterval;
 
-    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid)) {
+    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
           dispatch(fetchBrokerList({ hostUid, isBackground: true }));
@@ -103,7 +112,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (brokerTimer.current) clearInterval(brokerTimer.current);
     };
-  }, [dispatch, preferences.brokerStatusInterval, selectedHostUid, authorizedHosts, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.brokerStatusInterval, selectedHostUid, authorizedHosts, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   return children;
 }
