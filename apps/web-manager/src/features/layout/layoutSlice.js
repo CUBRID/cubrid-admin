@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { nextSeq } from '../../infrastructure/utils/singleFlight';
 
 const getInitialTheme = () => {
   const saved = localStorage.getItem('theme');
@@ -87,24 +88,29 @@ const layoutSlice = createSlice({
         }
       }
     },
-    closeHostTabs: (state, action) => {
-      const hostUid = action.payload;
-      const tabsToClose = state.openTabs.filter(tab => 
-        tab.includes(hostUid) || 
-        // Fallback for database tabs which might not have UID in identifier yet 
-        // (shared model - assumes they belong to the disconnected host if it was active)
-        (tab.startsWith('db:') && state.activeMainTab?.includes(hostUid))
-      );
-      state.openTabs = state.openTabs.filter(tab => !tabsToClose.includes(tab));
-      state.dirtyTabs = state.dirtyTabs.filter(id => !tabsToClose.includes(id));
-      
-      if (!state.openTabs.includes(state.activeMainTab)) {
-        if (state.openTabs.length > 0) {
-          state.activeMainTab = state.openTabs[state.openTabs.length - 1];
-        } else {
-          state.activeMainTab = null;
+    // Carries the seq it happened at, so a read sent before it can tell it is
+    // older (see databaseCoreSlice's closeHostTabs matcher).
+    closeHostTabs: {
+      reducer: (state, action) => {
+        const hostUid = action.payload;
+        const tabsToClose = state.openTabs.filter(tab => 
+          tab.includes(hostUid) || 
+          // Fallback for database tabs which might not have UID in identifier yet 
+          // (shared model - assumes they belong to the disconnected host if it was active)
+          (tab.startsWith('db:') && state.activeMainTab?.includes(hostUid))
+        );
+        state.openTabs = state.openTabs.filter(tab => !tabsToClose.includes(tab));
+        state.dirtyTabs = state.dirtyTabs.filter(id => !tabsToClose.includes(id));
+        
+        if (!state.openTabs.includes(state.activeMainTab)) {
+          if (state.openTabs.length > 0) {
+            state.activeMainTab = state.openTabs[state.openTabs.length - 1];
+          } else {
+            state.activeMainTab = null;
+          }
         }
-      }
+      },
+      prepare: (hostUid) => ({ payload: hostUid, meta: { seq: nextSeq() } }),
     },
     closeOtherTabs: (state, action) => {
       const keepTabId = action.payload;

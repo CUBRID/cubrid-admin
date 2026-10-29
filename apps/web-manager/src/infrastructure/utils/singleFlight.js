@@ -27,15 +27,19 @@ export const nextSeq = () => ++lastSeq;
  * request sent after it was asked for, so it waits for the one in flight and
  * shares the next one.
  *
- * `run(seq)` is called once per request actually sent; the promise resolves
- * to `{ value, seq }`. Never cache settled responses or coalesce writes.
+ * `run(seq)` is called once per request actually sent. The promise never
+ * rejects: it resolves to `{ ok: true, value, seq }` or `{ ok: false, error,
+ * seq }`, so a failure can be compared with what was applied too. Never cache
+ * settled responses or coalesce writes.
  */
 export function createSharedReads() {
   const entries = new Map(); // key -> { current, next }
 
   const launch = (run) => {
     const seq = nextSeq();
-    return Promise.resolve().then(() => run(seq)).then((value) => ({ value, seq }));
+    return Promise.resolve()
+      .then(() => run(seq))
+      .then((value) => ({ ok: true, value, seq }), (error) => ({ ok: false, error, seq }));
   };
 
   // When a request settles, the queued one (if any) becomes the one in flight.
@@ -51,7 +55,7 @@ export function createSharedReads() {
   };
 
   const track = (key, promise) => {
-    promise.then(() => settle(key, promise), () => settle(key, promise));
+    promise.then(() => settle(key, promise));
     return promise;
   };
 
@@ -64,7 +68,7 @@ export function createSharedReads() {
     }
     if (!fresh) return entry.current;
     if (!entry.next) {
-      entry.next = track(key, entry.current.then(() => {}, () => {}).then(() => launch(run)));
+      entry.next = track(key, entry.current.then(() => launch(run)));
     }
     return entry.next;
   };

@@ -2,26 +2,29 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { dbKey } from './dbKey';
+import { nextSeq } from '../../infrastructure/utils/singleFlight';
 
 export const fetchDatabaseStartInfo = createAsyncThunk(
   'database/fetchDatabaseStartInfo',
-  async (arg, { rejectWithValue }) => {
+  async (arg, { rejectWithValue, fulfillWithValue }) => {
     const hostUid = typeof arg === 'string' ? arg : arg.hostUid;
-    try {
-      const response = await databaseApi.getStartInfo(hostUid);
-      return response;
-    } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch database information');
+    // Only a background poll may take a request already in flight; anything
+    // else was asked for by the user or follows an action.
+    const result = await databaseApi.readStartInfo(hostUid, { fresh: !arg?.isBackground });
+    if (!result.ok) {
+      const err = result.error;
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch database information', { seq: result.seq });
     }
+    return fulfillWithValue(result.value, { seq: result.seq });
   }
 );
 
 export const startDatabase = createAsyncThunk(
   'database/startDatabase',
-  async ({ hostUid, dbname }, { rejectWithValue, dispatch }) => {
+  async ({ hostUid, dbname }, { rejectWithValue, dispatch, fulfillWithValue }) => {
     try {
       const response = await databaseApi.startDatabase(hostUid, dbname);
-      return response;
+      return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
       if (isAmbiguousFailure(err)) {
         dispatch(fetchDatabaseStartInfo(hostUid));
@@ -33,10 +36,10 @@ export const startDatabase = createAsyncThunk(
 
 export const stopDatabase = createAsyncThunk(
   'database/stopDatabase',
-  async ({ hostUid, dbname }, { rejectWithValue, dispatch }) => {
+  async ({ hostUid, dbname }, { rejectWithValue, dispatch, fulfillWithValue }) => {
     try {
       const response = await databaseApi.stopDatabase(hostUid, dbname);
-      return response;
+      return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
       // CMS stopdb can time out (30s) even when the DB has actually stopped.
       // Do a single immediate start-info check; if the DB is gone, treat stop as success.
@@ -47,7 +50,7 @@ export const stopDatabase = createAsyncThunk(
           typeof a === 'string' ? a.length > 0 : typeof a?.dbname === 'string' && a.dbname.length > 0
         );
         if (valid && !active.some((a) => (typeof a === 'string' ? a : a.dbname) === dbname)) {
-          return info;
+          return fulfillWithValue(info, { seq: nextSeq() });
         }
       } catch (_) {
         // ignore start-info failure, fall through to rejectWithValue
@@ -69,10 +72,10 @@ export const stopDatabase = createAsyncThunk(
 // turn cannot do once any one of them throws.
 export const startAllDatabases = createAsyncThunk(
   'database/startAllDatabases',
-  async ({ hostUid, dbnames }, { rejectWithValue }) => {
+  async ({ hostUid, dbnames }, { rejectWithValue, fulfillWithValue }) => {
     try {
       const response = await databaseApi.startAllDatabases(hostUid, dbnames);
-      return response;
+      return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to start databases');
     }
@@ -81,10 +84,10 @@ export const startAllDatabases = createAsyncThunk(
 
 export const stopAllDatabases = createAsyncThunk(
   'database/stopAllDatabases',
-  async ({ hostUid, dbnames }, { rejectWithValue }) => {
+  async ({ hostUid, dbnames }, { rejectWithValue, fulfillWithValue }) => {
     try {
       const response = await databaseApi.stopAllDatabases(hostUid, dbnames);
-      return response;
+      return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to stop databases');
     }
@@ -93,12 +96,12 @@ export const stopAllDatabases = createAsyncThunk(
 
 export const loginDatabase = createAsyncThunk(
   'database/loginDatabase',
-  async ({ hostUid, dbname, payload }, { rejectWithValue }) => {
+  async ({ hostUid, dbname, payload }, { rejectWithValue, fulfillWithValue }) => {
     try {
       const response = payload 
         ? await databaseApi.loginDatabase(hostUid, dbname, payload)
         : await databaseApi.loginDatabaseWithProfile(hostUid, dbname);
-      return { dbname, ...response };
+      return fulfillWithValue({ dbname, ...response }, { seq: nextSeq() });
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to login to database ${dbname}`);
     }
@@ -107,10 +110,10 @@ export const loginDatabase = createAsyncThunk(
 
 export const logoutDatabase = createAsyncThunk(
   'database/logoutDatabase',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
+  async ({ hostUid, dbname }, { rejectWithValue, fulfillWithValue }) => {
     try {
       await databaseApi.logoutDatabase(hostUid, dbname);
-      return { dbname };
+      return fulfillWithValue({ dbname }, { seq: nextSeq() });
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to log out of database ${dbname}`);
     }
@@ -119,10 +122,10 @@ export const logoutDatabase = createAsyncThunk(
 
 export const registerDatabase = createAsyncThunk(
   'database/registerDatabase',
-  async ({ hostUid, dbname, payload }, { rejectWithValue }) => {
+  async ({ hostUid, dbname, payload }, { rejectWithValue, fulfillWithValue }) => {
     try {
       const response = await databaseApi.registerDatabase(hostUid, dbname, payload);
-      return { dbname, response };
+      return fulfillWithValue({ dbname, response }, { seq: nextSeq() });
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to register database ${dbname}`);
     }
@@ -131,10 +134,10 @@ export const registerDatabase = createAsyncThunk(
 
 export const deleteDatabaseProfile = createAsyncThunk(
   'database/deleteDatabaseProfile',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
+  async ({ hostUid, dbname }, { rejectWithValue, fulfillWithValue }) => {
     try {
       const response = await databaseApi.deleteDatabaseProfile(hostUid, dbname);
-      return { dbname, response };
+      return fulfillWithValue({ dbname, response }, { seq: nextSeq() });
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to delete saved credentials for ${dbname}`);
     }
@@ -142,27 +145,26 @@ export const deleteDatabaseProfile = createAsyncThunk(
 );
 
 // The client just changed its own belief about this db's login (login,
-// logout, a gated start/stop, ...). Remember which start-info request was
-// the latest for the host at that moment: that request was sent before the
-// change, so its isLoggedIn is older than what the client now knows and
-// must not overwrite this db (see syncLoggedInFromStartInfo).
-const noteLoginChange = (state, hostUid, dbname) => {
-  if (!hostUid || !dbname) return;
-  state.loginChangedDuringStartInfo[dbKey(hostUid, dbname)] = state.latestStartInfoRequestIdByHost[hostUid] ?? null;
+// logout, a gated start/stop, ...). Remember when (`seq`, taken as the
+// change happened): a start-info read sent before that carries an older
+// isLoggedIn and must not overwrite this db (see syncLoggedInFromStartInfo).
+const noteLoginChange = (state, hostUid, dbname, seq) => {
+  if (!hostUid || !dbname || seq === undefined) return;
+  state.loginChangedSeq[dbKey(hostUid, dbname)] = seq;
 };
 
 // A non-HA database in a start-all/stop-all `succeeded` list went through
 // the backend's ensureDbLogin gate, so it is logged in now. An HA one did
 // not — the host-wide ha_start/ha_stop runs without a per-database login —
 // so it is left as it was.
-const markBulkSucceededLoggedIn = (state, hostUid, succeeded) => {
+const markBulkSucceededLoggedIn = (state, hostUid, succeeded, seq) => {
   if (!hostUid) return;
   const haDbNames = state.haDbNamesByHost[hostUid] || [];
   (succeeded || []).forEach((dbname) => {
     if (haDbNames.includes(dbname)) return;
     const key = dbKey(hostUid, dbname);
     if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
-    noteLoginChange(state, hostUid, dbname);
+    noteLoginChange(state, hostUid, dbname, seq);
   });
 };
 
@@ -172,9 +174,8 @@ const markBulkSucceededLoggedIn = (state, hostUid, succeeded) => {
 // that, even from a background poll. Other hosts are left untouched; so is
 // everything when the field is absent (older server) or there are no
 // entries to read it from, and so is any db with a login in flight or whose
-// login state the client changed after this start-info request was sent
-// (`requestId`; only fetchDatabaseStartInfo responses carry one).
-const syncLoggedInFromStartInfo = (state, payload, hostUid, requestId) => {
+// login state the client changed after this start-info was read (`seq`).
+const syncLoggedInFromStartInfo = (state, payload, hostUid, seq) => {
   if (!hostUid) return;
   const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
   const entries = [...toArray(payload.dblist?.dbs), ...toArray(payload.activelist?.active)]
@@ -184,7 +185,7 @@ const syncLoggedInFromStartInfo = (state, payload, hostUid, requestId) => {
   const loggedIn = new Set(entries.filter((e) => e.isLoggedIn === true).map((e) => e.dbname));
   const prefix = dbKey(hostUid, '');
   const inFlight = (key) => state.loggingInDatabases[key] === true;
-  const changedSinceRequest = (key) => !!requestId && state.loginChangedDuringStartInfo[key] === requestId;
+  const changedSinceRequest = (key) => seq !== undefined && (state.loginChangedSeq[key] ?? 0) > seq;
   const next = state.loggedInDatabases.filter(
     (key) => !key.startsWith(prefix) || inFlight(key) || changedSinceRequest(key)
   );
@@ -197,37 +198,21 @@ const syncLoggedInFromStartInfo = (state, payload, hostUid, requestId) => {
   }
 };
 
-// Helper to parse the shared response format. hostUid identifies which
-// host's per-host slot this response belongs to — every list this writes
-// lives in a {hostUid: [...]} map (see initialState) rather than a single
-// shared array, so a response for a host the user has since switched away
-// from can never overwrite the data the UI is now using to render a
-// DIFFERENT, currently-selected host's tree/dashboard.
+// Helper to parse the shared response format into this host's per-host
+// slots, so a response for a host the user has since switched away from can
+// never overwrite another host's lists.
 //
-// `isBackground` additionally gates the navigator* mirror fields
-// (navigatorDatabasesByHost/navigatorActiveDatabasesByHost), which
-// DatabaseTree.jsx reads instead of databasesByHost/activeDatabasesByHost.
-// Dashboard-driven background polling (MonitoringProvider's interval,
-// tagged isBackground:true) still updates the live fields every consumer
-// other than the navigator reads — it just skips the navigator mirror, so
-// the sidebar tree only moves on an explicit user action (initial load,
-// manual refresh, or an operation's own success/failure refetch — none of
-// which are ever background-tagged) rather than every poll tick.
-// `updateLive`/`updateNavigator` are independent gates, NOT both derived from
-// a single `isBackground` flag - see fetchDatabaseStartInfo.fulfilled's own
-// comment for why: a background poll starting after a foreground request is
-// still in flight must not make that foreground response look "stale" for
-// the navigator just because a newer (background) request now owns the
-// general per-host staleness slot. Every OTHER caller (start/stop database,
-// login, etc. - never background-tagged) omits the options object entirely
-// and gets the old all-or-nothing behavior unchanged.
+// Two views are written: the live lists every dashboard reads, and the
+// navigator* mirror DatabaseTree.jsx reads. The tree only moves on an
+// explicit user action or an operation's own refetch, never on a background
+// poll. Which views a response may update is decided by applyStartInfo.
 // Keeps an already-empty list as it is: every failed poll of an unreachable
 // host would otherwise hand subscribers a new empty array and re-render them.
 const clearList = (byHost, hostUid) => {
   if (byHost[hostUid]?.length !== 0) byHost[hostUid] = [];
 };
 
-const parseDbResponse = (state, payload, hostUid, isBackground = false, { updateLive = !isBackground, updateNavigator = !isBackground, requestId } = {}) => {
+const parseDbResponse = (state, payload, hostUid, { updateLive, updateNavigator, seq }) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
   const activeFound = payload.activelist?.active;
@@ -290,7 +275,7 @@ const parseDbResponse = (state, payload, hostUid, isBackground = false, { update
   // but only a response that is still the latest for this host's live view
   // (updateLive); one superseded by a newer request would overwrite the
   // fresher login state that newer response carries.
-  if (updateLive) syncLoggedInFromStartInfo(state, payload, hostUid, requestId);
+  if (updateLive) syncLoggedInFromStartInfo(state, payload, hostUid, seq);
 
   // Static ha_db_list membership from cubrid_ha.conf — deliberately separate
   // from any live-heartbeat-based HA signal, which can read "not HA" while
@@ -302,6 +287,29 @@ const parseDbResponse = (state, payload, hostUid, isBackground = false, { update
       state.haDbNamesByHost[hostUid] = newHaDbNames;
     }
   }
+};
+
+// One foreground start-info read for the host settled. The spinner stays
+// while another one is still pending.
+const endForegroundRead = (state, hostUid) => {
+  if (!(hostUid in state.foregroundReadsByHost)) return; // host closed meanwhile
+  const left = state.foregroundReadsByHost[hostUid] - 1;
+  state.foregroundReadsByHost[hostUid] = left;
+  state.loadingByHost[hostUid] = left > 0;
+};
+
+// Applies a start-info response to each view only if it is newer than what
+// that view last applied. Reads are stamped when sent and an action's result
+// when it returns, so a slow poll that was sent before a newer read or an
+// action can never overwrite them. A background poll never moves the
+// navigator.
+const applyStartInfo = (state, hostUid, payload, { seq, isBackground = false }) => {
+  if (!hostUid || seq === undefined) return;
+  const updateLive = seq > (state.appliedLiveSeqByHost[hostUid] ?? 0);
+  const updateNavigator = !isBackground && seq > (state.appliedNavigatorSeqByHost[hostUid] ?? 0);
+  if (updateLive) state.appliedLiveSeqByHost[hostUid] = seq;
+  if (updateNavigator) state.appliedNavigatorSeqByHost[hostUid] = seq;
+  if (updateLive || updateNavigator) parseDbResponse(state, payload, hostUid, { updateLive, updateNavigator, seq });
 };
 
 const initialState = {
@@ -326,7 +334,7 @@ const initialState = {
   selectedDatabaseSubItem: null,
   loggedInDatabases: [],
   loggingInDatabases: {},
-  loginChangedDuringStartInfo: {}, // { dbKey: requestId|null } — see noteLoginChange
+  loginChangedSeq: {}, // { dbKey: seq } — see noteLoginChange
   loadingByHost: {}, // { hostUid: boolean } — fetchDatabaseStartInfo's own
   // loading, kept per host like databasesByHost itself: a single shared
   // flag meant closing one host's tabs while fetchDatabaseStartInfo was
@@ -335,13 +343,11 @@ const initialState = {
   // host's own spinner.
   actionLoading: false,
   error: null,
-  latestStartInfoRequestIdByHost: {}, // { hostUid: requestId }
-  // Tracks only the latest NON-background fetchDatabaseStartInfo request
-  // per host - separate from latestStartInfoRequestIdByHost above, so a
-  // background poll starting while this one is still in flight can't make
-  // this one look stale for the navigator mirror once it resolves. See
-  // parseDbResponse's own comment.
-  latestNavigatorStartInfoRequestIdByHost: {}, // { hostUid: requestId }
+  // { hostUid: number } — foreground start-info reads still pending, behind loadingByHost.
+  foregroundReadsByHost: {},
+  // { hostUid: seq } — the newest start-info each view applied; see applyStartInfo.
+  appliedLiveSeqByHost: {},
+  appliedNavigatorSeqByHost: {},
 };
 
 const databaseCoreSlice = createSlice({
@@ -408,72 +414,54 @@ const databaseCoreSlice = createSlice({
     // (the server-side dbmtuserlogin session it was relying on has expired and
     // no saved profile exists to silently re-authenticate with), so the padlock
     // icon doesn't keep showing "logged in" for a session that no longer is.
-    clearDatabaseLogin: (state, action) => {
-      const { hostUid, dbname } = action.payload || {};
-      if (!hostUid || !dbname) return;
-      const key = dbKey(hostUid, dbname);
-      state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
-      delete state.loggingInDatabases[key];
-      noteLoginChange(state, hostUid, dbname);
+    clearDatabaseLogin: {
+      reducer: (state, action) => {
+        const { hostUid, dbname } = action.payload || {};
+        if (!hostUid || !dbname) return;
+        const key = dbKey(hostUid, dbname);
+        state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
+        delete state.loggingInDatabases[key];
+        noteLoginChange(state, hostUid, dbname, action.meta.seq);
+      },
+      prepare: (payload) => ({ payload, meta: { seq: nextSeq() } }),
     }
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchDatabaseStartInfo.pending, (state, action) => {
-        // Track the latest requestId PER HOST so a slower earlier request
-        // for that same host (still in flight when the user switches focus
-        // away and back) can't resolve after a newer one and clobber its
-        // fresher data.
-        //
-        // Scoped by hostUid, not a single shared id: a bare shared id meant
-        // any request for ANY host would mark this host's own in-flight
-        // request as "stale" the instant it fired, discarding this host's
-        // response once it resolved — under sustained polling across
-        // multiple hosts, that could discard every response for a given
-        // host indefinitely, not just an actually-superseded one.
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        const isBackground = !!action.meta.arg?.isBackground;
-        state.latestStartInfoRequestIdByHost[hostUid] = action.meta.requestId;
-        if (!isBackground) {
+        if (!action.meta.arg?.isBackground) {
+          state.foregroundReadsByHost[hostUid] = (state.foregroundReadsByHost[hostUid] ?? 0) + 1;
           state.loadingByHost[hostUid] = true;
-          state.latestNavigatorStartInfoRequestIdByHost[hostUid] = action.meta.requestId;
         }
         state.error = null;
       })
       .addCase(fetchDatabaseStartInfo.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
-        const requestId = action.meta.requestId;
-        const isLatestLive = requestId === state.latestStartInfoRequestIdByHost[hostUid];
-        const isLatestNavigator = !isBackground && requestId === state.latestNavigatorStartInfoRequestIdByHost[hostUid];
-        if (!isLatestLive && !isLatestNavigator) return;
-        if (isLatestNavigator) state.loadingByHost[hostUid] = false;
-        parseDbResponse(state, action.payload, hostUid, isBackground, {
-          updateLive: isLatestLive,
-          updateNavigator: isLatestNavigator,
-          requestId,
-        });
+        if (!isBackground) endForegroundRead(state, hostUid);
+        applyStartInfo(state, hostUid, action.payload, { seq: action.meta.seq, isBackground });
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
-        const requestId = action.meta.requestId;
-        const isLatestLive = requestId === state.latestStartInfoRequestIdByHost[hostUid];
-        // A background (interval) poll failure is transient and shouldn't
-        // blank the tree the navigator is showing — only an explicit,
-        // user-triggered fetch failure does that (and only if nothing
-        // newer superseded THIS request for the navigator specifically).
-        const isLatestNavigator = !isBackground && requestId === state.latestNavigatorStartInfoRequestIdByHost[hostUid];
-        if (!isLatestLive && !isLatestNavigator) return;
-        if (isLatestNavigator) {
-          state.loadingByHost[hostUid] = false;
+        if (!isBackground) endForegroundRead(state, hostUid);
+        // A failure is newer information too, but only when nothing newer was
+        // applied meanwhile. A background poll failure is transient and
+        // leaves the navigator alone; only an explicit fetch failure empties
+        // the tree.
+        const { seq } = action.meta;
+        if (seq === undefined) return;
+        if (seq > (state.appliedLiveSeqByHost[hostUid] ?? 0)) {
+          state.appliedLiveSeqByHost[hostUid] = seq;
+          clearList(state.databasesByHost, hostUid);
+          clearList(state.activeDatabasesByHost, hostUid);
+        }
+        if (!isBackground && seq > (state.appliedNavigatorSeqByHost[hostUid] ?? 0)) {
+          state.appliedNavigatorSeqByHost[hostUid] = seq;
           state.error = action.payload;
           clearList(state.navigatorDatabasesByHost, hostUid);
           clearList(state.navigatorActiveDatabasesByHost, hostUid);
-        }
-        if (isLatestLive) {
-          clearList(state.databasesByHost, hostUid);
-          clearList(state.activeDatabasesByHost, hostUid);
         }
       })
       .addCase(startDatabase.pending, (state) => {
@@ -483,7 +471,7 @@ const databaseCoreSlice = createSlice({
       .addCase(startDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
         const { hostUid, dbname } = action.meta.arg || {};
-        parseDbResponse(state, action.payload, hostUid);
+        applyStartInfo(state, hostUid, action.payload, { seq: action.meta.seq });
         // startDatabase only succeeds once the backend's own ensureDbLogin
         // gate has (re-)established a dbmtuserlogin for this database — sync
         // that belief here too, not just when the explicit loginDatabase
@@ -495,7 +483,7 @@ const databaseCoreSlice = createSlice({
         if (hostUid && dbname) {
           const key = dbKey(hostUid, dbname);
           if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
-          noteLoginChange(state, hostUid, dbname);
+          noteLoginChange(state, hostUid, dbname, action.meta.seq);
         }
       })
       .addCase(startDatabase.rejected, (state, action) => {
@@ -509,12 +497,12 @@ const databaseCoreSlice = createSlice({
       .addCase(stopDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
         const { hostUid, dbname } = action.meta.arg || {};
-        parseDbResponse(state, action.payload, hostUid);
+        applyStartInfo(state, hostUid, action.payload, { seq: action.meta.seq });
         // See startDatabase.fulfilled's matching comment.
         if (hostUid && dbname) {
           const key = dbKey(hostUid, dbname);
           if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
-          noteLoginChange(state, hostUid, dbname);
+          noteLoginChange(state, hostUid, dbname, action.meta.seq);
         }
       })
       .addCase(stopDatabase.rejected, (state, action) => {
@@ -527,7 +515,7 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(startAllDatabases.fulfilled, (state, action) => {
         state.actionLoading = false;
-        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded);
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded, action.meta.seq);
       })
       .addCase(startAllDatabases.rejected, (state, action) => {
         state.actionLoading = false;
@@ -539,7 +527,7 @@ const databaseCoreSlice = createSlice({
       })
       .addCase(stopAllDatabases.fulfilled, (state, action) => {
         state.actionLoading = false;
-        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded);
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded, action.meta.seq);
       })
       .addCase(stopAllDatabases.rejected, (state, action) => {
         state.actionLoading = false;
@@ -560,7 +548,7 @@ const databaseCoreSlice = createSlice({
         if (!state.loggedInDatabases.includes(key)) {
           state.loggedInDatabases.push(key);
         }
-        noteLoginChange(state, hostUid, dbname);
+        noteLoginChange(state, hostUid, dbname, action.meta.seq);
       })
       .addCase(loginDatabase.rejected, (state, action) => {
         const { hostUid, dbname } = action.meta.arg || {};
@@ -578,7 +566,7 @@ const databaseCoreSlice = createSlice({
         state.actionLoading = false;
         const key = dbKey(hostUid, dbname);
         state.loggedInDatabases = state.loggedInDatabases.filter((d) => d !== key);
-        noteLoginChange(state, hostUid, dbname);
+        noteLoginChange(state, hostUid, dbname, action.meta.seq);
       })
       .addCase(logoutDatabase.rejected, (state, action) => {
         state.actionLoading = false;
@@ -591,7 +579,7 @@ const databaseCoreSlice = createSlice({
       .addCase(registerDatabase.fulfilled, (state, action) => {
         state.actionLoading = false;
         if (action.payload.response) {
-          parseDbResponse(state, action.payload.response, action.meta.arg?.hostUid);
+          applyStartInfo(state, action.meta.arg?.hostUid, action.payload.response, { seq: action.meta.seq });
         }
       })
       .addCase(registerDatabase.rejected, (state, action) => {
@@ -610,9 +598,9 @@ const databaseCoreSlice = createSlice({
         const { hostUid } = action.meta.arg || {};
         const key = dbKey(hostUid, action.payload.dbname);
         state.loggedInDatabases = state.loggedInDatabases.filter((d) => d !== key);
-        noteLoginChange(state, hostUid, action.payload.dbname);
+        noteLoginChange(state, hostUid, action.payload.dbname, action.meta.seq);
         if (action.payload.response) {
-          parseDbResponse(state, action.payload.response, hostUid);
+          applyStartInfo(state, hostUid, action.payload.response, { seq: action.meta.seq });
         }
       })
       .addCase(deleteDatabaseProfile.rejected, (state, action) => {
@@ -658,26 +646,17 @@ const databaseCoreSlice = createSlice({
           delete state.navigatorDatabasesByHost[hostUid];
           delete state.navigatorActiveDatabasesByHost[hostUid];
           delete state.haDbNamesByHost[hostUid];
-          // A fetchDatabaseStartInfo already in flight for this host when it
-          // was deleted/disconnected is still "the latest for its own host"
-          // per the per-host dedup above — nothing else for this host will
-          // ever supersede it now that the host is gone — so it would pass
-          // that check and resurrect this host's just-evicted slot once it
-          // resolves, with nothing left to ever clean it up again. Clearing
-          // the id here makes that stale response get dropped like any
-          // other no-longer-latest one.
-          //
-          // That discard path returns before reaching the loadingByHost
-          // write, so if this host's now-orphaned request was the one that
-          // set it, nothing else would ever clear it — every other fetch is
-          // for a DIFFERENT host and only ever touches its own slot. Clear
-          // this host's own loading slot directly instead of leaving a
-          // stuck spinner with no fetch left that could ever turn it off —
-          // and ONLY this host's slot, not a single shared flag, or closing
-          // host A here would also hide host B's own, still-legitimate
-          // in-flight loading indicator.
-          delete state.latestStartInfoRequestIdByHost[hostUid];
-          delete state.latestNavigatorStartInfoRequestIdByHost[hostUid];
+          // A start-info read still in flight for this host was sent before
+          // it closed (closeHostTabs carries the seq it closed at), so it can
+          // never repopulate the slots just evicted. Its spinner goes too.
+          if (action.meta?.seq !== undefined) {
+            state.appliedLiveSeqByHost[hostUid] = action.meta.seq;
+            state.appliedNavigatorSeqByHost[hostUid] = action.meta.seq;
+          } else {
+            delete state.appliedLiveSeqByHost[hostUid];
+            delete state.appliedNavigatorSeqByHost[hostUid];
+          }
+          delete state.foregroundReadsByHost[hostUid];
           delete state.loadingByHost[hostUid];
         }
       );

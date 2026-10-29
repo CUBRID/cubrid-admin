@@ -70,7 +70,7 @@ describe('createSharedReads', () => {
     expect(run).toHaveBeenCalledTimes(2);
   });
 
-  it('gives every reader the same failure and still sends the queued read', async () => {
+  it('gives every reader the same failure with its seq, and still sends the queued read', async () => {
     const read = createSharedReads();
     const run = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce('v2');
 
@@ -78,9 +78,12 @@ describe('createSharedReads', () => {
     const b = read('k', run);
     const fresh = read('k', run, { fresh: true });
 
-    await expect(a).rejects.toThrow('down');
-    await expect(b).rejects.toThrow('down');
-    expect((await fresh).value).toBe('v2');
+    const [ra, rb, rf] = await Promise.all([a, b, fresh]);
+    expect(ra).toBe(rb);
+    expect(ra.ok).toBe(false);
+    expect(ra.error.message).toBe('down');
+    expect(rf).toMatchObject({ ok: true, value: 'v2' });
+    expect(rf.seq).toBeGreaterThan(ra.seq);
   });
 
   it('starts a new request once everything has settled', async () => {
