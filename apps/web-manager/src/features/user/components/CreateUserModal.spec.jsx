@@ -83,16 +83,15 @@ it('does not render a description field in edit mode, even when the user has a c
   expectNoDescriptionField();
 });
 
-it('keeps Save disabled in edit mode until a new password is entered', async () => {
+it('saves an empty password in edit mode as no password, as the engine allows', async () => {
   await render('alice');
   const saveBtn = el('create-user-save-btn');
-  expect(saveBtn.disabled).toBe(true);
-
-  await act(async () => setValue(el('create-user-password-input'), 'newpass1'));
   expect(saveBtn.disabled).toBe(false);
+  await act(async () => saveBtn.click());
 
-  await act(async () => setValue(el('create-user-password-input'), ''));
-  expect(saveBtn.disabled).toBe(true);
+  expect(userApi.updateDatabaseUser).toHaveBeenCalledTimes(1);
+  const [, , , payload] = userApi.updateDatabaseUser.mock.calls[0];
+  expect(payload.userpass).toBe('');
 });
 
 it('sends only the password in edit mode and shows the password-changed message', async () => {
