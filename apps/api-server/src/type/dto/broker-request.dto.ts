@@ -1,4 +1,6 @@
 import { ArrayNotEmpty, IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { CMS_PASSWORD_MAX_BYTES } from '@api-interfaces';
+import { MaxUtf8Bytes } from './max-utf8-bytes.decorator';
 
 /**
  * Validated request bodies for BrokerController's DBMT (CMS) user endpoints.
@@ -22,6 +24,7 @@ export class AddDbmtUserDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxUtf8Bytes(CMS_PASSWORD_MAX_BYTES)
   password: string;
 
   @IsString()
@@ -66,6 +69,7 @@ export class SetDbmtPasswdDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxUtf8Bytes(CMS_PASSWORD_MAX_BYTES)
   newpassword: string;
 }
 

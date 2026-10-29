@@ -8,3 +8,6 @@ export * from './response';
 // master, version-aware rule data itself stays backend-only — see
 // param-schema/index.ts).
 export * from './param-schema';
+
+// Length rules for database and CMS passwords, shared by both apps.
+export * from './password-rules';

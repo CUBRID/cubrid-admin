@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { checkCmsPassword, CMS_PASSWORD_MAX_BYTES } from '@api-interfaces';
 import { setHostPassword, editHost, loginToHostWithSideEffects, closeChangePasswordModal, clearHostError } from '../hostSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -44,7 +45,9 @@ export default function ChangeHostPasswordModal() {
 
   const validate = () => {
     const errs = {};
-    if (!formData.password) errs.password = CM.passwordRequired;
+    const problem = checkCmsPassword(formData.password);
+    if (problem === 'required') errs.password = CM.passwordRequired;
+    else if (problem === 'tooLong') errs.password = CM.cmsPasswordTooLongMsg(CMS_PASSWORD_MAX_BYTES);
     if (formData.password !== formData.confirmPassword) {
       errs.confirmPassword = CM.passwordsDoNotMatch;
     }
@@ -186,6 +189,7 @@ export default function ChangeHostPasswordModal() {
                 value={formData.password}
                 onChange={handleChange}
                 error={errors.password}
+                description={CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES)}
                 placeholder="••••••••"
                 disabled={loading}
                 icon="key"

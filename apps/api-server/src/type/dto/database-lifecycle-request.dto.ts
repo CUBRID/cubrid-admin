@@ -10,7 +10,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { SetAutoAddVolDto } from './database-config-request.dto';
-import { ExvolInfo } from '@api-interfaces';
+import { DB_PASSWORD_MAX_BYTES, ExvolInfo } from '@api-interfaces';
+import { MaxUtf8Bytes } from './max-utf8-bytes.decorator';
 
 /**
  * Validated request bodies for DatabaseLifecycleController. Kept as
@@ -46,6 +47,7 @@ export class DeleteDatabaseDto {
 
 class UpdateUserOnCreateDto {
   @IsString()
+  @MaxUtf8Bytes(DB_PASSWORD_MAX_BYTES)
   userpass: string;
 }
 

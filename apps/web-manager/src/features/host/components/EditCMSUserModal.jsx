@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
+import { checkCmsPassword, CMS_PASSWORD_MAX_BYTES } from '@api-interfaces';
 import {
   addCmsUser,
   updateCmsUser,
@@ -97,7 +98,8 @@ export default function EditCMSUserModal() {
   }, [isOpen, isEditMode, editUser, resetAction]);
 
   const passwordMismatch = formData.password !== formData.confirmPassword;
-  const canSave = formData.targetid && (!isEditMode ? !!formData.password : true) && !passwordMismatch;
+  const passwordTooLong = !!formData.password && checkCmsPassword(formData.password) === 'tooLong';
+  const canSave = formData.targetid && (!isEditMode ? !!formData.password : true) && !passwordMismatch && !passwordTooLong;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -216,7 +218,8 @@ export default function EditCMSUserModal() {
                 placeholder={isEditMode ? CM.passwordConfirm : CM.password}
                 icon="lock"
                 required={!isEditMode}
-                error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
+                description={CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES)}
+                error={passwordTooLong ? CM.cmsPasswordTooLongMsg(CMS_PASSWORD_MAX_BYTES) : (passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null)}
               />
               <Input
                 data-testid="edit-cms-user-confirm-password-input"
