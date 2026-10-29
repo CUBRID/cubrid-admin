@@ -26,7 +26,7 @@ import {
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
-import { summarizeLocks } from './lock-summary';
+import { listLockObjects, lockOverview, summarizeLocks } from './lock-summary';
 import {
   BaseService,
   HandleCmsErrors,
@@ -700,7 +700,10 @@ export class DatabaseManagementService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     if (request?.summary) {
-      return { summary: summarizeLocks(response.lockinfo) };
+      return { summary: summarizeLocks(response.lockinfo), overview: lockOverview(response.lockinfo) };
+    }
+    if (request?.objects) {
+      return { objects: listLockObjects(response.lockinfo) };
     }
 
     // Return lockinfo only (CMS envelope removed)
