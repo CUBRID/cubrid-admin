@@ -235,7 +235,7 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
 /**
  * Enhanced menu item for the professional ecosystem.
  */
-export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled = false }) {
+export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled = false, title }) {
   const { closeMenu } = useContext(MenuContext);
   const baseClasses = `flex items-center gap-2.5 px-3 py-2 text-14 font-medium tracking-wide transition-all w-full text-left rounded-lg font-sans relative group overflow-hidden`;
   
@@ -269,14 +269,26 @@ export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled 
 
   if (href && !disabled) {
     return (
-      <a role="menuitem" className={`${baseClasses} ${stateClasses}`} href={href} onClick={handleClick}>
+      <a role="menuitem" className={`${baseClasses} ${stateClasses}`} href={href} onClick={handleClick} title={title}>
         {content}
       </a>
     );
   }
 
+  if (disabled && title) {
+    // Disabled buttons do not get mouse events in every browser, so the
+    // tooltip (usually the reason it is disabled) hangs off a wrapper instead.
+    return (
+      <div title={title} className="cursor-not-allowed">
+        <button type="button" role="menuitem" className={`${baseClasses} ${stateClasses} pointer-events-none`} onClick={handleClick} disabled>
+          {content}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <button type="button" role="menuitem" className={`${baseClasses} ${stateClasses}`} onClick={handleClick} disabled={disabled}>
+    <button type="button" role="menuitem" className={`${baseClasses} ${stateClasses}`} onClick={handleClick} disabled={disabled} title={title}>
       {content}
     </button>
   );

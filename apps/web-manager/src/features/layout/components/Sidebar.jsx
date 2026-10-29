@@ -1406,6 +1406,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="download"
               label={CM.manageDatabaseMenu.load}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openLoadDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1443,12 +1444,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="drive_file_rename_outline"
               label={CM.manageDatabaseMenu.rename}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRenameDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="restore"
               label={CM.manageDatabaseMenu.restore}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRestoreDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1462,6 +1465,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="delete"
               label={CM.manageDatabaseMenu.delete}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDeleteDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
           </SubMenu>

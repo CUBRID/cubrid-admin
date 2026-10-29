@@ -131,3 +131,34 @@ it('keeps the whole untransformed submenu above the bottom edge', async () => {
     expect(top + menuSize.height).toBeLessThanOrEqual(800 - 20);
   });
 });
+
+const renderItem = (props) => act(async () => {
+  root.render(<MenuItem label="Rename" onClick={() => undefined} {...props} />);
+});
+
+it('exposes the title of a disabled item on a hoverable wrapper', async () => {
+  await renderItem({ disabled: true, title: 'Not available' });
+  const item = container.querySelector('[role="menuitem"]');
+  expect(item.disabled).toBe(true);
+  // Disabled buttons do not get mouse events in every browser, so the
+  // tooltip has to hang off an element that does.
+  const titled = item.closest('[title]');
+  expect(titled).toBeTruthy();
+  expect(titled).not.toBe(item);
+  expect(titled.getAttribute('title')).toBe('Not available');
+  expect(item.className).toContain('pointer-events-none');
+});
+
+it('puts the title on an enabled item directly', async () => {
+  await renderItem({ title: 'Rename this database' });
+  const item = container.querySelector('[role="menuitem"]');
+  expect(item.getAttribute('title')).toBe('Rename this database');
+  expect(item.parentElement).toBe(container);
+});
+
+it('renders no wrapper or title when none is given', async () => {
+  await renderItem({ disabled: true });
+  const item = container.querySelector('[role="menuitem"]');
+  expect(item.closest('[title]')).toBeNull();
+  expect(item.parentElement).toBe(container);
+});
