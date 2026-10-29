@@ -218,7 +218,8 @@ export default function EditCMSUserModal() {
                 placeholder={isEditMode ? CM.passwordConfirm : CM.password}
                 icon="lock"
                 required={!isEditMode}
-                description={CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES)}
+                // In edit mode an empty password keeps the current one.
+                description={!isEditMode || formData.password ? CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES) : null}
                 error={passwordTooLong ? CM.cmsPasswordTooLongMsg(CMS_PASSWORD_MAX_BYTES) : (passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null)}
               />
               <Input
