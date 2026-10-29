@@ -70,8 +70,6 @@ export type BulkDatabaseActionResult = {
   skipped: Array<{ dbname: string; reason: string }>;
 };
 
-export const HA_BULK_ADMIN_ONLY_REASON = 'HA bulk start/stop is limited to the CMS admin account';
-
 /**
  * Service for managing database lifecycle operations.
  * Handles database start, stop, restart, creation, profile management, and space information.
@@ -341,8 +339,9 @@ export class DatabaseLifecycleService extends BaseService {
    * database again if its start check fails. If the running list can't be
    * read, nothing is sent and every HA database is reported failed.
    *
-   * Allowed only for the host's CMS `admin` account; for any other account
-   * every HA database is reported skipped.
+   * Each database goes through the same DB-login gate as a single start or
+   * stop (ensureDbLogin); whether a CMS account may do this at all is left
+   * to the CMS user permission rework.
    */
   private async runHaBulkAction(
     userId: string,
@@ -352,15 +351,6 @@ export class DatabaseLifecycleService extends BaseService {
     out: BulkDatabaseActionResult
   ): Promise<void> {
     if (haDbNames.length === 0) return;
-
-    // TODO: check real CMS authority (user_auth / AU_ADMIN) instead of the
-    // account name once the permission logic is reworked — same name-based
-    // convention as CMSUserManagementModal for now.
-    const host = await this.hostService.findHostInternal(userId, hostUid);
-    if ((host.id || '').toLowerCase() !== 'admin') {
-      haDbNames.forEach((dbname) => out.skipped.push({ dbname, reason: HA_BULK_ADMIN_ONLY_REASON }));
-      return;
-    }
 
     let running: Set<string>;
     try {
@@ -373,6 +363,7 @@ export class DatabaseLifecycleService extends BaseService {
 
     const targets = haDbNames.filter((dbname) => (action === 'start' ? !running.has(dbname) : running.has(dbname)));
     const results = await mapWithConcurrency(targets, 1, async (dbname) => {
+      await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
       if (action === 'start') {
         await this.haService.haStart(userId, hostUid, dbname);
       } else {
@@ -407,8 +398,8 @@ export class DatabaseLifecycleService extends BaseService {
    *
    * CUBRID refuses to start an HA database through the non-HA `server=`
    * autostart list, so every `ha_db_list` entry that isn't running is
-   * started regardless of whether it's also present in `dbnames` — or, for
-   * a non-admin CMS account, every one is reported in `skipped` instead.
+   * started regardless of whether it's also present in `dbnames`, if the
+   * database is logged in.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
@@ -455,7 +446,7 @@ export class DatabaseLifecycleService extends BaseService {
    * service — non-HA with `stopdb`, HA one by one with `ha_stop <db>`.
    *
    * Every running `ha_db_list` entry is stopped regardless of whether it's
-   * also present in `dbnames`, admin account only — see startAllDatabases.
+   * also present in `dbnames`, if the database is logged in.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID

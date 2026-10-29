@@ -2059,7 +2059,6 @@ export const CM = {
   someDatabasesFailedToStopMsg: (count) => `${count} database(s) failed to stop.`,
   someDatabasesFailedToRestartMsg: (count) => `${count} database(s) failed to restart.`,
   someDatabasesSkippedMsg: (count) => `${count} database(s) skipped.`,
-  haBulkRequiresAdminReason: 'HA bulk start/stop requires the CMS admin account',
   failureTableFailedTitle: 'Failed',
   failureTableSkippedTitle: 'Skipped',
   failureTablePhase: 'Phase',
