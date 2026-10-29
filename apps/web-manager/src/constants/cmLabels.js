@@ -1929,6 +1929,9 @@ export const CM = {
   countLabel: 'Count',
   errorsLabel: 'Errors',
   sqlPattern: 'SQL Pattern',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: 'No queries found to analyze.',
 
   // AllLogsViewer

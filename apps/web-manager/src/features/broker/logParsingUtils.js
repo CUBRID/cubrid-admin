@@ -40,39 +40,62 @@ export function extractSQL(ls) {
 // negative, regardless of the "error:" text being present.
 const EXEC_RESULT_RE = /\bexecute(?:_all|_call|_batch)?\s+(?:error:)?(-?\d+)\s+tuple\s+\d+\s+time\s+(\d+(?:\.\d+)?)/;
 
-export function extractTopSQL(ls) {
-  const text = ls.join('\n');
-  const sqls = extractSQL(ls);
-  const stats = {};
-  const r = new RegExp(SQL_RE);
-  const matches = [];
-  let m;
-  while ((m = r.exec(text)) !== null) matches.push(m);
+// Keep one unfinished execution between chunks so SQL, binds, and the result
+// may cross a read boundary without splitting the count or timing statistics.
+export function createTopSQLAccumulator() {
+  const stats = new Map();
+  let pending = '';
 
-  matches.forEach((match, i) => {
-    const s = sqls[i]; if (!s) return;
-    if (!stats[s]) stats[s] = { c: 0, e: 0, t: [] };
-    stats[s].c++;
-    // Search up to the next statement's own log lines (or end of text)
-    // instead of a fixed character window — a long bind value or literal
-    // can otherwise push this execution's own result line out of a
-    // fixed-size lookahead, silently dropping its error/time.
-    const start = match.index + match[0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
-    const em = text.slice(start, end).match(EXEC_RESULT_RE);
-    if (em) {
-      stats[s].t.push(parseFloat(em[2]));
-      if (parseInt(em[1], 10) < 0) stats[s].e++;
+  const record = (match, followingText) => {
+    // Group the logged template, before bind substitution. Parsed SQL still
+    // uses extractSQL(), where substituting values is useful for copying.
+    const sql = (match[1] + match[2]).trim().replace(/<end>$/, '').trim();
+    if (!stats.has(sql)) stats.set(sql, { c: 0, e: 0, timed: 0, sum: 0, min: Infinity, max: -Infinity });
+    const stat = stats.get(sql);
+    stat.c++;
+    const result = followingText.match(EXEC_RESULT_RE);
+    if (result) {
+      const time = Number(result[2]);
+      stat.timed++;
+      stat.sum += time;
+      stat.min = Math.min(stat.min, time);
+      stat.max = Math.max(stat.max, time);
+      if (Number(result[1]) < 0) stat.e++;
     }
-  });
-  return Object.entries(stats).map(([sql, s], idx) => ({
-    id: `Q${idx + 1}`, sql,
-    // '-' (rather than '0.000') when no execution's result line was found at
-    // all, so a genuinely instantaneous (0.000s) query isn't confused with
-    // one whose timing/error couldn't be determined.
-    max: s.t.length ? Math.max(...s.t).toFixed(3) : '-',
-    min: s.t.length ? Math.min(...s.t).toFixed(3) : '-',
-    avg: s.t.length ? (s.t.reduce((a, b) => a + b, 0) / s.t.length).toFixed(3) : '-',
-    c: s.c, e: s.e,
-  })).sort((a, b) => b.c - a.c);
+  };
+
+  const consume = (final) => {
+    const matches = [...pending.matchAll(new RegExp(SQL_RE))];
+    const last = matches[matches.length - 1];
+    const lastComplete = last && EXEC_RESULT_RE.test(pending.slice(last.index + last[0].length));
+    const count = final || lastComplete ? matches.length : Math.max(0, matches.length - 1);
+    for (let i = 0; i < count; i++) {
+      const match = matches[i];
+      record(match, pending.slice(match.index + match[0].length, matches[i + 1]?.index ?? pending.length));
+    }
+    pending = count < matches.length ? pending.slice(last.index) : '';
+  };
+
+  return {
+    addLines(lines) {
+      pending += (pending ? '\n' : '') + lines.join('\n');
+      consume(false);
+    },
+    finish() {
+      consume(true);
+      return [...stats.entries()].map(([sql, stat]) => ({
+        sql,
+        max: stat.timed ? stat.max.toFixed(3) : '-',
+        min: stat.timed ? stat.min.toFixed(3) : '-',
+        avg: stat.timed ? (stat.sum / stat.timed).toFixed(3) : '-',
+        c: stat.c, e: stat.e,
+      })).sort((a, b) => b.c - a.c).map((row, i) => ({ id: `Q${i + 1}`, ...row }));
+    },
+  };
+}
+
+export function extractTopSQL(lines) {
+  const accumulator = createTopSQLAccumulator();
+  accumulator.addLines(lines);
+  return accumulator.finish();
 }

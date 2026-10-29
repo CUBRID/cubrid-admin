@@ -104,3 +104,30 @@ describe('extractTopSQL', () => {
     expect(row.min).toBe('0.002');
   });
 });
+
+describe('Top SQL template grouping', () => {
+  it('aggregates different bind values without changing SQL literals', () => {
+    const lines = [
+      "26-10-28 10:00:00.000 (1) execute srv_h_id 1 SELECT '?' AS marker FROM t WHERE id = ?",
+      '26-10-28 10:00:00.001 (1) bind 1 : INT 1',
+      '26-10-28 10:00:00.002 (1) execute 0 tuple 1 time 0.002',
+      "26-10-28 10:00:01.000 (1) execute srv_h_id 1 SELECT '?' AS marker FROM t WHERE id = ?",
+      '26-10-28 10:00:01.001 (1) bind 1 : INT 2',
+      '26-10-28 10:00:01.004 (1) execute error:-1 tuple 0 time 0.004',
+    ];
+    expect(extractTopSQL(lines)).toEqual([{
+      id: 'Q1', sql: "SELECT '?' AS marker FROM t WHERE id = ?",
+      c: 2, e: 1, min: '0.002', max: '0.004', avg: '0.003',
+    }]);
+  });
+
+  it('keeps queries with different literal SQL separate', () => {
+    const lines = [
+      "26-10-28 10:00:00.000 (1) execute srv_h_id 1 SELECT 'a  b' FROM db_root",
+      '26-10-28 10:00:00.001 (1) execute 0 tuple 1 time 0.001',
+      "26-10-28 10:00:01.000 (1) execute srv_h_id 1 SELECT 'a b' FROM db_root",
+      '26-10-28 10:00:01.001 (1) execute 0 tuple 1 time 0.001',
+    ];
+    expect(extractTopSQL(lines)).toHaveLength(2);
+  });
+});

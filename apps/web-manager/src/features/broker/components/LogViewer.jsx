@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchLogContent } from '../brokerSlice';
-import { extractSQL, extractTopSQL } from '../logParsingUtils';
+import { extractSQL } from '../logParsingUtils';
+import { analyzeTopSQL } from '../topSQLAnalysis';
+import { brokerApi } from '../brokerApi';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
@@ -115,13 +117,24 @@ function LogViewer({ hostUid, path }) {
   const [copying, setCopying]         = useState(false);
   const [isAll, setIsAll]             = useState(false);
   const [toolbarMenu, setToolbarMenu] = useState(null);
+  const [topRevision, setTopRevision] = useState(0);
+  const [topAnalysis, setTopAnalysis] = useState(null);
   const pageSize = 100;
 
   const logState   = useSelector(s => s.broker.viewingLogs[path]);
-  const loading    = logState?.loading;
+  const pageLoading = logState?.loading;
   const fileName   = path.split('/').pop();
   const lowerFileName = fileName.toLowerCase();
   const isErrorLogFile = lowerFileName.endsWith('.err') || lowerFileName.endsWith('.error');
+  const activeViewMode = isErrorLogFile ? 'raw' : viewMode;
+  const isTop = activeViewMode === 'top';
+  const currentAnalysis = topAnalysis?.hostUid === hostUid && topAnalysis?.path === path
+    && topAnalysis?.revision === topRevision ? topAnalysis : null;
+  const topLoading = isTop && (!currentAnalysis || currentAnalysis.loading);
+  const topError = isTop ? currentAnalysis?.error : null;
+  const loading = isTop ? topLoading : pageLoading;
+  const error = isTop ? topError : logState?.error;
+  const top = isTop && !topLoading && !topError ? currentAnalysis.rows : [];
   const totalLines = parseInt(logState?.data?.total || '0');
   
   const startLine  = isAll ? 1 : (currentPage - 1) * pageSize + 1;
@@ -131,8 +144,26 @@ function LogViewer({ hostUid, path }) {
   const totalPages = Math.max(1, Math.ceil(totalLines / pageSize));
 
   useEffect(() => {
+    if (isTop) return;
     dispatch(fetchLogContent({ hostUid, path, start: String(startLine), end: String(endLine) }));
-  }, [dispatch, hostUid, path, currentPage, isAll, startLine, endLine]);
+  }, [dispatch, hostUid, path, currentPage, isAll, startLine, endLine, isTop]);
+
+  useEffect(() => {
+    if (!isTop) return undefined;
+    const controller = new AbortController();
+    const identity = { hostUid, path, revision: topRevision };
+    setTopAnalysis({ ...identity, loading: true });
+    analyzeTopSQL(range => brokerApi.viewLog(hostUid, { path, ...range }), { signal: controller.signal })
+      .then(result => {
+        if (!controller.signal.aborted) setTopAnalysis({ ...identity, ...result, loading: false });
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) setTopAnalysis({ ...identity, loading: false,
+          error: error?.response?.data?.message || error?.message || 'LOG_INCOMPLETE',
+        });
+      });
+    return () => controller.abort();
+  }, [hostUid, path, topRevision, isTop]);
 
   useEffect(() => {
     if (isErrorLogFile && viewMode !== 'raw') {
@@ -151,14 +182,17 @@ function LogViewer({ hostUid, path }) {
     return () => document.removeEventListener('mousedown', closeMenu, true);
   }, [toolbarMenu]);
 
-  const activeViewMode = isErrorLogFile ? 'raw' : viewMode;
   const sqls = activeViewMode === 'sql' ? extractSQL(lines) : [];
-  const top  = activeViewMode === 'top' ? extractTopSQL(lines) : [];
+  const copyDisabled = isTop ? topLoading || !!topError || top.length === 0 : lines.length === 0;
+  const refresh = () => {
+    if (isTop) setTopRevision(revision => revision + 1);
+    else dispatch(fetchLogContent({ hostUid, path, start: String(startLine), end: String(endLine) }));
+  };
 
   const handleCopy = () => {
     const txt =
       activeViewMode === 'sql' ? extractSQL(lines).join('\n\n') :
-      activeViewMode === 'top' ? JSON.stringify(extractTopSQL(lines), null, 2) :
+      activeViewMode === 'top' ? JSON.stringify(top, null, 2) :
       lines.join('\n');
     navigator.clipboard.writeText(txt).then(() => {
       setCopying(true);
@@ -170,6 +204,7 @@ function LogViewer({ hostUid, path }) {
     const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
 <Styles><Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/></Style><Style ss:ID="s"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:FontName="Consolas" ss:Size="10"/></Style></Styles>
 <Worksheet ss:Name="TopSQL"><Table><Column ss:Width="40"/><Column ss:Width="60"/><Column ss:Width="60"/><Column ss:Width="60"/><Column ss:Width="50"/><Column ss:Width="50"/><Column ss:Width="500"/>
+<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">${esc(CM.topSQLScopeLabel(currentAnalysis.total))}</Data></Cell></Row>
 <Row ss:Height="20">${['ID','MAX','MIN','AVG','Count','Error','SQL'].map(h => `<Cell ss:StyleID="h"><Data ss:Type="String">${h}</Data></Cell>`).join('')}</Row>
 ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="String">-</Data></Cell>` : `<Cell><Data ss:Type="Number">${v}</Data></Cell>`; return `<Row ss:AutoFitHeight="1"><Cell><Data ss:Type="String">${d.id}</Data></Cell>${numCell(d.max)}${numCell(d.min)}${numCell(d.avg)}<Cell><Data ss:Type="Number">${d.c}</Data></Cell><Cell><Data ss:Type="Number">${d.e}</Data></Cell><Cell ss:StyleID="s"><Data ss:Type="String">${esc(d.sql)}</Data></Cell></Row>`; }).join('')}
 </Table></Worksheet></Workbook>`;
@@ -179,6 +214,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
       download: `top_sql_${Date.now()}.xls`,
     });
     a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   const modeSwitcher = !isErrorLogFile ? (
@@ -188,7 +224,10 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
           type="button"
           key={m.key}
           data-testid={`log-viewer-mode-${m.key}`}
-          onClick={() => setViewMode(m.key)}
+          onClick={() => {
+            if (m.key === 'top') setTopRevision(revision => revision + 1);
+            setViewMode(m.key);
+          }}
           aria-pressed={activeViewMode === m.key}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-13 font-semibold transition-colors whitespace-nowrap ${
             activeViewMode === m.key
@@ -242,7 +281,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
           <button
             type="button"
             onClick={handleCopy}
-            disabled={lines.length === 0}
+            disabled={copyDisabled}
             title={CM.copyToClipboard}
             aria-label={CM.copyToClipboard}
             className={`log-toolbar-wide-only w-8 h-8 flex items-center justify-center rounded-lg border transition-all active:scale-[0.98] disabled:opacity-30
@@ -258,7 +297,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
           <button
             type="button"
             data-testid="log-viewer-refresh-btn"
-            onClick={() => dispatch(fetchLogContent({ hostUid, path, start: String(startLine), end: String(endLine) }))}
+            onClick={refresh}
             disabled={loading}
             title={CM.refresh}
             aria-label={CM.refresh}
@@ -272,8 +311,8 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
 
           <div className="h-4 w-px bg-slate-200 dark:bg-white/10 mx-0.5" />
 
-          {/* Pagination */}
-          <div className="flex items-center bg-slate-100 dark:bg-black/20 rounded-lg p-0.5">
+          {/* Pagination applies to raw text and Parsed SQL; Top SQL covers the full log. */}
+          {!isTop && <div className="flex items-center bg-slate-100 dark:bg-black/20 rounded-lg p-0.5">
             <button
               type="button"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -308,7 +347,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
             >
               {isAll ? CM.paginated : CM.viewAll}
             </button>
-          </div>
+          </div>}
 
           <button
             type="button"
@@ -337,7 +376,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
           <MenuItem
             icon={copying ? 'check' : 'content_copy'}
             label={copying ? CM.copiedLabel : CM.copyToClipboard}
-            disabled={lines.length === 0}
+            disabled={copyDisabled}
             onClick={() => {
               handleCopy();
               setToolbarMenu(null);
@@ -354,6 +393,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
               }}
             />
           )}
+          {!isTop && <>
           <MenuDivider />
           <MenuItem
             icon={isAll ? 'view_week' : 'view_stream'}
@@ -363,7 +403,15 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
               setToolbarMenu(null);
             }}
           />
+          </>}
         </ContextMenuWrapper>
+      )}
+
+      {topError && (
+        <div role="alert" className="px-4 py-3 text-sm text-rose-500">
+          {topError === 'LOG_CHANGED' ? CM.topSQLLogChanged
+            : topError === 'LOG_INCOMPLETE' ? CM.topSQLReadFailed : topError}
+        </div>
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
@@ -439,11 +487,14 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
               <div className="w-16 shrink-0 text-right text-rose-500">{CM.errorsLabel}</div>
               <div className="flex-1">{CM.sqlPattern}</div>
             </div>
-            {top.length === 0 ? (
+            {topLoading ? (
+              <div role="status" className="py-8 text-center text-slate-400 text-sm">{CM.loadingLogLines}</div>
+            ) : topError ? null : top.length === 0 ? (
               <div className="py-8 text-center text-slate-400 text-sm">{CM.noQueriesToAnalyze}</div>
             ) : top.map((d, i) => (
               <div
                 key={i}
+                data-testid="top-sql-row"
                 className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-14"
               >
                 <div className="w-10 shrink-0 font-bold text-amber-500">{d.id}</div>
@@ -462,13 +513,15 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
       {/* ── Footer ───────────────────────────────────────────────────────────── */}
       <div className="shrink-0 px-4 py-2 bg-white dark:bg-bk-side border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-12 text-slate-500 dark:text-slate-400 font-medium tracking-tight">
         <div className="flex items-center gap-4">
-          <span>{CM.linesRangeLabel(startLine, Math.min(endLine, totalLines), totalLines.toLocaleString())}</span>
+          <span>{isTop
+            ? topLoading ? CM.loadingLogLines : topError ? CM.topSQLReadFailed : CM.topSQLScopeLabel(currentAnalysis.total)
+            : CM.linesRangeLabel(startLine, Math.min(endLine, totalLines), totalLines.toLocaleString())}</span>
           {activeViewMode === 'sql' && <span>{CM.statementsCountLabel(sqls.length)}</span>}
           {activeViewMode === 'top' && <span>{CM.patternsCountLabel(top.length)}</span>}
         </div>
         <div className="flex items-center gap-1.5">
-          <div className={`h-1.5 w-1.5 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : logState?.error ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-          {loading ? CM.synchronizing : logState?.error ? CM.disconnectedLabel : CM.connected}
+          <div className={`h-1.5 w-1.5 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : error ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+          {loading ? CM.synchronizing : error ? CM.disconnectedLabel : CM.connected}
         </div>
       </div>
     </div>

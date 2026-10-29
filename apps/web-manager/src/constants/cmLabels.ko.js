@@ -1886,6 +1886,9 @@ export const CM_KO = {
   countLabel: '횟수',
   errorsLabel: '오류',
   sqlPattern: 'SQL 패턴',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: '분석할 쿼리가 없습니다.',
 
   // 전체 로그 뷰어
