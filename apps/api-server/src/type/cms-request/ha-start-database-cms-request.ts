@@ -5,6 +5,6 @@ import { BaseCmsRequest } from './base-cms-request';
  */
 export type HaStartDatabaseCmsRequest = BaseCmsRequest & {
   task: 'ha_start';
-  /** Omitted entirely to start every HA-configured database on the host in one call. */
-  dbname?: string;
+  /** Required, like `ha_stop`'s: one database per call. */
+  dbname: string;
 };

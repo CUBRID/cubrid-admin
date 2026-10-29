@@ -68,22 +68,17 @@ export class HaService extends BaseService {
 
   /**
    * CMS `ha_start` — `{ task, dbname }` + token; success envelope `task: 'ha_start'`.
-   * `dbname` omitted starts every HA-configured database on the host in one call
-   * (confirmed empirically: `cubrid heartbeat start` with no dbname brings up
-   * HA processes + cub_server + cub_pl for the whole `ha_db_list`) — used for
-   * whole-service start instead of one `ha_start` per HA database, which was
-   * racing cub_master's global HA activation when done in parallel.
+   * Always one database (`cubrid heartbeat start <db>`); callers starting
+   * several send them one at a time, since parallel calls race cub_master's
+   * HA activation.
    */
   @HandleCmsErrors()
   async haStart(
     userId: string,
     hostUid: string,
-    dbname?: string
+    dbname: string
   ): Promise<HaStartDatabaseCmsResponse> {
-    const cmsRequest: HaStartDatabaseCmsRequest = {
-      task: 'ha_start',
-      ...(dbname && { dbname }),
-    };
+    const cmsRequest: HaStartDatabaseCmsRequest = { task: 'ha_start', dbname };
     return this.executeAsyncCmsJobRequest<HaStartDatabaseCmsRequest, HaStartDatabaseCmsResponse>(
       userId,
       hostUid,
@@ -93,19 +88,16 @@ export class HaService extends BaseService {
 
   /**
    * CMS `ha_stop` — `{ task, dbname }` + token; success envelope `task: 'ha_stop'`.
-   * `dbname` omitted stops every HA-configured database on the host in one
-   * call — see HaStopDatabaseCmsRequest for the cub_master node-info nuance.
+   * Always one database (`cubrid heartbeat stop <db>`) — see
+   * HaStopDatabaseCmsRequest for why a dbname-less call is never sent.
    */
   @HandleCmsErrors()
   async haStop(
     userId: string,
     hostUid: string,
-    dbname?: string
+    dbname: string
   ): Promise<HaStopDatabaseCmsResponse> {
-    const cmsRequest: HaStopDatabaseCmsRequest = {
-      task: 'ha_stop',
-      ...(dbname && { dbname }),
-    };
+    const cmsRequest: HaStopDatabaseCmsRequest = { task: 'ha_stop', dbname };
     return this.executeAsyncCmsJobRequest<HaStopDatabaseCmsRequest, HaStopDatabaseCmsResponse>(
       userId,
       hostUid,
