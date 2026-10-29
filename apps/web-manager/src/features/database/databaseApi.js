@@ -34,6 +34,10 @@ export const databaseApi = {
   stopAllDatabases: (hostUid, dbnames) => {
     return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
+  // Start/stop/restart exactly these databases (multi-select).
+  runSelectedDatabasesAction: (hostUid, action, dbnames) => {
+    return apiClient.post(`/${hostUid}/database/bulk`, { action, dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
+  },
   startWholeService: (hostUid) => {
     return apiClient.post(`/${hostUid}/database/service/start`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },

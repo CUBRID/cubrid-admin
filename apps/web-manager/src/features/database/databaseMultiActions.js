@@ -1,0 +1,109 @@
+import { dbKey } from './dbKey';
+import {
+  deleteDatabaseProfile,
+  loginDatabase,
+  logoutDatabase,
+  runSelectedDatabasesAction,
+} from './databaseCoreSlice';
+
+export const MULTI_DB_ACTIONS = ['start', 'stop', 'restart', 'login', 'logout', 'forgetCredentials'];
+
+// One row per database of a host, with what the multi-select actions need.
+export function databaseSelectionRows(state, hostUid) {
+  const db = state.database;
+  const active = new Set(db.activeDatabasesByHost?.[hostUid] || []);
+  const ha = new Set(db.haDbNamesByHost?.[hostUid] || []);
+  const loggedIn = new Set(db.loggedInDatabases || []);
+  return (db.databasesByHost?.[hostUid] || []).map((entry) => ({
+    dbname: entry.dbname,
+    running: active.has(entry.dbname),
+    loggedIn: loggedIn.has(dbKey(hostUid, entry.dbname)),
+    hasProfile: entry.isProfileExists === true,
+    isHa: ha.has(entry.dbname),
+  }));
+}
+
+const applies = {
+  start: (row) => !row.running,
+  stop: (row) => row.running,
+  restart: (row) => row.running,
+  login: (row) => !row.loggedIn,
+  logout: (row) => row.loggedIn,
+  forgetCredentials: (row) => row.hasProfile,
+};
+
+// The selected rows an action applies to; the rest is shown as skipped.
+export function splitByAction(action, rows) {
+  const targets = [];
+  const skipped = [];
+  for (const row of rows) {
+    if (applies[action](row)) targets.push(row);
+    else skipped.push(row);
+  }
+  return { targets, skipped };
+}
+
+const errorText = (err) => (typeof err === 'string' ? err : err?.message || String(err));
+
+// Runs one per-database thunk after another (no retry); a failure doesn't
+// stop the rest.
+async function eachInTurn(rows, run) {
+  const succeeded = [];
+  const failed = [];
+  const skipped = [];
+  for (const row of rows) {
+    try {
+      const outcome = await run(row);
+      if (outcome?.skip) skipped.push({ dbname: row.dbname, reason: outcome.skip });
+      else succeeded.push(row.dbname);
+    } catch (err) {
+      failed.push({ dbname: row.dbname, error: errorText(err) });
+    }
+  }
+  return { succeeded, failed, skipped };
+}
+
+/**
+ * Runs a multi-select action on `rows` (already filtered by splitByAction).
+ * Start/stop/restart go to the server in one request; login, logout and
+ * forgetting credentials call the per-database endpoints in turn. A login
+ * uses the database's saved credentials, or `credentials` for those without.
+ *
+ * @returns {Promise<{ succeeded: string[], failed: {dbname, error, phase?}[], skipped: {dbname, reason}[] }>}
+ */
+export async function runMultiDatabaseAction(dispatch, CM, { hostUid, action, rows, credentials }) {
+  if (rows.length === 0) return { succeeded: [], failed: [], skipped: [] };
+  const dbnames = rows.map((row) => row.dbname);
+  switch (action) {
+    case 'start':
+    case 'stop':
+    case 'restart': {
+      const result = await dispatch(runSelectedDatabasesAction({ hostUid, action, dbnames })).unwrap();
+      return { succeeded: result.succeeded || [], failed: result.failed || [], skipped: result.skipped || [] };
+    }
+    case 'login':
+      return eachInTurn(rows, async (row) => {
+        if (row.hasProfile) {
+          await dispatch(loginDatabase({ hostUid, dbname: row.dbname })).unwrap();
+          return null;
+        }
+        if (!credentials?.id) return { skip: CM.noSavedCredentialsReason };
+        await dispatch(loginDatabase({
+          hostUid,
+          dbname: row.dbname,
+          payload: { id: credentials.id, password: credentials.password || '' },
+        })).unwrap();
+        return null;
+      });
+    case 'logout':
+      return eachInTurn(rows, async (row) => {
+        await dispatch(logoutDatabase({ hostUid, dbname: row.dbname })).unwrap();
+      });
+    case 'forgetCredentials':
+      return eachInTurn(rows, async (row) => {
+        await dispatch(deleteDatabaseProfile({ hostUid, dbname: row.dbname })).unwrap();
+      });
+    default:
+      throw new Error(`Unknown multi-database action: ${action}`);
+  }
+}

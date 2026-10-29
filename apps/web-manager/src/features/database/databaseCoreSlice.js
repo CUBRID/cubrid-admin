@@ -94,6 +94,18 @@ export const stopAllDatabases = createAsyncThunk(
   }
 );
 
+export const runSelectedDatabasesAction = createAsyncThunk(
+  'database/runSelectedDatabasesAction',
+  async ({ hostUid, action, dbnames }, { rejectWithValue, fulfillWithValue }) => {
+    try {
+      const response = await databaseApi.runSelectedDatabasesAction(hostUid, action, dbnames);
+      return fulfillWithValue(response, { seq: nextSeq() });
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to ${action} databases`);
+    }
+  }
+);
+
 export const loginDatabase = createAsyncThunk(
   'database/loginDatabase',
   async ({ hostUid, dbname, payload }, { rejectWithValue, fulfillWithValue }) => {
@@ -519,6 +531,18 @@ const databaseCoreSlice = createSlice({
       .addCase(stopAllDatabases.pending, (state) => {
         state.actionLoading = true;
         state.error = null;
+      })
+      .addCase(runSelectedDatabasesAction.pending, (state) => {
+        state.actionLoading = true;
+        state.error = null;
+      })
+      .addCase(runSelectedDatabasesAction.fulfilled, (state, action) => {
+        state.actionLoading = false;
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded, action.meta.seq);
+      })
+      .addCase(runSelectedDatabasesAction.rejected, (state, action) => {
+        state.actionLoading = false;
+        state.error = action.payload;
       })
       .addCase(stopAllDatabases.fulfilled, (state, action) => {
         state.actionLoading = false;
