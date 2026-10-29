@@ -1738,6 +1738,41 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               });
             }}
           />
+          {(() => {
+            const allRows = databaseSelectionRows(
+              { database: { databasesByHost, activeDatabasesByHost, haDbNamesByHost, loggedInDatabases } },
+              selectedHostUid
+            );
+            const loginTargets = splitByAction('login', allRows).targets;
+            const logoutTargets = splitByAction('logout', allRows).targets;
+            return (
+              <>
+                <MenuItem
+                  icon="login"
+                  label={CM.loginAllDatabases}
+                  disabled={loginTargets.length === 0}
+                  onClick={() => {
+                    setDbRootContextMenu(null);
+                    // Databases without saved credentials need a user and password.
+                    if (loginTargets.some((row) => !row.hasProfile)) {
+                      setSelectDatabasesModal({ initialSelected: loginTargets.map((row) => row.dbname) });
+                      return;
+                    }
+                    handleMultiDatabaseAction('login', loginTargets);
+                  }}
+                />
+                <MenuItem
+                  icon="logout"
+                  label={CM.logoutAllDatabases}
+                  disabled={logoutTargets.length === 0}
+                  onClick={() => {
+                    setDbRootContextMenu(null);
+                    handleMultiDatabaseAction('logout', logoutTargets);
+                  }}
+                />
+              </>
+            );
+          })()}
           <MenuItem
             icon="checklist"
             label={CM.selectDatabasesMenu}

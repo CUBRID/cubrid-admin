@@ -2020,6 +2020,8 @@ export const CM_KO = {
   someDatabasesSkippedMsg: (count) => `${count}개의 데이터베이스를 건너뛰었습니다.`,
   // 다중 선택 DB 작업
   selectDatabasesMenu: '데이터베이스 선택...',
+  loginAllDatabases: '모든 데이터베이스 로그인',
+  logoutAllDatabases: '모든 데이터베이스 로그아웃',
   selectDatabasesTitle: '데이터베이스 선택',
   multiDbActions: {
     start: '시작',

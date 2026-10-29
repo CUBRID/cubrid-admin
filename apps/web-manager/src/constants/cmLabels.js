@@ -2062,6 +2062,8 @@ export const CM = {
   someDatabasesSkippedMsg: (count) => `${count} database(s) skipped.`,
   // Multi-select database actions
   selectDatabasesMenu: 'Select Databases...',
+  loginAllDatabases: 'Log In to All Databases',
+  logoutAllDatabases: 'Log Out of All Databases',
   selectDatabasesTitle: 'Select Databases',
   multiDbActions: {
     start: 'Start',
