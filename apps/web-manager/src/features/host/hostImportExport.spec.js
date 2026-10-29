@@ -29,72 +29,48 @@ const readBlob = (blob) => new Promise((resolve) => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('exporting hosts', () => {
-  it('writes the no-group bucket as ungrouped, not as a group named after it', () => {
+  it('writes the no-group bucket without a name, so a group may be called "Ungrouped"', () => {
     const groups = buildGroupedExportPayload(hostGroups);
 
-    expect(groups[0]).toEqual({ ungrouped: true, hosts: [expect.objectContaining({ alias: 'a' })] });
+    expect(groups[0]).toEqual({ hosts: [expect.objectContaining({ alias: 'a' })] });
     expect(groups[1]).toEqual({ name: 'Ungrouped', hosts: [expect.objectContaining({ alias: 'b' })] });
   });
 });
 
 describe('importing an exported file', () => {
-  it('puts the no-group hosts back without a group, in JSON', () => {
+  it('puts the no-group hosts back without a group and keeps a group named "Ungrouped", in JSON', () => {
     const json = JSON.stringify({
-      format: 'cubrid-webmanager-hosts', version: 2, groups: buildGroupedExportPayload(hostGroups),
+      format: 'cubrid-webmanager-hosts', version: 1, groups: buildGroupedExportPayload(hostGroups),
     });
     const { ungrouped, byGroup, unassigned } = importRows(json);
 
     expect(aliases(ungrouped)).toEqual(['a']);
     expect([...byGroup.keys()]).toEqual(['Ungrouped', 'Prod']);
+    expect(aliases(byGroup.get('Ungrouped'))).toEqual(['b']);
     expect(unassigned).toEqual([]);
   });
 
-  it('puts the no-group hosts back without a group, in XML', async () => {
+  it('puts the no-group hosts back without a group and keeps a group named "Ungrouped", in XML', async () => {
     let blob;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => { blob = b; return 'blob:x'; });
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     exportHostGroupsToNativeXml(hostGroups, null);
-    const { ungrouped, byGroup } = importRows(await readBlob(blob));
+    const xml = await readBlob(blob);
+    const { ungrouped, byGroup } = importRows(xml);
 
+    expect(xml).toContain('<group><host');
     expect(aliases(ungrouped)).toEqual(['a']);
     expect([...byGroup.keys()]).toEqual(['Ungrouped', 'Prod']);
+    expect(aliases(byGroup.get('Ungrouped'))).toEqual(['b']);
   });
 
   it('shows the group column even when the bucket is the only group', () => {
     const json = JSON.stringify({
-      format: 'cubrid-webmanager-hosts', version: 2,
-      groups: [{ ungrouped: true, hosts: [{ alias: 'a', address: '10.0.0.1', port: 8001, id: 'admin' }] }],
+      format: 'cubrid-webmanager-hosts', version: 1,
+      groups: [{ hosts: [{ alias: 'a', address: '10.0.0.1', port: 8001, id: 'admin' }] }],
     });
 
     expect(buildImportPreviewList(parseHostsImportFile(json), [])[0].hasPrefsGroups).toBe(true);
-  });
-});
-
-describe('importing a file from an older build (version 1)', () => {
-  it('treats its "Ungrouped" group as the no-group bucket, in JSON', () => {
-    const json = JSON.stringify({
-      format: 'cubrid-webmanager-hosts', version: 1,
-      groups: [
-        { name: 'Ungrouped', hosts: [{ alias: 'a', address: '10.0.0.1', port: 8001, id: 'admin' }] },
-        { name: 'Prod', hosts: [{ alias: 'c', address: '10.0.0.3', port: 8001, id: 'admin' }] },
-      ],
-    });
-    const { ungrouped, byGroup } = importRows(json);
-
-    expect(aliases(ungrouped)).toEqual(['a']);
-    expect([...byGroup.keys()]).toEqual(['Prod']);
-  });
-
-  it('treats its "Ungrouped" group as the no-group bucket, in XML', () => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<cwm-hosts version="1">
-  <group name="Ungrouped"><host alias="a" address="10.0.0.1" port="8001" user="admin"/></group>
-  <group name="Prod"><host alias="c" address="10.0.0.3" port="8001" user="admin"/></group>
-</cwm-hosts>`;
-    const { ungrouped, byGroup } = importRows(xml);
-
-    expect(aliases(ungrouped)).toEqual(['a']);
-    expect([...byGroup.keys()]).toEqual(['Prod']);
   });
 });
