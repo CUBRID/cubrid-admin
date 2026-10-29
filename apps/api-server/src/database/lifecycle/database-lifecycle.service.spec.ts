@@ -477,29 +477,45 @@ describe('DatabaseLifecycleService', () => {
       status: 'success',
     };
 
-    it('admin account: starts every HA database with a single bulk ha_start, regardless of the passed dbnames', async () => {
+    const haCalls = (task: string) =>
+      cmsClient.postAuthenticated.mock.calls.filter(([, body]) => body.task === task).map(([, body]) => body);
+
+    it('admin account: starts each stopped HA database with its own ha_start, one at a time', async () => {
       hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'Admin' });
-      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
-      cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'ha_start' });
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2', 'hadb3']));
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [{ dbname: 'hadb2' }] } });
+      let inFlight = 0;
+      let maxInFlight = 0;
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 1));
+        inFlight -= 1;
+        return { ...successResponse, task: body.task };
+      });
+
+      const result = await service.startAllDatabases(mockUserId, mockHostUid, []);
+
+      expect(haCalls('ha_start')).toEqual([
+        expect.objectContaining({ dbname: 'hadb1' }),
+        expect.objectContaining({ dbname: 'hadb3' }),
+      ]);
+      expect(maxInFlight).toBe(1);
+      expect(result.succeeded).toEqual(['hadb1', 'hadb3']);
+      expect(result.skipped).toEqual([]);
+    });
+
+    it('admin account: sends no ha_start and fails the HA databases when the running list cannot be read', async () => {
+      hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'admin' });
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockRejectedValue(new Error('startinfo timed out'));
+      cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'startdb' });
 
       const result = await service.startAllDatabases(mockUserId, mockHostUid, ['nonhadb']);
 
-      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
-        `https://${mockHost.address}:${mockHost.port}/cm_api`,
-        expect.objectContaining({ task: 'ha_start' }),
-        expect.objectContaining({ timeoutMs: expect.any(Number) })
-      );
-      // Only one ha_start call for both HA databases, not one per database.
-      const haStartCalls = cmsClient.postAuthenticated.mock.calls.filter(
-        ([, body]) => body.task === 'ha_start'
-      );
-      expect(haStartCalls).toHaveLength(1);
-      expect(haStartCalls[0][1]).not.toHaveProperty('dbname');
-      expect(result.succeeded).toEqual(expect.arrayContaining(['hadb1', 'hadb2']));
-      // Host-wide ha_start starts every HA db anyway, so no per-db login gate.
-      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb1');
-      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb2');
-      expect(result.skipped).toEqual([]);
+      expect(haCalls('ha_start')).toHaveLength(0);
+      expect(result.failed).toEqual([{ dbname: 'hadb1', error: 'startinfo timed out' }]);
+      expect(result.succeeded).toEqual(['nonhadb']);
     });
 
     it('non-admin account: never runs ha_start, reports every HA database skipped, non-HA unaffected', async () => {
@@ -535,9 +551,10 @@ describe('DatabaseLifecycleService', () => {
       expect(result.failed).toEqual([]);
     });
 
-    it('admin account: reports every HA database failed when the bulk ha_start fails, isolated from non-HA results', async () => {
+    it('admin account: reports only the HA database whose ha_start fails, isolated from non-HA results', async () => {
       hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'admin' });
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [] } });
       cmsClient.postAuthenticated.mockImplementation((_url, body) => {
         if (body.task === 'ha_start') {
           return Promise.reject(new Error('heartbeat start: fail'));
@@ -560,21 +577,22 @@ describe('DatabaseLifecycleService', () => {
       status: 'success',
     };
 
-    it('admin account: stops every HA database with a single bulk ha_stop, regardless of the passed dbnames', async () => {
+    it('admin account: stops each running HA database with its own ha_stop, never a dbname-less one', async () => {
       hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'admin' });
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
-      cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'ha_stop' });
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({
+        activelist: { active: [{ dbname: 'hadb1' }, { dbname: 'nonhadb' }] },
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...successResponse, task: body.task }));
 
       const result = await service.stopAllDatabases(mockUserId, mockHostUid, ['nonhadb']);
 
-      const haStopCalls = cmsClient.postAuthenticated.mock.calls.filter(
-        ([, body]) => body.task === 'ha_stop'
-      );
-      expect(haStopCalls).toHaveLength(1);
-      expect(haStopCalls[0][1]).not.toHaveProperty('dbname');
-      expect(result.succeeded).toEqual(expect.arrayContaining(['hadb1', 'hadb2']));
+      const haStopCalls = cmsClient.postAuthenticated.mock.calls
+        .filter(([, body]) => body.task === 'ha_stop')
+        .map(([, body]) => body);
+      expect(haStopCalls).toEqual([expect.objectContaining({ dbname: 'hadb1' })]);
+      expect(result.succeeded).toEqual(['hadb1', 'nonhadb']);
       expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb1');
-      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb2');
     });
 
     it('non-admin account: never runs ha_stop, reports every HA database skipped, non-HA unaffected', async () => {
@@ -592,7 +610,7 @@ describe('DatabaseLifecycleService', () => {
       expect(result.failed).toEqual([]);
     });
 
-    it('skips the bulk ha_stop call entirely when the host has no HA databases', async () => {
+    it('sends no ha_stop when the host has no HA databases', async () => {
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
       cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'stopdb' });
 
