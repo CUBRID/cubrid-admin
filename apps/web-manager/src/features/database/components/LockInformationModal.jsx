@@ -68,15 +68,16 @@ export default function LockInformationModal() {
     }
     setLoading(true);
     try {
-      const [response, objectResponse] = await Promise.all([
-        databaseApi.getLockInfo(selectedHostUid, selectedDatabase, { summary: true }),
-        withObjects ? databaseApi.getLockInfo(selectedHostUid, selectedDatabase, { objects: true }) : null,
-      ]);
+      // One request, so the server reads the locks once for both.
+      const response = await databaseApi.getLockInfo(selectedHostUid, selectedDatabase, {
+        summary: true,
+        ...(withObjects ? { objects: true } : {}),
+      });
       if (requestId !== requestIdRef.current) return;
       setOverview(response?.overview ?? EMPTY_OVERVIEW);
       setSummaryRows(response?.summary?.rows ?? []);
       // A refresh of the summary alone would leave per-object rows from before.
-      setObjects(withObjects ? objectResponse?.objects ?? [] : null);
+      setObjects(withObjects ? response?.objects ?? [] : null);
       setHasLoaded(true);
       setError(null);
     } catch (err) {

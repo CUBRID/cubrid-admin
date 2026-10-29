@@ -699,11 +699,15 @@ export class DatabaseManagementService extends BaseService {
       LockDatabaseCmsResponse
     >(userId, hostUid, cmsRequest);
 
-    if (request?.summary) {
-      return { summary: summarizeLocks(response.lockinfo), overview: lockOverview(response.lockinfo) };
-    }
-    if (request?.objects) {
-      return { objects: listLockObjects(response.lockinfo) };
+    // Both from one lockdb: with many locks its output runs to tens of MB, and
+    // a second call would wait behind the first in the host queue.
+    if (request?.summary || request?.objects) {
+      return {
+        ...(request.summary
+          ? { summary: summarizeLocks(response.lockinfo), overview: lockOverview(response.lockinfo) }
+          : {}),
+        ...(request.objects ? { objects: listLockObjects(response.lockinfo) } : {}),
+      };
     }
 
     // Return lockinfo only (CMS envelope removed)

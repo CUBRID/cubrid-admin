@@ -157,11 +157,13 @@ describe('LockInformationModal', () => {
     await act(async () => document.querySelector('[data-testid="lock-information-tab-objects"]')?.click());
     expect(databaseApi.getLockInfo).toHaveBeenCalledTimes(1);
 
-    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse('csql')).mockResolvedValueOnce(objectResponse);
+    databaseApi.getLockInfo.mockResolvedValueOnce({ ...lockResponse('csql'), ...objectResponse });
     await act(async () => q('lock-information-object-view').click());
 
-    expect(databaseApi.getLockInfo).toHaveBeenCalledWith('host1', 'demodb', { objects: true });
-    expect(q('lock-information-objects')).toBeTruthy();
+    // One request for both, so the server runs lockdb once.
+    expect(databaseApi.getLockInfo).toHaveBeenCalledTimes(2);
+    expect(databaseApi.getLockInfo).toHaveBeenLastCalledWith('host1', 'demodb', { summary: true, objects: true });
+    expect(q('lock-information-objects').textContent).toContain('0|201|-32763');
   });
 
   const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -192,7 +194,7 @@ describe('LockInformationModal', () => {
         numHolders: '1', numBlockedHolders: '0', numWaiters: '0',
       })),
     };
-    databaseApi.getLockInfo.mockResolvedValueOnce(summary).mockResolvedValueOnce(objects);
+    databaseApi.getLockInfo.mockResolvedValueOnce({ ...summary, ...objects });
     await act(async () => q('lock-information-object-view').click());
 
     expect(rowsIn('lock-information-objects')).toHaveLength(20);

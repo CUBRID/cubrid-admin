@@ -1409,6 +1409,18 @@ describe('DatabaseManagementService', () => {
       expect(result.objects?.[1]).toMatchObject({ oid: '0|833|2', holders: [], numHolders: '-' });
     });
 
+    it('returns the summary and the per-object rows from a single lockdb', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true, objects: true });
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.summary?.totalLocks).toBeGreaterThan(0);
+      expect(result.overview).toMatchObject({ esc: '100000' });
+      expect(result.objects?.[0]).toMatchObject({ oid: '0|201|-32763' });
+    });
+
     it('should successfully get lock information (legacy format without lock_holders)', async () => {
       // Legacy format: no lock_holders, has numallocated and sizelock
       const legacyResponse: LockDatabaseCmsResponse = {
