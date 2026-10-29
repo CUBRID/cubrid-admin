@@ -14,6 +14,7 @@ let container, root, lines, exportedBlob;
 const path = '/cubrid/log/broker/sql_log/query_editor_1.sql.log';
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -38,6 +39,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
@@ -49,7 +51,10 @@ const render = (logPath = path) => {
   } });
   return act(async () => root.render(<Provider store={store}><LogViewer hostUid="h1" path={logPath} /></Provider>));
 };
-const click = selector => act(async () => container.querySelector(selector).click());
+const click = async selector => {
+  await act(async () => container.querySelector(selector).click());
+  await act(async () => vi.runAllTimersAsync());
+};
 const readBlob = blob => new Promise(resolve => {
   const reader = new FileReader();
   reader.onload = () => resolve(reader.result);
@@ -92,10 +97,10 @@ describe('LogViewer complete-log Top SQL', () => {
     expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(true);
     expect(container.querySelector('[data-testid="top-sql-row"]')).toBeNull();
     expect(container.textContent).toContain(CM.loadingLogLines);
-    await act(async () => {
-      finish();
-      await new Promise(resolve => setTimeout(resolve, 10));
-    });
+    await act(async () => finish());
+    // Capture has completed, but analysis is still waiting between chunks.
+    expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(true);
+    await act(async () => vi.runAllTimersAsync());
     expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(false);
   });
 
