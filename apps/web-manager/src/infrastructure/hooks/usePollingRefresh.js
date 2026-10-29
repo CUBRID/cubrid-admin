@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useAnyModalOpen } from './useAnyModalOpen';
 
 /**
  * A custom hook to manage background data polling, visibility-aware refresh,
@@ -25,8 +26,11 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
 
   const [isBrowserVisible, setIsBrowserVisible] = useState(document.visibilityState === 'visible');
   
-  // A tab is "truly active" if the browser is visible AND it is the current foreground tab.
-  const isTabActive = isBrowserVisible && activeMainTab === tabId;
+  // A tab is "truly active" if the browser is visible AND it is the current
+  // foreground tab AND no modal covers it. Closing the modal counts as a tab
+  // resume, so it refreshes at once (see 4. below).
+  const anyModalOpen = useAnyModalOpen();
+  const isTabActive = isBrowserVisible && activeMainTab === tabId && !anyModalOpen;
   
   const isActiveRef = useRef(isTabActive);
   const initialLoadDone = useRef(false);

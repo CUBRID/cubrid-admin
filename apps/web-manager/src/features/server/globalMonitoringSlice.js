@@ -17,7 +17,8 @@ export const fetchHostSummary = createAsyncThunk(
       const [hostStat, brokersResponse, dbInfo, envInfo] = await Promise.all([
         monitoringApi.getHostStat(hostUid).catch(() => null),
         brokerApi.getBrokerList(hostUid).catch(() => null),
-        databaseApi.getStartInfo(hostUid).catch(() => null),
+        // Shares a start-info read already in flight for the host.
+        databaseApi.readStartInfo(hostUid).then((r) => (r.ok ? r.value : null)),
         hostApi.getHostEnv(hostUid).catch(() => null),
       ]);
 

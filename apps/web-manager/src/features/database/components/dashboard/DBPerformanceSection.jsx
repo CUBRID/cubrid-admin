@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchDashboardPerformance } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -7,6 +7,7 @@ import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Card } from '../../../../components/ds/layout/Card';
 import { ProgressBar } from '../../../../components/ds/foundation/ProgressBar';
 import { useCM } from '../../../../constants/useCM';
+import { useRefreshWhenShown } from './useRefreshWhenShown';
 
 export default function DBPerformanceSection({ dbStats, pollingProps }) {
   const CM = useCM();
@@ -20,14 +21,7 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
   };
 
   // Logic: Refresh once when becoming visible AND expanded
-  const wasActiveAndExpanded = useRef(isTabActive && !isCollapsed);
-  useEffect(() => {
-    const currentActiveAndExpanded = isTabActive && !isCollapsed;
-    if (currentActiveAndExpanded && !wasActiveAndExpanded.current) {
-      refresh();
-    }
-    wasActiveAndExpanded.current = currentActiveAndExpanded;
-  }, [isTabActive, isCollapsed, hostUid, dbname]);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
 
   // Logic: Interval polling when active AND expanded AND autoRefresh enabled
   useEffect(() => {

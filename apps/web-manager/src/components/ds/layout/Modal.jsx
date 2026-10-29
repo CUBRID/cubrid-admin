@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
+import { markModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 import { useCM } from '../../../constants/useCM';
 
 let openModalCount = 0;
@@ -54,6 +55,9 @@ export const Modal = ({
   // users land back where they were instead of on <body>.
   const previouslyFocusedRef = useRef(null);
   const isTopModal = useCallback(() => layerRef.current === getTopModalLayer(), []);
+
+  // Pauses background polling while this modal covers the app.
+  useEffect(() => (isOpen ? markModalOpen() : undefined), [isOpen]);
 
   useEffect(() => {
     if (!showCloseButton) return undefined;
