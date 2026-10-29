@@ -29,12 +29,24 @@ export const BROKER_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // goto conf_error; }` — absence/0 fails the WHOLE broker.conf load, not
   // just this key.
   { key: 'BROKER_PORT', category: 'common', guard: { kind: 'int', min: 1, max: 65535, base: 0 }, default: '', instanceOnly: true, required: true },
-  { key: 'MIN_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1, base: 0 }, default: '5' },
-  // Must also be >= MIN_NUM_APPL_SERVER — source-confirmed, not a guess:
-  // broker_config.c:716-719 hard-fails the whole config load with
-  // PARAM_BAD_MAX_APPL_SERVER when max < min. Enforced via `crossField`
-  // (validateCrossFieldParams), not expressible as a single-entry guard.
-  { key: 'MAX_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1, max: 4096, base: 0 }, default: '40', crossField: { comparedToKey: 'MIN_NUM_APPL_SERVER', rule: 'gte' } }, // APPL_SERVER_NUM_LIMIT
+  // MIN/MAX_NUM_APPL_SERVER readers changed on release/11.3.
+  // release/11.0-11.2: ini_getuint, so 0, a negative or an unparsable value
+  // silently becomes the default (5 / 40); more than APPL_SERVER_NUM_LIMIT
+  // (4096) is PARAM_BAD_VALUE. NCA rejects the silently replaced values too
+  // (min: 1, and not-a-number), stricter than the engine, as with every
+  // other ini_getuint key (see broker-key-guards.ts). There is no max < min
+  // error on these versions — the broker just raises max to min
+  // (broker_config.c:1238-1240 on release/11.2) — so no crossField here.
+  { key: 'MIN_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1, max: 4096, base: 0 }, default: '5', maxVersion: '11.2.999' },
+  { key: 'MAX_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1, max: 4096, base: 0 }, default: '40', maxVersion: '11.2.999' }, // APPL_SERVER_NUM_LIMIT
+  // release/11.3 on: ini_getint; MIN < 1 is PARAM_BAD_RANGE (no upper bound
+  // of its own — MAX's checks cap it), MAX < 1 or > APPL_SERVER_NUM_LIMIT
+  // (4096) is PARAM_BAD_RANGE, and MAX < MIN hard-fails the whole config
+  // load with PARAM_BAD_MAX_APPL_SERVER (broker_config.c:716-719 on
+  // v11.4.5). Enforced via `crossField` (validateCrossFieldParams), not
+  // expressible as a single-entry guard.
+  { key: 'MIN_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1, base: 0 }, default: '5', minVersion: '11.3' },
+  { key: 'MAX_NUM_APPL_SERVER', category: 'common', guard: { kind: 'int', min: 1, max: 4096, base: 0 }, default: '40', crossField: { comparedToKey: 'MIN_NUM_APPL_SERVER', rule: 'gte' }, minVersion: '11.3' }, // APPL_SERVER_NUM_LIMIT
   // instanceOnly: broker_config.c enforces this value is nonzero and
   // unique among this conf's brokers *and* MASTER_SHM_ID (lines ~1296-1312)
   // — same collision reasoning as BROKER_PORT above. required: same

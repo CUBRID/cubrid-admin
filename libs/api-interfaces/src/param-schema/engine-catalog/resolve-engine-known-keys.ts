@@ -2,6 +2,7 @@ import { EngineKnownKeys } from '../engine-known-keys';
 import { ParamGuard } from '../param-guard';
 import { ENGINE_PARAM_CATALOG, EngineCatalogDbParam, EngineCatalogVersion } from './engine-param-catalog.generated';
 import { scopeFromFlags } from './catalog-defaults';
+import { resolveBrokerKeyGuards } from '../broker-key-guards';
 
 const versionParts = (version: string) => (version.match(/\d+(?:\.\d+)*/)?.[0] ?? '').split('.').slice(0, 3);
 
@@ -153,10 +154,17 @@ function keysOf(versions: EngineCatalogVersion[]): Omit<EngineKnownKeys, 'strict
 export function resolveEngineKnownKeys(engineVersion: string): EngineKnownKeys {
   const [major, minor, patch] = versionParts(engineVersion);
   const exact = ENGINE_PARAM_CATALOG.versions.find((v) => versionParts(v.engineVersion).join('.') === [major, minor, patch].join('.'));
-  if (exact) return { strict: true, catalogVersion: exact.engineVersion, ...keysOf([exact]) };
+  if (exact) return { strict: true, catalogVersion: exact.engineVersion, ...keysOf([exact]), brokerGuards: resolveBrokerKeyGuards(exact.engineVersion) };
   const sameLine = ENGINE_PARAM_CATALOG.versions.filter((v) => {
     const [vMajor, vMinor] = versionParts(v.engineVersion);
     return vMajor === major && vMinor === minor;
   });
-  return { strict: false, catalogVersion: null, ...keysOf(sameLine.length > 0 ? sameLine : ENGINE_PARAM_CATALOG.versions) };
+  // Broker guard ranges are major.minor only, so resolving against the
+  // host's own version gives what keysOf's "later version wins" gives the
+  // other lists: the rules of the newest catalogued patch of the same line
+  // (picked by version, not by the catalog's array order, where 11.4.6
+  // precedes 11.4.5). For a line the catalog doesn't have it extrapolates —
+  // older than 11.0 gets the oldest rules, newer than develop the current
+  // ones. Not strict here, so a failure is only a warning anyway.
+  return { strict: false, catalogVersion: null, ...keysOf(sameLine.length > 0 ? sameLine : ENGINE_PARAM_CATALOG.versions), brokerGuards: resolveBrokerKeyGuards(engineVersion) };
 }

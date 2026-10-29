@@ -135,10 +135,21 @@ describe('BROKER_KEY_GUARDS vs the engine catalog', () => {
   it('names only real broker keywords that the schema does not already cover', () => {
     const catalogued = new Set(ENGINE_PARAM_CATALOG.versions.flatMap((v) => v.broker.map((b) => b.key.toUpperCase())));
     const inSchema = new Set(BROKER_PARAM_SCHEMA.map((e) => e.key.toUpperCase()));
-    for (const key of Object.keys(BROKER_KEY_GUARDS)) {
+    for (const { key } of BROKER_KEY_GUARDS) {
       expect(catalogued.has(key), key).toBe(true);
       expect(inSchema.has(key), key).toBe(false);
     }
+  });
+
+  it('gives a key at most one rule (and the broker schema one entry) per catalogued version', () => {
+    const overlaps = [];
+    for (const version of ENGINE_PARAM_CATALOG.versions) {
+      for (const [name, entries] of [['guards', BROKER_KEY_GUARDS], ['schema', BROKER_PARAM_SCHEMA]]) {
+        const keys = entries.filter(e => appliesTo(e, version.engineVersion)).map(e => e.key);
+        overlaps.push(...keys.filter((k, i) => keys.indexOf(k) !== i).map(k => `${name} ${k} @ ${version.label}`));
+      }
+    }
+    expect(overlaps).toEqual([]);
   });
 });
 

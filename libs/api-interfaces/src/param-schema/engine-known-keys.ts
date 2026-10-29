@@ -39,4 +39,11 @@ export interface EngineKnownKeys {
    * flag is absent. Optional so older cached getEnv payloads still type-check.
    */
   databaseScopes?: Record<string, 'SERVER' | 'CLIENT' | 'BOTH'>;
+  /**
+   * Value rules for broker.conf keys the broker schema doesn't list,
+   * resolved from BROKER_KEY_GUARDS for this host's engine version. Keyed
+   * by upper-case key (unlike `broker`), as broker-key-guards.ts writes
+   * them. Optional so older cached getEnv payloads still type-check.
+   */
+  brokerGuards?: Record<string, ParamGuard>;
 }
