@@ -11,6 +11,7 @@ export const TreeNode = React.memo(({
   icon = 'folder',
   level = 1,
   isActive = false,
+  isMultiSelected = false,
   isLoading = false,
   hasChildren = false,
   status,
@@ -57,7 +58,9 @@ export const TreeNode = React.memo(({
     }
     e.stopPropagation();
     if (e.target.closest?.('[data-tree-chevron]')) return;
-    if (onSelect) onSelect();
+    // The event goes along so a caller can read Ctrl/Shift and, with
+    // preventDefault, keep a <details> node from toggling on that click.
+    if (onSelect) onSelect(e);
   };
 
   const handleContextMenu = (e) => {
@@ -78,6 +81,7 @@ export const TreeNode = React.memo(({
   const summaryClasses = `
     flex items-center gap-2 px-2 py-[5px] w-full text-left transition-all duration-150
     cursor-pointer list-none rounded select-none group/node relative border border-transparent
+    ${isMultiSelected ? 'bg-sky-500/10 dark:bg-sky-500/15 ring-1 ring-inset ring-sky-500/40' : ''}
     ${isActive
       ? 'bg-amber-500/6 dark:bg-amber-500/10 border-transparent text-amber-600 dark:text-amber-500'
       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-white/4 hover:text-slate-900 dark:hover:text-slate-200'
@@ -92,6 +96,7 @@ export const TreeNode = React.memo(({
     return (
       <button
         data-testid={id != null ? `tree-node-${id}` : undefined}
+        data-multi-selected={isMultiSelected || undefined}
         className={summaryClasses}
         onClick={handleSelect}
         onContextMenu={handleContextMenu}
@@ -127,6 +132,7 @@ export const TreeNode = React.memo(({
     <details
       id={id}
       data-testid={id != null ? `tree-node-${id}` : undefined}
+      data-multi-selected={isMultiSelected || undefined}
       data-status={status}
       className="group/details block"
       onToggle={isControlled ? undefined : handleToggle}

@@ -8,16 +8,8 @@ import { Table } from '../../../components/ds/layout/Table';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
-import { MULTI_DB_ACTIONS, databaseSelectionRows, splitByAction } from '../databaseMultiActions';
+import { MULTI_DB_ACTIONS, MULTI_DB_ACTION_ICONS, databaseSelectionRows, splitByAction } from '../databaseMultiActions';
 
-const ACTION_ICONS = {
-  start: 'play_circle',
-  stop: 'stop_circle',
-  restart: 'restart_alt',
-  login: 'login',
-  logout: 'logout',
-  forgetCredentials: 'key_off',
-};
 
 const yesNo = (value) => (
   <Icon name={value ? 'check' : 'remove'} size="xs" className={value ? 'text-emerald-500' : 'text-slate-300'} />
@@ -128,7 +120,7 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
                   data-testid={`select-databases-action-${action}`}
                   variant={action === 'login' && loginPending ? 'primary' : 'secondary'}
                   size="sm"
-                  icon={ACTION_ICONS[action]}
+                  icon={MULTI_DB_ACTION_ICONS[action]}
                   disabled={count === 0}
                   onClick={() => runAction(action)}
                 >

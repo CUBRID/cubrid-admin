@@ -8,6 +8,15 @@ import {
 
 export const MULTI_DB_ACTIONS = ['start', 'stop', 'restart', 'login', 'logout', 'forgetCredentials'];
 
+export const MULTI_DB_ACTION_ICONS = {
+  start: 'play_circle',
+  stop: 'stop_circle',
+  restart: 'restart_alt',
+  login: 'login',
+  logout: 'logout',
+  forgetCredentials: 'key_off',
+};
+
 // One row per database of a host, with what the multi-select actions need.
 export function databaseSelectionRows(state, hostUid) {
   const db = state.database;

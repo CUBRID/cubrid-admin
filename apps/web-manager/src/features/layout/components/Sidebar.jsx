@@ -24,7 +24,13 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
-import { runMultiDatabaseAction, splitByAction } from '../../database/databaseMultiActions';
+import {
+  MULTI_DB_ACTIONS,
+  MULTI_DB_ACTION_ICONS,
+  databaseSelectionRows,
+  runMultiDatabaseAction,
+  splitByAction,
+} from '../../database/databaseMultiActions';
 import SelectDatabasesModal from '../../database/components/SelectDatabasesModal';
 import { hostLoginResultStatusModal } from '../../host/hostLoginReport';
 import { dbKey } from '../../database/dbKey';
@@ -123,6 +129,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [groupContextMenu, setGroupContextMenu] = useState(null);
   const [dbContextMenu, setDbContextMenu] = useState(null);
+  // Ctrl/Shift multi-selection in the database tree, and its context menu.
+  const [selectedDbNames, setSelectedDbNames] = useState(() => new Set());
+  const [dbMultiContextMenu, setDbMultiContextMenu] = useState(null);
   const [brokerContextMenu, setBrokerContextMenu] = useState(null);
   const [usersContextMenu, setUsersContextMenu] = useState(null);
   const [userContextMenu, setUserContextMenu] = useState(null);
@@ -177,6 +186,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // a still in-flight response for a host the user has since switched away
   // from can never be mistaken for this host's own data.
   const databases = databasesByHost[selectedHostUid] || [];
+  // The database tree remounts per host; its multi-selection starts empty too.
+  useEffect(() => {
+    setSelectedDbNames(new Set());
+    setDbMultiContextMenu(null);
+  }, [selectedHostUid]);
 
   // One action on several selected databases (selection modal or a tree
   // selection): confirm with the HA warning, run, then refresh and report.
@@ -255,6 +269,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setBulkHostContextMenu(null);
     setGroupContextMenu(null);
     setDbContextMenu(null);
+    setDbMultiContextMenu(null);
     setBrokerContextMenu(null);
     setUsersContextMenu(null);
     setUserContextMenu(null);
@@ -427,6 +442,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     e.preventDefault();
     e.stopPropagation();
     closeAllContextMenus();
+    if (selectedDbNames.size > 1 && selectedDbNames.has(dbName)) {
+      setDbMultiContextMenu({ mouseX: e.clientX, mouseY: e.clientY });
+      return;
+    }
     setDbContextMenu({ mouseX: e.clientX, mouseY: e.clientY, db: dbName, isActive, isLoggedIn });
   };
 
@@ -963,6 +982,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                         onBackupItemContextMenu={handleBackupItemContextMenu}
                         onQueryPlanContextMenu={handleQueryPlanContextMenu}
                         onQueryItemContextMenu={handleQueryItemContextMenu}
+                        selectedDbNames={selectedDbNames}
+                        onSelectedDbNamesChange={setSelectedDbNames}
                       />
                     </div>
                     <div id="broker-tree-container" className={activeTab !== 'broker' ? 'hidden' : ''}>
@@ -1566,6 +1587,54 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           />
         </ContextMenuWrapper>
       )}
+
+      {dbMultiContextMenu && (() => {
+        const rows = databaseSelectionRows(
+          { database: { databasesByHost, activeDatabasesByHost, haDbNamesByHost, loggedInDatabases } },
+          selectedHostUid
+        ).filter((row) => selectedDbNames.has(row.dbname));
+        const close = () => setDbMultiContextMenu(null);
+        return (
+          <ContextMenuWrapper x={dbMultiContextMenu.mouseX} y={dbMultiContextMenu.mouseY} onClose={close}>
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between gap-2 min-w-0">
+              <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">
+                {CM.multiDbSelectedCount(rows.length)}
+              </Typography>
+              <Icon name="checklist" size="xs" className="opacity-30" weight={300} />
+            </div>
+            {MULTI_DB_ACTIONS.map((action) => {
+              const { targets } = splitByAction(action, rows);
+              return (
+                <MenuItem
+                  key={action}
+                  icon={MULTI_DB_ACTION_ICONS[action]}
+                  label={`${CM.multiDbActions[action]} (${targets.length})`}
+                  disabled={targets.length === 0}
+                  onClick={() => {
+                    close();
+                    // Databases without saved credentials need a user and
+                    // password, which the selection window asks for.
+                    if (action === 'login' && targets.some((row) => !row.hasProfile)) {
+                      setSelectDatabasesModal({ initialSelected: rows.map((row) => row.dbname) });
+                      return;
+                    }
+                    handleMultiDatabaseAction(action, rows);
+                  }}
+                />
+              );
+            })}
+            <MenuDivider />
+            <MenuItem
+              icon="checklist"
+              label={CM.selectDatabasesMenu}
+              onClick={() => {
+                close();
+                setSelectDatabasesModal({ initialSelected: rows.map((row) => row.dbname) });
+              }}
+            />
+          </ContextMenuWrapper>
+        );
+      })()}
 
       {dbRootContextMenu && (
         <ContextMenuWrapper x={dbRootContextMenu.mouseX} y={dbRootContextMenu.mouseY} onClose={() => setDbRootContextMenu(null)}>
