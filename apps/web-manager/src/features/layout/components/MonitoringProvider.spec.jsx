@@ -13,6 +13,7 @@ vi.mock('../../broker/brokerSlice', () => ({
 }));
 
 import MonitoringProvider from './MonitoringProvider';
+import { markModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 let container;
 let root;
@@ -95,6 +96,20 @@ it('pauses polling while the selected host is pending reconnect and resumes when
   expect(countOf('test/fetchBrokerList')).toBe(1);
 
   await setReconnectQueue([]);
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+  expect(countOf('test/fetchBrokerList')).toBe(2);
+});
+
+it('stops polling the host while a modal is open and refreshes once when it closes', async () => {
+  let closeModal;
+  await act(async () => { closeModal = markModalOpen(); });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(1);
+  expect(countOf('test/fetchBrokerList')).toBe(1);
+
+  await act(async () => { closeModal(); });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
   expect(countOf('test/fetchBrokerList')).toBe(2);
 });
