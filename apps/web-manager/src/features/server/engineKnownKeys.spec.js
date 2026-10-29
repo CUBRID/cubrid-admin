@@ -24,6 +24,15 @@ describe('resolveEngineKnownKeys', () => {
     expect(k.database).toEqual(expect.arrayContaining(['page_latch_timeout', 'page_latch_timeout_in_msecs']));
   });
 
+  it('gives every parameter its server/client scope from the engine flags', () => {
+    const { databaseScopes } = resolveEngineKnownKeys(BANNER_11_4_5);
+    expect(databaseScopes.data_buffer_size).toBe('SERVER');
+    expect(databaseScopes.db_hosts).toBe('CLIENT');
+    expect(databaseScopes.debug_autocommit).toBe('BOTH');
+    expect(databaseScopes.db_volume_size).toBeUndefined(); // neither flag
+    expect(Object.keys(databaseScopes).length).toBeGreaterThan(200);
+  });
+
   it('never lists keys real builds compile out or gateway-only broker keys', () => {
     for (const v of ['11.0.17', '11.4.5', '11.5.0']) {
       const k = resolveEngineKnownKeys(v);

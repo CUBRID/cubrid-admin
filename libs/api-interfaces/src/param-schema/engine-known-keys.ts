@@ -32,4 +32,11 @@ export interface EngineKnownKeys {
    * cached getEnv payloads still type-check.
    */
   databaseDeprecated?: string[];
+  /**
+   * Which process(es) each cubrid.conf key (lowercased) affects, from the
+   * engine's PRM_FOR_SERVER / PRM_FOR_CLIENT flags — for keys the schema
+   * doesn't list too (paramdump shows every parameter). A key with neither
+   * flag is absent. Optional so older cached getEnv payloads still type-check.
+   */
+  databaseScopes?: Record<string, 'SERVER' | 'CLIENT' | 'BOTH'>;
 }

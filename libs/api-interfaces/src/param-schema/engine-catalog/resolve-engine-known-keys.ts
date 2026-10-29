@@ -1,6 +1,7 @@
 import { EngineKnownKeys } from '../engine-known-keys';
 import { ParamGuard } from '../param-guard';
 import { ENGINE_PARAM_CATALOG, EngineCatalogDbParam, EngineCatalogVersion } from './engine-param-catalog.generated';
+import { scopeFromFlags } from './catalog-defaults';
 
 const versionParts = (version: string) => (version.match(/\d+(?:\.\d+)*/)?.[0] ?? '').split('.').slice(0, 3);
 
@@ -126,10 +127,14 @@ function keysOf(versions: EngineCatalogVersion[]): Omit<EngineKnownKeys, 'strict
   const broker = new Set<string>();
   const databaseGuards: Record<string, ParamGuard> = {};
   const deprecated = new Set<string>();
+  const databaseScopes: NonNullable<EngineKnownKeys['databaseScopes']> = {};
   for (const v of versions) {
     for (const p of v.db) {
       const key = p.key.toLowerCase();
       database.add(key);
+      const scope = scopeFromFlags(p.flags);
+      if (scope) databaseScopes[key] = scope;
+      else delete databaseScopes[key];
       // Later versions win — `versions` is oldest first.
       const guard = guardFromCatalog(p);
       if (guard) databaseGuards[key] = guard;
@@ -141,7 +146,7 @@ function keysOf(versions: EngineCatalogVersion[]): Omit<EngineKnownKeys, 'strict
     // which reads cubrid_gateway.conf, not cubrid_broker.conf.
     for (const k of v.broker) if (!k.buildCondition) broker.add(k.key.toLowerCase());
   }
-  return { database: [...database].sort(), broker: [...broker].sort(), databaseGuards, databaseDeprecated: [...deprecated].sort() };
+  return { database: [...database].sort(), broker: [...broker].sort(), databaseGuards, databaseDeprecated: [...deprecated].sort(), databaseScopes };
 }
 
 /** Backend-only: pulls in the full generated catalog. */
