@@ -236,7 +236,7 @@ export default function DatabaseInfoModal() {
             </div>
             <div className="min-w-0 flex-1">
               <Typography variant="caption" className="font-semibold uppercase tracking-wide text-amber-600/70 dark:text-amber-400/60 mb-0.5">{CM.databaseName}</Typography>
-              <Typography variant="h4" className="text-16 font-black text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
+              <Typography title={selectedDatabase} variant="h4" className="text-16 font-black text-amber-700 dark:text-amber-400 font-mono truncate">{selectedDatabase}</Typography>
             </div>
             <StatusBadge label={CM.environmentReady} variant="emerald" pulse={true} className="rounded-full" />
           </div>

@@ -13,6 +13,7 @@ import { Table } from '../../../../components/ds/layout/Table';
 import { Card } from '../../../../components/ds/layout/Card';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { EmptyState } from '../../../../components/ds/feedback/EmptyState';
+import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 
 /** lockdb dashboard row → gettransactioninfo / killtransaction shape */
@@ -27,7 +28,7 @@ function lockRowToTransaction(row) {
   };
 }
 
-export default function DBLockTransactionSection({ locks, pollingProps }) {
+export default function DBLockTransactionSection({ locks, locksStatus, pollingProps }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -98,6 +99,8 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
     { header: CM.userNameCol, accessor: 'user', render: (val) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val}</span> },
     { header: CM.host, accessor: 'host', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
     { header: CM.pid, accessor: 'pid', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
+    // e.g. broker2_cub_cas_1 for a broker session (broker and CAS number), applylogdb/copylogdb for HA
+    { header: CM.programName, accessor: 'program', render: (val) => <span className="font-mono text-14 text-slate-500 max-w-[200px] truncate block" title={val}>{val}</span> },
     { header: CM.objectType, accessor: 'obj', render: (val) => <span className="font-mono text-14 text-slate-500 max-w-[280px] truncate block" title={val}>{val}</span> },
     {
       header: CM.lockMode,
@@ -112,6 +115,11 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
           />
         );
       }
+    },
+    {
+      header: CM.lockCountCol,
+      accessor: 'count',
+      render: (val) => <span className="font-mono text-14 tabular-nums text-slate-500">{Number(val ?? 0).toLocaleString()}</span>,
     },
   ], [CM]);
 
@@ -136,15 +144,24 @@ export default function DBLockTransactionSection({ locks, pollingProps }) {
         onToggle={(v) => setIsCollapsed(v)}
       >
         <Table
+          maxRows={15}
           columns={columns}
           data={locks}
           onRowContextMenu={handleRowContextMenu}
           emptyState={
-            <EmptyState
-              icon="verified_user"
+            <FetchEmptyState
+              status={locksStatus}
               title={CM.lockAndTransaction}
-              subtitle={CM.loadingLockAndTransaction}
-              py="py-8"
+              errorTitle={CM.locksUnavailableTitle}
+              errorSubtitle={CM.locksUnavailableMsg}
+              empty={
+                <EmptyState
+                  icon="verified_user"
+                  title={CM.noLocksTitle}
+                  subtitle={CM.noLocksMsg}
+                  py="py-8"
+                />
+              }
             />
           }
         />

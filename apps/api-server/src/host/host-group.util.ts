@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { omitHashMap } from '@util';
 import { HashMap } from '@type/collections';
 import { HostGroupInfo, HostInfo, User } from '@type/index';
-import { SafeHostList, SafeHostGroupsMap, SafeHostGroupInfo } from '@type/collections';
+import { SafeHostInfo, SafeHostList, SafeHostGroupsMap, SafeHostGroupInfo } from '@type/collections';
+import { cmsSessionExpiresAt } from '@cms-https-client/cms-token-activity';
 
 export type HostRef = {
   groupId: string;
@@ -15,6 +15,11 @@ export type HostRef = {
  * Always present once touched — cannot be renamed or deleted (see updateGroup/deleteGroup).
  */
 export const UNGROUPED_GROUP_ID = '__ungrouped__';
+
+/** Host alias is a free-form webmanager-only label (unlike DB/user names, it
+ * has no engine-imposed identifier limit), so it needs its own cap to stop
+ * pathologically long values from overflowing the sidebar/menus. */
+export const MAX_HOST_ALIAS_LENGTH = 100;
 
 /** Lazily creates the reserved ungrouped bucket. Idempotent. */
 export function ensureUngroupedGroup(user: User): HostGroupInfo {
@@ -116,6 +121,23 @@ export function findDuplicateAlias(
   return found;
 }
 
+/** A host as sent to the client: no credentials or token, plus its expected CMS session expiry. */
+export function toSafeHost(host: HostInfo): SafeHostInfo {
+  const {
+    password: _password,
+    token: _token,
+    dbProfiles: _dbProfiles,
+    cmsTokenIssuedAt: _issuedAt,
+    cmsTokenActiveTimeSec: _activeTime,
+    ...safe
+  } = host;
+  return {
+    ...safe,
+    initialLogin: host.initialLogin ?? true,
+    cmsSessionExpiresAt: cmsSessionExpiresAt(host),
+  };
+}
+
 export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
   const out: SafeHostGroupsMap = {};
   for (const [groupId, group] of Object.entries(readHostGroups(user))) {
@@ -123,7 +145,9 @@ export function sanitizeHostGroups(user: User): SafeHostGroupsMap {
       name: group.name,
       defaultHostUid: group.defaultHostUid,
       createdAt: group.createdAt,
-      hosts: omitHashMap(readGroupHosts(group), ['password', 'token', 'dbProfiles']) as SafeHostList,
+      hosts: Object.fromEntries(
+        Object.entries(readGroupHosts(group)).map(([uid, host]) => [uid, toSafeHost(host)])
+      ) as SafeHostList,
     };
   }
   // Always show the ungrouped bucket, even before any host has ever landed there.

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { loginToHost, closeReconnectModal, clearHostError, revokeHostLogin, setSelectedHost } from '../hostSlice';
+import { loginToHost, closeReconnectModal, clearHostError, revokeHostLogin, forgetHostSession, setSelectedHost } from '../hostSlice';
 import { clearReconnectingHost } from '../../../api/apiClient';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -97,6 +97,7 @@ export default function ReconnectHostModal() {
     // Full cleanup: revoke session, close tabs, reset state
     if (reconnectHostUid) {
       dispatch(revokeHostLogin(reconnectHostUid));
+      dispatch(forgetHostSession(reconnectHostUid));
       try {
         const { closeHostTabs } = await import('../../layout/layoutSlice');
         dispatch(closeHostTabs(reconnectHostUid));
@@ -189,7 +190,7 @@ export default function ReconnectHostModal() {
           </div>
           <div className="flex-1 min-w-0">
             <Typography variant="caption" className="font-bold text-amber-600/70 dark:text-amber-400/60 uppercase tracking-widest block mb-0.5">{CM.targetHost || 'Target Host'}</Typography>
-            <Typography variant="span" className="text-sm font-black text-slate-900 dark:text-white truncate block tracking-tight font-mono">
+            <Typography title={currentHost?.alias || currentHost?.id || 'N/A'} variant="span" className="text-sm font-black text-slate-900 dark:text-white truncate block tracking-tight font-mono">
               {currentHost?.alias || currentHost?.id || 'N/A'}
             </Typography>
           </div>

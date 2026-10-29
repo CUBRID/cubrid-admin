@@ -163,7 +163,10 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         initialResponse
       );
 
-      this.applyCmsOutcome(job, response);
+      const succeeded = this.applyCmsOutcome(job, response);
+      if (succeeded && job.type === 'rename') {
+        await this.clearRenameAliasCaches(job);
+      }
       job.finishedAt = job.finishedAt ?? new Date().toISOString();
       await this.store.finalizeOrphanedJob(userKey, job);
       return true;
@@ -463,6 +466,12 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       const cmsResponse = await this.executeCmsForJob(uKey, job);
       const succeeded = this.applyCmsOutcome(job, cmsResponse);
 
+      // Before the startinfo lookup below: the rename already happened on
+      // CMS, so a failure of that separate lookup must not skip this.
+      if (succeeded && job.type === 'rename') {
+        await this.clearRenameAliasCaches(job);
+      }
+
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
         job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
       }
@@ -497,6 +506,27 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           await this.store.writeGlobalOperations(ops);
         }
       });
+    }
+  }
+
+  /**
+   * Best-effort: a failure here must not flip an already-successful rename
+   * job to "failed" (the rename itself did happen on CMS).
+   */
+  private async clearRenameAliasCaches(job: CmsJobRecord): Promise<void> {
+    try {
+      const renameTo = (job.payload as RenameDatabaseRequest)?.rename;
+      await this.managementService.clearDbAliasCachesAfterRename(
+        job.userId,
+        job.hostUid,
+        job.dbname,
+        renameTo
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Failed to clear stale login profile/cache after renaming database ${job.dbname}: ` +
+        `${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 

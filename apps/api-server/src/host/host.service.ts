@@ -6,6 +6,7 @@ import { HostInfo, User } from '@type/index';
 import { AddHostRequest, GetHostsResponse, HostResponse, UpdateHostRequest } from '@api-interfaces';
 import { SafeHostGroupsMap } from '@type/collections';
 import { v4 as uuidv4 } from 'uuid';
+import { forgetCmsToken } from '@cms-https-client/cms-token-activity';
 import {
   addHostToGroup,
   countAllHosts,
@@ -18,9 +19,11 @@ import {
   findHostRef,
   getHost,
   isValidGroupNameStart,
+  MAX_HOST_ALIAS_LENGTH,
   moveHostToGroup,
   removeHostFromUser,
   sanitizeHostGroups,
+  toSafeHost,
   updateGroup,
   UNGROUPED_GROUP_ID,
 } from './host-group.util';
@@ -62,7 +65,10 @@ export class HostService {
 
       const alias = typeof hostInfo.alias === 'string' ? hostInfo.alias.trim() : '';
       if (!alias) {
-        throw HostError.InvalidFormat({ field: 'alias', reason: 'MISSING_OR_BLANK_ALIAS' });
+        throw HostError.InvalidFormat({ field: 'alias', reason: 'MISSING_OR_BLANK_ALIAS', message: 'An alias is required to add a host.' });
+      }
+      if (alias.length > MAX_HOST_ALIAS_LENGTH) {
+        throw HostError.InvalidFormat({ field: 'alias', reason: 'ALIAS_TOO_LONG', max: MAX_HOST_ALIAS_LENGTH });
       }
 
       const duplicate = findDuplicateHost(user, { ...hostInfo, alias });
@@ -89,7 +95,7 @@ export class HostService {
       const { groupId } = hostInfo;
       if (groupId) {
         if (!groups[groupId]) {
-          throw HostError.InvalidFormat({ field: 'groupId', reason: 'GROUP_NOT_FOUND' });
+          throw HostError.InvalidFormat({ field: 'groupId', reason: 'GROUP_NOT_FOUND', message: `Group "${groupId}" does not exist.` });
         }
         addHostToGroup(user, groupId, newHost);
       } else {
@@ -109,10 +115,10 @@ export class HostService {
     const updatedUser = await this.repository.atomicUpdateUser(userId, async (user: User) => {
       const trimmed = String(name ?? '').trim();
       if (!trimmed) {
-        throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED' });
+        throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED', message: 'A group name is required.' });
       }
       if (!isValidGroupNameStart(trimmed)) {
-        throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START' });
+        throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START', message: `"${trimmed}" is not a valid group name — it must start with a letter or digit.` });
       }
       createEmptyGroup(user, trimmed);
       return user;
@@ -130,21 +136,21 @@ export class HostService {
       try {
         const ok = updateGroup(user, groupId, patch);
         if (!ok) {
-          throw HostError.InvalidFormat({ field: 'groupId', reason: 'GROUP_NOT_FOUND' });
+          throw HostError.InvalidFormat({ field: 'groupId', reason: 'GROUP_NOT_FOUND', message: `Group "${groupId}" does not exist.` });
         }
       } catch (e: any) {
         const code = String(e?.message || '');
         if (code === 'BLANK_GROUP_NAME_NOT_ALLOWED') {
-          throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED' });
+          throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED', message: 'A group name is required.' });
         }
         if (code === 'GROUP_NAME_INVALID_START') {
-          throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START' });
+          throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START', message: `"${patch.name}" is not a valid group name — it must start with a letter or digit.` });
         }
         if (code === 'DEFAULT_HOST_NOT_IN_GROUP') {
-          throw HostError.InvalidFormat({ field: 'defaultHostUid', reason: 'DEFAULT_HOST_NOT_IN_GROUP' });
+          throw HostError.InvalidFormat({ field: 'defaultHostUid', reason: 'DEFAULT_HOST_NOT_IN_GROUP', message: 'The default host must already be a member of this group.' });
         }
         if (code === 'CANNOT_RENAME_UNGROUPED') {
-          throw HostError.InvalidFormat({ field: 'name', reason: 'CANNOT_RENAME_UNGROUPED' });
+          throw HostError.InvalidFormat({ field: 'name', reason: 'CANNOT_RENAME_UNGROUPED', message: 'The "Ungrouped" bucket cannot be renamed.' });
         }
         throw e;
       }
@@ -157,7 +163,7 @@ export class HostService {
   async deleteHostGroup(userId: string, groupId: string): Promise<SafeHostGroupsMap> {
     const updatedUser = await this.repository.atomicUpdateUser(userId, async (user: User) => {
       if (groupId === UNGROUPED_GROUP_ID) {
-        throw HostError.InvalidFormat({ field: 'groupId', reason: 'CANNOT_DELETE_UNGROUPED' });
+        throw HostError.InvalidFormat({ field: 'groupId', reason: 'CANNOT_DELETE_UNGROUPED', message: 'The "Ungrouped" bucket cannot be deleted.' });
       }
       deleteGroup(user, groupId);
       return user;
@@ -182,7 +188,10 @@ export class HostService {
       if (hostInfo.alias !== undefined) {
         const trimmed = String(hostInfo.alias).trim();
         if (!trimmed) {
-          throw HostError.InvalidFormat({ field: 'alias', reason: 'BLANK_ALIAS_NOT_ALLOWED' });
+          throw HostError.InvalidFormat({ field: 'alias', reason: 'BLANK_ALIAS_NOT_ALLOWED', message: 'The alias cannot be blank.' });
+        }
+        if (trimmed.length > MAX_HOST_ALIAS_LENGTH) {
+          throw HostError.InvalidFormat({ field: 'alias', reason: 'ALIAS_TOO_LONG', max: MAX_HOST_ALIAS_LENGTH });
         }
         proposedAlias = trimmed;
       }
@@ -206,6 +215,17 @@ export class HostService {
         throw HostError.DuplicatedAlias({ duplicatedHostId: duplicateAlias.uid, alias: proposedAlias });
       }
 
+      // A different server or CMS account makes the stored session meaningless.
+      const nextTarget = [
+        hostInfo.address ?? existingHost.address,
+        hostInfo.port ?? existingHost.port,
+        hostInfo.id ?? existingHost.id,
+        hostInfo.password ?? existingHost.password,
+      ];
+      const sameTarget = [existingHost.address, existingHost.port, existingHost.id, existingHost.password]
+        .every((value, i) => String(value) === String(nextTarget[i]));
+      if (!sameTarget) forgetCmsToken(existingHost.token);
+
       ref.group.hosts[hostUid] = {
         uid: hostUid,
         id: hostInfo.id ?? existingHost.id,
@@ -215,6 +235,8 @@ export class HostService {
         initialLogin: existingHost.initialLogin ?? true,
         alias: proposedAlias,
         token: hostInfo.token ?? existingHost.token,
+        cmsTokenIssuedAt: sameTarget ? existingHost.cmsTokenIssuedAt : undefined,
+        cmsTokenActiveTimeSec: sameTarget ? existingHost.cmsTokenActiveTimeSec : undefined,
         dbProfiles: hostInfo.dbProfiles ?? existingHost.dbProfiles ?? {},
       };
 
@@ -237,7 +259,7 @@ export class HostService {
         if (!ref) {
           throw HostError.NoSuchHost({ hostUid });
         }
-        throw HostError.InvalidFormat({ field: 'targetGroupId', reason: 'GROUP_NOT_FOUND' });
+        throw HostError.InvalidFormat({ field: 'targetGroupId', reason: 'GROUP_NOT_FOUND', message: `Group "${targetGroupId}" does not exist.` });
       }
       return user;
     });
@@ -247,9 +269,11 @@ export class HostService {
   @HandleHostErrors()
   async deleteHost(userId: string, hostUid: string): Promise<SafeHostGroupsMap> {
     const updatedUser = await this.repository.atomicUpdateUser(userId, async (user: User) => {
+      const removedToken = getHost(user, hostUid)?.token;
       if (!removeHostFromUser(user, hostUid)) {
         throw HostError.NoSuchHost({ hostUid });
       }
+      forgetCmsToken(removedToken);
       return user;
     });
     return sanitizeHostGroups(updatedUser);
@@ -266,10 +290,7 @@ export class HostService {
   }
 
   async findHost(userId: string, hostUid: string): Promise<HostResponse> {
-    const host = await this.findHostInternal(userId, hostUid);
-    const { password, token, dbProfiles, ...hostResponse } = host;
-    hostResponse.initialLogin = host.initialLogin ?? true;
-    return hostResponse as HostResponse;
+    return toSafeHost(await this.findHostInternal(userId, hostUid));
   }
 
   /** Mark the group containing this host as an HA cluster group. */

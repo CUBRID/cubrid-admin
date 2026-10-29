@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import type { DesktopBridge, DesktopConfig } from './ipc/bridge-types';
 
@@ -17,6 +17,15 @@ const desktopBridge: DesktopBridge = {
   finishWorkspaceSetup: (workspaceRoot) =>
     ipcRenderer.invoke('desktop:finish-workspace-setup', workspaceRoot),
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),
+  setMenuLanguage: (language) => ipcRenderer.invoke('desktop:set-menu-language', language),
+  setMenuState: (state) => ipcRenderer.invoke('desktop:set-menu-state', state),
+  onMenuAction: (callback) => {
+    const subscription = (_event: IpcRendererEvent, actionId: string) => callback(actionId);
+    ipcRenderer.on('desktop:menu-action', subscription);
+    return () => {
+      ipcRenderer.removeListener('desktop:menu-action', subscription);
+    };
+  },
   onCloseActiveTab: (callback) => {
     const subscription = () => callback();
     ipcRenderer.on('desktop:close-active-tab', subscription);
@@ -25,6 +34,14 @@ const desktopBridge: DesktopBridge = {
     };
   },
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
+  getAppVersion: () => ipcRenderer.invoke('desktop:get-app-version'),
+  getUpdateStatus: () => ipcRenderer.invoke('desktop:get-update-status'),
+  getStartupUpdateNotice: () => ipcRenderer.invoke('desktop:get-startup-update-notice'),
+  dismissUpdate: (version) => ipcRenderer.invoke('desktop:dismiss-update', version),
+  openUpdateDownload: (url) => ipcRenderer.invoke('desktop:open-update-download', url),
+  getCheckForUpdatesOnStartup: () => ipcRenderer.invoke('desktop:get-check-updates-on-startup'),
+  setCheckForUpdatesOnStartup: (enabled) =>
+    ipcRenderer.invoke('desktop:set-check-updates-on-startup', enabled),
 };
 
 contextBridge.exposeInMainWorld('desktopConfig', {

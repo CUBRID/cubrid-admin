@@ -6,6 +6,7 @@ import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
+import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
 
 const getSizeFormat = (size) => {
@@ -78,7 +79,10 @@ const BarCell = ({ val }) => {
   );
 };
 
-export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
+// dbListStatus: the host dashboard's database-list fetch state ('loading'
+// until it settles). activeDatabases is [] until then, which must not read as "no
+// running databases".
+export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded' }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
@@ -90,11 +94,14 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
   // An empty response is still a completed initial load. Keep that distinction
   // so background polls do not alternate the empty state with table skeletons.
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const dbListSettled = dbListStatus !== 'loading';
 
   useEffect(() => {
     setVolumes([]);
     setLoading(false);
     setHasLoadedOnce(false);
+    setLoadFailed(false);
   }, [hostUid]);
 
   // A database can stay active (running) after logout — logout only drops
@@ -114,6 +121,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
   const requestIdRef = useRef(0);
 
   const fetchVolumes = useCallback(async () => {
+    if (!dbListSettled) return;
     const requestId = ++requestIdRef.current;
     if (!hostUid || !authorizedHosts.includes(hostUid) || loggedInActiveDatabases.length === 0) {
       // Stopping the last active database, or logging out of all of them,
@@ -127,19 +135,26 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       // message.
       setLoading(false);
       setHasLoadedOnce(true);
+      setLoadFailed(false);
       return;
     }
     setLoading(true);
     try {
       const result = await dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases })).unwrap();
-      if (requestIdRef.current === requestId) setVolumes(result);
+      if (requestIdRef.current === requestId) {
+        setVolumes(result);
+        setLoadFailed(false);
+      }
+    } catch {
+      // Keep the last rows; only an empty table shows the failure.
+      if (requestIdRef.current === requestId) setLoadFailed(true);
     } finally {
       if (requestIdRef.current === requestId) {
         setLoading(false);
         setHasLoadedOnce(true);
       }
     }
-  }, [hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
+  }, [dbListSettled, hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
   useEffect(() => { fetchVolumes(); }, [fetchVolumes]);
 
@@ -191,11 +206,13 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [] }) {
       collapsible
     >
       <Table
+        maxRows={15}
         columns={columns}
         data={volumeData}
-        loading={loading && !hasLoadedOnce}
+        loading={!hasLoadedOnce && dbListStatus !== 'error'}
         className="text-14"
         emptyMessage={loggedInActiveDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
+        emptyState={dbListStatus === 'error' || loadFailed ? <FetchEmptyState status="error" /> : undefined}
       />
     </Card>
   );

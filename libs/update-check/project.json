@@ -1,0 +1,16 @@
+{
+  "name": "update-check",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/update-check/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p libs/update-check/tsconfig.lib.json --outDir dist/libs/update-check --rootDir libs/update-check/src",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

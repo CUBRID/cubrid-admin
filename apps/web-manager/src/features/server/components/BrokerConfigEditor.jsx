@@ -6,6 +6,7 @@ import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
+import { confSaveProblems } from '../confSaveProblems';
 
 import ConfigEditorToolbar from './broker/ConfigEditorToolbar';
 import ConfigSourceEditor from './broker/ConfigSourceEditor';
@@ -76,24 +77,37 @@ export default function BrokerConfigEditor({ hostUid }) {
     dispatch(setTabDirty({ tabId, isDirty: false }));
   };
 
+  // No client-side check here: the server parses and validates broker.conf
+  // and rejects it with per-line reasons.
   const handleSave = async () => {
     setSaving(true);
     try {
       const confdata = rawContent.split('\n');
 
-      await brokerApi.updateBrokerConfig(hostUid, confdata);
-      
+      const result = await brokerApi.updateBrokerConfig(hostUid, confdata);
+      const warnings = result?.warnings ?? [];
+
       originalRawContentRef.current = rawContent;
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
       dispatch(showStatusModal({
         type: 'success',
         title: CM.configSaved,
-        message: CM.brokerConfigSaveSuccess
+        message: CM.brokerConfigSaveSuccess,
+        // CMS's broker_setparam (ts2_set_broker_conf) only rewrites
+        // broker.conf on disk and never notifies the running broker, so
+        // nothing saved here is live until the broker restarts.
+        guidance: [CM.brokerConfigRestartRequiredNotice, ...warnings],
       }));
     } catch (err) {
-      if (isAmbiguousFailure(err)) fetchConfig();
-      dispatch(showStatusModal({
+      const problems = confSaveProblems(err);
+      if (!problems && isAmbiguousFailure(err)) fetchConfig();
+      dispatch(showStatusModal(problems ? {
+        type: 'error',
+        title: CM.invalidConfigValues,
+        message: CM.invalidConfigValuesMsg,
+        guidance: problems,
+      } : {
         type: 'error',
         title: CM.saveFailed,
         message: CM.brokerConfigSaveError,

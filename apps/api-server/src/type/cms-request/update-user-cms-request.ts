@@ -28,11 +28,11 @@ export type UpdateUserCmsRequest = BaseCmsRequest & {
   userpass: string;
 
   /**
-   * Groups object containing group array
+   * Groups section, sent as an array so CMS sees an open/close "groups" block
    */
-  groups: {
+  groups: Array<{
     group: string[];
-  };
+  }>;
 
   /**
    * Authorization array

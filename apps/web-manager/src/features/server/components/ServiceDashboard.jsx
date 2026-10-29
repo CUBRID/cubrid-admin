@@ -17,7 +17,6 @@ import { orderedGroupEntries,
   resolveDefaultHostUid,
   sortHostUidsByHaRole,
   inferHaNodeType,
-  stripHaRoleTagFromAlias,
 } from '../../host/hostGroupUtils';
 
 const MetricBar = ({ pct }) => (
@@ -36,6 +35,9 @@ const Component = function ServiceDashboard() {
   const { hosts, hostGroups, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // Rows come from the registered host list (fetchHosts); while it loads the
+  // table must not say "No data available".
+  const hostsLoading = useSelector((state) => state.host.loading);
 
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const [roleFilter, setRoleFilter] = useState('all');
@@ -231,7 +233,7 @@ const Component = function ServiceDashboard() {
               </div>
               <div className="flex-1 flex items-center justify-between min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-15 font-black text-slate-800 dark:text-slate-100 truncate">
+                  <span title={row.groupName} className="text-15 font-black text-slate-800 dark:text-slate-100 truncate">
                     {row.groupName}
                   </span>
                   <span className="inline-flex items-center px-1.5 h-[14px] rounded-[3px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/3 text-11 font-black tracking-wide leading-none shrink-0 text-slate-500 dark:text-slate-400 uppercase">
@@ -253,7 +255,7 @@ const Component = function ServiceDashboard() {
         const haRole = inferHaNodeType(row, haInfo[row.uid]);
         const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
-        const displayName = stripHaRoleTagFromAlias(val || row.id);
+        const displayName = val || row.id;
 
         return (
           <div className="flex items-center gap-3 py-0.5 w-full">
@@ -282,7 +284,7 @@ const Component = function ServiceDashboard() {
 
             {/* Name + role */}
             <div className="flex-1 flex items-center justify-between min-w-0">
-              <span className={`text-15 font-medium leading-tight truncate ${
+              <span title={displayName} className={`text-15 font-medium leading-tight truncate ${
                 isConnected ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'
               }`}>{displayName}</span>
               {roleConfig && (
@@ -362,8 +364,9 @@ const Component = function ServiceDashboard() {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.tps : undefined;
-        if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v}</span>;
+        // null = no rate yet (needs two samples), see computeBrokerRates.
+        if (v === undefined || v === null) return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-bold">{v.toFixed(1)}</span>;
       }
     },
     {
@@ -376,8 +379,8 @@ const Component = function ServiceDashboard() {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.qps : undefined;
-        if (v === undefined) return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v}</span>;
+        if (v === undefined || v === null) return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-14 text-slate-600 dark:text-slate-300">{v.toFixed(1)}</span>;
       }
     },
     { 
@@ -434,8 +437,8 @@ const Component = function ServiceDashboard() {
 
   return (
     <div data-testid="service-dashboard" className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden font-sans">
-      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center justify-between shrink-0 sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <div className="flex items-center gap-3">
+      <header className="h-14 px-6 border-b border-slate-100 dark:border-white/4 flex items-center shrink-0 min-w-fit sticky top-0 z-20 bg-linear-to-r from-amber-500/[0.03] to-transparent bg-white dark:bg-background-dark font-sans shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 shadow-sm">
             <Icon name="monitoring" size="sm" weight={300} className="text-amber-500" />
           </div>
@@ -457,7 +460,7 @@ const Component = function ServiceDashboard() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-14">
+        <div className="flex items-center gap-1.5 text-14 ml-auto shrink-0">
           {/* HA Role Filter Segmented Control */}
           <div className="flex items-center bg-slate-100/80 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200/50 dark:border-white/5 mr-2 shrink-0">
             {[
@@ -484,7 +487,7 @@ const Component = function ServiceDashboard() {
             })}
           </div>
 
-          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight hidden lg:block mr-2 shrink-0">
+          <Typography variant="label" className="text-12 text-slate-400 font-mono tracking-tight mr-2 shrink-0 whitespace-nowrap">
             {CM.syncedAt(lastRefreshed.toLocaleTimeString())}
           </Typography>
 
@@ -522,9 +525,11 @@ const Component = function ServiceDashboard() {
       <div className="flex-1 overflow-y-auto p-6 space-y-4 relative">
         <Card testId="service-dashboard-table" noPadding className="overflow-hidden border-slate-200 dark:border-white/10 shadow-sm rounded-xl bg-white dark:bg-white/1">
           <Table
+            maxRows={15}
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}
+            loading={hostsLoading}
             className="border-none text-14"
             hoverable
             sortable={false}

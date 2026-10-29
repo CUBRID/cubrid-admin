@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 
 // The root package.json is the single source of the product version; it's
@@ -55,6 +56,16 @@ export default defineConfig(({ mode, command }) => {
   base: isElectronBuild ? './' : '/',
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+  },
+  resolve: {
+    alias: {
+      // Mirrors tsconfig.base.json's "@api-interfaces" path mapping — this
+      // app is plain JS/JSX (no tsconfig-paths plugin in its build), and
+      // until now only ever consumed that lib's types (erased at compile
+      // time). The param-schema module's shared validation functions are
+      // the first thing here that needs it at runtime.
+      '@api-interfaces': fileURLToPath(new URL('../../libs/api-interfaces/src', import.meta.url)),
+    },
   },
   plugins: [
     react(),

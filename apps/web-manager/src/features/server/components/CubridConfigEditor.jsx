@@ -8,6 +8,7 @@ import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
+import { confSaveProblems } from '../confSaveProblems';
 
 // ── Highlighted Source View ────────────────────────────────────────────────
 function renderHighlighted(content) {
@@ -114,17 +115,26 @@ export default function CubridConfigEditor({ hostUid, confname }) {
     dispatch(setTabDirty({ tabId, isDirty: false }));
   };
 
+  // No client-side check here: the server parses and validates the text
+  // (cubrid.conf and cm.conf alike) and rejects it with per-line reasons.
   const handleSave = async () => {
     setSaving(true);
     try {
       const payload = { confname, confdata: content.split('\n') };
-      await hostApi.setHostConfig(hostUid, payload);
+      const result = await hostApi.setHostConfig(hostUid, payload);
+      const warnings = result?.warnings ?? [];
       originalContentRef.current = content;
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));
-      dispatch(showStatusModal({ type: 'success', title: CM.configSaved, message: CM.configUpdatedMsg(confname) }));
+      dispatch(showStatusModal({ type: 'success', title: CM.configSaved, message: CM.configUpdatedMsg(confname), ...(warnings.length > 0 ? { guidance: warnings } : {}) }));
     } catch (err) {
-      dispatch(showStatusModal({
+      const problems = confSaveProblems(err);
+      dispatch(showStatusModal(problems ? {
+        type: 'error',
+        title: CM.invalidConfigValues,
+        message: CM.invalidConfigValuesMsg,
+        guidance: problems,
+      } : {
         type: 'error',
         title: CM.saveFailed,
         message: CM.saveErrorFallbackMsg,
