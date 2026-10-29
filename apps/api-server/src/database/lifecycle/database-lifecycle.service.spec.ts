@@ -605,6 +605,83 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('runSelectedDatabasesAction', () => {
+    const ok = { __EXEC_TIME: '10 ms', note: 'none', status: 'success' };
+    const tasks = () => cmsClient.postAuthenticated.mock.calls.map(([, body]) => [body.task, (body as { dbname?: string }).dbname]);
+    // start-info follows what the CMS calls did, like a real host.
+    let running: Set<string>;
+    const hostState = (active: string[]) => {
+      running = new Set(active);
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockImplementation(async () => ({
+        dblist: { dbs: ['hadb1', 'hadb2', 'db1', 'db2'].map((dbname) => ({ dbname })) },
+        activelist: { active: [...running].map((dbname) => ({ dbname })) },
+      }));
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
+    };
+    const cmsApplies = (body: { task: string; dbname?: string }) => {
+      if (body.task === 'startdb' || body.task === 'ha_start') running.add(body.dbname as string);
+      if (body.task === 'stopdb' || body.task === 'ha_stop') running.delete(body.dbname as string);
+      return { ...ok, task: body.task };
+    };
+
+    it('starts only the selected databases and skips the ones that do not apply', async () => {
+      hostState(['db2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'start', ['hadb1', 'db1', 'db2', 'nodb']);
+
+      expect(tasks()).toEqual([['ha_start', 'hadb1'], ['startdb', 'db1']]);
+      expect(result.succeeded).toEqual(['hadb1', 'db1']);
+      expect(result.skipped).toEqual([
+        { dbname: 'db2', reason: 'Already running' },
+        { dbname: 'nodb', reason: 'Not a database on this host' },
+      ]);
+      expect(result.failed).toEqual([]);
+    });
+
+    it('stops only running selected databases, never an unselected HA database', async () => {
+      hostState(['hadb1', 'hadb2', 'db1']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['hadb1', 'db2']);
+
+      expect(tasks()).toEqual([['ha_stop', 'hadb1']]);
+      expect(result.succeeded).toEqual(['hadb1']);
+      expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not running' }]);
+    });
+
+    it('restarts by stopping then starting, and does not start one whose stop failed', async () => {
+      hostState(['hadb1', 'db1', 'db2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        if (body.task === 'stopdb' && (body as { dbname?: string }).dbname === 'db2') throw new Error('stop failed');
+        return cmsApplies(body as { task: string; dbname?: string });
+      });
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'restart', ['hadb1', 'db1', 'db2']);
+
+      expect(tasks().map(([task, db]) => `${task}:${db}`)).toEqual(
+        expect.arrayContaining(['ha_stop:hadb1', 'stopdb:db1', 'stopdb:db2', 'ha_start:hadb1', 'startdb:db1'])
+      );
+      expect(tasks()).not.toContainEqual(['startdb', 'db2']);
+      expect(result.succeeded).toEqual(['hadb1', 'db1']);
+      expect(result.failed).toEqual([{ dbname: 'db2', error: expect.any(String), phase: 'stop' }]);
+    });
+
+    it('fails a database that is not logged in, without touching it', async () => {
+      hostState([]);
+      databaseUserService.ensureDbLogin.mockImplementation(async (_u, _h, dbname) => {
+        if (dbname === 'hadb2') throw new Error('no login');
+        return { reauthenticated: false };
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'start', ['hadb1', 'hadb2']);
+
+      expect(tasks()).toEqual([['ha_start', 'hadb1']]);
+      expect(result.failed).toEqual([{ dbname: 'hadb2', error: 'no login' }]);
+    });
+  });
+
   describe('stopWholeService', () => {
     it('still stops databases and reports the broker failure when stopping brokers fails', async () => {
       const mockBrokerService = (service as any).brokerService;

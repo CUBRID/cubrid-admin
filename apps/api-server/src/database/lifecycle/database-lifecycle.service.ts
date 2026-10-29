@@ -66,9 +66,27 @@ const NON_HA_BULK_ACTION_CONCURRENCY = 4;
 /** Outcome of startAllDatabases/stopAllDatabases, per database. */
 export type BulkDatabaseActionResult = {
   succeeded: string[];
-  failed: Array<{ dbname: string; error: string }>;
+  /** `phase` is set only by a restart, for the step that failed. */
+  failed: Array<{ dbname: string; error: string; phase?: 'stop' | 'start' }>;
   skipped: Array<{ dbname: string; reason: string }>;
 };
+
+export type SelectedDatabasesAction = 'start' | 'stop' | 'restart';
+
+/** Names start-info lists as running; throws if the list is missing. */
+function activeDbnamesOf(info: { activelist?: { active?: unknown } } | null | undefined): Set<string> {
+  const active = info?.activelist?.active;
+  if (!Array.isArray(active)) {
+    throw new Error('Could not read which databases are running');
+  }
+  return new Set(active.map((a: { dbname: string } | string) => (typeof a === 'string' ? a : a?.dbname)));
+}
+
+export const BULK_SKIP_REASON = {
+  notFound: 'Not a database on this host',
+  alreadyRunning: 'Already running',
+  notRunning: 'Not running',
+} as const;
 
 /**
  * Service for managing database lifecycle operations.
@@ -381,14 +399,83 @@ export class DatabaseLifecycleService extends BaseService {
     });
   }
 
+  /**
+   * Start, stop or restart exactly the selected databases (multi-select),
+   * unlike startAllDatabases/stopAllDatabases, which take every HA database
+   * on the host. Databases the action doesn't apply to (unknown, already
+   * running for start, not running for stop/restart) are reported skipped.
+   * Each database goes through the same login gate as a single action; HA
+   * ones run one at a time with `ha_start|ha_stop <db>`.
+   *
+   * A restart stops the targets, then starts the ones that stopped; a
+   * database whose stop failed is not started, and failures carry the phase.
+   */
+  async runSelectedDatabasesAction(
+    userId: string,
+    hostUid: string,
+    action: SelectedDatabasesAction,
+    dbnames: string[]
+  ): Promise<BulkDatabaseActionResult> {
+    await this.assertNoActiveJob(userId, hostUid);
+
+    const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
+    const info = await this.databaseInfoService.startInfo(userId, hostUid);
+    const known = new Set((info?.dblist?.dbs || []).map((db) => db.dbname));
+    const running = activeDbnamesOf(info);
+    const targets: string[] = [];
+    for (const dbname of new Set(dbnames)) {
+      if (!known.has(dbname)) {
+        out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notFound });
+      } else if (action === 'start' && running.has(dbname)) {
+        out.skipped.push({ dbname, reason: BULK_SKIP_REASON.alreadyRunning });
+      } else if (action !== 'start' && !running.has(dbname)) {
+        out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notRunning });
+      } else {
+        targets.push(dbname);
+      }
+    }
+    if (targets.length === 0) return out;
+
+    const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
+    const runPhase = async (phase: 'start' | 'stop', dbs: string[]): Promise<BulkDatabaseActionResult> => {
+      const phaseOut: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
+      await this.runHaBulkAction(userId, hostUid, dbs.filter((d) => haDbNames.has(d)), phase, phaseOut);
+      const nonHa = dbs.filter((d) => !haDbNames.has(d));
+      const results = await mapWithConcurrency(nonHa, NON_HA_BULK_ACTION_CONCURRENCY, (dbname) =>
+        phase === 'start'
+          ? this.startNonHaDatabase(userId, hostUid, dbname)
+          : this.stopNonHaDatabase(userId, hostUid, dbname)
+      );
+      results.forEach((result, index) => {
+        const dbname = nonHa[index];
+        if (result.status === 'fulfilled') {
+          phaseOut.succeeded.push(dbname);
+        } else {
+          const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          phaseOut.failed.push({ dbname, error });
+        }
+      });
+      return phaseOut;
+    };
+
+    if (action !== 'restart') {
+      const result = await runPhase(action, targets);
+      out.succeeded.push(...result.succeeded);
+      out.failed.push(...result.failed);
+      return out;
+    }
+
+    const stopped = await runPhase('stop', targets);
+    out.failed.push(...stopped.failed.map((f) => ({ ...f, phase: 'stop' as const })));
+    const started = await runPhase('start', stopped.succeeded);
+    out.succeeded.push(...started.succeeded);
+    out.failed.push(...started.failed.map((f) => ({ ...f, phase: 'start' as const })));
+    return out;
+  }
+
   /** Names of the databases start-info lists as running; throws if it can't be read. */
   private async readActiveDbnames(userId: string, hostUid: string): Promise<Set<string>> {
-    const info = await this.databaseInfoService.startInfo(userId, hostUid);
-    const active = info?.activelist?.active;
-    if (!Array.isArray(active)) {
-      throw new Error('Could not read which databases are running');
-    }
-    return new Set(active.map((a: { dbname: string } | string) => (typeof a === 'string' ? a : a?.dbname)));
+    return activeDbnamesOf(await this.databaseInfoService.startInfo(userId, hostUid));
   }
 
   /**

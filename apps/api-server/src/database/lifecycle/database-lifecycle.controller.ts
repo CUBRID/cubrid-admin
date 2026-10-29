@@ -5,7 +5,13 @@ import {
   GetCreatedbInfoClientResponse,
   StartInfoClientResponse,
 } from '@api-interfaces';
-import { SaveDatabaseProfileDto, DeleteDatabaseDto, CreateDatabaseWithConfigDto, StartStopAllDatabasesDto } from '@type/index';
+import {
+  SaveDatabaseProfileDto,
+  DeleteDatabaseDto,
+  CreateDatabaseWithConfigDto,
+  StartStopAllDatabasesDto,
+  SelectedDatabasesActionDto,
+} from '@type/index';
 import { BulkDatabaseActionResult, DatabaseLifecycleService } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
@@ -147,6 +153,31 @@ export class DatabaseLifecycleController {
     this.logger.log(`Restarting database: ${dbname} on host: ${hostUid}`);
     const result = await this.lifecycleService.restartDatabase(userId, hostUid, dbname);
     return result;
+  }
+
+  /**
+   * Start, stop or restart exactly the databases in the body (multi-select).
+   * Unlike start-all/stop-all, HA databases outside the list are untouched.
+   *
+   * @route POST /:hostUid/database/bulk
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @param body Action and database names
+   * @returns Per-database succeeded/failed/skipped outcome
+   * @example
+   * // POST /host-uid/database/bulk
+   * // Body: { "action": "restart", "dbnames": ["demodb", "testdb"] }
+   */
+  @Post('bulk')
+  async runSelectedDatabasesAction(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: SelectedDatabasesActionDto
+  ): Promise<BulkDatabaseActionResult> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Bulk ${body.action} of databases (${body.dbnames.join(', ')}) on host: ${hostUid}`);
+    return await this.lifecycleService.runSelectedDatabasesAction(userId, hostUid, body.action, body.dbnames);
   }
 
   /**
