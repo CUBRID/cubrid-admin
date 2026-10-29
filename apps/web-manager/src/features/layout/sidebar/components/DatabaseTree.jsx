@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedDatabase,
   setSelectedDatabaseSubItem,
@@ -16,6 +16,7 @@ import { openTab } from '../../layoutSlice';
 import { dbKey } from '../../../database/dbKey';
 import { getHaDbServerModes, HA_DB_STATE_CONFIG } from '../../../host/haPeerUtils';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
+import { useTreeMultiSelect } from '../../../../components/domain/tree/useTreeMultiSelect';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Typography } from '../../../../components/ds/foundation/Typography';
@@ -143,41 +144,11 @@ export default function DatabaseTree({
   // already-logged-in database. It never attempts a login — that's a separate,
   // deliberate action (double-click) so browsing the tree structure never
   // silently triggers a connection attempt.
-  // Ctrl/Cmd toggles a database in the multi-selection and Shift selects a
-  // range, the same rules as the host tree (HostGroupTree.handleMultiSelect).
-  // Returns true when the click was a multi-selection click, which then
-  // neither selects the database nor toggles its node.
-  const lastClickedDbRef = useRef(null);
-  const handleMultiSelect = (e, dbname) => {
-    if (!onSelectedDbNamesChange) return false;
-    const order = databases.map((db) => db.dbname);
-    if (e?.shiftKey && lastClickedDbRef.current) {
-      const startIdx = order.indexOf(lastClickedDbRef.current);
-      const endIdx = order.indexOf(dbname);
-      if (startIdx !== -1 && endIdx !== -1) {
-        const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
-        onSelectedDbNamesChange(new Set(order.slice(from, to + 1)));
-        return true;
-      }
-    }
-    if (e?.metaKey || e?.ctrlKey) {
-      onSelectedDbNamesChange((prev) => {
-        const next = new Set(prev);
-        if (next.has(dbname)) next.delete(dbname);
-        else next.add(dbname);
-        return next;
-      });
-      lastClickedDbRef.current = dbname;
-      return true;
-    }
-    lastClickedDbRef.current = dbname;
-    // A plain click on a database outside the selection ends it; one inside
-    // keeps it, so a right-click right after still acts on all of them.
-    if (selectedDbNames?.size > 0 && !selectedDbNames.has(dbname)) {
-      onSelectedDbNamesChange(new Set());
-    }
-    return false;
-  };
+  // Ctrl/Shift multi-selection (useTreeMultiSelect); a multi-selection
+  // click neither selects the database nor toggles its node.
+  const handleMultiSelect = useTreeMultiSelect(
+    databases.map((db) => db.dbname), selectedDbNames, onSelectedDbNamesChange
+  );
 
   const handleDbToggle = useCallback((db, isActive, isLoggedIn) => {
     if (!isActive || !isLoggedIn) return;

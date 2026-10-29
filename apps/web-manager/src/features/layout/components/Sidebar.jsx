@@ -24,6 +24,7 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
+import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
 import {
   MULTI_DB_ACTIONS,
   MULTI_DB_ACTION_ICONS,
@@ -132,6 +133,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // Ctrl/Shift multi-selection in the database tree, and its context menu.
   const [selectedDbNames, setSelectedDbNames] = useState(() => new Set());
   const [dbMultiContextMenu, setDbMultiContextMenu] = useState(null);
+  const [selectedBrokerNames, setSelectedBrokerNames] = useState(() => new Set());
+  const [brokerMultiContextMenu, setBrokerMultiContextMenu] = useState(null);
   const [brokerContextMenu, setBrokerContextMenu] = useState(null);
   const [usersContextMenu, setUsersContextMenu] = useState(null);
   const [userContextMenu, setUserContextMenu] = useState(null);
@@ -190,7 +193,43 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   useEffect(() => {
     setSelectedDbNames(new Set());
     setDbMultiContextMenu(null);
+    setSelectedBrokerNames(new Set());
+    setBrokerMultiContextMenu(null);
   }, [selectedHostUid]);
+
+  // One action on several selected brokers, one broker at a time.
+  const handleMultiBrokerAction = (action, brokers) => {
+    const hostUid = selectedHostUid;
+    const { targets, skipped: notApplicable } = splitBrokersByAction(action, brokers);
+    if (targets.length === 0) return;
+    const label = CM.multiDbActions[action];
+    requestActionConfirm({
+      title: CM.multiBrokerConfirmTitle(label),
+      description: CM.multiDbConfirmDesc(label, targets.map((broker) => broker.name)),
+      confirmLabel: label,
+      variant: action === 'start' ? 'primary' : 'danger',
+      run: async () => {
+        setLoadingText(CM.processing);
+        startAction();
+        try {
+          const result = await runMultiBrokerAction(dispatch, { hostUid, action, names: targets.map((broker) => broker.name) });
+          resetAction();
+          const report = bulkResultStatusModal(CM, {
+            title: label,
+            failedMsg: CM.multiBrokerFailedMsg,
+            failed: result.failed,
+            skipped: notApplicable.map((broker) => ({ dbname: broker.name, reason: CM.multiBrokerNotApplicableReason })),
+            showPhase: action === 'restart',
+            nameLabel: CM.broker,
+            skippedMsg: CM.someBrokersSkippedMsg,
+          });
+          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiBrokerDoneMsg(result.succeeded.length) }));
+        } catch (err) {
+          endError(err);
+        }
+      },
+    });
+  };
 
   // One action on several selected databases (selection modal or a tree
   // selection): confirm with the HA warning, run, then refresh and report.
@@ -270,6 +309,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setGroupContextMenu(null);
     setDbContextMenu(null);
     setDbMultiContextMenu(null);
+    setBrokerMultiContextMenu(null);
     setBrokerContextMenu(null);
     setUsersContextMenu(null);
     setUserContextMenu(null);
@@ -460,6 +500,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     e.preventDefault();
     e.stopPropagation();
     closeAllContextMenus();
+    if (selectedBrokerNames.size > 1 && selectedBrokerNames.has(brokerName)) {
+      setBrokerMultiContextMenu({ mouseX: e.clientX, mouseY: e.clientY });
+      return;
+    }
     setBrokerContextMenu({ mouseX: e.clientX, mouseY: e.clientY, broker: brokerName, state });
   };
 
@@ -992,6 +1036,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                         hostUid={selectedHostUid}
                         onContextMenu={handleBrokerContextMenu}
                         onSqlLogContextMenu={handleSqlLogContextMenu}
+                        selectedBrokerNames={selectedBrokerNames}
+                        onSelectedBrokerNamesChange={setSelectedBrokerNames}
                       />
                     </div>
                     <div className={activeTab !== 'log' ? 'hidden' : ''}>
@@ -1356,6 +1402,22 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               }}
             />
           )}
+          {dbContextMenu.isActive && (
+            <MenuItem
+              icon="restart_alt"
+              label={CM.restartDatabase}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => {
+                const dbname = dbContextMenu.db;
+                setDbContextMenu(null);
+                const row = databaseSelectionRows(
+                  { database: { databasesByHost, activeDatabasesByHost, haDbNamesByHost, loggedInDatabases } },
+                  selectedHostUid
+                ).find((r) => r.dbname === dbname);
+                if (row) handleMultiDatabaseAction('restart', [row]);
+              }}
+            />
+          )}
           {!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) && (
             <MenuItem
               icon="login"
@@ -1632,6 +1694,38 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 setSelectDatabasesModal({ initialSelected: rows.map((row) => row.dbname) });
               }}
             />
+          </ContextMenuWrapper>
+        );
+      })()}
+
+      {brokerMultiContextMenu && (() => {
+        const selectedBrokers = (brokersByHost[selectedHostUid] || [])
+          .filter((broker) => selectedBrokerNames.has(broker.name))
+          .map((broker) => ({ name: broker.name, state: broker.state }));
+        const close = () => setBrokerMultiContextMenu(null);
+        return (
+          <ContextMenuWrapper x={brokerMultiContextMenu.mouseX} y={brokerMultiContextMenu.mouseY} onClose={close}>
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between gap-2 min-w-0">
+              <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">
+                {CM.multiDbSelectedCount(selectedBrokers.length)}
+              </Typography>
+              <Icon name="hub" size="xs" className="opacity-30" weight={300} />
+            </div>
+            {MULTI_BROKER_ACTIONS.map((action) => {
+              const { targets } = splitBrokersByAction(action, selectedBrokers);
+              return (
+                <MenuItem
+                  key={action}
+                  icon={MULTI_DB_ACTION_ICONS[action]}
+                  label={`${CM.multiDbActions[action]} (${targets.length})`}
+                  disabled={targets.length === 0}
+                  onClick={() => {
+                    close();
+                    handleMultiBrokerAction(action, selectedBrokers);
+                  }}
+                />
+              );
+            })}
           </ContextMenuWrapper>
         );
       })()}
@@ -1953,7 +2047,19 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 });
               }}
             />
-          ) : (
+          ) : null}
+          {brokerContextMenu.state === 'ON' && (
+            <MenuItem
+              icon="restart_alt"
+              label={CM.restartBroker}
+              onClick={() => {
+                const bName = brokerContextMenu.broker;
+                setBrokerContextMenu(null);
+                handleMultiBrokerAction('restart', [{ name: bName, state: 'ON' }]);
+              }}
+            />
+          )}
+          {brokerContextMenu.state !== 'ON' && (
             <MenuItem
               icon="play_arrow"
               label={CM.startBroker}

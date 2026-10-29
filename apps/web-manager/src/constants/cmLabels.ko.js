@@ -2021,6 +2021,13 @@ export const CM_KO = {
   // 다중 선택 DB 작업
   selectDatabasesMenu: '데이터베이스 선택...',
   loginAllDatabases: '모든 데이터베이스 로그인',
+  restartDatabase: '데이터베이스 재시작',
+  restartBroker: '브로커 재시작',
+  multiBrokerConfirmTitle: (action) => `선택한 브로커 ${action}`,
+  multiBrokerFailedMsg: (count) => `${count}개의 브로커에서 실패했습니다.`,
+  multiBrokerDoneMsg: (count) => `${count}개의 브로커를 처리했습니다.`,
+  someBrokersSkippedMsg: (count) => `${count}개의 브로커를 건너뛰었습니다.`,
+  multiBrokerNotApplicableReason: '이 브로커에는 해당하지 않음',
   logoutAllDatabases: '모든 데이터베이스 로그아웃',
   selectDatabasesTitle: '데이터베이스 선택',
   multiDbActions: {

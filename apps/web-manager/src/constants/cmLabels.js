@@ -2063,6 +2063,13 @@ export const CM = {
   // Multi-select database actions
   selectDatabasesMenu: 'Select Databases...',
   loginAllDatabases: 'Log In to All Databases',
+  restartDatabase: 'Restart Database',
+  restartBroker: 'Restart Broker',
+  multiBrokerConfirmTitle: (action) => `${action} Selected Brokers`,
+  multiBrokerFailedMsg: (count) => `${count} broker(s) failed.`,
+  multiBrokerDoneMsg: (count) => `${count} broker(s) done.`,
+  someBrokersSkippedMsg: (count) => `${count} broker(s) skipped.`,
+  multiBrokerNotApplicableReason: 'Not applicable to this broker',
   logoutAllDatabases: 'Log Out of All Databases',
   selectDatabasesTitle: 'Select Databases',
   multiDbActions: {

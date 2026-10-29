@@ -2,12 +2,13 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
+import { useTreeMultiSelect } from '../../../../components/domain/tree/useTreeMultiSelect';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { useCM } from '../../../../constants/useCM';
 
-export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu }) {
+export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu, selectedBrokerNames, onSelectedBrokerNamesChange }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { navigatorBrokersByHost, loadingByHost, logsByBroker, selectedBroker, selectedBrokerSubItem, logsLoading } = useSelector((state) => state.broker, shallowEqual);
@@ -23,6 +24,10 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
   // fetchBrokerList.fulfilled.
   const brokers = navigatorBrokersByHost[hostUid] || [];
   const loading = loadingByHost[hostUid] || false;
+  // Ctrl/Shift multi-selection; such a click neither selects nor toggles.
+  const handleMultiSelect = useTreeMultiSelect(
+    brokers.map((broker) => broker.name), selectedBrokerNames, onSelectedBrokerNamesChange
+  );
 
   if (loading && (!brokers || brokers.length === 0)) {
     return (
@@ -70,8 +75,13 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
             level={1}
             status={broker.state === 'ON' ? 'on' : 'off'}
             isActive={isBrokerSelected && !selectedBrokerSubItem}
+            isMultiSelected={selectedBrokerNames?.has(broker.name) ?? false}
             hasChildren={true}
-            onSelect={() => {
+            onSelect={(e) => {
+              if (handleMultiSelect(e, broker.name)) {
+                e.preventDefault();
+                return;
+              }
               dispatch(setSelectedBroker(broker.name));
               dispatch(setSelectedBrokerSubItem(null));
             }}

@@ -69,7 +69,10 @@ export function groupBulkFailures(failed) {
 // short headline plus tables — failures (grouped per database, with the
 // stop/start phase for a restart) and skipped HA databases kept apart.
 // null when every database succeeded.
-export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipped = [], showPhase = false }) {
+export function bulkResultStatusModal(CM, {
+  title, failedMsg, failed = [], skipped = [], showPhase = false,
+  nameLabel = CM.database, skippedMsg = CM.someDatabasesSkippedMsg,
+}) {
   const grouped = groupBulkFailures(failed || []);
   const skippedList = skipped || [];
   if (grouped.length === 0 && skippedList.length === 0) return null;
@@ -78,7 +81,7 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
   if (grouped.length > 0) {
     tables.push({
       title: CM.failureTableFailedTitle,
-      nameLabel: CM.database,
+      nameLabel,
       showPhase,
       variant: 'failed',
       testId: 'bulk-failed-table',
@@ -91,7 +94,7 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
   if (skippedList.length > 0) {
     tables.push({
       title: CM.failureTableSkippedTitle,
-      nameLabel: CM.database,
+      nameLabel,
       variant: 'skipped',
       testId: 'bulk-skipped-table',
       rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: sk.reason }] })),
@@ -102,7 +105,7 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
     title,
     message: [
       grouped.length > 0 ? failedMsg(grouped.length) : '',
-      skippedList.length > 0 ? CM.someDatabasesSkippedMsg(skippedList.length) : '',
+      skippedList.length > 0 ? skippedMsg(skippedList.length) : '',
     ].filter(Boolean).join(' '),
     tables,
   };
