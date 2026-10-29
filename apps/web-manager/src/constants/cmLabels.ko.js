@@ -1353,6 +1353,7 @@ export const CM_KO = {
   errControlFile: '오류에 대한 제어 파일이 유효하지 않습니다.',
   errClassFile: '로드하지 않을 테이블을 기록한 파일이 유효하지 않습니다.',
   errNoSelectedPath: '리스트에서 데이터베이스의 언로드 파일을 선택해 주십시오.',
+  loadCountRange: (min, max) => `between ${min.toLocaleString()} and ${max.toLocaleString()}`,
   errNumOfInstances: '인스턴스의 대략적인 개수가 유효하지 않습니다. 이 값은 반드시 0보다 커야 합니다.',
 
 
