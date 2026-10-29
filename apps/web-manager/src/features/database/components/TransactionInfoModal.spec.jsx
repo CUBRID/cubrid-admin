@@ -172,6 +172,30 @@ describe('TransactionInfoModal', () => {
     expect(q('transaction-info-pages')).toBeNull();
   });
 
+  it('keeps the clamped page when the transactions grow back', async () => {
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
+    await render(makeStore());
+    await act(async () => pageButton('3').click());
+
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 25)));
+    await act(async () => q('transaction-info-refresh-btn').click());
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
+    await act(async () => q('transaction-info-refresh-btn').click());
+
+    expect(shownPrograms()[0]).toBe('prog21');
+  });
+
+  it('drops the selection when the page changes, so Kill never acts on a row out of view', async () => {
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
+    await render(makeStore());
+    const firstRow = document.querySelector('[data-testid="transaction-info-modal"] tbody tr');
+    await act(async () => firstRow.click());
+    expect(q('transaction-info-kill-btn').disabled).toBe(false);
+
+    await act(async () => pageButton(CM.nextPage).click());
+    expect(q('transaction-info-kill-btn').disabled).toBe(true);
+  });
+
   it('sorts every transaction by index before paging, not just the page in view', async () => {
     databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
     await render(makeStore());

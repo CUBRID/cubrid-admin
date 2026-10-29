@@ -44,6 +44,10 @@ export default function TransactionInfoModal() {
     return [...transactions].sort((a, b) => sign * (Number(parseTranIndex(a.tranindex)) - Number(parseTranIndex(b.tranindex))));
   }, [transactions, sortDirection]);
   const pager = useClientPagination(sortedTransactions, PAGE_SIZE, `${isTransactionInfoModalOpen}:${selectedHostUid}:${selectedDatabase}`);
+  // A selection on another page can't be seen, so Kill must not act on it.
+  useEffect(() => {
+    setSelectedTranIndex(null);
+  }, [pager.page]);
 
   // killtransaction/gettransactioninfo (CUBRID 11+) don't take dbuser/dbpasswd —
   // they run under the already-authenticated CMS session, so there's nothing

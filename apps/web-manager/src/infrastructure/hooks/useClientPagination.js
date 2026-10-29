@@ -13,6 +13,10 @@ export const useClientPagination = (rows, pageSize, resetKey) => {
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const current = Math.min(page, totalPages);
+  // Keep the clamp: otherwise rows growing back would jump to the old page.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
   const start = (current - 1) * pageSize;
   return {
     page: current,
