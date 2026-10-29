@@ -136,4 +136,51 @@ describe('TransactionInfoModal', () => {
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(q('transaction-info-modal').textContent).toContain(CM.loadingLabel);
   });
+
+  const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const shownPrograms = () => Array.from(document.querySelectorAll('[data-testid="transaction-info-modal"] tbody tr'))
+    .map((tr) => tr.textContent.match(/prog\d+/)?.[0]);
+  const pageButton = (label) => Array.from(q('transaction-info-pages').querySelectorAll('button'))
+    .find((b) => b.textContent === label || b.getAttribute('aria-label') === label);
+
+  it('shows 20 transactions a page and moves between pages', async () => {
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
+    await render(makeStore());
+
+    expect(shownPrograms()).toEqual(range(1, 20).map((i) => `prog${i}`));
+    expect(q('transaction-info-pages').textContent).toContain('Showing 1–20 of 45');
+
+    await act(async () => pageButton('3').click());
+    expect(shownPrograms()).toEqual(range(41, 45).map((i) => `prog${i}`));
+
+    await act(async () => pageButton(CM.previousPage).click());
+    expect(shownPrograms()[0]).toBe('prog21');
+  });
+
+  it('stays on the last page that still exists when a refresh returns fewer transactions', async () => {
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
+    await render(makeStore());
+    await act(async () => pageButton('3').click());
+
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 25)));
+    await act(async () => q('transaction-info-refresh-btn').click());
+    expect(shownPrograms()).toEqual(range(21, 25).map((i) => `prog${i}`));
+
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(1, 2));
+    await act(async () => q('transaction-info-refresh-btn').click());
+    expect(shownPrograms()).toEqual(['prog1', 'prog2']);
+    expect(q('transaction-info-pages')).toBeNull();
+  });
+
+  it('sorts every transaction by index before paging, not just the page in view', async () => {
+    databaseApi.getTransactionInfo.mockResolvedValueOnce(txResponse(...range(1, 45)));
+    await render(makeStore());
+    const header = () => Array.from(document.querySelectorAll('[data-testid="transaction-info-modal"] th'))
+      .find((th) => th.textContent.includes(CM.tranIndex));
+
+    await act(async () => header().click());
+    await act(async () => header().click());
+    expect(header().getAttribute('aria-sort')).toBe('descending');
+    expect(shownPrograms()).toEqual(range(26, 45).reverse().map((i) => `prog${i}`));
+  });
 });

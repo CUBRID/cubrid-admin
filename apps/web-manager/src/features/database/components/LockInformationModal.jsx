@@ -11,11 +11,12 @@ import { MetricCard } from '../../../components/ds/foundation/MetricCard';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { ProgressBar } from '../../../components/ds/foundation/ProgressBar';
 import { Table } from '../../../components/ds/layout/Table';
-import { VirtualTable } from '../../../components/ds/layout/VirtualTable';
+import { TablePagination } from '../../../components/ds/feedback/Pagination';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLoadingOverlay';
 import { useCM } from '../../../constants/useCM';
+import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
 
 // The engine prints "Timeout_period : <value>" and CMS keeps only the second
 // word, so the timeout always arrives as ":". Nothing better to show then.
@@ -27,6 +28,8 @@ function lockTableSize(sizelock) {
   if (!match) return { value: sizelock || '-', unit: '' };
   return { value: match[1], unit: { K: 'KiB', M: 'MiB' }[match[2]] ?? 'B' };
 }
+
+const PAGE_SIZE = 20;
 
 const EMPTY_OVERVIEW = { esc: '', dinterval: '', numlocked: '', numallocated: '', sizelock: '', maxnumlock: '', transactions: [] };
 
@@ -43,8 +46,8 @@ export default function LockInformationModal() {
   const [activeTab, setActiveTab] = useState('sessions');
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
   const [summaryRows, setSummaryRows] = useState([]);
-  // Per-object rows are fetched only when that view is opened: with a bulk
-  // insert they run to tens of thousands.
+  // Per-object rows are fetched only when that view is opened: with many row
+  // locks they run to tens of thousands.
   const [lockView, setLockView] = useState('summary');
   const [objects, setObjects] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -113,6 +116,10 @@ export default function LockInformationModal() {
     summaryRows.forEach((row) => counts.set(row.index, (counts.get(row.index) ?? 0) + row.count));
     return overview.transactions.map((tran) => ({ ...tran, locks: counts.get(tran.index) ?? 0 }));
   }, [overview, summaryRows]);
+  const pagerKey = `${isLockInfoModalOpen}:${selectedHostUid}:${selectedDatabase}`;
+  const sessionPager = useClientPagination(transactions, PAGE_SIZE, pagerKey);
+  const summaryPager = useClientPagination(summaryRows, PAGE_SIZE, pagerKey);
+  const objectPager = useClientPagination(objects ?? [], PAGE_SIZE, pagerKey);
   const sessionColumns = useMemo(() => [
     { accessor: 'index', header: CM.lockIndex, cellClassName: 'font-mono' },
     { accessor: 'program', header: CM.pname, render: (value) => value || '-' },
@@ -201,8 +208,11 @@ export default function LockInformationModal() {
           )}
           {!showError && hasLoaded && activeTab === 'sessions' && (
             <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
-              <Table columns={sessionColumns} data={transactions} emptyMessage={CM.noActiveTransactions} stickyHeader selectable showEmptyStateAsRow />
+              <Table columns={sessionColumns} data={sessionPager.pageRows} emptyMessage={CM.noActiveTransactions} stickyHeader selectable showEmptyStateAsRow />
             </div>
+          )}
+          {!showError && hasLoaded && activeTab === 'sessions' && (
+            <TablePagination pager={sessionPager} testId="lock-information-sessions-pages" className="mt-3" />
           )}
 
           {!showError && hasLoaded && activeTab === 'objects' && (
@@ -226,13 +236,20 @@ export default function LockInformationModal() {
               </div>
               <div className="rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden overflow-x-auto">
                 {lockView === 'summary' ? (
-                  <Table columns={summaryColumns} data={summaryRows} emptyMessage={CM.noHeldObjectLocks} stickyHeader selectable showEmptyStateAsRow maxRows={15} />
+                  <Table columns={summaryColumns} data={summaryPager.pageRows} emptyMessage={CM.noHeldObjectLocks} stickyHeader selectable showEmptyStateAsRow />
                 ) : objects ? (
-                  <VirtualTable columns={objectColumns} data={objects} emptyMessage={CM.noHeldObjectLocks} testId="lock-information-objects" />
+                  <div data-testid="lock-information-objects">
+                    <Table columns={objectColumns} data={objectPager.pageRows} emptyMessage={CM.noHeldObjectLocks} stickyHeader selectable showEmptyStateAsRow />
+                  </div>
                 ) : (
                   <div className="min-h-[200px]" />
                 )}
               </div>
+              {lockView === 'summary' ? (
+                <TablePagination pager={summaryPager} testId="lock-information-summary-pages" />
+              ) : (
+                <TablePagination pager={objectPager} testId="lock-information-objects-pages" />
+              )}
             </div>
           )}
 

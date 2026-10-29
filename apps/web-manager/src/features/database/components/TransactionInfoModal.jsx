@@ -1,15 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeTransactionInfoModal, openKillTransactionModal } from '../databaseSlice';
 import { databaseApi } from '../databaseApi';
-import { extractTransactionList, isHaReplicationProcess } from '../transactionUtils';
+import { extractTransactionList, isHaReplicationProcess, parseTranIndex } from '../transactionUtils';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Table } from '../../../components/ds/layout/Table';
 import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLoadingOverlay';
+import { TablePagination } from '../../../components/ds/feedback/Pagination';
 import { useCM } from '../../../constants/useCM';
+import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
+
+const PAGE_SIZE = 20;
 
 export default function TransactionInfoModal() {
   const CM = useCM();
@@ -31,6 +35,15 @@ export default function TransactionInfoModal() {
   const [selectedTranIndex, setSelectedTranIndex] = useState(null);
   // Drops a response that lands after the modal was closed or retargeted.
   const requestIdRef = useRef(0);
+  // Sorted here rather than by Table: Table only sees the current page. The
+  // index arrives as "6(ACTIVE)", so compare its number, not the string.
+  const [sortDirection, setSortDirection] = useState(null);
+  const sortedTransactions = useMemo(() => {
+    if (!sortDirection) return transactions;
+    const sign = sortDirection === 'asc' ? 1 : -1;
+    return [...transactions].sort((a, b) => sign * (Number(parseTranIndex(a.tranindex)) - Number(parseTranIndex(b.tranindex))));
+  }, [transactions, sortDirection]);
+  const pager = useClientPagination(sortedTransactions, PAGE_SIZE, `${isTransactionInfoModalOpen}:${selectedHostUid}:${selectedDatabase}`);
 
   // killtransaction/gettransactioninfo (CUBRID 11+) don't take dbuser/dbpasswd —
   // they run under the already-authenticated CMS session, so there's nothing
@@ -100,7 +113,14 @@ export default function TransactionInfoModal() {
   };
 
   const columns = [
-    { accessor: 'tranindex', header: CM.tranIndex, sortable: true, cellClassName: 'font-mono' },
+    {
+      accessor: 'tranindex',
+      header: CM.tranIndex,
+      sortable: true,
+      onHeaderClick: () => setSortDirection((dir) => (dir === 'asc' ? 'desc' : 'asc')),
+      sortDirection,
+      cellClassName: 'font-mono',
+    },
     { accessor: '@user', header: CM.userNameCol, render: (value) => value || '-' },
     { accessor: 'host', header: CM.host, render: (value) => value || '-', cellClassName: 'font-mono' },
     { accessor: 'pid', header: CM.processId, render: (value) => value || '-', cellClassName: 'font-mono' },
@@ -178,7 +198,7 @@ export default function TransactionInfoModal() {
             {hasLoaded && (
               <Table
                 columns={columns}
-                data={transactions}
+                data={pager.pageRows}
                 emptyMessage={CM.activeTransactionsOf}
                 onRowClick={(tran) => setSelectedTranIndex(tran.tranindex)}
                 isRowSelected={(tran) => String(selectedTranIndex) === String(tran.tranindex)}
@@ -189,6 +209,9 @@ export default function TransactionInfoModal() {
               />
             )}
           </div>
+        )}
+        {!showError && hasLoaded && (
+          <TablePagination pager={pager} testId="transaction-info-pages" className="mt-3 shrink-0" />
         )}
       </div>
     </Modal>

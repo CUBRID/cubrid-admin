@@ -163,4 +163,52 @@ describe('LockInformationModal', () => {
     expect(databaseApi.getLockInfo).toHaveBeenCalledWith('host1', 'demodb', { objects: true });
     expect(q('lock-information-objects')).toBeTruthy();
   });
+
+  const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
+  const rowsIn = (testId) => Array.from(q(testId).querySelectorAll('tbody tr'));
+  const clickPage = (testId, label) => act(async () => Array.from(q(testId).querySelectorAll('button'))
+    .find((b) => b.textContent === label || b.getAttribute('aria-label') === label).click());
+
+  it('pages the lock summary and the per-object rows 20 at a time', async () => {
+    const summary = lockResponse('csql');
+    summary.summary.rows = range(30).map((i) => ({
+      index: '1', user: 'DBA', host: 'app1', pid: '111', program: 'csql', obj: `Class = dba.t${i}`, mode: 'IX_LOCK', count: 1,
+    }));
+    databaseApi.getLockInfo.mockResolvedValueOnce(summary);
+    await render(makeStore());
+    await act(async () => q('lock-information-tab-objects').click());
+
+    const frame = q('lock-information-modal');
+    expect(frame.textContent).toContain('dba.t20');
+    expect(frame.textContent).not.toContain('dba.t21');
+    expect(q('lock-information-summary-pages').textContent).toContain('Showing 1–20 of 30');
+    await clickPage('lock-information-summary-pages', CM.nextPage);
+    expect(frame.textContent).toContain('dba.t30');
+    expect(frame.textContent).not.toContain('dba.t20');
+
+    const objects = {
+      objects: range(45).map((i) => ({
+        oid: `0|${i}|1`, obj: 'Instance of class = dba.t1', holders: [{ index: '1', mode: 'X_LOCK', count: '1' }],
+        numHolders: '1', numBlockedHolders: '0', numWaiters: '0',
+      })),
+    };
+    databaseApi.getLockInfo.mockResolvedValueOnce(summary).mockResolvedValueOnce(objects);
+    await act(async () => q('lock-information-object-view').click());
+
+    expect(rowsIn('lock-information-objects')).toHaveLength(20);
+    expect(q('lock-information-summary-pages')).toBeNull();
+    await clickPage('lock-information-objects-pages', '3');
+    expect(rowsIn('lock-information-objects').map((tr) => tr.textContent.match(/0\|\d+\|1/)[0]))
+      .toEqual(range(5).map((i) => `0|${40 + i}|1`));
+  });
+
+  it('pages the transaction list when there are more than 20 sessions', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse(...range(25).map((i) => `app${i}`)));
+    await render(makeStore());
+
+    expect(q('lock-information-sessions-pages').textContent).toContain('Showing 1–20 of 25');
+    await clickPage('lock-information-sessions-pages', '2');
+    expect(q('lock-information-modal').textContent).toContain('app25');
+    expect(q('lock-information-modal').textContent).not.toContain('app20');
+  });
 });
