@@ -30,7 +30,9 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
   useLayoutEffect(() => {
     if (open && menuRef.current && containerRef.current && !isPositioned) {
       const parentRect = containerRef.current.getBoundingClientRect();
-      const menuRect = menuRef.current.getBoundingClientRect();
+      // Layout size: the submenu opens at scale(0.95), which getBoundingClientRect
+      // would include, leaving its bottom/right edge past the clamp.
+      const menuRect = { width: menuRef.current.offsetWidth, height: menuRef.current.offsetHeight };
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       
@@ -39,10 +41,12 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
 
       // Horizontal positioning
       let left = parentRect.right + 4; // Small gap
-      if (left + menuRect.width > viewportWidth) {
+      if (left + menuRect.width > viewportWidth - 20) {
         newX = 'left';
         left = parentRect.left - menuRect.width - 4;
       }
+      // Narrow windows may have room on neither side; overlap the parent rather than go off-screen.
+      left = Math.max(20, Math.min(left, viewportWidth - menuRect.width - 20));
       
       // Vertical positioning with screen-boundary awareness
       let top = parentRect.top;
