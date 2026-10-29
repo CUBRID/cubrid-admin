@@ -4,6 +4,8 @@
  * Compatible with legacy CUBRID Admin XML and desktop .prefs / .properties.
  */
 
+import { UNGROUPED_GROUP_ID } from './hostGroupUtils';
+
 export const MIN_IMPORT_PORT = 1;
 export const MAX_IMPORT_PORT = 65535;
 export const DEFAULT_IMPORT_PORT = 8001;
@@ -47,21 +49,29 @@ export const exportHostsToXml = (hosts, fileName = 'export_hosts.xml') => {
 
 /** Native (web-manager-to-web-manager) export format marker, distinct from CA's XML/prefs. */
 export const NATIVE_FORMAT_ID = 'cubrid-webmanager-hosts';
-export const NATIVE_FORMAT_VERSION = 1;
+// 2: hosts with no group are written as `ungrouped` instead of a group named
+// after the bucket ("Ungrouped"), which import made into a real group.
+export const NATIVE_FORMAT_VERSION = 2;
+// What version 1 files call the no-group bucket (its stored name on the server).
+const V1_UNGROUPED_GROUP_NAME = 'Ungrouped';
 
-/** @returns {{ name: string, hosts: object[] }[]} groups (in hostGroups map order) filtered to selected host uids */
-function buildGroupedExportPayload(hostGroups, selectedUids) {
+/** @returns {{ name?: string, ungrouped?: true, hosts: object[] }[]} groups (in hostGroups map order) filtered to selected host uids */
+export function buildGroupedExportPayload(hostGroups, selectedUids) {
   const selected = selectedUids ? new Set(selectedUids) : null;
   const groups = [];
 
-  for (const group of Object.values(hostGroups || {})) {
+  for (const [groupId, group] of Object.entries(hostGroups || {})) {
     const hostsInGroup = Object.values(group.hosts || {}).filter(
       (host) => !selected || selected.has(host.uid)
     );
     if (hostsInGroup.length === 0) continue;
 
     groups.push({
-      name: group.name || 'Imported',
+      // No name for the bucket: an older build then imports these hosts into
+      // its fallback group instead of creating a group from the name.
+      ...(groupId === UNGROUPED_GROUP_ID
+        ? { ungrouped: true }
+        : { name: group.name || 'Imported' }),
       hosts: hostsInGroup.map((host) => ({
         alias: host.alias || '',
         address: host.address || '',
@@ -100,7 +110,11 @@ export const exportHostGroupsToNativeXml = (hostGroups, selectedUids, fileName =
 
   groups.forEach((group) => {
     const groupNode = doc.createElement('group');
-    groupNode.setAttribute('name', group.name);
+    if (group.ungrouped) {
+      groupNode.setAttribute('ungrouped', 'true');
+    } else {
+      groupNode.setAttribute('name', group.name);
+    }
     group.hosts.forEach((host) => {
       const hostNode = doc.createElement('host');
       hostNode.setAttribute('alias', host.alias);
@@ -385,7 +399,8 @@ export function validateImportHostEntry(entry, { existingHosts = [], batchPeers 
 export function buildImportPreviewList(parsed, existingHosts) {
   const hosts = Array.isArray(parsed) ? parsed : (parsed?.hosts ?? []);
   const groups = Array.isArray(parsed) ? [] : (parsed?.groups ?? []);
-  const hasPrefsGroups = groups.length > 0;
+  // A file whose only group is the no-group bucket still assigns every host.
+  const hasPrefsGroups = groups.length > 0 || hosts.some((host) => host.ungrouped);
 
   const legacyIdToGroup = new Map();
   for (const group of groups) {
@@ -447,6 +462,29 @@ export function validateSelectedImportRows(rows) {
     `${row.alias || row.address || row.rowId}: ${row.validationError}`
   );
   return { ok: false, messages };
+}
+
+/**
+ * Splits rows by where they import to: the no-group bucket, a group named in
+ * the file, or (file has no group for them) the fallback group.
+ * @returns {{ ungrouped: object[], byGroup: Map<string, object[]>, unassigned: object[] }}
+ */
+export function partitionImportRows(rows) {
+  const ungrouped = [];
+  const byGroup = new Map();
+  const unassigned = [];
+  for (const row of rows) {
+    const groupName = row.importGroupName?.trim();
+    if (row.ungrouped) {
+      ungrouped.push(row);
+    } else if (groupName) {
+      if (!byGroup.has(groupName)) byGroup.set(groupName, []);
+      byGroup.get(groupName).push(row);
+    } else {
+      unassigned.push(row);
+    }
+  }
+  return { ungrouped, byGroup, unassigned };
 }
 
 function parseXmlDocument(xmlString, contextLabel) {
@@ -524,15 +562,20 @@ function parseHostGroupsFromXmlString(xmlString) {
  * Converts the native `{ groups: [{ name, hosts }] }` shape into the
  * `{ hosts, groups }` shape `buildImportPreviewList` already understands —
  * synthesizes a `legacyId` per host so the same name-to-hosts bridging
- * logic used for CA .prefs host groups works unchanged here too.
+ * logic used for CA .prefs host groups works unchanged here too. Hosts of
+ * the no-group bucket are flagged `ungrouped` and belong to no group.
  */
-function groupedPayloadToHostsAndGroups(groupList) {
+function groupedPayloadToHostsAndGroups(groupList, version) {
   const hosts = [];
   const groups = [];
   let counter = 0;
 
   for (const group of groupList || []) {
-    const groupName = String(group.name ?? '').trim();
+    const name = String(group.name ?? '').trim();
+    // Version 1 wrote the bucket as a group named after it.
+    const ungrouped = group.ungrouped === true
+      || (version < 2 && name === V1_UNGROUPED_GROUP_NAME);
+    const groupName = ungrouped ? '' : name;
     const legacyHostIds = [];
 
     for (const host of group.hosts || []) {
@@ -547,6 +590,7 @@ function groupedPayloadToHostsAndGroups(groupList) {
         port: host.port != null ? String(host.port) : String(DEFAULT_IMPORT_PORT),
         id: String(host.id ?? '').trim() || 'admin',
         password: '',
+        ...(ungrouped ? { ungrouped: true } : {}),
       });
       if (groupName) legacyHostIds.push(legacyId);
     }
@@ -572,7 +616,7 @@ function tryParseNativeJson(input) {
     return null;
   }
 
-  const parsed = groupedPayloadToHostsAndGroups(data.groups);
+  const parsed = groupedPayloadToHostsAndGroups(data.groups, Number(data.version) || 1);
   if (parsed.hosts.length === 0) {
     throw new Error('The selected file contains no valid host connections.');
   }
@@ -591,6 +635,7 @@ function tryParseNativeXml(input) {
   for (let i = 0; i < groupNodes.length; i++) {
     const groupNode = groupNodes[i];
     const name = (groupNode.getAttribute('name') || '').trim();
+    const ungrouped = groupNode.getAttribute('ungrouped') === 'true';
     const hostNodes = groupNode.getElementsByTagName('host');
     const hosts = [];
     for (let j = 0; j < hostNodes.length; j++) {
@@ -602,10 +647,11 @@ function tryParseNativeXml(input) {
         id: hostNode.getAttribute('user') || 'admin',
       });
     }
-    groupList.push({ name, hosts });
+    groupList.push({ name, ungrouped, hosts });
   }
 
-  const parsed = groupedPayloadToHostsAndGroups(groupList);
+  const version = Number(doc.documentElement.getAttribute('version')) || 1;
+  const parsed = groupedPayloadToHostsAndGroups(groupList, version);
   if (parsed.hosts.length === 0) {
     throw new Error('The selected file contains no valid host connections.');
   }

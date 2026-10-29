@@ -4,6 +4,7 @@ import { closeImportExportModal,
   addHost,
   createHostGroup,
   deleteHostGroup,
+  deleteHost,
   editHost,
   loginHostsBatch,
   setSkipAutoHostLogin,
@@ -15,6 +16,7 @@ import { exportHostsToXml,
   parseHostsImportFile,
   buildImportPreviewList,
   validateSelectedImportRows,
+  partitionImportRows,
 } from '../hostImportExport';
 import { flattenHostsFromGroups, findNewGroupId } from '../hostGroupUtils';
 import { importLoginAllStatusModal } from '../hostLoginReport';
@@ -196,17 +198,12 @@ export default function ImportExportHostModal() {
         const createdGroupIds = [];
         const importedGroupNames = [];
 
-        const hostsByGroup = new Map();
-        const unassignedHosts = [];
-        for (const hostData of hostsToAdd) {
-          const groupName = hostData.importGroupName?.trim();
-          if (groupName) {
-            if (!hostsByGroup.has(groupName)) hostsByGroup.set(groupName, []);
-            hostsByGroup.get(groupName).push(hostData);
-          } else {
-            unassignedHosts.push(hostData);
-          }
-        }
+        const {
+          ungrouped: ungroupedHosts,
+          byGroup: hostsByGroup,
+          unassigned: unassignedHosts,
+        } = partitionImportRows(hostsToAdd);
+        const addedUngroupedUids = [];
 
         try {
           dispatch(setSkipAutoHostLogin(true));
@@ -234,6 +231,18 @@ export default function ImportExportHostModal() {
             }
           }
 
+          // No groupId: the server adds the host to its no-group bucket.
+          // Deleting the created groups doesn't remove these, so they're
+          // rolled back one by one.
+          for (const hostData of ungroupedHosts) {
+            const addedHost = await addImportedHost(hostData, undefined);
+            if (addedHost) {
+              addedUngroupedUids.push(addedHost.uid);
+              importedWithoutPassword.push(addedHost);
+            }
+          }
+          if (ungroupedHosts.length > 0) importedGroupNames.push(CM.ungroupedHosts);
+
           const addedCount = hostsToAdd.length;
           const groupSummary = importedGroupNames.length > 0
             ? importedGroupNames.map((name) => `"${name}"`).join(', ')
@@ -255,6 +264,9 @@ export default function ImportExportHostModal() {
           }
         } catch (err) {
           await rollbackImportGroups(createdGroupIds);
+          for (const uid of addedUngroupedUids) {
+            await dispatch(deleteHost(uid)).unwrap().catch(() => {});
+          }
           dispatch(showStatusModal({
             type: 'error',
             title: CM.importFailedTitle,
@@ -728,9 +740,9 @@ export default function ImportExportHostModal() {
                     ...(fileHasPrefsGroups ? [{
                       accessor: 'importGroupName',
                       header: CM.groupLabel,
-                      render: (groupName) => (
+                      render: (groupName, row) => (
                         <Typography variant="caption" className="text-slate-600 dark:text-slate-300">
-                          {groupName || '—'}
+                          {row.ungrouped ? CM.ungroupedHosts : (groupName || '—')}
                         </Typography>
                       ),
                     }] : []),
