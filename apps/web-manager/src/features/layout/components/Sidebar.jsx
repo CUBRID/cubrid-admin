@@ -24,6 +24,8 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
+import { runMultiDatabaseAction, splitByAction } from '../../database/databaseMultiActions';
+import SelectDatabasesModal from '../../database/components/SelectDatabasesModal';
 import { hostLoginResultStatusModal } from '../../host/hostLoginReport';
 import { dbKey } from '../../database/dbKey';
 
@@ -163,6 +165,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // dialog; onConfirm calls run() and clears this, onCancel just clears it.
   const [pendingActionConfirm, setPendingActionConfirm] = useState(null);
   const requestActionConfirm = (config) => setPendingActionConfirm(config);
+  // { initialSelected: dbname[] } while the database selection modal is open.
+  const [selectDatabasesModal, setSelectDatabasesModal] = useState(null);
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { databasesByHost, activeDatabasesByHost, loggedInDatabases, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
@@ -173,6 +177,45 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // a still in-flight response for a host the user has since switched away
   // from can never be mistaken for this host's own data.
   const databases = databasesByHost[selectedHostUid] || [];
+
+  // One action on several selected databases (selection modal or a tree
+  // selection): confirm with the HA warning, run, then refresh and report.
+  const handleMultiDatabaseAction = (action, rows, credentials) => {
+    const hostUid = selectedHostUid;
+    const { targets, skipped: notApplicable } = splitByAction(action, rows);
+    if (targets.length === 0) return;
+    const label = CM.multiDbActions[action];
+    const haCount = ['start', 'stop', 'restart'].includes(action) ? targets.filter((row) => row.isHa).length : 0;
+    requestActionConfirm({
+      title: CM.multiDbConfirmTitle(label),
+      description: [
+        CM.multiDbConfirmDesc(label, targets.map((row) => row.dbname)),
+        haCount > 0 ? CM.multiDbHaWarning(haCount) : '',
+      ].filter(Boolean).join(' '),
+      confirmLabel: label,
+      variant: ['stop', 'restart', 'forgetCredentials'].includes(action) ? 'danger' : 'primary',
+      run: async () => {
+        setLoadingText(CM.processing);
+        startAction();
+        try {
+          const result = await runMultiDatabaseAction(dispatch, CM, { hostUid, action, rows: targets, credentials });
+          dispatch(fetchDatabaseStartInfo(hostUid));
+          resetAction();
+          const skipped = [
+            ...result.skipped,
+            ...notApplicable.map((row) => ({ dbname: row.dbname, reason: CM.multiDbNotApplicableReason })),
+          ];
+          const report = bulkResultStatusModal(CM, {
+            title: label, failedMsg: CM.multiDbFailedMsg, failed: result.failed, skipped, showPhase: action === 'restart',
+          });
+          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiDbDoneMsg(result.succeeded.length) }));
+        } catch (err) {
+          dispatch(fetchDatabaseStartInfo(hostUid));
+          endError(err);
+        }
+      },
+    });
+  };
   const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
   const haDbNames = haDbNamesByHost[selectedHostUid] || [];
   const brokers = brokersByHost[selectedHostUid] || [];
@@ -1626,6 +1669,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               });
             }}
           />
+          <MenuItem
+            icon="checklist"
+            label={CM.selectDatabasesMenu}
+            onClick={() => {
+              setDbRootContextMenu(null);
+              setSelectDatabasesModal({ initialSelected: [] });
+            }}
+          />
           <MenuDivider />
           <MenuItem
             icon="add_circle"
@@ -2300,6 +2351,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
       <CMSUserManagementModal />
       <EditCMSUserModal />
+      <SelectDatabasesModal
+        isOpen={!!selectDatabasesModal}
+        hostUid={selectedHostUid}
+        initialSelected={selectDatabasesModal?.initialSelected}
+        onClose={() => setSelectDatabasesModal(null)}
+        onAction={(action, rows, credentials) => {
+          setSelectDatabasesModal(null);
+          handleMultiDatabaseAction(action, rows, credentials);
+        }}
+      />
       <ConfirmDialog
         isOpen={stopServiceConfirm.isOpen}
         title={CM.stopServicesConfirmTitle}
