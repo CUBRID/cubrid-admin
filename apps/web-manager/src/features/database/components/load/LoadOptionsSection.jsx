@@ -1,3 +1,4 @@
+import { LOAD_COUNT_MIN, LOAD_COUNT_MAX } from '@api-interfaces';
 import { Checkbox } from '../../../../components/ds/forms/Checkbox';
 import { Input } from '../../../../components/ds/forms/Input';
 import { useCM } from '../../../../constants/useCM';
@@ -45,6 +46,10 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
         >
           <Input
             type="number"
+            min={LOAD_COUNT_MIN}
+            max={LOAD_COUNT_MAX}
+            step={1}
+            aria-label={CM.estimatedInstances}
             value={formData.values.estimated}
             onChange={(e) => handleValueChange('estimated', e.target.value)}
             disabled={!formData.checkBoxes.estimated}
@@ -67,6 +72,10 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
         >
           <Input
             type="number"
+            min={LOAD_COUNT_MIN}
+            max={LOAD_COUNT_MAX}
+            step={1}
+            aria-label={CM.insertionCountPeriodicCommit}
             value={formData.values.period}
             onChange={(e) => handleValueChange('period', e.target.value)}
             disabled={!formData.checkBoxes.period}

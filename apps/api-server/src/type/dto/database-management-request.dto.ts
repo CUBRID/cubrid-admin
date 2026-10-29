@@ -7,8 +7,19 @@ import {
   IsOptional,
   IsString,
   ValidateIf,
+  ValidateBy,
 } from 'class-validator';
-import { RenameInfo } from '@api-interfaces';
+import { RenameInfo, isValidLoadCountOption, LOAD_COUNT_MIN, LOAD_COUNT_MAX } from '@api-interfaces';
+
+function IsLoadCountOption() {
+  return ValidateBy({
+    name: 'isLoadCountOption',
+    validator: {
+      validate: isValidLoadCountOption,
+      defaultMessage: ({ property }) => `${property} must be "none" or a decimal whole number between ${LOAD_COUNT_MIN} and ${LOAD_COUNT_MAX}.`,
+    },
+  });
+}
 
 /**
  * Validated request bodies for DatabaseManagementController. Kept as
@@ -142,6 +153,7 @@ export class LoadDatabaseDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsLoadCountOption()
   period: string;
 
   @IsString()
@@ -153,6 +165,7 @@ export class LoadDatabaseDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsLoadCountOption()
   estimated: string;
 
   @IsIn(['yes', 'no'])

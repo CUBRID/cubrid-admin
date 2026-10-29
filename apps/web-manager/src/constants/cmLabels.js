@@ -1395,6 +1395,7 @@ export const CM = {
   errControlFile: 'The error control file is not valid.',
   errClassFile: 'The ignored table file is not valid.',
   errNoSelectedPath: 'Please check the unloaded files of the selected database from the following list.',
+  loadCountRange: (min, max) => `between ${min.toLocaleString()} and ${max.toLocaleString()}`,
   errNumOfInstances: 'The estimated number of instances is not valid. It can only be an integer greater than 0.',
 
 
