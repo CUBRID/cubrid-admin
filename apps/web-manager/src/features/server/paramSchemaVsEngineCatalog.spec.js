@@ -104,8 +104,8 @@ describe('DIFFER_UNIT keys with hand-derived bounds', () => {
   it('lock_timeout: -1 (forever) is the lowest accepted value', () => {
     expect(entry('lock_timeout').guard).toMatchObject({ kind: 'time', min: -1 });
   });
-  it('checkpoint_every_size: >= 10 log pages even at the smallest (4K) log page', () => {
-    expect(entry('checkpoint_every_size').guard).toMatchObject({ kind: 'size', min: 9 * 4096 + 1 });
+  it('checkpoint_every_size: >= 10 log pages at the 16K pages cubrid.conf is first read with', () => {
+    expect(entry('checkpoint_every_size').guard).toMatchObject({ kind: 'size', min: 9 * 16384 + 1 });
   });
 });
 
