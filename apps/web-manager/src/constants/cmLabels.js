@@ -945,7 +945,7 @@ export const CM = {
     'ASCII only (no Korean or other non-ASCII characters) — letters, numbers, "_", "-", "." are all fine.',
     'No spaces, "/", "\\", or "@", and it cannot start with "#".',
     'Make sure the volume path is writable and has enough disk space.',
-    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GB.',
+    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GiB.',
   ],
   addVolumeGuidance: [
     'Make sure the volume path is writable and has enough free disk space.',
@@ -1119,6 +1119,15 @@ export const CM = {
   connectHostForMonitoring: 'Connect to a host server from the navigator to activate global resource monitoring.',
   permanentTemp: 'Permanent Temp',
   tempTemp: 'Temporary Temp',
+  // Service dashboard: percent of each volume group in use.
+  permanentUsedLabel: 'Permanent used',
+  permanentTempUsedLabel: 'Permanent (Temp) used',
+  temporaryUsedLabel: 'Temporary used',
+  // Host dashboard volume columns, as in CUBRID Admin: used / total / free.
+  permanentVolumeUtf: 'Permanent (U/T/F)',
+  permanentTempVolumeUtf: 'Permanent (Temp) (U/T/F)',
+  temporaryVolumeUtf: 'Temporary (U/T/F)',
+  volumeUtfHint: 'Used / Total / Free',
 
   haMaster: 'Master',
   haSlave: 'Slave',

@@ -905,7 +905,7 @@ export const CM_KO = {
     'ASCII만 가능합니다(한글 등 비ASCII 문자는 안 됨) — 영문/숫자/"_"/"-"/"."은 다 괜찮습니다.',
     '공백, "/", "\\", "@"는 쓸 수 없고 "#"으로 시작할 수 없습니다.',
     '볼륨 경로에 쓰기 권한이 있고 디스크 공간이 충분한지 확인하세요.',
-    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GB.',
+    'Check that the general volume size is within the range supported by CUBRID. The maximum general volume size is 20 GiB.',
   ],
   addVolumeGuidance: [
     '볼륨 경로에 쓰기 권한이 있고 여유 디스크 공간이 충분한지 확인하세요.',
@@ -1079,6 +1079,13 @@ export const CM_KO = {
   // rule as CM.permanent/CM.temporary above.
   permanentTemp: 'Permanent Temp',
   tempTemp: 'Temporary Temp',
+  permanentUsedLabel: '영구 볼륨 사용률',
+  permanentTempUsedLabel: '영구(임시) 볼륨 사용률',
+  temporaryUsedLabel: '임시 볼륨 사용률',
+  permanentVolumeUtf: '영구 볼륨 (U/T/F)',
+  permanentTempVolumeUtf: '영구(임시) 볼륨 (U/T/F)',
+  temporaryVolumeUtf: '임시 볼륨 (U/T/F)',
+  volumeUtfHint: '사용 / 전체 / 여유',
 
   haMaster: '마스터',
   haSlave: '슬레이브',

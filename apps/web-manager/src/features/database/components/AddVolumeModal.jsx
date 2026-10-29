@@ -35,13 +35,13 @@ const PURPOSE_OPTIONS = [
 ];
 
 const SIZE_PRESETS = [
-  { label: '128 MB', mb: 128 },
-  { label: '256 MB', mb: 256 },
-  { label: '512 MB', mb: 512 },
-  { label: '1 GB', mb: 1024 },
-  { label: '4 GB', mb: 4096 },
-  { label: '10 GB', mb: 10240 },
-  { label: '20 GB', mb: 20480 },
+  { label: '128 MiB', mb: 128 },
+  { label: '256 MiB', mb: 256 },
+  { label: '512 MiB', mb: 512 },
+  { label: '1 GiB', mb: 1024 },
+  { label: '4 GiB', mb: 4096 },
+  { label: '10 GiB', mb: 10240 },
+  { label: '20 GiB', mb: 20480 },
 ];
 
 export default function AddVolumeModal() {
@@ -285,10 +285,10 @@ export default function AddVolumeModal() {
                 <button
                   type="button"
                   onClick={() => setSizeUnit((u) => (u === 'MB' ? 'GB' : 'MB'))}
-                  className="text-12 font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
+                  className="text-12 font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                   title={CM.switchUnit}
                 >
-                  {sizeUnit}
+                  {sizeUnit === 'GB' ? 'GiB' : 'MiB'}
                 </button>
               }
               min={0}

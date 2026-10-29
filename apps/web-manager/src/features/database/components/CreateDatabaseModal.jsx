@@ -752,10 +752,10 @@ export default function CreateDatabaseModal() {
                           <button
                             type="button"
                             onClick={() => handleVolumeChange(idx, 'unit', vol.unit === 'GB' ? 'MB' : 'GB')}
-                            className="text-12 font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
+                            className="text-12 font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                             title={CM.switchUnit}
                           >
-                            {vol.unit === 'GB' ? 'GB' : 'MB'}
+                            {vol.unit === 'GB' ? 'GiB' : 'MiB'}
                           </button>
                         }
                       />
@@ -843,7 +843,7 @@ export default function CreateDatabaseModal() {
                       <div className="w-[80px] shrink-0">
                         <Select
                           value={formData.autoAddVol.extUnit}
-                          options={['MB', 'GB'].map(u => ({ value: u, label: u }))}
+                          options={[{ value: 'MB', label: 'MiB' }, { value: 'GB', label: 'GiB' }]}
                           onChange={(e) => handleAutoAddVolChange('extUnit', e.target.value)}
                           className="w-full"
                         />

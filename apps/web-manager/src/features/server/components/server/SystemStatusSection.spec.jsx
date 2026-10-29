@@ -60,7 +60,7 @@ describe('SystemStatusSection', () => {
       disk: { total: 1024 * 1024 * 1024, used: 512 * 1024 * 1024, pct: 50, names: ['/'] },
     });
     const text = nowRow().textContent;
-    expect(text).toContain('512 MB / 1 GB (50.0%)');
+    expect(text).toContain('512 MiB / 1 GiB (50.0%)');
     expect(text).toContain(CM.diskRootFilesystem);
     expect(text).toContain('12.5%');
     expect(text).toContain('3.50');

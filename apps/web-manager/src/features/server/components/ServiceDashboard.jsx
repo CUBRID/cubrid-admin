@@ -321,39 +321,22 @@ const Component = function ServiceDashboard() {
         return <span className="text-14 text-slate-600 dark:text-slate-400">{row.user || row.id}</span>;
       } 
     },
-    { 
-      header: CM.permanent, 
-      accessor: 'permFree',
+    ...[
+      ['permUsed', CM.permanentUsedLabel],
+      ['permTempUsed', CM.permanentTempUsedLabel],
+      ['tempTempUsed', CM.temporaryUsedLabel],
+    ].map(([accessor, header]) => ({
+      header,
+      accessor,
       render: (_, row) => {
         if (row._type === 'group') return <span className="text-slate-300">—</span>;
         const isConnected = authorizedHosts.includes(row.uid);
-        const v = isConnected ? summaries[row.uid]?.permFree : undefined;
+        const v = isConnected ? summaries[row.uid]?.[accessor] : undefined;
         if (v === undefined || v === -1 || Number.isNaN(v)) return <span className="text-slate-300">—</span>;
-        return <Badge variant={v > 30 ? 'success' : v > 10 ? 'warning' : 'danger'}>{v}%</Badge>;
+        // Percent in use: the fuller the volumes, the more urgent.
+        return <Badge variant={v >= 90 ? 'danger' : v >= 70 ? 'warning' : 'success'}>{v}%</Badge>;
       }
-    },
-    { 
-      header: CM.permanentTemp, 
-      accessor: 'permTempFree',
-      render: (_, row) => {
-        if (row._type === 'group') return <span className="text-slate-300">—</span>;
-        const isConnected = authorizedHosts.includes(row.uid);
-        const v = isConnected ? summaries[row.uid]?.permTempFree : undefined;
-        if (v === undefined || v === -1 || Number.isNaN(v)) return <span className="text-slate-300">—</span>;
-        return <Badge variant={v > 30 ? 'success' : v > 10 ? 'warning' : 'danger'}>{v}%</Badge>;
-      }
-    },
-    { 
-      header: CM.tempTemp, 
-      accessor: 'tempTempFree',
-      render: (_, row) => {
-        if (row._type === 'group') return <span className="text-slate-300">—</span>;
-        const isConnected = authorizedHosts.includes(row.uid);
-        const v = isConnected ? summaries[row.uid]?.tempTempFree : undefined;
-        if (v === undefined || v === -1 || Number.isNaN(v)) return <span className="text-slate-300">—</span>;
-        return <Badge variant={v > 30 ? 'success' : v > 10 ? 'warning' : 'danger'}>{v}%</Badge>;
-      }
-    },
+    })),
     {
       header: CM.tps,
       accessor: 'tps',

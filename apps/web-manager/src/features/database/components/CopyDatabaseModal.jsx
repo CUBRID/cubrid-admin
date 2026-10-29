@@ -104,8 +104,8 @@ export default function CopyDatabaseModal() {
         databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
           .then((res) => {
             if (cancelled) return;
-            const freeMB = res?.freespace != null ? `${res.freespace} (MB)` : '-';
-            const sizeMB = res?.dbsize != null ? `${Math.round(res.dbsize / (1024 * 1024))} (MB)` : '-';
+            const freeMB = res?.freespace != null ? `${res.freespace} (MiB)` : '-';
+            const sizeMB = res?.dbsize != null ? `${Math.round(res.dbsize / (1024 * 1024))} (MiB)` : '-';
             setDiskInfo({ freeSpace: freeMB, dbSize: sizeMB });
 
             const validTypes = ['generic', 'data', 'index', 'temp', 'permanent'];

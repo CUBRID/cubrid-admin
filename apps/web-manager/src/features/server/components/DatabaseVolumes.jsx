@@ -8,21 +8,20 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
+import { formatSize } from '../../../infrastructure/utils/format';
+import { volumeGroup } from '../hostMetrics';
 
-const getSizeFormat = (size) => {
-  if (size >= 1024 ** 3) return `${(size / 1024 ** 3).toFixed(1)}GB`;
-  if (size >= 1024 ** 2) return `${(size / 1024 ** 2).toFixed(1)}MB`;
-  if (size >= 1024) return `${(size / 1024).toFixed(1)}KB`;
-  return `${size}B`;
-};
+const getSizeFormat = (size) => formatSize(size, 1);
 
-const getVolumeColumn = (dbSpace, type) => {
+// CUBRID Admin's per-group "U / T / F" (used / total / free) column, with the
+// bar showing the percent in use. `group` is one of volumeGroup's groups.
+const getVolumeColumn = (dbSpace, group) => {
   if (!dbSpace?.spaceinfo) return { display: '-', pct: 0 };
   let totalPage = 0, freePage = 0;
   const pageSize = parseInt(dbSpace.pagesize || 0);
   if (!pageSize) return { display: '-', pct: 0 };
   for (const space of dbSpace.spaceinfo) {
-    if (space.type === type) {
+    if (volumeGroup(space) === group) {
       totalPage += parseInt(space.totalpage || 0);
       freePage += parseInt(space.freepage || 0);
     }
@@ -30,8 +29,8 @@ const getVolumeColumn = (dbSpace, type) => {
   if (totalPage > 0) {
     const used = (totalPage - freePage) * pageSize;
     const total = totalPage * pageSize;
-    const freePct = ((freePage * 100) / totalPage).toFixed(0);
-    return { display: `${getSizeFormat(used)} / ${getSizeFormat(total)} / ${freePct}%`, pct: 100 - parseInt(freePct) };
+    const pct = Math.round(((totalPage - freePage) * 100) / totalPage);
+    return { display: `${getSizeFormat(used)} / ${getSizeFormat(total)} / ${getSizeFormat(freePage * pageSize)}`, pct };
   }
   return { display: '-', pct: 0 };
 };
@@ -159,20 +158,25 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   useEffect(() => { fetchVolumes(); }, [fetchVolumes]);
 
   const volumeData = React.useMemo(() => volumes?.map((result) => {
-    if (!result?.spaceinfo) return { id: result.dbname, db: result.dbname, permanent: { display: '-', pct: 0 }, temporary: { display: '-', pct: 0 }, activeLog: '-', archiveLog: '-', storageFree: '-', _permanentPct: 0, _temporaryPct: 0, _activeLogRaw: 0, _archiveLogRaw: 0, _storageFreeRaw: 0 };
-    const perm = getVolumeColumn(result, 'PERMANENT');
-    const temp = getVolumeColumn(result, 'TEMPORARY');
+    const empty = { display: '-', pct: 0 };
+    if (!result?.spaceinfo) return { id: result.dbname, db: result.dbname, permPerm: empty, permTemp: empty, tempTemp: empty, activeLog: '-', archiveLog: '-', storageFree: '-', _permPermPct: 0, _permTempPct: 0, _tempTempPct: 0, _activeLogRaw: 0, _archiveLogRaw: 0, _storageFreeRaw: 0 };
+    const permPerm = getVolumeColumn(result, 'permPerm');
+    const permTemp = getVolumeColumn(result, 'permTemp');
+    const tempTemp = getVolumeColumn(result, 'tempTemp');
     return {
       id: result.dbname,
       db: result.dbname,
-      permanent: perm,
-      temporary: temp,
+      permPerm,
+      permTemp,
+      tempTemp,
       activeLog: getLogColumn(result, 'Active_log'),
       archiveLog: getLogColumn(result, 'Archive_log'),
-      storageFree: result.freespace ? getSizeFormat(parseInt(result.freespace) * 1024) : '-',
+      // CMS reports freespace in MB (dbspaceinfo), not KB.
+      storageFree: result.freespace ? getSizeFormat(parseInt(result.freespace) * 1024 * 1024) : '-',
       // raw numeric values used by sortAccessor for correct ordering
-      _permanentPct: perm.pct,
-      _temporaryPct: temp.pct,
+      _permPermPct: permPerm.pct,
+      _permTempPct: permTemp.pct,
+      _tempTempPct: tempTemp.pct,
       _activeLogRaw: getLogColumnRaw(result, 'Active_log'),
       _archiveLogRaw: getLogColumnRaw(result, 'Archive_log'),
       _storageFreeRaw: result.freespace ? parseInt(result.freespace) : 0,
@@ -185,8 +189,16 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
       accessor: 'db',
       render: (val) => <span className="font-mono text-14 font-semibold text-slate-700 dark:text-slate-200">{val}</span>
     },
-    { header: CM.permanent,   accessor: 'permanent',   sortAccessor: '_permanentPct',   render: (val) => <BarCell val={val} /> },
-    { header: CM.temporary,   accessor: 'temporary',   sortAccessor: '_temporaryPct',   render: (val) => <BarCell val={val} /> },
+    ...[
+      ['permPerm', CM.permanentVolumeUtf],
+      ['permTemp', CM.permanentTempVolumeUtf],
+      ['tempTemp', CM.temporaryVolumeUtf],
+    ].map(([accessor, label]) => ({
+      header: <span title={CM.volumeUtfHint}>{label}</span>,
+      accessor,
+      sortAccessor: `_${accessor}Pct`,
+      render: (val) => <BarCell val={val} />,
+    })),
     { header: CM.activeLog,   accessor: 'activeLog',   sortAccessor: '_activeLogRaw',   render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
     { header: CM.archiveLog,  accessor: 'archiveLog',  sortAccessor: '_archiveLogRaw',  render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
     { header: CM.freeStorage, accessor: 'storageFree', sortAccessor: '_storageFreeRaw', render: (val) => <span className="font-mono text-14 text-emerald-600 dark:text-emerald-400 font-semibold">{val}</span> },
