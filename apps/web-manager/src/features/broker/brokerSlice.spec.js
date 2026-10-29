@@ -1,6 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// layoutSlice reads the OS theme at import time; jsdom has no matchMedia.
+vi.hoisted(() => {
+  window.matchMedia ??= () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+});
+
 vi.mock('./brokerApi', () => ({
   brokerApi: {
     getBrokerList: vi.fn(),
@@ -11,8 +16,16 @@ vi.mock('./brokerApi', () => ({
 
 import { brokerApi } from './brokerApi';
 import reducer, { fetchBrokerList } from './brokerSlice';
+import apiClient from '../../api/apiClient';
+import { closeHostTabs } from '../layout/layoutSlice';
 
-beforeEach(() => vi.resetAllMocks());
+// List reads are shared per login session (the Authorization header); a new
+// session per test keeps one test's unfinished read away from the next.
+let session = 0;
+beforeEach(() => {
+  vi.resetAllMocks();
+  apiClient.defaults.headers.common.Authorization = `Bearer test-${++session}`;
+});
 
 const makeStore = () => configureStore({ reducer: { broker: reducer } });
 
@@ -125,7 +138,7 @@ describe('fetchBrokerList bulk status enrichment', () => {
     }
   });
 
-  it('keeps a broker that is in the response without asinfo (stopped) and drops one missing from it', async () => {
+  it('keeps every broker, without rates for one missing from the status response', async () => {
     brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker('running'), rawBroker('stopped'), rawBroker('missing')] });
     brokerApi.getBrokerStatusBulk.mockResolvedValue({
       brokers: [{ bname: 'running', time: 't', asinfo: asinfo(1, 1) }, { bname: 'stopped', time: 't' }],
@@ -133,18 +146,20 @@ describe('fetchBrokerList bulk status enrichment', () => {
 
     const result = await makeStore().dispatch(fetchBrokerList({ hostUid: 'bulk-host-3' })).unwrap();
 
-    expect(result.map((b) => b.name)).toEqual(['running', 'stopped']);
+    expect(result.map((b) => b.name)).toEqual(['running', 'stopped', 'missing']);
     expect(result[1]).not.toHaveProperty('qps');
+    expect(result[2]).not.toHaveProperty('qps');
   });
 
-  it('treats a failed bulk request like every per-broker status request failing', async () => {
+  it('keeps every broker, without rates, when the bulk status request fails', async () => {
     brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker('b1'), rawBroker('b2')] });
     brokerApi.getBrokerStatusBulk.mockRejectedValue(new Error('CMS down'));
 
     const result = await makeStore().dispatch(fetchBrokerList({ hostUid: 'bulk-host-4' })).unwrap();
 
     expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledTimes(1);
-    expect(result).toEqual([]);
+    expect(result.map((b) => b.name)).toEqual(['b1', 'b2']);
+    expect(result[0]).not.toHaveProperty('qps');
   });
 
   it('makes no status request when the host has no brokers', async () => {
@@ -204,7 +219,7 @@ describe('fetchBrokerList stale-response guard is scoped per host', () => {
     );
   });
 
-  it('still discards a genuinely superseded response for the SAME host', async () => {
+  it('sends a second foreground read for the same host only after the first, applying both in order', async () => {
     const first = deferred();
     const second = deferred();
     let call = 0;
@@ -213,16 +228,20 @@ describe('fetchBrokerList stale-response guard is scoped per host', () => {
 
     const dispatchFirst = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
     const dispatchSecond = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+    await Promise.resolve();
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
 
+    first.resolve({ result: [{ name: 'older', pid: '1' }] });
+    await dispatchFirst;
     second.resolve({ result: [{ name: 'newer', pid: '2' }] });
     await dispatchSecond;
-    first.resolve({ result: [{ name: 'stale', pid: '1' }] });
-    await dispatchFirst;
 
     const brokers = store.getState().broker.brokersByHost.hostA;
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(2);
     expect(brokers).toHaveLength(1);
     expect(brokers[0]).toEqual(expect.objectContaining({ name: 'newer', pid: '2' }));
   });
+
 });
 
 describe('broker lists are stored per host, not in one shared array', () => {
@@ -273,7 +292,7 @@ describe('broker lists are stored per host, not in one shared array', () => {
     // Host A is deleted/disconnected while its own fetch is still in
     // flight — nothing else for host A will ever supersede this request,
     // so the per-host dedup alone wouldn't catch it as stale.
-    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    store.dispatch(closeHostTabs('hostA'));
     expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
 
     hostA.resolve({ result: [{ name: 'hostA-broker', pid: '1' }] });
@@ -291,7 +310,7 @@ describe('broker lists are stored per host, not in one shared array', () => {
     const store = configureStore({ reducer: { broker: reducer } });
 
     const stale = store.dispatch(fetchBrokerList({ hostUid: 'hostA', afterAction: true, skipStatusEnrichment: true }));
-    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    store.dispatch(closeHostTabs('hostA'));
     // Reconnected: a new list request is in flight for the same host.
     const fresh = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
 
@@ -319,7 +338,7 @@ describe('broker lists are stored per host, not in one shared array', () => {
     // matches again), but that discard path returns before ever reaching
     // the loadingByHost write — nothing else is fetching FOR HOST A, so
     // nothing would otherwise clear it.
-    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    store.dispatch(closeHostTabs('hostA'));
     expect(store.getState().broker.loadingByHost.hostA).toBeUndefined();
 
     hostA.resolve({ result: [{ name: 'hostA-broker', pid: '1' }] });
@@ -342,7 +361,7 @@ describe('broker lists are stored per host, not in one shared array', () => {
     // still genuinely in flight — this must not touch host B's loading
     // flag (a single shared flag would have, since both would have set the
     // same one).
-    store.dispatch({ type: 'layout/closeHostTabs', payload: 'hostA' });
+    store.dispatch(closeHostTabs('hostA'));
     expect(store.getState().broker.loadingByHost.hostB).toBe(true);
 
     hostB.resolve({ result: [{ name: 'hostB-broker', pid: '2' }] });
@@ -364,32 +383,35 @@ describe('fetchBrokerList after a broker action', () => {
   const backgroundPoll = () => fetchBrokerList({ hostUid: 'host1', isBackground: true, skipStatusEnrichment: true });
   const shownState = (store) => store.getState().broker.brokersByHost.host1?.[0]?.state;
 
-  it('is shown even when a background poll started while it was in flight', async () => {
+  it('lets a background poll share the read made after an action instead of sending its own', async () => {
     const held = holdListCalls();
     const store = makeStore();
     const afterAction = store.dispatch(fetchAfterAction());
     const poll = store.dispatch(backgroundPoll());
+    await Promise.resolve();
 
     held[0](list('OFF'));
-    await afterAction;
-    expect(shownState(store)).toBe('OFF');
-
-    held[1](list('OFF'));
-    await poll;
+    await Promise.all([afterAction, poll]);
+    expect(held).toHaveLength(1);
     expect(shownState(store)).toBe('OFF');
   });
 
-  it('does not overwrite a newer response that was already shown', async () => {
+  it('reads again after a poll that was in flight when the action finished, and shows that read', async () => {
     const held = holdListCalls();
     const store = makeStore();
-    const afterAction = store.dispatch(fetchAfterAction());
     const poll = store.dispatch(backgroundPoll());
+    const afterAction = store.dispatch(fetchAfterAction());
+    await Promise.resolve();
+    expect(held).toHaveLength(1);
 
-    held[1](list('ON'));
+    held[0](list('ON'));
     await poll;
-    held[0](list('OFF'));
-    await afterAction;
-
     expect(shownState(store)).toBe('ON');
+
+    await vi.waitFor(() => expect(held).toHaveLength(2));
+    held[1](list('OFF'));
+    await afterAction;
+    expect(shownState(store)).toBe('OFF');
   });
+
 });

@@ -3,81 +3,92 @@ import { brokerApi } from './brokerApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { createRateTracker } from './rateTracker';
 import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
-
-
+import apiClient from '../../api/apiClient';
+import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 
 // Module-level so the previous-sample baseline survives across polls and
 // across every host/broker tab, keyed by hostUid+brokerName below.
 const brokerRateTracker = createRateTracker();
 
+// The whole list read is shared, not just its requests: qps/tps are rates
+// against the previous sample, so computing them twice for one sample would
+// leave the second at zero.
+const brokerListReads = createSharedReads();
+
+const readBrokerList = async (hostUid, skipStatusEnrichment) => {
+  const response = await brokerApi.getBrokerList(hostUid);
+  const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
+
+  if (!brokerList) return [];
+
+  const formattedBrokers = brokerList.map(item => ({
+    ...item,
+    name: item.name,
+    state: item.state || item.status,
+    pid: item.pid,
+    port: item.port,
+    as: item.as,
+    jq: item.jq,
+    req: item.req,
+    long_tran: item.long_tran || '0',
+    long_tran_time: item.long_tran_time || '0',
+    long_query: item.long_query || '0',
+    long_query_time: item.long_query_time || '0',
+    error_query: item.error_query || '0',
+  }));
+
+  if (skipStatusEnrichment) return formattedBrokers;
+
+  // One bulk request for every broker's status. A broker missing from
+  // the response (or a failed request) counts as a failed status fetch.
+  const statusByName = await fetchBrokerStatusMap(hostUid, formattedBrokers.map((b) => b.name));
+  const responses = formattedBrokers.map((b) => (
+    statusByName.has(b.name)
+      ? { b, statusRes: statusByName.get(b.name), success: true }
+      : { b, success: false }
+  ));
+
+  // A broker whose status could not be read stays listed, without rates.
+  return responses.map((r) => {
+    if (!r.success) return r.b;
+    const asList = r.statusRes?.asinfo;
+    if (!asList?.length) return r.b;
+
+    // as_num_query/as_num_tran are per-AS lifetime totals — sum across
+    // every AS process for this broker, then convert to a rate below.
+    const totalQuery = asList.reduce((sum, as) => sum + (Number(as.as_num_query) || 0), 0);
+    const totalTran = asList.reduce((sum, as) => sum + (Number(as.as_num_tran) || 0), 0);
+    const trackerKey = `${hostUid}:${r.b.name}`;
+    const qps = brokerRateTracker(`${trackerKey}:qps`, totalQuery);
+    const tps = brokerRateTracker(`${trackerKey}:tps`, totalTran);
+
+    return {
+      ...r.b,
+      key: r.b.name,
+      qps: qps === null ? null : qps.toFixed(1),
+      tps: tps === null ? null : tps.toFixed(1),
+    };
+  });
+};
+
 export const fetchBrokerList = createAsyncThunk(
   'broker/fetchBrokerList',
-  async (arg, { rejectWithValue }) => {
+  async (arg, { rejectWithValue, fulfillWithValue }) => {
     const hostUid = typeof arg === 'string' ? arg : arg.hostUid;
     // Callers that only need the plain list fields (pid/port/jq/auto/sqll/
     // long_tran_time/long_query_time — e.g. BrokerStatus.jsx's "Basic
-    // Information" panel) can skip the bulk broker status request below,
-    // which is only needed to compute qps/tps. Those fields are all already
-    // present on `formattedBrokers` before enrichment runs.
+    // Information" panel) can skip the bulk broker status request, which is
+    // only needed to compute qps/tps.
     const skipStatusEnrichment = typeof arg === 'object' && !!arg.skipStatusEnrichment;
-    try {
-      const response = await brokerApi.getBrokerList(hostUid);
-      const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
-
-      if (!brokerList) return [];
-
-      const formattedBrokers = brokerList.map(item => ({
-        ...item,
-        name: item.name,
-        state: item.state || item.status,
-        pid: item.pid,
-        port: item.port,
-        as: item.as,
-        jq: item.jq,
-        req: item.req,
-        long_tran: item.long_tran || '0',
-        long_tran_time: item.long_tran_time || '0',
-        long_query: item.long_query || '0',
-        long_query_time: item.long_query_time || '0',
-        error_query: item.error_query || '0',
-      }));
-
-      if (skipStatusEnrichment) return formattedBrokers;
-
-      // One bulk request for every broker's status. A broker missing from
-      // the response (or a failed request) counts as a failed status fetch.
-      const statusByName = await fetchBrokerStatusMap(hostUid, formattedBrokers.map((b) => b.name));
-      const responses = formattedBrokers.map((b) => (
-        statusByName.has(b.name)
-          ? { b, statusRes: statusByName.get(b.name), success: true }
-          : { b, success: false }
-      ));
-
-      const dataSource = responses.map((r) => {
-        if (!r.success) return null;
-        const asList = r.statusRes?.asinfo;
-        if (!asList?.length) return r.b;
-
-        // as_num_query/as_num_tran are per-AS lifetime totals — sum across
-        // every AS process for this broker, then convert to a rate below.
-        const totalQuery = asList.reduce((sum, as) => sum + (Number(as.as_num_query) || 0), 0);
-        const totalTran = asList.reduce((sum, as) => sum + (Number(as.as_num_tran) || 0), 0);
-        const trackerKey = `${hostUid}:${r.b.name}`;
-        const qps = brokerRateTracker(`${trackerKey}:qps`, totalQuery);
-        const tps = brokerRateTracker(`${trackerKey}:tps`, totalTran);
-
-        return {
-          ...r.b,
-          key: r.b.name,
-          qps: qps === null ? null : qps.toFixed(1),
-          tps: tps === null ? null : tps.toFixed(1),
-        };
-      }).filter(Boolean);
-
-      return dataSource;
-    } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch broker list');
+    // Do not share a read across login sessions.
+    const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, skipStatusEnrichment]);
+    // Only a background poll may take a read already in flight; anything
+    // else was asked for by the user or follows an action.
+    const result = await brokerListReads(key, () => readBrokerList(hostUid, skipStatusEnrichment), { fresh: !arg?.isBackground });
+    if (!result.ok) {
+      return rejectWithValue(result.error.response?.data?.message || 'Failed to fetch broker list', { seq: result.seq });
     }
+    return fulfillWithValue(result.value, { seq: result.seq });
   }
 );
 
@@ -234,6 +245,26 @@ export const updateBrokerConfig = createAsyncThunk(
   }
 );
 
+// One foreground list read for the host settled. The spinner stays while
+// another one is still pending.
+const endForegroundRead = (state, hostUid) => {
+  if (!(hostUid in state.foregroundReadsByHost)) return; // host closed meanwhile
+  const left = state.foregroundReadsByHost[hostUid] - 1;
+  state.foregroundReadsByHost[hostUid] = left;
+  state.loadingByHost[hostUid] = left > 0;
+};
+
+// Which views a list read (or its failure) may update: only those that have
+// not applied anything newer. A background poll never moves the navigator.
+const claimSeq = (state, hostUid, seq, isBackground) => {
+  if (seq === undefined) return { updateLive: false, updateNavigator: false };
+  const updateLive = seq > (state.appliedLiveSeqByHost[hostUid] ?? 0);
+  const updateNavigator = !isBackground && seq > (state.appliedNavigatorSeqByHost[hostUid] ?? 0);
+  if (updateLive) state.appliedLiveSeqByHost[hostUid] = seq;
+  if (updateNavigator) state.appliedNavigatorSeqByHost[hostUid] = seq;
+  return { updateLive, updateNavigator };
+};
+
 const initialState = {
   // Keyed by hostUid — a bare shared `brokers` array meant a slow, still
   // in-flight fetch for a host the user has since switched away from could
@@ -262,8 +293,7 @@ const initialState = {
   // one host's tabs while fetchBrokerList was still in flight for it could
   // only clear loading by zeroing it globally, which also hid a DIFFERENT,
   // still-legitimately-loading host's own spinner.
-  brokerListFailedByHost: {}, // { hostUid: boolean } — latest fetchBrokerList failed
-  afterActionBrokerListByHost: {}, // { hostUid: { requestId, superseded } } — see the matcher below
+  brokerListFailedByHost: {}, // { hostUid: boolean } — the newest applied fetchBrokerList failed
   actionLoading: false,
   lastActionTarget: null, // Track broker name
   lastActionType: null,   // Track 'start' or 'stop'
@@ -275,13 +305,13 @@ const initialState = {
   dbLogsByDbName: {}, // { dbname: [logs] }
   dbLogsLoading: false,
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
-  latestBrokerListRequestIdByHost: {}, // { hostUid: requestId }
-  // Tracks only the latest NON-background fetchBrokerList request per host
-  // — separate from latestBrokerListRequestIdByHost above, so a background
-  // poll starting while this one is still in flight can't make this one
-  // look stale for the navigator mirror once it resolves. See
-  // fetchBrokerList.fulfilled's own comment.
-  latestNavigatorBrokerListRequestIdByHost: {}, // { hostUid: requestId }
+  // { hostUid: number } — foreground list reads still pending, behind loadingByHost.
+  foregroundReadsByHost: {},
+  // { hostUid: seq } — the newest list each view applied. A read is stamped
+  // when sent, so a slow one can never overwrite a newer one; a background
+  // poll never moves the navigator.
+  appliedLiveSeqByHost: {},
+  appliedNavigatorSeqByHost: {},
   propertyModal: {
     isOpen: false,
     brokerName: null,
@@ -340,78 +370,50 @@ const brokerSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchBrokerList.pending, (state, action) => {
-        // Per-broker status calls inside this thunk mean a host with many
-        // brokers can take a while — track the latest requestId PER HOST so
-        // a slower earlier fetch for that same host (e.g. still in flight
-        // when the user switches focus away and back) can't resolve after a
-        // newer one and clobber its fresher data.
-        //
-        // Scoped by hostUid, not a single shared id: a bare shared id meant
-        // any fetch for ANY host — e.g. a different, still-mounted tab's
-        // poll for a completely unrelated host — would mark this host's own
-        // in-flight fetch as "stale" the moment it fired, discarding this
-        // host's response when it later resolved. Under sustained polling
-        // from multiple hosts/tabs, that could discard every response for a
-        // given host indefinitely, not just an actually-superseded one.
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        const isBackground = !!action.meta.arg?.isBackground;
-        state.latestBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
-        if (!isBackground) {
+        if (!action.meta.arg?.isBackground) {
+          state.foregroundReadsByHost[hostUid] = (state.foregroundReadsByHost[hostUid] ?? 0) + 1;
           state.loadingByHost[hostUid] = true;
-          state.latestNavigatorBrokerListRequestIdByHost[hostUid] = action.meta.requestId;
         }
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        const isBackground = typeof action.meta.arg === 'object' && !!action.meta.arg?.isBackground;
-        const requestId = action.meta.requestId;
-        // Two INDEPENDENT staleness checks, not one gating the other — a
-        // background poll starting while a foreground (navigator-relevant)
-        // request is still in flight must not make that foreground
-        // response's eventual navigator update look stale just because the
-        // background one now owns the general per-host staleness slot. See
-        // databaseCoreSlice.js's identical fix for the full reasoning.
-        const isLatestLive = requestId === state.latestBrokerListRequestIdByHost[hostUid];
-        const isLatestNavigator = !isBackground && requestId === state.latestNavigatorBrokerListRequestIdByHost[hostUid];
-        if (!isLatestLive && !isLatestNavigator) return;
+        const isBackground = !!action.meta.arg?.isBackground;
+        if (!isBackground) endForegroundRead(state, hostUid);
+        const { updateLive, updateNavigator } = claimSeq(state, hostUid, action.meta.seq, isBackground);
         const newBrokers = action.payload;
-        if (isLatestNavigator) state.loadingByHost[hostUid] = false;
-        if (isLatestLive && JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
-          state.brokersByHost[hostUid] = newBrokers;
+        if (updateLive) {
+          state.brokerListFailedByHost[hostUid] = false;
+          if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
+            state.brokersByHost[hostUid] = newBrokers;
+          }
         }
-        // Navigator mirror — skipped for a background (interval) poll, so
-        // the sidebar broker tree only moves on an explicit user action.
-        if (isLatestNavigator && JSON.stringify(state.navigatorBrokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
+        if (updateNavigator && JSON.stringify(state.navigatorBrokersByHost[hostUid]) !== JSON.stringify(newBrokers)) {
           state.navigatorBrokersByHost[hostUid] = newBrokers;
         }
-        // Only let the CURRENTLY ACTIVE host's own response affect the
-        // shared selectedBroker. Without this, a response for a host the
-        // user has since switched away from (still "latest for that host" —
-        // nothing else for it superseded this request) could find its own
-        // list doesn't contain whatever broker is selected in the NEW host
-        // and wrongly null out that unrelated, still-valid selection.
-        if (isLatestLive && hostUid === state.activeHostUid) {
+        // Only the active host's own list may clear the shared selection; a
+        // late list for another host doesn't contain what is selected here.
+        if (updateLive && hostUid === state.activeHostUid) {
           const exists = (state.brokersByHost[hostUid] || []).find(b => b.name === state.selectedBroker);
           if (!exists) state.selectedBroker = null;
         }
       })
       .addCase(fetchBrokerList.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        const isBackground = typeof action.meta.arg === 'object' && !!action.meta.arg?.isBackground;
-        const requestId = action.meta.requestId;
-        const isLatestLive = requestId === state.latestBrokerListRequestIdByHost[hostUid];
-        const isLatestNavigator = !isBackground && requestId === state.latestNavigatorBrokerListRequestIdByHost[hostUid];
-        if (!isLatestLive && !isLatestNavigator) return;
-        // Same reasoning as the fulfilled case: a background poll failure
-        // is transient and shouldn't blank the navigator's tree.
-        if (isLatestNavigator) {
-          state.loadingByHost[hostUid] = false;
+        const isBackground = !!action.meta.arg?.isBackground;
+        if (!isBackground) endForegroundRead(state, hostUid);
+        // A background poll failure leaves the navigator's tree alone; only
+        // an explicit fetch failure empties it. brokerListFailedByHost lets
+        // the host dashboard (Brokers.jsx) tell a failure from an empty list.
+        const { updateLive, updateNavigator } = claimSeq(state, hostUid, action.meta.seq, isBackground);
+        if (updateLive) {
+          state.brokerListFailedByHost[hostUid] = true;
+          state.brokersByHost[hostUid] = [];
+        }
+        if (updateNavigator) {
           state.error = action.payload;
           state.navigatorBrokersByHost[hostUid] = [];
-        }
-        if (isLatestLive) {
-          state.brokersByHost[hostUid] = [];
         }
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
@@ -582,53 +584,6 @@ const brokerSlice = createSlice({
           state.activeHostUid = action.payload;
         }
       )
-      // fetchBrokerList.rejected blanks brokersByHost[hostUid]; flag the
-      // failure per host so the host dashboard's broker section (Brokers.jsx)
-      // can tell it apart from a real empty list and keep its last list.
-      .addMatcher(
-        (action) => fetchBrokerList.fulfilled.match(action) || fetchBrokerList.rejected.match(action),
-        (state, action) => {
-          const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-          if (action.meta.requestId !== state.latestBrokerListRequestIdByHost[hostUid]) return;
-          state.brokerListFailedByHost[hostUid] = fetchBrokerList.rejected.match(action);
-        }
-      )
-      // The list fetch right after a broker start/stop (`afterAction`) must
-      // be shown even if a background poll started while it was in flight:
-      // the poll then owns latestBrokerListRequestIdByHost, so the case
-      // reducer drops this response and the host dashboard keeps the
-      // pre-action state until that poll returns. It is still skipped if a
-      // response sent after it was already shown (that one is newer).
-      .addMatcher(
-        (action) => fetchBrokerList.pending.match(action) || fetchBrokerList.fulfilled.match(action)
-          || fetchBrokerList.rejected.match(action),
-        (state, action) => {
-          const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-          const isAfterAction = typeof action.meta.arg === 'object' && !!action.meta.arg?.afterAction;
-          const { requestId } = action.meta;
-          const tracked = state.afterActionBrokerListByHost[hostUid];
-          if (fetchBrokerList.pending.match(action)) {
-            if (isAfterAction) state.afterActionBrokerListByHost[hostUid] = { requestId, superseded: false };
-            return;
-          }
-          if (!tracked) return;
-          if (!isAfterAction) {
-            if (!fetchBrokerList.fulfilled.match(action)) return;
-            // Applied by the case reducer, so it was sent after the action fetch.
-            if (requestId === state.latestBrokerListRequestIdByHost[hostUid]) tracked.superseded = true;
-            return;
-          }
-          if (requestId !== tracked.requestId) return;
-          delete state.afterActionBrokerListByHost[hostUid];
-          if (tracked.superseded || fetchBrokerList.rejected.match(action)) return;
-          // Host closed/disconnected meanwhile (closeHostTabs clears its id).
-          if (!state.latestBrokerListRequestIdByHost[hostUid]) return;
-          if (JSON.stringify(state.brokersByHost[hostUid]) !== JSON.stringify(action.payload)) {
-            state.brokersByHost[hostUid] = action.payload;
-          }
-          state.brokerListFailedByHost[hostUid] = false;
-        }
-      )
       // Cleanup on tab close to prevent memory leaks
       .addMatcher(
         (action) => action.type === 'layout/closeTab',
@@ -673,31 +628,19 @@ const brokerSlice = createSlice({
           delete state.brokerConfig[hostUid];
           delete state.brokersByHost[hostUid];
           delete state.navigatorBrokersByHost[hostUid];
-          // A fetchBrokerList already in flight for this host when it was
-          // deleted/disconnected is still "the latest for its own host" per
-          // the per-host dedup above — nothing else for this host will ever
-          // supersede it now that the host is gone — so it would pass that
-          // check and resurrect this host's just-evicted slot once it
-          // resolves, with nothing left to ever clean it up again. Clearing
-          // the id here makes that stale response get dropped like any
-          // other no-longer-latest one.
-          //
-          // That discard path returns before reaching the loadingByHost
-          // write, so if this host's now-orphaned request was the one that
-          // set it, nothing else would ever clear it — every other fetch is
-          // for a DIFFERENT host and only ever touches its own slot. Clear
-          // this host's own loading slot directly instead of leaving a
-          // stuck spinner with no fetch left that could ever turn it off —
-          // and ONLY this host's slot, not a single shared flag, or closing
-          // host A here would also hide host B's own, still-legitimate
-          // in-flight loading indicator.
-          delete state.latestBrokerListRequestIdByHost[hostUid];
-          delete state.latestNavigatorBrokerListRequestIdByHost[hostUid];
+          // A list read still in flight for this host was sent before it
+          // closed (closeHostTabs carries the seq it closed at), so it can
+          // never repopulate the slots just evicted. Its spinner goes too.
+          if (action.meta?.seq !== undefined) {
+            state.appliedLiveSeqByHost[hostUid] = action.meta.seq;
+            state.appliedNavigatorSeqByHost[hostUid] = action.meta.seq;
+          } else {
+            delete state.appliedLiveSeqByHost[hostUid];
+            delete state.appliedNavigatorSeqByHost[hostUid];
+          }
+          delete state.foregroundReadsByHost[hostUid];
           delete state.loadingByHost[hostUid];
-          // Same for the after-action fetch: once the host reconnects, a new
-          // request sets the latest id again, and the old connection's
-          // response must not pass the check above.
-          delete state.afterActionBrokerListByHost[hostUid];
+          delete state.brokerListFailedByHost[hostUid];
         }
       );
   },
