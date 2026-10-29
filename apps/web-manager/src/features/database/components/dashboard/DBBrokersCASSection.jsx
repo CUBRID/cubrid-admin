@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchDashboardCAS } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -7,6 +7,7 @@ import { Card } from '../../../../components/ds/layout/Card';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
+import { useRefreshWhenShown } from './useRefreshWhenShown';
 
 export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProps, onViewSQLLog, onViewSlowQueryLog, onRestartCAS }) {
   const CM = useCM();
@@ -18,14 +19,7 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
     if (hostUid && dbname) dispatch(fetchDashboardCAS({ hostUid, dbname }));
   };
 
-  const wasActiveAndExpanded = useRef(isTabActive && !isCollapsed);
-  useEffect(() => {
-    const currentActiveAndExpanded = isTabActive && !isCollapsed;
-    if (currentActiveAndExpanded && !wasActiveAndExpanded.current) {
-      refresh();
-    }
-    wasActiveAndExpanded.current = currentActiveAndExpanded;
-  }, [isTabActive, isCollapsed, hostUid, dbname]);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
 
   useEffect(() => {
     let interval;

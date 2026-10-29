@@ -13,6 +13,7 @@ vi.mock('../../broker/brokerSlice', () => ({
 }));
 
 import MonitoringProvider from './MonitoringProvider';
+import { markModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 let container;
 let root;
@@ -151,4 +152,18 @@ it('skips a tick while the previous poll is still waiting on the host', async ()
     await vi.advanceTimersByTimeAsync(10000);
   });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
+});
+
+it('stops polling the host while a modal is open and refreshes once when it closes', async () => {
+  let closeModal;
+  await act(async () => { closeModal = markModalOpen(); });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(1);
+  expect(countOf('test/fetchBrokerList')).toBe(1);
+
+  await act(async () => { closeModal(); });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+  expect(countOf('test/fetchBrokerList')).toBe(2);
 });
