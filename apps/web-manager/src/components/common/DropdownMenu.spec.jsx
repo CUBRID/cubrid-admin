@@ -132,6 +132,21 @@ it('keeps the whole untransformed submenu above the bottom edge', async () => {
   });
 });
 
+it('moves an open submenu with its parent row when the window is resized', async () => {
+  const parentRect = { top: 100, bottom: 136, left: 100, right: 300 };
+  await withLayout({ viewport: { width: 1200, height: 800 }, parentRect, menuSize: { width: 224, height: 120 } }, async () => {
+    await renderMenus();
+    await openSubMenu();
+    expect(portalBox()).toEqual({ top: 100, left: 304 });
+
+    // The parent menu was re-clamped further up and left by the resize.
+    Object.assign(parentRect, { top: 60, bottom: 96, left: 40, right: 240 });
+    await act(async () => window.dispatchEvent(new Event('resize')));
+
+    expect(portalBox()).toEqual({ top: 60, left: 244 });
+  });
+});
+
 const renderItem = (props) => act(async () => {
   root.render(<MenuItem label="Rename" onClick={() => undefined} {...props} />);
 });

@@ -84,6 +84,15 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
     return () => document.removeEventListener('scroll', handleScroll, true);
   }, [open]);
 
+  // A resize also moves the parent menu (ContextMenuWrapper re-clamps it), so
+  // measure again from the parent row's new place.
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleResize = () => setIsPositioned(false);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [open]);
+
   const menuStyle = isPositioned ? {
     top: `${position.top}px`,
     left: `${position.left}px`,
