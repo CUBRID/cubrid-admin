@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Logger, Param, Post, Request } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post, Query, Request } from '@nestjs/common';
 import { CmsConfigService } from './cms-config.service';
 import { BrokerSetParamDto } from '@type/index';
 import {
@@ -73,21 +73,24 @@ export class CmsConfigController {
 
   /**
    * Get database parameters dump from a CMS host.
-   * Returns database server parameters without CMS envelope fields.
+   * Returns database server parameters, and client parameters too when
+   * `both=y`, without CMS envelope fields.
    *
    * @route GET /:hostUid/cms-config/param-dump
    * @param req - Express request (contains authenticated user)
    * @param hostUid - Host unique identifier from path parameter
-   * @param dbname - Database name from query parameter
+   * @param dbname - Database name from path parameter
+   * @param both - 'y' to also dump client parameters
    * @returns ParamdumpClientResponse Database parameters without CMS envelope fields
    * @example
-   * // GET /host-uid/cms-config/param-dump?dbname=demodb
+   * // GET /host-uid/cms-config/param-dump/demodb?both=y
    */
   @Get('param-dump/:dbname')
   async paramdump(
     @Request() req,
     @Param('hostUid') hostUid: string,
-    @Param('dbname') dbname: string
+    @Param('dbname') dbname: string,
+    @Query('both') both?: string
   ): Promise<ParamdumpClientResponse> {
     const userId = req.user.sub;
 
@@ -95,7 +98,7 @@ export class CmsConfigController {
       `Getting paramdump info for host: ${hostUid}, dbname: ${dbname}`,
       'CmsConfigController'
     );
-    const response = await this.cmsConfigService.getParamDump(userId, hostUid, dbname);
+    const response = await this.cmsConfigService.getParamDump(userId, hostUid, dbname, both === 'y');
     return response;
   }
 

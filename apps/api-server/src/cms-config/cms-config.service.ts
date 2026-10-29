@@ -152,6 +152,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
    * @param userId - User ID from JWT
    * @param hostUid - Host unique identifier
    * @param dbname - Database name
+   * @param both - Also dump client parameters (CMS returns them under `client`)
    * @returns ParamdumpClientResponse Database parameters without CMS envelope fields
    * @throws Error if the request fails or CMS status is not success
    */
@@ -159,18 +160,19 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
   async getParamDump(
     userId: string,
     hostUid: string,
-    dbname: string
+    dbname: string,
+    both = false
   ): Promise<ParamdumpClientResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
-    const cmsRequest: BaseCmsRequest & { dbname: string; both: 'n' } = {
+    const cmsRequest: BaseCmsRequest & { dbname: string; both: 'n' | 'y' } = {
       task: 'paramdump',
-      both: 'n',
+      both: both ? 'y' : 'n',
       dbname: dbname,
     };
 
     const response = await this.executeCmsRequest<
-      BaseCmsRequest & { dbname: string; both: 'n' },
+      BaseCmsRequest & { dbname: string; both: 'n' | 'y' },
       ParamdumpCmsResponse
     >(userId, hostUid, cmsRequest);
 

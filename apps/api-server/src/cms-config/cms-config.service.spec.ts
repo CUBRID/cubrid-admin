@@ -38,7 +38,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
     const mockHostService = { findHostInternal: jest.fn().mockResolvedValue(mockHost) };
     postAuthenticated = jest.fn();
     const mockCmsClient = { postAuthenticated };
-    const mockDatabaseUserService = {};
+    const mockDatabaseUserService = { ensureDbLogin: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -208,6 +208,20 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       await expect(
         service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'data_buffer_pages=32768'])
       ).resolves.toMatchObject({ warnings: [expect.stringContaining('use data_buffer_size')] });
+    });
+  });
+  describe('getParamDump — client parameters', () => {
+    beforeEach(() => postAuthenticated.mockImplementation((_url, req) => Promise.resolve(cmsResponseFor(req.task))));
+    const paramdumpRequest = () => postAuthenticated.mock.calls.find(([, req]) => req.task === 'paramdump')?.[1];
+
+    it('asks CMS for client parameters too when both is set', async () => {
+      await service.getParamDump(mockUserId, mockHostUid, 'demodb', true);
+      expect(paramdumpRequest()).toMatchObject({ task: 'paramdump', dbname: 'demodb', both: 'y' });
+    });
+
+    it('asks for server parameters only by default', async () => {
+      await service.getParamDump(mockUserId, mockHostUid, 'demodb');
+      expect(paramdumpRequest()).toMatchObject({ both: 'n' });
     });
   });
 });

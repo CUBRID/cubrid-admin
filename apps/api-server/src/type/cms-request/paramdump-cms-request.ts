@@ -23,7 +23,7 @@ export type ParamdumpCmsRequest = BaseCmsRequest & {
   dbname: string;
 
   /**
-   * Whether to include both server and broker parameters
+   * Whether to dump client parameters as well as server parameters
    *
    * Values: 'y' (yes) | 'n' (no)
    */
