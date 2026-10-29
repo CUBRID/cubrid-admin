@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
@@ -37,17 +37,10 @@ export default function MonitoringProvider({ children }) {
   loggedInActiveRef.current = loggedInActiveDatabases;
   const isAuthorized = Boolean(selectedHostUid && authorizedHosts.includes(selectedHostUid));
 
-  // One poll of each kind per host at a time. A host's CMS requests run one
-  // after another, so while a slow one holds it (e.g. lockdb on a database
-  // with many locks) a tick every interval would pile up requests that then
-  // all run back to back once it frees up.
-  const inFlightRef = useRef(new Set());
-  const pollOnce = useCallback((key, request) => {
-    if (inFlightRef.current.has(key)) return;
-    inFlightRef.current.add(key);
-    Promise.resolve(dispatch(request)).finally(() => inFlightRef.current.delete(key));
-  }, [dispatch]);
-
+  // A tick that finds a read of the same kind still in flight for the host
+  // shares it (see createSharedReads) instead of queueing another behind it,
+  // so a slow request (e.g. lockdb on a database with many locks) can't make
+  // polls pile up.
   const dashboardTimer = useRef(null);
   const brokerTimer = useRef(null);
   const lastActivityRef = useRef(Date.now());
@@ -91,10 +84,10 @@ export default function MonitoringProvider({ children }) {
     if (isMonitoringTab && interval > 0 && isAuthorized && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
-          pollOnce(`start-info:${hostUid}`, fetchDatabaseStartInfo({ hostUid, isBackground: true }));
+          dispatch(fetchDatabaseStartInfo({ hostUid, isBackground: true }));
           const loggedInActive = loggedInActiveRef.current;
           if (loggedInActive.length > 0) {
-            pollOnce(`volumes:${hostUid}`, fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActive, isBackground: true }));
+            dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActive, isBackground: true }));
           }
         }
       };
@@ -106,7 +99,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (dashboardTimer.current) clearInterval(dashboardTimer.current);
     };
-  }, [dispatch, pollOnce, preferences.dashboardInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.dashboardInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   // Broker Interval Refresh
   useEffect(() => {
@@ -121,7 +114,7 @@ export default function MonitoringProvider({ children }) {
     if (isMonitoringTab && interval > 0 && isAuthorized && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
-          pollOnce(`brokers:${hostUid}`, fetchBrokerList({ hostUid, isBackground: true }));
+          dispatch(fetchBrokerList({ hostUid, isBackground: true }));
         }
       };
 
@@ -132,7 +125,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (brokerTimer.current) clearInterval(brokerTimer.current);
     };
-  }, [dispatch, pollOnce, preferences.brokerStatusInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.brokerStatusInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   return children;
 }

@@ -131,27 +131,16 @@ it('waits for the interval after a failed poll instead of retrying at once', asy
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
 });
 
-it('skips a tick while the previous poll is still waiting on the host', async () => {
+it('keeps dispatching each tick while a read is still waiting on the host', async () => {
+  // A read still in flight is shared by the next tick's thunk (see
+  // createSharedReads), so dispatching again sends nothing new.
   releaseStartInfo = () => {};
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(10000);
-  });
-  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-
-  // The host is busy with something slow: later ticks do not pile up.
   await act(async () => {
     await vi.advanceTimersByTimeAsync(30000);
   });
-  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-  expect(countOf('test/fetchBrokerList')).toBe(5);
-
-  const release = releaseStartInfo;
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(4);
+  expect(countOf('test/fetchBrokerList')).toBe(4);
   releaseStartInfo = null;
-  await act(async () => { release(); });
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(10000);
-  });
-  expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
 });
 
 it('stops polling the host while a modal is open and refreshes once when it closes', async () => {
