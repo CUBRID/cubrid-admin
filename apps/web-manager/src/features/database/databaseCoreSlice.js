@@ -446,18 +446,17 @@ const databaseCoreSlice = createSlice({
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
         if (!isBackground) endForegroundRead(state, hostUid);
-        // A failure is newer information too, but only when nothing newer was
-        // applied meanwhile. A background poll failure is transient and
-        // leaves the navigator alone; only an explicit fetch failure empties
-        // the tree.
+        // A background poll failure is transient: it keeps the lists the
+        // dashboards show. Only an explicit fetch failure, when nothing newer
+        // was applied meanwhile, empties them and the tree.
         const { seq } = action.meta;
-        if (seq === undefined) return;
+        if (isBackground || seq === undefined) return;
         if (seq > (state.appliedLiveSeqByHost[hostUid] ?? 0)) {
           state.appliedLiveSeqByHost[hostUid] = seq;
           clearList(state.databasesByHost, hostUid);
           clearList(state.activeDatabasesByHost, hostUid);
         }
-        if (!isBackground && seq > (state.appliedNavigatorSeqByHost[hostUid] ?? 0)) {
+        if (seq > (state.appliedNavigatorSeqByHost[hostUid] ?? 0)) {
           state.appliedNavigatorSeqByHost[hostUid] = seq;
           state.error = action.payload;
           clearList(state.navigatorDatabasesByHost, hostUid);

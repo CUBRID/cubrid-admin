@@ -309,7 +309,7 @@ describe('broker lists are stored per host, not in one shared array', () => {
     brokerApi.getBrokerList.mockImplementationOnce(() => before.promise).mockImplementationOnce(() => after.promise);
     const store = configureStore({ reducer: { broker: reducer } });
 
-    const stale = store.dispatch(fetchBrokerList({ hostUid: 'hostA', afterAction: true, skipStatusEnrichment: true }));
+    const stale = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
     store.dispatch(closeHostTabs('hostA'));
     // Reconnected: a new list request is in flight for the same host.
     const fresh = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
@@ -379,7 +379,8 @@ describe('fetchBrokerList after a broker action', () => {
   };
   const list = (state) => ({ result: [{ ...rawBroker('broker1'), state }] });
   // skipStatusEnrichment keeps these independent of how statuses are fetched.
-  const fetchAfterAction = () => fetchBrokerList({ hostUid: 'host1', afterAction: true, skipStatusEnrichment: true });
+  // An action's refetch is a plain foreground read.
+  const fetchAfterAction = () => fetchBrokerList({ hostUid: 'host1', skipStatusEnrichment: true });
   const backgroundPoll = () => fetchBrokerList({ hostUid: 'host1', isBackground: true, skipStatusEnrichment: true });
   const shownState = (store) => store.getState().broker.brokersByHost.host1?.[0]?.state;
 

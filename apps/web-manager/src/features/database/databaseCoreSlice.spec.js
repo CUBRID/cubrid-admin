@@ -252,6 +252,19 @@ describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () =>
 
   // Each failed poll of an unreachable host used to store a new empty array,
   // and the polling that depends on the list then polled again at once.
+  it('keeps the shown lists when a background poll fails', async () => {
+    databaseApi.getStartInfo.mockResolvedValueOnce({ dblist: { dbs: [{ dbname: 'demodb' }] }, activelist: { active: ['demodb'] } });
+    const store = configureStore({ reducer });
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    const shown = store.getState();
+
+    databaseApi.getStartInfo.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
+    await store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+
+    expect(store.getState().databasesByHost.hostA).toBe(shown.databasesByHost.hostA);
+    expect(store.getState().activeDatabasesByHost.hostA).toEqual(['demodb']);
+  });
+
   it('keeps the same empty lists when polls of an unreachable host keep failing', async () => {
     databaseApi.getStartInfo.mockRejectedValue(new Error('connect ECONNREFUSED'));
     const store = configureStore({ reducer });
