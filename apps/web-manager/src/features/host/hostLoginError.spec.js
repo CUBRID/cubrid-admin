@@ -88,4 +88,13 @@ describe('loginToHost', () => {
     expect(state.hostAuthErrors).toEqual({ h2: 'h2 failed' });
     expect(state.error).toBe('h2 failed');
   });
+
+  it("leaves another host's failure alone when both failed with the same message", () => {
+    let state = reducer(undefined, loginToHost.rejected(null, 'a', 'h1', 'No response'));
+    state = reducer(state, loginToHost.rejected(null, 'b', 'h2', 'No response'));
+    state = reducer(state, loginToHost.pending('c', 'h1'));
+
+    expect(state.hostAuthErrors).toEqual({ h2: 'No response' });
+    expect(state.error).toBe('No response');
+  });
 });

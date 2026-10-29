@@ -1743,6 +1743,11 @@ export const CM_KO = {
   importSummaryMsg: (addedCount, groupSummary, skippedCount) =>
     `${groupSummary}에 호스트 ${addedCount}개를 가져왔습니다. ${skippedCount}개 항목은 건너뛰었습니다.`,
   importRolledBackMsg: '가져오기가 롤백되었습니다. 호스트가 추가되지 않았습니다.',
+  importRollbackIncompleteMsg: (groupCount, hostNames) => [
+    groupCount > 0 ? `가져온 그룹 ${groupCount}개를 지우지 못했습니다.` : '',
+    hostNames.length > 0 ? `가져온 호스트를 지우지 못했습니다: ${hostNames.join(', ')}.` : '',
+    '다시 가져오기 전에 호스트 목록에서 지워 주세요.',
+  ].filter(Boolean).join(' '),
   importFailedMsg: '호스트를 가져오지 못했습니다.',
   failedToCreateImportGroupMsg: (name) => `가져오기 그룹 "${name}"을(를) 생성하지 못했습니다.`,
   passwordSavedMsg: (count) => `호스트 ${count}개에 비밀번호가 저장되었습니다. 준비되면 사이드바에서 로그인하세요.`,

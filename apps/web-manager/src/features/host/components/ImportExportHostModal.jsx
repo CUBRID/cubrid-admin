@@ -119,11 +119,14 @@ export default function ImportExportHostModal() {
     reader.readAsText(file);
   };
 
+  // Returns how many of the groups could not be deleted.
   const rollbackImportGroups = async (groupIds) => {
+    let failed = 0;
     for (const groupId of [...groupIds].reverse()) {
       if (!groupId) continue;
-      await dispatch(deleteHostGroup(groupId)).unwrap().catch(() => {});
+      await dispatch(deleteHostGroup(groupId)).unwrap().catch(() => { failed += 1; });
     }
+    return failed;
   };
 
   const createImportGroup = async (name) => {
@@ -203,7 +206,7 @@ export default function ImportExportHostModal() {
           byGroup: hostsByGroup,
           unassigned: unassignedHosts,
         } = partitionImportRows(hostsToAdd);
-        const addedUngroupedUids = [];
+        const addedUngroupedHosts = [];
 
         try {
           dispatch(setSkipAutoHostLogin(true));
@@ -237,7 +240,7 @@ export default function ImportExportHostModal() {
           for (const hostData of ungroupedHosts) {
             const addedHost = await addImportedHost(hostData, undefined);
             if (addedHost) {
-              addedUngroupedUids.push(addedHost.uid);
+              addedUngroupedHosts.push(addedHost);
               importedWithoutPassword.push(addedHost);
             }
           }
@@ -263,14 +266,22 @@ export default function ImportExportHostModal() {
             dispatch(closeImportExportModal());
           }
         } catch (err) {
-          await rollbackImportGroups(createdGroupIds);
-          for (const uid of addedUngroupedUids) {
-            await dispatch(deleteHost(uid)).unwrap().catch(() => {});
+          const groupsLeft = await rollbackImportGroups(createdGroupIds);
+          const hostsLeft = [];
+          for (const host of addedUngroupedHosts) {
+            await dispatch(deleteHost(host.uid)).unwrap().catch(() => {
+              hostsLeft.push(host.alias || host.address);
+            });
           }
+          // Whatever could not be removed is still in the host list, and a
+          // later import would see those hosts as duplicates.
+          const leftover = groupsLeft > 0 || hostsLeft.length > 0
+            ? CM.importRollbackIncompleteMsg(groupsLeft, hostsLeft)
+            : null;
           dispatch(showStatusModal({
             type: 'error',
             title: CM.importFailedTitle,
-            message: err?.message || CM.importRolledBackMsg,
+            message: [err?.message || CM.importRolledBackMsg, leftover].filter(Boolean).join(' '),
           }));
         } finally {
           dispatch(setSkipAutoHostLogin(false));

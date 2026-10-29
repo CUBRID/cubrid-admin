@@ -24,10 +24,15 @@ function purgeHostClientState(state, hostUid) {
 // reconnect modal) and as the slice-wide `error` the host modals show. Only
 // the per-host copy used to be cleared by a later login, so a success left
 // the old failure in `error` for the next Add/Edit Host modal to show.
+// `loginErrorHostUid` names the host that wrote `error`, so one host's retry
+// can't clear another host's failure that happens to read the same.
 function clearHostLoginError(state, hostUid) {
   const message = state.hostAuthErrors[hostUid];
   if (message === undefined) return;
-  if (state.error === message) state.error = null;
+  if (state.loginErrorHostUid === hostUid && state.error === message) {
+    state.error = null;
+    state.loginErrorHostUid = null;
+  }
   delete state.hostAuthErrors[hostUid];
 }
 
@@ -473,6 +478,7 @@ const initialState = {
   isEditCmsUserModalOpen: false,
   cmsUserToEdit: null, // { hostUid, user }
   error: null,
+  loginErrorHostUid: null, // host whose failed login wrote `error`
   reconnectQueue: [],
 };
 
@@ -772,6 +778,7 @@ const hostSlice = createSlice({
         state.hostAuthErrors[action.meta.arg] = action.payload;
         if (!state.isBatchHostLogin) {
           state.error = action.payload;
+          state.loginErrorHostUid = action.meta.arg;
         }
       })
       // Silent background refresh — no loading/error state, so a failure
