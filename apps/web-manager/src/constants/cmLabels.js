@@ -112,6 +112,13 @@ export const CM = {
   runDeadlockInterval: 'Run deadlock interval',
   currentLockedObjNum: 'Current number of objects which are locked',
   maxLockedObjNum: 'Maximum number of objects which can be locked',
+  allocatedLockObjNum: 'Current number of objects which are allocated',
+  allocatedLockObjSize: 'Current size of objects which are allocated',
+  lockHolders: 'Holders (transaction: mode)',
+  lockSummaryView: 'Summary',
+  lockObjectDetailView: 'Per object (OID)',
+  lockObjectDetailHint: 'Loads every locked object. With many locks this takes longer.',
+  lockEscalationUnit: 'row locks',
   waitingSuffix: ' (waiting)',
 
   checkDatabase: 'Check Database',

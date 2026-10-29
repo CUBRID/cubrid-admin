@@ -82,6 +82,13 @@ export const CM_KO = {
   runDeadlockInterval: '데드락 검사 간격',
   currentLockedObjNum: '현재 잠긴 객체 수',
   maxLockedObjNum: '최대 잠금 가능 객체 수',
+  allocatedLockObjNum: '현재 할당된 객체 수',
+  allocatedLockObjSize: '현재 할당된 객체 크기',
+  lockHolders: '보유 트랜잭션 (트랜잭션: 모드)',
+  lockSummaryView: '요약',
+  lockObjectDetailView: '객체별 (OID)',
+  lockObjectDetailHint: '잠긴 객체를 모두 불러옵니다. 잠금이 많으면 오래 걸립니다.',
+  lockEscalationUnit: '행 잠금',
   waitingSuffix: ' (대기 중)',
 
   checkDatabase: '데이터베이스 검사',

@@ -22,13 +22,31 @@ const deferred = () => {
 };
 
 const lockResponse = (...pnames) => ({
-  lockinfo: [{
-    dinterval: '1000',
+  overview: {
     esc: '100000',
-    lot: [{ numlocked: '1', numallocated: '10', entry: [] }],
-    transaction: pnames.map((pname, i) => ({ index: String(i + 1), pname, isolevel: 'READ COMMITTED' })),
-  }],
+    dinterval: '1.00',
+    numlocked: '1',
+    numallocated: '1000',
+    sizelock: '242K',
+    maxnumlock: '',
+    transactions: pnames.map((program, i) => ({
+      index: String(i + 1), program, user: 'DBA', host: 'app1', pid: '111', isolation: 'COMMITTED READ', timeout: ':',
+    })),
+  },
+  summary: {
+    totalLocks: 3,
+    rows: pnames.length ? [
+      { index: '1', user: 'DBA', host: 'app1', pid: '111', program: pnames[0], obj: 'Instance of class = dba.t1', mode: 'X_LOCK', count: 2 },
+      { index: '1', user: 'DBA', host: 'app1', pid: '111', program: pnames[0], obj: 'Class = dba.t1', mode: 'IX_LOCK', count: 1 },
+    ] : [],
+  },
 });
+
+const objectResponse = {
+  objects: [
+    { oid: '0|201|-32763', obj: 'Class = dba.t1', holders: [{ index: '1', mode: 'IX_LOCK', count: '1' }], numHolders: '1', numBlockedHolders: '0', numWaiters: '0' },
+  ],
+};
 
 const makeStore = () => configureStore({
   reducer: {
@@ -114,5 +132,35 @@ describe('LockInformationModal', () => {
     await act(async () => q('lock-information-retry-btn').click());
     expect(q('lock-information-error')).toBeNull();
     expect(q('lock-information-modal').textContent).toContain('csql');
+  });
+
+  it('shows the transaction lock count, no ":" timeout, and the CMS units', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse('csql'));
+    await render(makeStore());
+
+    expect(databaseApi.getLockInfo).toHaveBeenCalledWith('host1', 'demodb', { summary: true });
+    const cells = [...document.querySelectorAll('tbody tr td')].map((td) => td.textContent);
+    expect(cells).toContain('3');
+    expect(cells).not.toContain(':');
+
+    await act(async () => document.querySelector('[data-testid="lock-information-tab-objects"]')?.click());
+    const frame = q('lock-information-modal');
+    expect(frame.textContent).toContain(CM.allocatedLockObjNum);
+    expect(frame.textContent).toContain('242');
+    expect(frame.textContent).toContain('KiB');
+    expect(frame.textContent).toContain('Instance of class = dba.t1');
+  });
+
+  it('loads per-object rows only when that view is opened', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse('csql'));
+    await render(makeStore());
+    await act(async () => document.querySelector('[data-testid="lock-information-tab-objects"]')?.click());
+    expect(databaseApi.getLockInfo).toHaveBeenCalledTimes(1);
+
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse('csql')).mockResolvedValueOnce(objectResponse);
+    await act(async () => q('lock-information-object-view').click());
+
+    expect(databaseApi.getLockInfo).toHaveBeenCalledWith('host1', 'demodb', { objects: true });
+    expect(q('lock-information-objects')).toBeTruthy();
   });
 });
