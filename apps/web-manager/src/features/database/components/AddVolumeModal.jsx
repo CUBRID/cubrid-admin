@@ -68,15 +68,15 @@ export default function AddVolumeModal() {
   const [purpose, setPurpose] = useState('data');
   const [path, setPath] = useState('');
   const [sizeMB, setSizeMB] = useState(512);
-  const [sizeUnit, setSizeUnit] = useState('MB');
+  const [sizeUnit, setSizeUnit] = useState('MiB');
   const [fetchingStatus, setFetchingStatus] = useState(false);
 
   // Custom-capacity input displays/accepts whichever unit is selected, but
-  // sizeMB itself (used for numberOfPages/payload/presets) always stays in MB.
-  const displaySize = sizeUnit === 'GB' ? parseFloat((sizeMB / 1024).toFixed(3)) : sizeMB;
+  // sizeMB itself (used for numberOfPages/payload/presets) always stays in MiB.
+  const displaySize = sizeUnit === 'GiB' ? parseFloat((sizeMB / 1024).toFixed(3)) : sizeMB;
   const handleDisplaySizeChange = (value) => {
     const parsed = parseFloat(value) || 0;
-    setSizeMB(sizeUnit === 'GB' ? parsed * 1024 : parsed);
+    setSizeMB(sizeUnit === 'GiB' ? parsed * 1024 : parsed);
   };
 
   const numberOfPages = Math.floor(sizeMB * 1024 / 16);
@@ -284,11 +284,11 @@ export default function AddVolumeModal() {
               suffix={
                 <button
                   type="button"
-                  onClick={() => setSizeUnit((u) => (u === 'MB' ? 'GB' : 'MB'))}
+                  onClick={() => setSizeUnit((u) => (u === 'MiB' ? 'GiB' : 'MiB'))}
                   className="text-12 font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                   title={CM.switchUnit}
                 >
-                  {sizeUnit === 'GB' ? 'GiB' : 'MiB'}
+                  {sizeUnit}
                 </button>
               }
               min={0}

@@ -68,7 +68,7 @@ const INITIAL_FORM_DATA = {
     // (data_ext_page/index_ext_page) is a page count, computed from this
     // and formData.pageSize right before submit — see handleFinish.
     extSize: '512',
-    extUnit: 'MB',
+    extUnit: 'MiB',
   },
   baseDir: '',
   dbaPassword: '',
@@ -295,7 +295,7 @@ export default function CreateDatabaseModal() {
         }
       }));
 
-      const extSizeBytes = Number(formData.autoAddVol.extSize) * (formData.autoAddVol.extUnit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024);
+      const extSizeBytes = Number(formData.autoAddVol.extSize) * (formData.autoAddVol.extUnit === 'GiB' ? 1024 * 1024 * 1024 : 1024 * 1024);
       const extPage = String(Math.floor(extSizeBytes / formData.pageSize));
 
       const payload = {
@@ -588,7 +588,7 @@ export default function CreateDatabaseModal() {
                   label={CM.pageSize}
                   value={formData.pageSize}
                   onChange={(e) => handleInputChange('pageSize', parseInt(e.target.value))}
-                  options={PAGE_SIZES.map(s => ({ value: s, label: `${s / 1024} KB` }))}
+                  options={PAGE_SIZES.map(s => ({ value: s, label: `${s / 1024} KiB` }))}
                 />
               </div>
             </div>
@@ -740,10 +740,10 @@ export default function CreateDatabaseModal() {
                       />
                       <Input
                         type="number"
-                        value={vol.unit === 'GB' ? parseFloat((vol.size / 1024).toFixed(3)) : vol.size}
+                        value={vol.unit === 'GiB' ? parseFloat((vol.size / 1024).toFixed(3)) : vol.size}
                         onChange={(e) => {
                           const parsed = Number(e.target.value) || 0;
-                          handleVolumeChange(idx, 'size', vol.unit === 'GB' ? parsed * 1024 : parsed);
+                          handleVolumeChange(idx, 'size', vol.unit === 'GiB' ? parsed * 1024 : parsed);
                         }}
                         size="sm"
                         min={0}
@@ -751,11 +751,11 @@ export default function CreateDatabaseModal() {
                         suffix={
                           <button
                             type="button"
-                            onClick={() => handleVolumeChange(idx, 'unit', vol.unit === 'GB' ? 'MB' : 'GB')}
+                            onClick={() => handleVolumeChange(idx, 'unit', vol.unit === 'GiB' ? 'MiB' : 'GiB')}
                             className="text-12 font-black text-slate-400 dark:text-slate-500 hover:text-amber-500 tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                             title={CM.switchUnit}
                           >
-                            {vol.unit === 'GB' ? 'GiB' : 'MiB'}
+                            {vol.unit === 'GiB' ? 'GiB' : 'MiB'}
                           </button>
                         }
                       />
@@ -843,7 +843,7 @@ export default function CreateDatabaseModal() {
                       <div className="w-[80px] shrink-0">
                         <Select
                           value={formData.autoAddVol.extUnit}
-                          options={[{ value: 'MB', label: 'MiB' }, { value: 'GB', label: 'GiB' }]}
+                          options={[{ value: 'MiB', label: 'MiB' }, { value: 'GiB', label: 'GiB' }]}
                           onChange={(e) => handleAutoAddVolChange('extUnit', e.target.value)}
                           className="w-full"
                         />
@@ -907,7 +907,7 @@ export default function CreateDatabaseModal() {
                 <SectionHeader title={CM.configuration} icon="tune" className="mb-4" />
                 <div className="space-y-0.5 mt-1">
                   <SummaryRow label={CM.databaseName} value={formData.dbName} accent />
-                  <SummaryRow label={CM.pageSize} value={`${formData.pageSize / 1024} KB`} />
+                  <SummaryRow label={CM.pageSize} value={`${formData.pageSize / 1024} KiB`} />
                   <SummaryRow label={CM.localeCharset} value={formData.locale === 'user_defined' ? formData.userDefinedLocale : formData.locale.split('.')[0]} />
                   <SummaryRow label={CM.autoStart} value={formData.autoStart ? CM.yes : CM.no} />
                 </div>
@@ -917,8 +917,8 @@ export default function CreateDatabaseModal() {
                 <SectionHeader title={CM.storage} icon="hard_drive" className="mb-4" />
                 <div className="space-y-0.5 mt-1">
                   <SummaryRow label={CM.totalVolumes} value={`${formData.volumes.length + 2}`} />
-                  <SummaryRow label={CM.genericVolume} value={`${formData.genericVolSize} MB`} />
-                  <SummaryRow label={CM.logVolume} value={`${formData.logVolSize} MB`} />
+                  <SummaryRow label={CM.genericVolume} value={`${formData.genericVolSize} MiB`} />
+                  <SummaryRow label={CM.logVolume} value={`${formData.logVolSize} MiB`} />
                   <div className="py-2 border-b border-slate-100 dark:border-white/4">
                     <span className="text-13 text-slate-500 dark:text-slate-400 font-medium block mb-1">{CM.genericVolPath}</span>
                     <span
@@ -930,7 +930,7 @@ export default function CreateDatabaseModal() {
                   </div>
                   <div className="flex items-center justify-between pt-3 mt-1.5 border-t border-slate-100 dark:border-white/4">
                     <span className="text-13 font-black text-slate-500 uppercase tracking-widest">{CM.totalLabel}</span>
-                    <span className="text-18 font-black font-mono text-emerald-500 tracking-tight">{totalStorage} MB</span>
+                    <span className="text-18 font-black font-mono text-emerald-500 tracking-tight">{totalStorage} MiB</span>
                   </div>
                 </div>
               </div>
@@ -984,7 +984,7 @@ export default function CreateDatabaseModal() {
                     <span className={`text-11 font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border leading-tight ${typeBadge('data')}`}>
                       {CM.permanent}
                     </span>
-                    <span className="text-13 font-black font-mono text-slate-700 dark:text-slate-300 w-16 text-right tabular-nums">{vol.size} MB</span>
+                    <span className="text-13 font-black font-mono text-slate-700 dark:text-slate-300 w-16 text-right tabular-nums">{vol.size} MiB</span>
                   </div>
                 ))}
               </div>

@@ -9,7 +9,7 @@ import { Typography } from './Typography';
  * @param {string} icon - Material Icon name
  * @param {string} label - Conceptual metric title (e.g., "Active Sessions")
  * @param {string|number} value - The primary metric data
- * @param {string} unit - Optional data unit (e.g., "ms", "KB")
+ * @param {string} unit - Optional data unit (e.g., "ms", "KiB")
  * @param {string} accent - Design token: amber, sky, violet, rose, emerald, slate
  * @param {string} className - Optional container overrides
  * @param {boolean} isLoading - Shows subtle pulse state when polling

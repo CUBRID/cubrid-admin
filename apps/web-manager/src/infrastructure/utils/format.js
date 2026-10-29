@@ -39,7 +39,7 @@ export const formatPagesToSize = (pages, pageSize) => {
 };
 
 /**
- * Format storage free space (KB to human readable)
+ * Format storage free space (KiB to human readable)
  * @param {number|string} kb 
  * @returns {string}
  */
@@ -50,7 +50,7 @@ export const formatKBToSize = (kb) => {
 };
 
 /**
- * Simple MB to GB/MB formatter
+ * Simple MiB to GiB/MiB formatter
  * @param {number} mb 
  * @returns {string}
  */

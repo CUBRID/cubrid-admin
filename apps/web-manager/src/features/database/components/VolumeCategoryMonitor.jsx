@@ -175,7 +175,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize, status, title }) => {
                     <div className={`h-full ${barColor} transition-all duration-700ms`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-12 font-bold font-mono text-slate-500">{formatMB(usedPages, pageSize)} MB {CM.usedLabel}</span>
+                    <span className="text-12 font-bold font-mono text-slate-500">{formatMB(usedPages, pageSize)} MiB {CM.usedLabel}</span>
                     <span className="text-12 font-bold font-mono text-slate-400">{pct.toFixed(1)}%</span>
                   </div>
                 </div>
