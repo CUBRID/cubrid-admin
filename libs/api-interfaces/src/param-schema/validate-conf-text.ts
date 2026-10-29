@@ -6,6 +6,7 @@ import { DEPRECATED_PARAM_REPLACEMENTS } from './deprecated-param-replacements';
 import { validateCmConfText } from './validate-cm-conf-text';
 import { CM_PENDING_PARAM_SCHEMA, CM_TEMPLATE_ONLY_KEYS } from './cm-unreleased-keys';
 import { parseGuardInt } from './validate-param-value';
+import { BROKER_KEY_GUARDS } from './broker-key-guards';
 
 export type ConfFileKind = 'cubridconf' | 'brokerconf' | 'cmconf';
 
@@ -90,6 +91,14 @@ export function validateConfText(
         const guard = knownKeys?.databaseGuards?.[key.toLowerCase()];
         if (guard) {
           entry = { key: key.toLowerCase(), category: 'advanced', guard };
+          generated.push(entry);
+        }
+      }
+      // broker.conf keys the schema doesn't cover, read only per broker.
+      if (!entry && kind === 'brokerconf' && section.name?.startsWith('%') && (!known || known.has(key.toLowerCase()))) {
+        const guard = BROKER_KEY_GUARDS[key.toUpperCase()];
+        if (guard) {
+          entry = { key: key.toUpperCase(), category: 'advance', guard };
           generated.push(entry);
         }
       }

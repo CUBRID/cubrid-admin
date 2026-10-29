@@ -159,3 +159,31 @@ describe('validateConfText — cubrid.conf HA host and standalone sections', () 
   });
 });
 
+
+describe('validateConfText — broker keys outside the schema (BROKER_KEY_GUARDS)', () => {
+  const file = (lines) => `[broker]\nMASTER_SHM_ID=30001\n[%b1]\nBROKER_PORT=30000\n${lines}`;
+  const problemKeys = (lines) => validateConfText(BROKER_SCHEMA, file(lines), 'brokerconf').map((p) => p.key);
+
+  it('accepts what broker_config.c accepts', () => {
+    expect(problemKeys('NET_BUF_SIZE=32K\nSHARD=off\nAPPL_SERVER=cas_oracle\nJOB_QUEUE_SIZE=4096\nSHARD_PROXY_TIMEOUT=1h\nACCESS_LOG_MAX_SIZE=1G')).toEqual([]);
+  });
+
+  it('rejects values the broker refuses to load', () => {
+    expect(problemKeys('NET_BUF_SIZE=20K')).toEqual(['NET_BUF_SIZE']); // 16/32/48/64 KB only
+    expect(problemKeys('SHARD=yes')).toEqual(['SHARD']); // ON/OFF only
+    expect(problemKeys('ACCESS_LOG_MAX_SIZE=3G')).toEqual(['ACCESS_LOG_MAX_SIZE']);
+    expect(problemKeys('SHARD_PROXY_TIMEOUT=90000')).toEqual(['SHARD_PROXY_TIMEOUT']); // > 86400 s
+    expect(problemKeys('SHARD_KEY_FILE=')).toEqual(['SHARD_KEY_FILE']);
+    expect(problemKeys('MAX_PREPARED_STMT_COUNT=0')).toEqual(['MAX_PREPARED_STMT_COUNT']);
+    expect(problemKeys('SHARD_PROXY_LOG=debug')).toEqual(['SHARD_PROXY_LOG']); // DEBUG is not in tbl_proxy_log_mode
+  });
+
+  it('rejects values the broker would silently replace', () => {
+    expect(problemKeys('JOB_QUEUE_SIZE=5000')).toEqual(['JOB_QUEUE_SIZE']); // lowered to 4096
+    expect(problemKeys('SQL_LOG2=4')).toEqual(['SQL_LOG2']); // lowered to 3
+  });
+
+  it('leaves the [broker] section alone, where these keys are never read', () => {
+    expect(validateConfText(BROKER_SCHEMA, '[broker]\nMASTER_SHM_ID=30001\nNET_BUF_SIZE=20K\n[%b1]\nBROKER_PORT=30000', 'brokerconf')).toEqual([]);
+  });
+});

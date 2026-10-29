@@ -164,6 +164,7 @@ export function validateParamValue(guard: ParamGuard | undefined, rawValue: unkn
       const truncatedKb = Math.trunc(kb);
       if (guard.minKb !== undefined && truncatedKb < guard.minKb) return `Must be >= ${guard.minKb}K`;
       if (guard.maxKb !== undefined && truncatedKb > guard.maxKb) return `Must be <= ${guard.maxKb}K`;
+      if (guard.exactKb && !guard.exactKb.includes(truncatedKb)) return `Must be one of ${guard.exactKb.map((kb) => `${kb}K`).join(', ')}`;
       return null;
     }
     case 'brokerTime': {

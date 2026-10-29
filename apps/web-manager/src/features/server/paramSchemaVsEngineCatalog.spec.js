@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compareEngineVersions } from '@api-interfaces/param-schema/resolve-param-schema';
 import { DATABASE_PARAM_SCHEMA } from '@api-interfaces/param-schema/database-param-schema';
 import { BROKER_PARAM_SCHEMA } from '@api-interfaces/param-schema/broker-param-schema';
+import { BROKER_KEY_GUARDS } from '@api-interfaces/param-schema/broker-key-guards';
 import { ENGINE_PARAM_CATALOG } from '@api-interfaces/param-schema/engine-catalog/engine-param-catalog.generated';
 import { DEPRECATED_PARAM_REPLACEMENTS } from '@api-interfaces/param-schema/deprecated-param-replacements';
 
@@ -126,5 +127,16 @@ describe('broker defaults the catalog cannot check', () => {
   // broker_keywords[] carries names only, so defaults read from broker_config.c are pinned here.
   it('ACCESS_LOG defaults to OFF (INI_GETSTR_CHK ... "ACCESS_LOG", "OFF")', () => {
     expect(BROKER_PARAM_SCHEMA.find(e => e.key === 'ACCESS_LOG').default).toBe('OFF');
+  });
+});
+
+describe('BROKER_KEY_GUARDS vs the engine catalog', () => {
+  it('names only real broker keywords that the schema does not already cover', () => {
+    const catalogued = new Set(ENGINE_PARAM_CATALOG.versions.flatMap((v) => v.broker.map((b) => b.key.toUpperCase())));
+    const inSchema = new Set(BROKER_PARAM_SCHEMA.map((e) => e.key.toUpperCase()));
+    for (const key of Object.keys(BROKER_KEY_GUARDS)) {
+      expect(catalogued.has(key), key).toBe(true);
+      expect(inSchema.has(key), key).toBe(false);
+    }
   });
 });
