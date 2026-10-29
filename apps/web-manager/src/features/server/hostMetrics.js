@@ -105,7 +105,7 @@ export function volumeGroup(space) {
   const purpose = (space?.purpose || '').toUpperCase();
   if (type === 'DATA' || type === 'INDEX' || type === 'GENERIC') return 'permPerm';
   if (type === 'TEMP') return 'permTemp';
-  if (type === 'PERMANENT') return purpose === 'PERMANENT' ? 'permPerm' : 'permTemp';
+  if (type === 'PERMANENT') return purpose === 'TEMPORARY' ? 'permTemp' : 'permPerm';
   if (type === 'TEMPORARY') return 'tempTemp';
   return null;
 }
