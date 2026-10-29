@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { compareEngineVersions } from '@api-interfaces/param-schema/resolve-param-schema';
+import { compareEngineVersions, resolveParamSchema } from '@api-interfaces/param-schema/resolve-param-schema';
+import { guardFromCatalog } from '@api-interfaces/param-schema/engine-catalog/resolve-engine-known-keys';
 import { DATABASE_PARAM_SCHEMA } from '@api-interfaces/param-schema/database-param-schema';
 import { BROKER_PARAM_SCHEMA } from '@api-interfaces/param-schema/broker-param-schema';
 import { BROKER_KEY_GUARDS } from '@api-interfaces/param-schema/broker-key-guards';
@@ -138,5 +139,34 @@ describe('BROKER_KEY_GUARDS vs the engine catalog', () => {
       expect(catalogued.has(key), key).toBe(true);
       expect(inSchema.has(key), key).toBe(false);
     }
+  });
+});
+
+describe('DATABASE_PARAM_SCHEMA bounds vs the engine catalog', () => {
+  // Hand-written bounds drifted once (buffer sizes computed at 4K pages while
+  // cubrid.conf is first read at 16K). Where the catalog gives a guard of the
+  // same kind, its bounds must match. Known, intended differences:
+  const ALLOWED = new Set([
+    'deadlock_detection_interval_in_secs.max', // FLT_MAX cap from the catalog
+    'max_query_cache_entries.max', // INT_MAX, the int guard's own limit
+    'query_cache_size_in_pages.max',
+    'index_scan_oid_buffer_pages.min', // 0.05 vs the engine's 0.049999
+    'db_volume_size.min', // 0: a size is never negative anyway
+  ]);
+  it('every numeric bound of a schema key agrees with the one derived from the engine (11.4.5)', () => {
+    const version = ENGINE_PARAM_CATALOG.versions.find((v) => v.engineVersion === '11.4.5');
+    const mismatches = [];
+    for (const entry of resolveParamSchema(DATABASE_PARAM_SCHEMA, '11.4.5')) {
+      const param = version.db.find((p) => p.key === entry.key);
+      const derived = param && guardFromCatalog(param);
+      if (!derived || derived.kind !== entry.guard.kind) continue;
+      for (const bound of ['min', 'max']) {
+        const a = entry.guard[bound];
+        const b = derived[bound];
+        const same = (a === undefined && b === undefined) || (a !== undefined && b !== undefined && Number(a) === Number(b));
+        if (!same && !ALLOWED.has(`${entry.key}.${bound}`)) mismatches.push(`${entry.key}.${bound}: schema ${a}, engine ${b}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 });
