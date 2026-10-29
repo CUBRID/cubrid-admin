@@ -4,6 +4,7 @@ import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
+import { CmsConfigService } from '@cms-config/cms-config.service';
 import { DatabaseError } from '@error/database/database-error';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
@@ -50,6 +51,7 @@ describe('DatabaseManagementService', () => {
   const mockUserId = 'user-123';
   const mockHostUid = 'host-uid-1';
   const mockDbname = 'testdb';
+  let cmsConfigService: { getAllSystemParam: jest.Mock; setSystemParam: jest.Mock };
   const mockStartInfoResponse = { activelist: { active: [] }, dblist: { dbs: [] } };
 
   beforeEach(async () => {
@@ -72,9 +74,18 @@ describe('DatabaseManagementService', () => {
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
+    cmsConfigService = {
+      getAllSystemParam: jest.fn().mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] }),
+      setSystemParam: jest.fn().mockResolvedValue({ success: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseManagementService,
+        {
+          provide: CmsConfigService,
+          useValue: cmsConfigService,
+        },
         {
           provide: HostService,
           useValue: mockHostService,
@@ -928,6 +939,31 @@ describe('DatabaseManagementService', () => {
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
+    });
+
+    it('renames the database in cubrid.conf autostart list and [@dbname] section after renamedb', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', `server=demodb,${mockDbname}`, `[@${mockDbname}]`, 'a=1'] }],
+      });
+
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(
+        mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=demodb,renamed_db', '[@renamed_db]', 'a=1']
+      );
+    });
+
+    it('leaves cubrid.conf alone when nothing in it names the database', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
     });
 
     it('should successfully rename database with advanced "off" without volume', async () => {

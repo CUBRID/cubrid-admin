@@ -84,6 +84,17 @@ it('clears login state for both the old and new name once the rename job succeed
   expect(store.getState().database.loggedInDatabases).toEqual(['host-1:otherdb']);
 });
 
+it('renames the extension volumes in place instead of moving them to the parent directory', async () => {
+  mocks.run.mockResolvedValue(job);
+  await render();
+  await typeNewName('newdb');
+  await click(container.querySelector('[data-testid="rename-database-execute-btn"]'));
+
+  expect(mocks.submitRename).toHaveBeenCalledWith(
+    'host-1', 'demodb', expect.objectContaining({ exvolpath: 'none', advanced: 'off' })
+  );
+});
+
 it('still clears both names when the job was backgrounded and finishes later', async () => {
   let finish;
   mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));

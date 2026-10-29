@@ -18,19 +18,6 @@ import {
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 
-const getPathSeparator = (path) => {
-  if (path && path.includes('\\')) return '\\';
-  return '/';
-};
-
-const getParentDirectory = (path) => {
-  if (!path) return '';
-  const separator = getPathSeparator(path);
-  const parts = path.split(separator);
-  if (parts.length <= 1) return '';
-  return parts.slice(0, -1).join(separator);
-};
-
 const validateDbName = (name) => {
   if (!name) return false;
   if (name.includes(' ')) return false;
@@ -44,10 +31,8 @@ export default function RenameDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isRenameDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
-  const databases = databasesByHost[selectedHostUid] || [];
-  const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const {
     error,
@@ -99,7 +84,9 @@ export default function RenameDatabaseModal() {
     try {
       const payload = {
         rename: renameTo,
-        exvolpath: getParentDirectory(currentDb?.dbdir || '').trim(),
+        // 'none': renamedb renames the extension volumes where they are.
+        // A path here is `renamedb -E`, which moves them into that directory.
+        exvolpath: 'none',
         advanced: 'off',
         forcedel: forcedel ? 'y' : 'n',
       };
