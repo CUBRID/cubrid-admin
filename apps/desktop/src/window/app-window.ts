@@ -16,6 +16,14 @@ function isExternalWebUrl(url: string): boolean {
   }
 }
 
+// openExternal rejects when the OS has no browser for the URL or refuses to
+// start one; nothing else would report that.
+function openInBrowser(url: string): void {
+  shell.openExternal(url).catch((error) => {
+    console.error('[desktop] failed to open link in browser', { url, error });
+  });
+}
+
 /**
  * Web links (Help menu, login footer, release pages) open in the user's
  * default browser. The app never opens a second Electron window, and its
@@ -24,7 +32,7 @@ function isExternalWebUrl(url: string): boolean {
 function routeExternalLinksToBrowser(window: BrowserWindow): void {
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalWebUrl(url)) {
-      void shell.openExternal(url);
+      openInBrowser(url);
     }
     return { action: 'deny' };
   });
@@ -35,7 +43,7 @@ function routeExternalLinksToBrowser(window: BrowserWindow): void {
     }
     event.preventDefault();
     if (isExternalWebUrl(url)) {
-      void shell.openExternal(url);
+      openInBrowser(url);
     }
   });
 }
