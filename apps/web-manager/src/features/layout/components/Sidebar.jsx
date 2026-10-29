@@ -25,6 +25,7 @@ import {
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
+import { restartServiceKeepingDatabases } from '../../host/hostServiceRestart';
 import {
   MULTI_DB_ACTIONS,
   MULTI_DB_ACTION_ICONS,
@@ -1176,6 +1177,35 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               const serverName = contextMenu.alias || contextMenu.server || hostUid;
               setContextMenu(null);
               requestStopService(hostUid, serverName);
+            }}
+          />
+          <MenuItem
+            icon="restart_alt"
+            label={CM.restartService}
+            disabled={!authorizedHosts.includes(contextMenu.hostUid) || sidebarActionLoading}
+            onClick={() => {
+              const hostUid = contextMenu.hostUid;
+              const serverName = contextMenu.alias || contextMenu.server || hostUid;
+              setContextMenu(null);
+              requestActionConfirm({
+                title: CM.confirmRestartServiceTitle,
+                description: CM.confirmRestartServiceDesc(serverName),
+                confirmLabel: CM.restartService,
+                variant: 'danger',
+                run: async () => {
+                  setLoadingText(CM.restartingService);
+                  startAction();
+                  const { problems, notRestarted } = await dispatch(restartServiceKeepingDatabases(hostUid));
+                  resetAction();
+                  const issues = [
+                    ...problems,
+                    notRestarted.length > 0 ? CM.serviceRestartNotRestartedMsg(notRestarted.map((f) => f.dbname)) : '',
+                  ].filter(Boolean);
+                  dispatch(showStatusModal(issues.length > 0
+                    ? { type: 'error', title: CM.restartService, message: issues.join('\n') }
+                    : { type: 'success', title: CM.restartService, message: CM.serviceRestartedMsg }));
+                },
+              });
             }}
           />
           <MenuDivider />
