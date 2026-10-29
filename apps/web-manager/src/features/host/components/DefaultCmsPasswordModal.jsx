@@ -15,8 +15,10 @@ export default function DefaultCmsPasswordModal() {
   const dispatch = useDispatch();
   const hostUids = useSelector((state) => state.layout.defaultCmsPasswordHosts);
   const hosts = useSelector((state) => state.host.hosts);
+  // Stays out of the way while a host password change it opened is showing.
+  const changingPassword = useSelector((state) => state.host.isChangePasswordModalOpen);
 
-  if (hostUids.length === 0) return null;
+  if (hostUids.length === 0 || changingPassword) return null;
 
   const close = () => dispatch(dismissDefaultCmsPassword());
   const change = (uid) => {

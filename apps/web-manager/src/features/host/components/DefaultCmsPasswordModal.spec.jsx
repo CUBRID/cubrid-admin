@@ -20,10 +20,16 @@ const hostSlice = createSlice({
   initialState: {
     hosts: [{ uid: 'h1', alias: 'Prod', address: '10.0.0.1' }, { uid: 'h2', alias: '', address: '10.0.0.2' }],
     opened: null,
+    isChangePasswordModalOpen: false,
   },
-  reducers: {},
+  reducers: {
+    closeChangePassword: (state) => { state.isChangePasswordModalOpen = false; },
+  },
   extraReducers: (builder) => {
-    builder.addMatcher((a) => a.type === 'host/openChangePasswordModal', (state, a) => { state.opened = a.payload; });
+    builder.addMatcher((a) => a.type === 'host/openChangePasswordModal', (state, a) => {
+      state.opened = a.payload;
+      state.isChangePasswordModalOpen = true;
+    });
   },
 });
 
@@ -82,6 +88,10 @@ it('opens the host password change for the chosen host', async () => {
 
   await act(async () => q('default-cms-password-change-h1').click());
   expect(store.getState().host.opened).toBe('h1');
+  // Out of the way while the password change is open, back with the rest after.
+  expect(q('default-cms-password-modal')).toBeNull();
+
+  await act(async () => store.dispatch(hostSlice.actions.closeChangePassword()));
   expect(q('default-cms-password-change-h1')).toBeNull();
   expect(q('default-cms-password-change-h2')).not.toBeNull();
 });

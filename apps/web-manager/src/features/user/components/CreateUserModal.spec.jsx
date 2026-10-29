@@ -156,3 +156,12 @@ it('rejects a password longer than the engine accepts (31 bytes)', async () => {
   expect(userApi.createDatabaseUser).not.toHaveBeenCalled();
   expect(container.textContent).toContain('at most 31 bytes');
 });
+
+it('does not remove a password when only the confirmation is left filled in', async () => {
+  await render('alice');
+  await act(async () => setValue(el('create-user-confirm-password-input'), 'oldpass1'));
+  await act(async () => el('create-user-save-btn').click());
+
+  expect(userApi.updateDatabaseUser).not.toHaveBeenCalled();
+  expect(container.textContent).toContain('Passwords do not match');
+});

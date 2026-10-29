@@ -108,7 +108,8 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     const errs = {};
     if (!formData.name.trim()) errs.name = CM.usernameRequired;
     if (checkDbPassword(formData.password) === 'tooLong') errs.password = CM.dbPasswordTooLongMsg(DB_PASSWORD_MAX_BYTES);
-    if (formData.password && formData.password !== formData.confirmPassword) {
+    // Compared even when empty: an empty password removes it, so it must be confirmed too.
+    if (formData.password !== formData.confirmPassword) {
       errs.confirmPassword = CM.passwordsDoNotMatch;
     }
     return errs;
