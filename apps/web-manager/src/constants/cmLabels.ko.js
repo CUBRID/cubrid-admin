@@ -89,6 +89,8 @@ export const CM_KO = {
   lockObjectDetailView: '객체별 (OID)',
   lockObjectDetailHint: '잠긴 객체를 모두 불러옵니다. 잠금이 많으면 오래 걸립니다.',
   lockEscalationUnit: '행 잠금',
+  lockTimeoutNoWait: '대기 안 함',
+  lockTimeoutInfinite: '무한 대기',
   waitingSuffix: ' (대기 중)',
 
   checkDatabase: '데이터베이스 검사',

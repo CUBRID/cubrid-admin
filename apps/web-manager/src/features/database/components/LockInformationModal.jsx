@@ -18,9 +18,18 @@ import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLo
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
 
-// The engine prints "Timeout_period : <value>" and CMS keeps only the second
-// word, so the timeout always arrives as ":". Nothing better to show then.
-const timeoutText = (value) => (value && value !== ':' ? value : '-');
+// The engine prints "Timeout_period : <value>" (since 2012; before that,
+// "Timeout_period <seconds>"). A CMS without the CBRD-27825 fix keeps only the
+// second word, so the timeout arrives as ":" and there is nothing to show.
+// A fixed CMS sends the value itself: seconds, "No wait" or "Infinite wait".
+const timeoutText = (value, CM) => {
+  const text = (value || '').trim();
+  if (!text || text === ':') return '-';
+  if (/^no wait$/i.test(text)) return CM.lockTimeoutNoWait;
+  if (/^infinite wait$/i.test(text)) return CM.lockTimeoutInfinite;
+  if (/^-?\d+(\.\d+)?$/.test(text)) return `${text} ${CM.secondsSuffix}`;
+  return text;
+};
 
 // The engine prints the lock table size in bytes, or with K or M (1024-based).
 function lockTableSize(sizelock) {
@@ -128,7 +137,7 @@ export default function LockInformationModal() {
     { accessor: 'host', header: CM.host, render: (value) => value || '-', cellClassName: 'font-mono' },
     { accessor: 'pid', header: CM.pid, render: (value) => value || '-', cellClassName: 'font-mono' },
     { accessor: 'isolation', header: CM.isolationLevel, render: (value) => <StatusBadge label={value || '-'} variant="sky" /> },
-    { accessor: 'timeout', header: CM.timeOut, align: 'right', render: timeoutText, cellClassName: 'font-mono' },
+    { accessor: 'timeout', header: CM.timeOut, align: 'right', render: (value) => timeoutText(value, CM), cellClassName: 'font-mono' },
     { accessor: 'locks', header: CM.locks, align: 'right', cellClassName: 'font-mono' },
   ], [CM]);
   const summaryColumns = useMemo(() => [

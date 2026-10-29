@@ -21,7 +21,9 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
-const lockResponse = (...pnames) => ({
+const lockResponse = (...pnames) => lockResponseWithTimeouts(pnames.map(() => ':'), ...pnames);
+
+const lockResponseWithTimeouts = (timeouts, ...pnames) => ({
   overview: {
     esc: '100000',
     dinterval: '1.00',
@@ -30,7 +32,7 @@ const lockResponse = (...pnames) => ({
     sizelock: '242K',
     maxnumlock: '',
     transactions: pnames.map((program, i) => ({
-      index: String(i + 1), program, user: 'DBA', host: 'app1', pid: '111', isolation: 'COMMITTED READ', timeout: ':',
+      index: String(i + 1), program, user: 'DBA', host: 'app1', pid: '111', isolation: 'COMMITTED READ', timeout: timeouts[i],
     })),
   },
   summary: {
@@ -149,6 +151,19 @@ describe('LockInformationModal', () => {
     expect(frame.textContent).toContain('242');
     expect(frame.textContent).toContain('KiB');
     expect(frame.textContent).toContain('Instance of class = dba.t1');
+  });
+
+  it('shows the timeout a fixed CMS sends as seconds or a wait label', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(
+      lockResponseWithTimeouts(['3.00', 'Infinite wait', 'No wait', ':'], 'csql', 'cas', 'cub_cas', 'loaddb'),
+    );
+    await render(makeStore());
+
+    const cells = [...document.querySelectorAll('tbody tr td')].map((td) => td.textContent);
+    expect(cells).toContain(`3.00 ${CM.secondsSuffix}`);
+    expect(cells).toContain(CM.lockTimeoutInfinite);
+    expect(cells).toContain(CM.lockTimeoutNoWait);
+    expect(cells).not.toContain(':');
   });
 
   it('loads per-object rows only when that view is opened', async () => {

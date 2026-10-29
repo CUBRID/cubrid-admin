@@ -119,6 +119,8 @@ export const CM = {
   lockObjectDetailView: 'Per object (OID)',
   lockObjectDetailHint: 'Loads every locked object. With many locks this takes longer.',
   lockEscalationUnit: 'row locks',
+  lockTimeoutNoWait: 'No wait',
+  lockTimeoutInfinite: 'Infinite wait',
   waitingSuffix: ' (waiting)',
 
   checkDatabase: 'Check Database',
