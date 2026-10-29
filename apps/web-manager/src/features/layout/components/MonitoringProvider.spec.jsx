@@ -20,6 +20,8 @@ let store;
 let dispatched;
 // While set, every start-info poll fails right away, as with an unreachable host.
 let failStartInfo;
+// While set, start-info polls stay pending until it is called.
+let releaseStartInfo;
 
 const initialState = {
   user: { preferences: { dashboardInterval: 10, brokerStatusInterval: 10 } },
@@ -46,9 +48,13 @@ beforeEach(async () => {
   vi.useFakeTimers();
   dispatched = [];
   failStartInfo = false;
+  releaseStartInfo = null;
   const recorder = (api) => (next) => (action) => {
     if (action.type.startsWith('test/fetch')) dispatched.push(action);
     const result = next(action);
+    if (releaseStartInfo !== null && action.type === 'test/fetchDatabaseStartInfo') {
+      return new Promise((resolve) => { releaseStartInfo = resolve; });
+    }
     // Capped so a regression fails the count below instead of hanging the run.
     if (failStartInfo && action.type === 'test/fetchDatabaseStartInfo' && dispatched.length < 50) {
       Promise.resolve().then(() => api.dispatch({ type: 'test/startInfoFailed' }));
@@ -118,6 +124,29 @@ it('waits for the interval after a failed poll instead of retrying at once', asy
   });
   // The first poll ran before failures were switched on; then one per interval.
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
+});
+
+it('skips a tick while the previous poll is still waiting on the host', async () => {
+  releaseStartInfo = () => {};
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+
+  // The host is busy with something slow: later ticks do not pile up.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+  expect(countOf('test/fetchBrokerList')).toBe(5);
+
+  const release = releaseStartInfo;
+  releaseStartInfo = null;
+  await act(async () => { release(); });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10000);
   });
