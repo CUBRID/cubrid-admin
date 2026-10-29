@@ -351,6 +351,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             data={asInfoWithRates}
             sortable
             zebra
+            maxRows={15}
             emptyMessage={CM.noAppServersActiveMsg}
           />
         </Card>
@@ -372,6 +373,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             data={jobInfo}
             sortable
             zebra
+            maxRows={15}
             emptyMessage={CM.jobQueueEmptyMsg}
           />
         </Card>
