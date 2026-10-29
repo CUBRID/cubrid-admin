@@ -10,56 +10,53 @@ function makeLog() {
   }
   return lines;
 }
-
-const response = (lines, start, end) => ({ total: String(lines.length), log: [{ line: lines.slice(Number(start) - 1, Number(end)) }] });
+const snapshot = lines => ({ total: String(lines.length), log: [{ line: lines }] });
 
 describe('complete-log Top SQL analysis', () => {
-  it('reads bounded ranges and carries executions across 100-line and 1000-line boundaries', async () => {
-    const lines = makeLog();
-    const read = vi.fn(async ({ start, end }) => response(lines, start, end));
-    const result = await analyzeTopSQL(read);
-    expect(read.mock.calls.map(([range]) => range)).toEqual([
-      { start: '1', end: '1000' }, { start: '1001', end: '1003' },
-    ]);
-    expect(result).toEqual({ total: 1003, rows: [{
+  it('captures once and carries executions across local chunk boundaries', async () => {
+    const capture = vi.fn(async () => snapshot(makeLog()));
+    expect(await analyzeTopSQL(capture)).toEqual({ total: 1003, rows: [{
       id: 'Q1', sql: 'SELECT * FROM t WHERE id = ?', c: 2, e: 1,
       max: '0.002', min: '0.002', avg: '0.002',
     }] });
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith();
   });
 
-  it('stops at the initial line count even if the active log keeps growing', async () => {
-    const lines = makeLog();
-    const read = vi.fn(async ({ start, end }) => ({
-      ...response(lines, start, end), total: read.mock.calls.length === 1 ? '1003' : '5000',
-    }));
-    expect((await analyzeTopSQL(read)).total).toBe(1003);
-    expect(read).toHaveBeenCalledTimes(2);
+  it.each([1003, 2000])('never reopens the live path after replacement with %i lines', async total => {
+    const capture = vi.fn()
+      .mockResolvedValueOnce(snapshot(makeLog()))
+      .mockResolvedValue({ total: String(total), log: [{ line: Array(total).fill('replacement file') }] });
+    const result = await analyzeTopSQL(capture);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(result.total).toBe(1003);
+    expect(result.rows[0].c).toBe(2);
   });
 
-  it('rejects a truncated file instead of exporting partial counts', async () => {
-    const lines = makeLog();
-    const read = vi.fn(async ({ start, end }) => read.mock.calls.length === 1
-      ? response(lines, start, end) : { total: '0', log: [] });
-    await expect(analyzeTopSQL(read)).rejects.toThrow('LOG_CHANGED');
+  it('keeps an execution prefix whose SQL body starts in the next chunk', async () => {
+    const lines = Array(999).fill('26-10-28 10:00:00.000 (0) STATE idle');
+    lines.push('26-10-28 10:00:00.000 (1) execute srv_h_id 1 ',
+      'SELECT * FROM t WHERE id = ?',
+      '26-10-28 10:00:00.001 (1) bind 1 : INT 2',
+      '26-10-28 10:00:00.004 (1) execute error:-670 tuple 0 time 0.004');
+    const { rows } = await analyzeTopSQL(async () => snapshot(lines));
+    expect(rows).toEqual([{ id: 'Q1', sql: 'SELECT * FROM t WHERE id = ?',
+      c: 1, e: 1, min: '0.004', max: '0.004', avg: '0.004' }]);
   });
 
-  it('rejects a short or malformed response', async () => {
+  it('rejects a short or malformed snapshot', async () => {
     await expect(analyzeTopSQL(async () => ({ total: '5', log: [] }))).rejects.toThrow('LOG_INCOMPLETE');
     await expect(analyzeTopSQL(async () => ({ total: 'unknown', log: [] }))).rejects.toThrow('LOG_INCOMPLETE');
   });
 
-  it('handles empty files', async () => {
-    expect(await analyzeTopSQL(async () => ({ total: '0', log: [] }))).toEqual({ rows: [], total: 0 });
+  it('handles empty snapshots', async () => {
+    expect(await analyzeTopSQL(async () => snapshot([]))).toEqual({ rows: [], total: 0 });
   });
 
-  it('does not continue reading after cancellation', async () => {
+  it('does not analyze after cancellation during capture', async () => {
     const controller = new AbortController();
-    const lines = makeLog();
-    const read = vi.fn(async ({ start, end }) => {
-      controller.abort();
-      return response(lines, start, end);
-    });
-    await expect(analyzeTopSQL(read, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
-    expect(read).toHaveBeenCalledTimes(1);
+    const capture = vi.fn(async () => { controller.abort(); return snapshot(makeLog()); });
+    await expect(analyzeTopSQL(capture, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(capture).toHaveBeenCalledTimes(1);
   });
 });

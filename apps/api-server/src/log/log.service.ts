@@ -1,6 +1,6 @@
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { HostService } from '@host';
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import {
   GetBrokerLogListClientResponse,
   ViewLogClientResponse,
@@ -117,6 +117,29 @@ export class LogService extends BaseService {
     >(userId, hostUid, cmsRequest);
 
     return this.extractDomainData(cmsResponse);
+  }
+
+  /**
+   * One CMS viewlog task opens the path once, so a rename/replace cannot
+   * splice a different file's tail into the captured response.
+   */
+  async captureLogSnapshot(userId: string, hostUid: string, path: string): Promise<ViewLogClientResponse> {
+    const maxLines = 100_000;
+    const maxBytes = 16 * 1024 * 1024;
+    const response = await this.executeCmsRequest<
+      BaseCmsRequest & { path: string; start: string; end: string }, ViewLogCmsResponse
+    >(userId, hostUid, { task: 'viewlog', path, start: '1', end: String(maxLines) },
+      { timeoutMs: 30_000, maxResponseBytes: maxBytes });
+    const total = Number(response.total);
+    if (total > maxLines || Buffer.byteLength(JSON.stringify(response), 'utf8') > maxBytes) {
+      throw new PayloadTooLargeException('Log exceeds the analysis limit (100,000 lines or 16 MiB). Select a smaller archived log.');
+    }
+    const lines = (response.log || []).flatMap(group => group.line || []);
+    if (response.total == null || response.total === '' || !Number.isSafeInteger(total) || total < 0
+      || lines.length !== total || !lines.every(line => typeof line === 'string')) {
+      throw new ConflictException('Could not capture the complete log. Refresh and try again.');
+    }
+    return { path, start: '1', end: String(total), total: String(total), log: [{ line: lines }] };
   }
 
   /**

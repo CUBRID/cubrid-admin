@@ -7,7 +7,7 @@ import {
   ViewLogClientResponse,
   GetAdminLogInfoClientResponse,
 } from '@api-interfaces';
-import { ViewLogDto } from '@type/index';
+import { LogSnapshotDto, ViewLogDto } from '@type/index';
 
 /**
  * Controller for handling log-related operations.
@@ -106,6 +106,16 @@ export class LogController {
     const userId = req.user.sub;
     Logger.log(`Getting admin log info for host: ${hostUid}`, 'LogController');
     return await this.logService.getAdminLogInfo(userId, hostUid);
+  }
+
+  /** Capture a complete, size-limited input for Top SQL in one CMS read. */
+  @Post('snapshot')
+  async captureLogSnapshot(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: LogSnapshotDto
+  ): Promise<ViewLogClientResponse> {
+    return this.logService.captureLogSnapshot(req.user.sub, hostUid, body.path);
   }
 
   /**

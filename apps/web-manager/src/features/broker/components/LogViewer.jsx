@@ -153,7 +153,7 @@ function LogViewer({ hostUid, path }) {
     const controller = new AbortController();
     const identity = { hostUid, path, revision: topRevision };
     setTopAnalysis({ ...identity, loading: true });
-    analyzeTopSQL(range => brokerApi.viewLog(hostUid, { path, ...range }), { signal: controller.signal })
+    analyzeTopSQL(() => brokerApi.captureLogSnapshot(hostUid, path), { signal: controller.signal })
       .then(result => {
         if (!controller.signal.aborted) setTopAnalysis({ ...identity, ...result, loading: false });
       })

@@ -73,7 +73,11 @@ export function createTopSQLAccumulator() {
       const match = matches[i];
       record(match, pending.slice(match.index + match[0].length, matches[i + 1]?.index ?? pending.length));
     }
-    pending = count < matches.length ? pending.slice(last.index) : '';
+    // A newline before the SQL body may leave only the execute prefix in
+    // this chunk. Keep it even though SQL_RE cannot match a statement yet.
+    const prefix = pending.match(/(?:execute_all|execute|srv_prepare:|srv_execute:)\s+(?:srv_h_id\s+\d+\s*)?(?:0:\s*)?$/i);
+    pending = final ? '' : count < matches.length ? pending.slice(last.index)
+      : prefix ? pending.slice(prefix.index) : '';
   };
 
   return {

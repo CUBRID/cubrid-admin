@@ -2,27 +2,29 @@ import { createTopSQLAccumulator } from './logParsingUtils';
 
 const CHUNK_SIZE = 1000;
 
-// Fix the scope to the first response's line count: appends cannot make this
-// read run forever. Retain only aggregate statistics and the pending execution.
-export async function analyzeTopSQL(readLog, { signal } = {}) {
+// Capture once: CMS has no file-version identifier for independent range reads.
+// Analyze bounded local chunks of this response, never reopen the live path.
+// NCA caps captures at 100,000 lines / 16 MiB before accepting a complete log.
+export async function analyzeTopSQL(captureLog, { signal } = {}) {
+  const checkCancelled = () => {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  };
+  checkCancelled();
+  const response = await captureLog();
+  checkCancelled();
+  const total = Number(response?.total);
+  if (response?.total == null || response.total === '' || !Number.isSafeInteger(total) || total < 0) {
+    throw new Error('LOG_INCOMPLETE');
+  }
+  const lines = (response.log || []).flatMap(group => group.line || []);
+  if (lines.length !== total || !lines.every(line => typeof line === 'string')) throw new Error('LOG_INCOMPLETE');
   const accumulator = createTopSQLAccumulator();
-  let total;
-  let start = 1;
-  do {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const end = total === undefined ? CHUNK_SIZE : Math.min(total, start + CHUNK_SIZE - 1);
-    const response = await readLog({ start: String(start), end: String(end) });
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const available = Number(response?.total);
-    if (response?.total == null || response.total === '' || !Number.isSafeInteger(available) || available < 0) throw new Error('LOG_INCOMPLETE');
-    if (total === undefined) total = available;
-    if (available < total) throw new Error('LOG_CHANGED');
-    const lines = (response.log || []).flatMap(group => group.line || []);
-    if (!lines.every(line => typeof line === 'string')) throw new Error('LOG_INCOMPLETE');
-    const expected = Math.max(0, Math.min(CHUNK_SIZE, total - start + 1));
-    if (lines.length !== expected) throw new Error('LOG_INCOMPLETE');
-    accumulator.addLines(lines);
-    start += lines.length;
-  } while (start <= total);
+  for (let start = 0; start < total; start += CHUNK_SIZE) {
+    checkCancelled();
+    accumulator.addLines(lines.slice(start, start + CHUNK_SIZE));
+    // Let navigation/refresh cancel a large analysis between local chunks.
+    if (start + CHUNK_SIZE < total) await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  checkCancelled();
   return { rows: accumulator.finish(), total };
 }

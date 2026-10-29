@@ -8,7 +8,7 @@ import { brokerApi } from '../brokerApi';
 import { CM } from '../../../constants/cmLabels';
 import LogViewer from './LogViewer';
 
-vi.mock('../brokerApi', () => ({ brokerApi: { viewLog: vi.fn() } }));
+vi.mock('../brokerApi', () => ({ brokerApi: { viewLog: vi.fn(), captureLogSnapshot: vi.fn() } }));
 
 let container, root, lines, exportedBlob;
 const path = '/cubrid/log/broker/sql_log/query_editor_1.sql.log';
@@ -30,6 +30,7 @@ beforeEach(() => {
     lines[index + 1] = `26-10-28 10:00:00.001 (1) bind 1 : INT ${value}`;
     lines[index + 2] = '26-10-28 10:00:00.002 (1) execute 0 tuple 1 time 0.002';
   }
+  brokerApi.captureLogSnapshot.mockImplementation(async () => ({ total: String(lines.length), log: [{ line: lines }] }));
   brokerApi.viewLog.mockImplementation(async (_host, { start, end }) => ({
     total: String(lines.length), log: [{ line: lines.slice(Number(start) - 1, Number(end)) }],
   }));
@@ -60,7 +61,8 @@ describe('LogViewer complete-log Top SQL', () => {
     await render();
     expect(brokerApi.viewLog).toHaveBeenCalledWith('h1', { path, start: '1', end: '100' });
     await click('[data-testid="log-viewer-mode-top"]');
-    expect(brokerApi.viewLog).toHaveBeenCalledWith('h1', { path, start: '1001', end: '1003' });
+    expect(brokerApi.captureLogSnapshot).toHaveBeenCalledWith('h1', path);
+    expect(brokerApi.viewLog).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain(CM.topSQLScopeLabel(1003));
     const row = container.querySelector('[data-testid="top-sql-row"]');
     expect([...row.children].map(node => node.textContent)).toEqual([
@@ -80,30 +82,31 @@ describe('LogViewer complete-log Top SQL', () => {
     expect(container.textContent).toContain(CM.linesRangeLabel(1, 100, '1,003'));
   });
 
-  it('disables export until every chunk is loaded', async () => {
+  it('disables export until the complete snapshot is captured and analyzed', async () => {
     await render();
-    const original = brokerApi.viewLog.getMockImplementation();
     let finish;
-    brokerApi.viewLog.mockImplementation((host, range) => range.start === '1001'
-      ? new Promise(resolve => { finish = () => resolve(original(host, range)); })
-      : original(host, range));
+    brokerApi.captureLogSnapshot.mockImplementation(() => new Promise(resolve => {
+      finish = () => resolve({ total: String(lines.length), log: [{ line: lines }] });
+    }));
     await click('[data-testid="log-viewer-mode-top"]');
     expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(true);
     expect(container.querySelector('[data-testid="top-sql-row"]')).toBeNull();
     expect(container.textContent).toContain(CM.loadingLogLines);
-    await act(async () => finish());
+    await act(async () => {
+      finish();
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
     expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(false);
   });
 
-  it('shows a later chunk failure and lets Refresh retry the whole analysis', async () => {
+  it('shows a capture failure and lets Refresh retry the whole analysis', async () => {
     await render();
-    const original = brokerApi.viewLog.getMockImplementation();
-    brokerApi.viewLog.mockImplementation((host, range) => range.start === '1001'
-      ? Promise.reject(new Error('CMS read failed')) : original(host, range));
+    const original = brokerApi.captureLogSnapshot.getMockImplementation();
+    brokerApi.captureLogSnapshot.mockRejectedValue(new Error('CMS read failed'));
     await click('[data-testid="log-viewer-mode-top"]');
     expect(container.querySelector('[role="alert"]').textContent).toBe('CMS read failed');
     expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(true);
-    brokerApi.viewLog.mockImplementation(original);
+    brokerApi.captureLogSnapshot.mockImplementation(original);
     await click('[data-testid="log-viewer-refresh-btn"]');
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.querySelector('[data-testid="top-sql-row"]')).not.toBeNull();
@@ -112,7 +115,7 @@ describe('LogViewer complete-log Top SQL', () => {
   it('does not show results from a cancelled analysis after leaving Top SQL', async () => {
     await render();
     let finish;
-    brokerApi.viewLog.mockImplementationOnce(() => new Promise(resolve => {
+    brokerApi.captureLogSnapshot.mockImplementationOnce(() => new Promise(resolve => {
       finish = () => resolve({ total: '0', log: [] });
     }));
     await click('[data-testid="log-viewer-mode-top"]');
