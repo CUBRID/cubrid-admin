@@ -10,7 +10,7 @@ export type HaClusterNodeClient = {
   state: string;
 };
 
-export type CmsHostLoginClientResponse =
+export type CmsHostLoginClientResponse = (
   | {
       success: true;
       isHA: false;
@@ -22,4 +22,8 @@ export type CmsHostLoginClientResponse =
       currentNodeType: string;
       /** Peers from heartbeatlist `hanodelist`, flattened. */
       haNodes: HaClusterNodeClient[];
-    };
+    }
+) & {
+  /** Login only: the CMS account is still admin with the installed password admin. */
+  usesDefaultPassword?: boolean;
+};

@@ -416,6 +416,8 @@ export const CM = {
   editHost: 'Edit Host',
   deleteHost: 'Delete Host',
   changePassword: 'Change Password',
+  defaultCmsPasswordTitle: 'Default CMS password in use',
+  defaultCmsPasswordMsg: 'These hosts are connected with the CMS account admin and its installed password admin. Changing the password is recommended.',
   userManagement: 'User Management',
   cmsAccountManagement: 'CMS Account Management',
   serverVersion: 'Host Engine Version',
