@@ -3,6 +3,16 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+
+// The root package.json is the single source of the product version; it's
+// baked in at build time so it shows even before login (no API call).
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+)
+if (!appVersion) {
+  throw new Error('Root package.json has no "version" field.')
+}
 
 const devServiceWorkerCleanup = {
   name: 'dev-service-worker-cleanup',
@@ -44,6 +54,9 @@ export default defineConfig(({ mode, command }) => {
 
   return {
   base: isElectronBuild ? './' : '/',
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+  },
   resolve: {
     alias: {
       // Mirrors tsconfig.base.json's "@api-interfaces" path mapping — this

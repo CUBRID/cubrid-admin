@@ -387,7 +387,6 @@ export const CM = {
   hostServiceManagement: 'Host Service Management',
   help: 'Help',
   aboutCubridAdmin: 'About CUBRID Admin',
-  aboutCubrid: 'About CUBRID',
   cubridWebManager: 'Next CUBRID Admin',
   startService: 'Start Service',
   stopService: 'Stop Service',
