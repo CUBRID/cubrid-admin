@@ -143,8 +143,8 @@ describe('Restart All: bulk stop then bulk start, each failed database reported 
     ]);
   });
 
-  it('lists an HA database skipped in both phases (non-admin CMS account) once', async () => {
-    const skip = { dbname: 'hadb1', reason: 'HA bulk start/stop is limited to the CMS admin account' };
+  it('lists a database skipped in both phases once', async () => {
+    const skip = { dbname: 'hadb1', reason: 'not running' };
     databaseApi.stopAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [skip] });
     databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [skip] });
     const store = configureStore({ reducer });
@@ -208,13 +208,10 @@ describe('Restart All: bulk stop then bulk start, each failed database reported 
   });
 });
 
-describe('Start All / Stop All on an HA host: HA databases skipped for a non-admin CMS account', () => {
-  // Policy: a dbname-less ha_start/ha_stop is host-wide, so the backend runs
-  // it only for the CMS admin account (no per-db login gate) and reports
-  // every HA database as skipped for any other account.
+describe('Start All / Stop All: skipped databases and HA login state', () => {
   const skipped = [
-    { dbname: 'hadb1', reason: 'HA bulk start/stop is limited to the CMS admin account' },
-    { dbname: 'hadb2', reason: 'HA bulk start/stop is limited to the CMS admin account' },
+    { dbname: 'hadb1', reason: 'not running' },
+    { dbname: 'hadb2', reason: 'not running' },
   ];
 
   it('reports skipped databases on their own (info, not error), in a separate table', () => {
@@ -240,11 +237,11 @@ describe('Start All / Stop All on an HA host: HA databases skipped for a non-adm
     expect(report.message).toBe('1개의 데이터베이스를 중지하지 못했습니다. 1개의 데이터베이스를 건너뛰었습니다.');
     expect(report.tables.map((tb) => [tb.variant, tb.rows])).toEqual([
       ['failed', [{ name: 'otherdb', reasons: [{ phase: undefined, reason: 'boom' }] }]],
-      ['skipped', [{ name: 'hadb1', reasons: [{ reason: 'HA 일괄 시작/중지는 CMS admin 계정으로만 할 수 있습니다' }] }]],
+      ['skipped', [{ name: 'hadb1', reasons: [{ reason: 'not running' }] }]],
     ]);
   });
 
-  it('does not mark an HA database logged in from a bulk success (host-wide ha_start skips the db login)', async () => {
+  it('marks an HA database logged in from a bulk success (ha_start <db> goes through the db login)', async () => {
     databaseApi.getStartInfo.mockResolvedValue({
       dblist: { dbs: [{ dbname: 'hadb1' }, { dbname: 'demodb' }] },
       activelist: { active: [] },
@@ -258,6 +255,6 @@ describe('Start All / Stop All on an HA host: HA databases skipped for a non-adm
 
     const { loggedInDatabases } = store.getState();
     expect(loggedInDatabases).toContain('hostA:demodb');
-    expect(loggedInDatabases).not.toContain('hostA:hadb1');
+    expect(loggedInDatabases).toContain('hostA:hadb1');
   });
 });

@@ -2020,7 +2020,6 @@ export const CM_KO = {
   someDatabasesFailedToStopMsg: (count) => `${count}개의 데이터베이스를 중지하지 못했습니다.`,
   someDatabasesFailedToRestartMsg: (count) => `${count}개의 데이터베이스를 재시작하지 못했습니다.`,
   someDatabasesSkippedMsg: (count) => `${count}개의 데이터베이스를 건너뛰었습니다.`,
-  haBulkRequiresAdminReason: 'HA 일괄 시작/중지는 CMS admin 계정으로만 할 수 있습니다',
   failureTableFailedTitle: '실패',
   failureTableSkippedTitle: '건너뜀',
   failureTablePhase: '단계',

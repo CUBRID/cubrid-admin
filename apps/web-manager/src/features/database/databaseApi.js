@@ -3,6 +3,12 @@ import { createSingleFlight } from '../../infrastructure/utils/singleFlight';
 
 const volumeReads = createSingleFlight();
 
+// Start/Stop All and service start/stop answer only when every database is
+// done, and HA databases go one at a time (about 10 s each), so the default
+// 60 s timeout would report a failure while the server is still working —
+// and a Restart All would then start before its stop finished.
+const BULK_DATABASE_ACTION_TIMEOUT_MS = 30 * 60 * 1000;
+
 export const databaseApi = {
   getStartInfo: (hostUid) => {
     return apiClient.get(`/${hostUid}/database/start-info`);
@@ -14,16 +20,16 @@ export const databaseApi = {
     return apiClient.post(`/${hostUid}/database/stop/${encodeURIComponent(dbname)}`, {});
   },
   startAllDatabases: (hostUid, dbnames) => {
-    return apiClient.post(`/${hostUid}/database/start-all`, { dbnames });
+    return apiClient.post(`/${hostUid}/database/start-all`, { dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   stopAllDatabases: (hostUid, dbnames) => {
-    return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames });
+    return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   startWholeService: (hostUid) => {
-    return apiClient.post(`/${hostUid}/database/service/start`, {});
+    return apiClient.post(`/${hostUid}/database/service/start`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   stopWholeService: (hostUid) => {
-    return apiClient.post(`/${hostUid}/database/service/stop`, {});
+    return apiClient.post(`/${hostUid}/database/service/stop`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   getVolumeInfo: (hostUid, dbname) => {
     const url = `/${hostUid}/database/volume-info/${encodeURIComponent(dbname)}`;

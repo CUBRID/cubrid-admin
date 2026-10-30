@@ -4,8 +4,8 @@ const errorText = (err) => (typeof err === 'string' ? err : err?.message || Stri
 
 // "Restart All Databases": bulk stop, then bulk start, of the same list —
 // each phase isolates its own per-database failures (same endpoints and HA
-// rule as Start/Stop All). Failures are tagged with their phase; an HA
-// database skipped in both phases (non-admin CMS account) is listed once.
+// rule as Start/Stop All). Failures are tagged with their phase; a database
+// skipped in both phases is listed once.
 //
 // If the stop request itself fails (e.g. the client timed out or the
 // response was lost), the server may still have stopped some or all of
@@ -94,8 +94,7 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
       nameLabel: CM.database,
       variant: 'skipped',
       testId: 'bulk-skipped-table',
-      // The only skip reason the server reports (HA admin-only rule).
-      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: CM.haBulkRequiresAdminReason }] })),
+      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: sk.reason }] })),
     });
   }
   return {

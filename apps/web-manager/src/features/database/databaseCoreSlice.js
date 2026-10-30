@@ -151,15 +151,11 @@ const noteLoginChange = (state, hostUid, dbname) => {
   state.loginChangedDuringStartInfo[dbKey(hostUid, dbname)] = state.latestStartInfoRequestIdByHost[hostUid] ?? null;
 };
 
-// A non-HA database in a start-all/stop-all `succeeded` list went through
-// the backend's ensureDbLogin gate, so it is logged in now. An HA one did
-// not — the host-wide ha_start/ha_stop runs without a per-database login —
-// so it is left as it was.
+// Every database in a start-all/stop-all `succeeded` list, HA or not, went
+// through the backend's ensureDbLogin gate, so it is logged in now.
 const markBulkSucceededLoggedIn = (state, hostUid, succeeded) => {
   if (!hostUid) return;
-  const haDbNames = state.haDbNamesByHost[hostUid] || [];
   (succeeded || []).forEach((dbname) => {
-    if (haDbNames.includes(dbname)) return;
     const key = dbKey(hostUid, dbname);
     if (!state.loggedInDatabases.includes(key)) state.loggedInDatabases.push(key);
     noteLoginChange(state, hostUid, dbname);
