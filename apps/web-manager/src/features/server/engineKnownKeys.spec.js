@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEngineKnownKeys } from '@api-interfaces/param-schema/engine-catalog/resolve-engine-known-keys';
+import { guardFromCatalog, resolveEngineKnownKeys } from '@api-interfaces/param-schema/engine-catalog/resolve-engine-known-keys';
 import { resolveParamSchema } from '@api-interfaces/param-schema/resolve-param-schema';
 import { DATABASE_PARAM_SCHEMA } from '@api-interfaces/param-schema/database-param-schema';
 import { validateConfText } from '@api-interfaces';
@@ -22,6 +22,15 @@ describe('resolveEngineKnownKeys', () => {
     expect(k.strict).toBe(false);
     expect(k.catalogVersion).toBeNull();
     expect(k.database).toEqual(expect.arrayContaining(['page_latch_timeout', 'page_latch_timeout_in_msecs']));
+  });
+
+  it('gives every parameter its server/client scope from the engine flags', () => {
+    const { databaseScopes } = resolveEngineKnownKeys(BANNER_11_4_5);
+    expect(databaseScopes.data_buffer_size).toBe('SERVER');
+    expect(databaseScopes.db_hosts).toBe('CLIENT');
+    expect(databaseScopes.debug_autocommit).toBe('BOTH');
+    expect(databaseScopes.db_volume_size).toBeUndefined(); // neither flag
+    expect(Object.keys(databaseScopes).length).toBeGreaterThan(200);
   });
 
   it('never lists keys real builds compile out or gateway-only broker keys', () => {
@@ -61,6 +70,39 @@ describe('keys outside the schema still get the engine\'s own type rules (from t
     expect(check('lock_timeout=10s')).toEqual([]);
     expect(check('lock_timeout=-1')).toEqual([]);
     expect(check('lock_timeout=default')).toEqual([]);
+  });
+
+  it('checks keyword keys against the engine word table, or an integer within the limits', () => {
+    // error_log_level: er_log_level_words, limits ER_FATAL_ERROR_SEVERITY..ER_NOTIFICATION_SEVERITY (0..4).
+    expect(check('error_log_level=warning')).toEqual([]);
+    expect(check('error_log_level=Notification')).toEqual([]);
+    expect(check('error_log_level=2')).toEqual([]);
+    expect(check('error_log_level=5')).toEqual([expect.objectContaining({ key: 'error_log_level' })]);
+    expect(check('error_log_level=verbose')).toEqual([expect.objectContaining({ key: 'error_log_level' })]);
+    expect(check('regexp_engine=re2')).toEqual([]);
+    expect(check('regexp_engine=pcre')).toEqual([expect.objectContaining({ key: 'regexp_engine' })]);
+  });
+
+  it('uses limits written as enum constants', () => {
+    // PERFMON_ACTIVATION_FLAG_MAX_VALUE: (0x200 << 1) - 1 on 11.4.5.
+    expect(check('extended_statistics_activation=1023')).toEqual([]);
+    expect(check('extended_statistics_activation=1024')).toEqual([expect.objectContaining({ key: 'extended_statistics_activation' })]);
+  });
+
+  it('checks unit-converted limits in the unit the conf value is written in', () => {
+    // ha_delay_limit: seconds = ceil (ms / 1000), limits 0..INT_MAX seconds.
+    expect(check('ha_delay_limit=1h')).toEqual([]);
+    expect(check('ha_delay_limit=-5')).toEqual([expect.objectContaining({ key: 'ha_delay_limit' })]);
+    expect(check('ha_delay_limit=2147483648s')).toEqual([expect.objectContaining({ key: 'ha_delay_limit' })]);
+    // max_flush_size_per_second: pages = ceil (bytes / 16K), at least 1 page.
+    expect(check('max_flush_size_per_second=1')).toEqual([]);
+    expect(check('max_flush_size_per_second=0')).toEqual([expect.objectContaining({ key: 'max_flush_size_per_second' })]);
+  });
+
+  it('caps a float or a size with no upper limit at what the engine can hold', () => {
+    const param = { key: 'x', prmId: 'PRM_ID_X', hidden: false, deprecated: false, obsoleted: false, timeUnit: false, differUnit: false, flags: [], defaultValue: null, lowerLimit: null, upperLimit: null };
+    expect(guardFromCatalog({ ...param, datatype: 'float', sizeUnit: false })).toEqual({ kind: 'float', max: 3.4028234663852886e38 });
+    expect(guardFromCatalog({ ...param, datatype: 'bigint', sizeUnit: true })).toEqual({ kind: 'size', max: '18446744073709551615' });
   });
 
   it('only warns for an uncatalogued host version', () => {

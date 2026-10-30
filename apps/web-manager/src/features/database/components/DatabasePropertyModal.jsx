@@ -19,6 +19,7 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { parseConfText, parseEngineSizeToBytes, validateEffectiveParams } from '@api-interfaces';
+import { ParamScopeBadge } from './ParamScopeBadge';
 
 // The param list itself — which keys exist, their category/type/guard/
 // default — no longer lives here. It comes from the connected host's
@@ -536,14 +537,7 @@ export default function DatabasePropertyModal() {
     },
     {
       header: CM.parameterTypeLabel, accessor: 'scope', width: '16%',
-      render: (val) => {
-        const scopeColors = {
-          SERVER: 'text-sky-500 bg-sky-500/8 border-sky-500/20',
-          CLIENT: 'text-violet-500 bg-violet-500/8 border-violet-500/20',
-          BOTH: 'text-emerald-500 bg-emerald-500/8 border-emerald-500/20',
-        };
-        return <span className={`text-11 font-medium uppercase tracking-widest px-1.5 py-0.5 rounded border ${scopeColors[val]}`}>{val}</span>;
-      },
+      render: (val) => <ParamScopeBadge scope={val} />,
     },
     { header: CM.valueTypeLabel, accessor: 'guard', width: '18%', render: (guard) => <span className="text-12 font-mono text-slate-400 dark:text-slate-500">{guard.kind}</span> },
     {

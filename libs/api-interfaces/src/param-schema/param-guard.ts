@@ -53,7 +53,9 @@ export type ParamGuard =
   // (MB for APPL_SERVER_MAX_SIZE*, KB for the log sizes), only
   // b/k/kb/m/mb/g/gb exist, and the result is kilobytes that must fit an
   // int. `minKb` applies to the int-truncated kilobytes the broker keeps.
-  | { kind: 'brokerSize'; defaultUnit: 'K' | 'M'; minKb?: number; maxKb?: number }
+  // `exactKb`: only these kilobyte values are accepted (NET_BUF_SIZE,
+  // broker_config.c is_invalid_buf_size).
+  | { kind: 'brokerSize'; defaultUnit: 'K' | 'M'; minKb?: number; maxKb?: number; exactKb?: number[] }
   // broker.conf times (broker_util.c ut_time_string_to_sec): ms/msec,
   // s/sec, min, h, default seconds, decimals allowed; > INT_MAX or < 0
   // fails. `truncate`: the broker keeps (int) seconds and range-checks
@@ -72,4 +74,6 @@ export type ParamGuard =
   // m/M (cm_config.cpp strips one 'M' then atoi()s and multiplies by
   // 1024 * 1024 into an int).
   | { kind: 'cmsMegabytes'; min: number; max: number }
-  | { kind: 'string' };
+  // `nonEmpty`: an empty value fails the load (e.g. broker.conf
+  // SHARD_KEY_FILE); otherwise any text, including none, is accepted.
+  | { kind: 'string'; nonEmpty?: boolean };

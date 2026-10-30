@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabaseInfoModal, fetchDatabaseParamDump } from '../databaseSlice';
 import { dbKey } from '../dbKey';
+import { fetchHostEnv } from '../../host/hostSlice';
+import { ParamScopeBadge } from './ParamScopeBadge';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -25,14 +27,24 @@ export default function DatabaseInfoModal() {
   const { isDatabaseInfoModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { databaseInfoData } = useSelector((state) => state.databaseConfiguration, shallowEqual);
-  const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
+  // Server/client scope of every engine parameter, for the host's engine
+  // version (getEnv's paramSchemas, cached in hostEnvs).
+  const hostEnv = useSelector((state) => state.host.hostEnvs[selectedHostUid]);
+  const scopes = hostEnv?.paramSchemas?.knownKeys?.databaseScopes;
+  const isAuthorized = Boolean(selectedHostUid && authorizedHosts?.includes(selectedHostUid));
 
   const [view, setView] = useState(VIEW_FORM);
   const [dumpBoth, setDumpBoth] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const isActive = activeDatabases.includes(selectedDatabase);
+
+  useEffect(() => {
+    // undefined = not fetched yet; a failed fetch leaves null and is not retried from here.
+    if (isDatabaseInfoModalOpen && isAuthorized && hostEnv === undefined) dispatch(fetchHostEnv(selectedHostUid));
+  }, [isDatabaseInfoModalOpen, selectedHostUid, isAuthorized, hostEnv, dispatch]);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -80,6 +92,7 @@ export default function DatabaseInfoModal() {
 
   const paramList = allKeys.map(key => ({
     name: key,
+    scope: scopes?.[key.toLowerCase()] ?? null,
     server: serverParams[key] !== undefined ? (typeof serverParams[key] === 'boolean' ? (serverParams[key] ? 'yes' : 'no') : String(serverParams[key])) : '-',
     client: clientParams ? (clientParams[key] !== undefined ? (typeof clientParams[key] === 'boolean' ? (clientParams[key] ? 'yes' : 'no') : String(clientParams[key])) : '-') : null
   }));
@@ -90,6 +103,7 @@ export default function DatabaseInfoModal() {
         {val}
       </Typography>
     )},
+    { header: CM.parameterTypeLabel, accessor: 'scope', className: 'w-[130px]', render: (val) => <ParamScopeBadge scope={val} /> },
     { header: CM.serverValue, accessor: 'server', className: dumpBoth ? 'w-[200px]' : 'w-[400px]', render: (val) => (
       <Typography variant="span" className="font-mono text-13 text-amber-500 font-bold">{val}</Typography>
     )},
