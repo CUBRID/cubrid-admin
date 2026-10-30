@@ -222,6 +222,25 @@ describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () =>
 
     expect(store.getState().haDbNamesByHost.hostA).toEqual(['newHa']);
   });
+
+  // Each failed poll of an unreachable host used to store a new empty array,
+  // and the polling that depends on the list then polled again at once.
+  it('keeps the same empty lists when polls of an unreachable host keep failing', async () => {
+    databaseApi.getStartInfo.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const store = configureStore({ reducer });
+
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    const first = store.getState();
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    await store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    const after = store.getState();
+
+    expect(after.activeDatabasesByHost.hostA).toEqual([]);
+    expect(after.activeDatabasesByHost.hostA).toBe(first.activeDatabasesByHost.hostA);
+    expect(after.databasesByHost.hostA).toBe(first.databasesByHost.hostA);
+    expect(after.navigatorActiveDatabasesByHost.hostA).toBe(first.navigatorActiveDatabasesByHost.hostA);
+    expect(after.navigatorDatabasesByHost.hostA).toBe(first.navigatorDatabasesByHost.hostA);
+  });
 });
 
 describe('database lists are stored per host, not in one shared array', () => {
