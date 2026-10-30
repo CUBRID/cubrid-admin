@@ -3,14 +3,12 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { dbKey } from '../../database/dbKey';
+import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 // Stable fallback reference — `activeDatabasesByHost[selectedHostUid] || []`
-// would otherwise hand the effect below a brand-new array every render for
-// as long as this host has no cached entry yet (e.g. just-selected, before
-// its first fetch resolves). That effect depends on this value and
-// dispatches a fetch, which changes Redux state and re-renders this
-// component — seeing a "new" array each time, it never settles and keeps
-// re-dispatching instead of waiting for the configured interval.
+// would otherwise be a brand-new array every render for as long as this host
+// has no cached entry yet (e.g. just-selected, before its first fetch
+// resolves), and so would the useMemo below.
 const EMPTY_LIST = [];
 
 export default function MonitoringProvider({ children }) {
@@ -32,6 +30,17 @@ export default function MonitoringProvider({ children }) {
     [activeDatabases, loggedInDatabases, selectedHostUid]
   );
   
+  // Read by the timer instead of restarting it: a failed poll replaces the
+  // database lists, and a restart polls again at once, so an unreachable host
+  // was polled back to back with no interval.
+  const loggedInActiveRef = useRef(loggedInActiveDatabases);
+  loggedInActiveRef.current = loggedInActiveDatabases;
+  const isAuthorized = Boolean(selectedHostUid && authorizedHosts.includes(selectedHostUid));
+
+  // A tick that finds a read of the same kind still in flight for the host
+  // shares it (see createSharedReads) instead of queueing another behind it,
+  // so a slow request (e.g. lockdb on a database with many locks) can't make
+  // polls pile up.
   const dashboardTimer = useRef(null);
   const brokerTimer = useRef(null);
   const lastActivityRef = useRef(Date.now());
@@ -57,7 +66,10 @@ export default function MonitoringProvider({ children }) {
   // enters/leaves the queue — depending on the whole array would restart
   // both timers (and their immediate refresh()) whenever any other host did.
   const isPendingReconnect = Boolean(selectedHostUid && reconnectQueue.includes(selectedHostUid));
-  const isMonitoringTab = activeMainTab?.startsWith('host:') || activeMainTab?.startsWith('db:');
+  // Nothing behind an open modal can be read, so both timers stop and restart
+  // (with an immediate refresh) when it closes.
+  const anyModalOpen = useAnyModalOpen();
+  const isMonitoringTab = (activeMainTab?.startsWith('host:') || activeMainTab?.startsWith('db:')) && !anyModalOpen;
 
   // Dashboard Interval Refresh (Databases & Volumes)
   useEffect(() => {
@@ -69,12 +81,13 @@ export default function MonitoringProvider({ children }) {
     const hostUid = selectedHostUid;
     const interval = preferences.dashboardInterval;
 
-    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
+    if (isMonitoringTab && interval > 0 && isAuthorized && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
           dispatch(fetchDatabaseStartInfo({ hostUid, isBackground: true }));
-          if (loggedInActiveDatabases.length > 0) {
-            dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases, isBackground: true }));
+          const loggedInActive = loggedInActiveRef.current;
+          if (loggedInActive.length > 0) {
+            dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActive, isBackground: true }));
           }
         }
       };
@@ -86,7 +99,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (dashboardTimer.current) clearInterval(dashboardTimer.current);
     };
-  }, [dispatch, preferences.dashboardInterval, selectedHostUid, authorizedHosts, isPendingReconnect, activeDatabases, loggedInActiveDatabases, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.dashboardInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   // Broker Interval Refresh
   useEffect(() => {
@@ -98,7 +111,7 @@ export default function MonitoringProvider({ children }) {
     const hostUid = selectedHostUid;
     const interval = preferences.brokerStatusInterval;
 
-    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
+    if (isMonitoringTab && interval > 0 && isAuthorized && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
           dispatch(fetchBrokerList({ hostUid, isBackground: true }));
@@ -112,7 +125,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (brokerTimer.current) clearInterval(brokerTimer.current);
     };
-  }, [dispatch, preferences.brokerStatusInterval, selectedHostUid, authorizedHosts, isPendingReconnect, activeMainTab, isMonitoringTab]);
+  }, [dispatch, preferences.brokerStatusInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   return children;
 }

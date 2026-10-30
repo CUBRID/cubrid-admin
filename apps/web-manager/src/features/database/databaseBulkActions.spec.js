@@ -1,14 +1,19 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('./databaseApi', () => ({
-  databaseApi: {
+vi.mock('./databaseApi', async () => {
+  const { createSharedReads } = await import('../../infrastructure/utils/singleFlight');
+  const reads = createSharedReads();
+  const databaseApi = {
     startDatabase: vi.fn(),
     stopDatabase: vi.fn(),
     startAllDatabases: vi.fn(),
     stopAllDatabases: vi.fn(),
     getStartInfo: vi.fn(),
-  },
-}));
+    // The real sharing, over the mocked request.
+    readStartInfo: (hostUid, options) => reads(hostUid, () => databaseApi.getStartInfo(hostUid), options),
+  };
+  return { databaseApi };
+});
 import { databaseApi } from './databaseApi';
 import reducer, {
   startDatabase, stopDatabase, startAllDatabases, stopAllDatabases, fetchDatabaseStartInfo,

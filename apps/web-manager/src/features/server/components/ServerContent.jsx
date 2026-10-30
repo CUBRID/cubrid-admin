@@ -1,4 +1,5 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
+import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 import React, { useState, useRef, useEffect } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
@@ -32,15 +33,20 @@ const Component = function ServerContent({ hostUid }) {
   const CM = useCM();
   const dispatch = useDispatch();
 
-  // Database list/active list are fetched into this component's own state
-  // (not the shared `state.database.databases/activeDatabases` slice) so that
-  // multiple simultaneously-open dashboard tabs for different hosts, and the
-  // navigator, don't clobber each other's displayed data.
-  const [databases, setDatabases] = useState([]);
+  // The host's shared lists hold the newest read or action result for it
+  // (applied in the order they were read), so a database started or stopped
+  // anywhere shows here at once instead of on the next tick. Focusing another
+  // host clears them (resetDatabaseState), so this tab's own last read stands
+  // in until they are filled again.
+  const sharedDatabases = useSelector((state) => state.database.databasesByHost[hostUid]);
+  const sharedActiveDatabases = useSelector((state) => state.database.activeDatabasesByHost[hostUid]);
+  const [lastReadDatabases, setDatabases] = useState([]);
   // 'loading' until the first database-list fetch settles, then 'loaded' or
   // 'error', so sections built on it don't read an empty list as "no databases".
   const [dbListStatus, setDbListStatus] = useState('loading');
-  const [activeDatabases, setActiveDatabases] = useState([]);
+  const [lastReadActiveDatabases, setActiveDatabases] = useState([]);
+  const databases = sharedDatabases ?? lastReadDatabases;
+  const activeDatabases = sharedActiveDatabases ?? lastReadActiveDatabases;
   const { hosts, authorizedHosts, haInfo, reconnectQueue = EMPTY_RECONNECT_QUEUE } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
@@ -122,7 +128,9 @@ const Component = function ServerContent({ hostUid }) {
   };
 
   const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
-  const isTabActive = activeMainTab === `host:${hostUid}`;
+  // The system status and HA heartbeat polls stop while a modal covers the dashboard.
+  const anyModalOpen = useAnyModalOpen();
+  const isTabActive = activeMainTab === `host:${hostUid}` && !anyModalOpen;
 
   const haHeartbeat = hostData?.haHeartbeat;
 

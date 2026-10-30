@@ -61,12 +61,14 @@ const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
   const lines = logState?.data?.log?.[0]?.line || [];
   const totalLines = parseInt(logState?.data?.total || '0');
 
+  // Fetch the last 100 lines once there is no state for this file at all. A
+  // failed fetch leaves its error here, so it is not retried the moment it
+  // fails; the refresh button retries.
   useEffect(() => {
-    if (isExpanded && !logState?.data && !loading) {
-      // Fetch last 100 lines by default if expanded and no data
+    if (isExpanded && !logState) {
       dispatch(fetchLogContent({ hostUid, path, start: '1', end: '100' }));
     }
-  }, [dispatch, hostUid, path, isExpanded, logState?.data, loading]);
+  }, [dispatch, hostUid, path, isExpanded, logState]);
 
   const handleRefresh = (e) => {
     e.stopPropagation();
@@ -204,11 +206,19 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       : dispatch(fetchBrokerLogs({ hostUid, brokerName: targetName }));
   };
 
-  // Load logs list if they aren't available
+  // Load the list once while it isn't available. A failed fetch leaves it
+  // unset, so without the ref it would be asked for again the moment it
+  // failed; the refresh button retries.
+  const requestedListRef = useRef(null);
   useEffect(() => {
-    if (!logsList && !logsLoading) {
-      handleFetchLogsList();
+    if (logsList) {
+      requestedListRef.current = null;
+      return;
     }
+    const key = `${hostUid}:${targetName}`;
+    if (logsLoading || requestedListRef.current === key) return;
+    requestedListRef.current = key;
+    handleFetchLogsList();
   }, [dispatch, hostUid, targetName, logsList, logsLoading, isDb]);
 
   // Expand all logs once they are available on the initial mount

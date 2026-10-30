@@ -1,52 +1,62 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import monitoringApi from './monitoringApi';
 import { computeBrokerRates, mapDiskInfo } from './hostMetrics';
+import apiClient from '../../api/apiClient';
+import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 
 // Disk usage changes slowly and gethoststat has no disk field, so the
 // separate getsysdiskinfo call runs at most this often per host.
 const DISK_REFRESH_MS = 30 * 1000;
 
+// Several views poll the same host (the system status section, the host
+// dashboard, the HA failover watch), and heartbeatlist alone takes seconds
+// on an HA host, so reads are shared per host. A shared monitoring sample is
+// applied once: its rates and history are deltas from the previous sample.
+const monitoringReads = createSharedReads();
+const heartbeatReads = createSharedReads();
+// Do not share a read across login sessions.
+const readKey = (hostUid) => JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid]);
+const readHeartbeat = (hostUid) => heartbeatReads(readKey(hostUid), () => monitoringApi.getHaHeartbeatList(hostUid));
+
+const readMonitoringData = async (hostUid, state) => {
+  const haInfo = state.host.haInfo[hostUid];
+  const isHA = haInfo?.isHA;
+
+  const diskFetchedAt = state.monitoring?.hostsData?.[hostUid]?.diskFetchedAt;
+  const shouldFetchDisk = !diskFetchedAt || Date.now() - diskFetchedAt >= DISK_REFRESH_MS;
+
+  const [hostStat, brokers, heartbeat, diskInfo] = await Promise.all([
+    monitoringApi.getHostStat(hostUid),
+    monitoringApi.getBrokerList(hostUid),
+    isHA ? readHeartbeat(hostUid) : Promise.resolve(undefined),
+    // A disk failure must not fail the whole status poll: null = tried
+    // and failed (keep the last value), undefined = not due this tick.
+    shouldFetchDisk ? monitoringApi.getSysDiskInfo(hostUid).catch(() => null) : Promise.resolve(undefined),
+  ]);
+  if (heartbeat && !heartbeat.ok) throw heartbeat.error;
+  return { hostStat, brokers, haHeartbeat: heartbeat?.value, heartbeatSeq: heartbeat?.seq, diskInfo };
+};
+
 // Thunk to fetch all monitoring data in parallel
 export const fetchMonitoringData = createAsyncThunk(
   'monitoring/fetchAll',
-  async (hostUid, { getState, rejectWithValue }) => {
-    try {
-      const state = getState();
-      const haInfo = state.host.haInfo[hostUid];
-      const isHA = haInfo?.isHA;
-
-      const diskFetchedAt = state.monitoring?.hostsData?.[hostUid]?.diskFetchedAt;
-      const shouldFetchDisk = !diskFetchedAt || Date.now() - diskFetchedAt >= DISK_REFRESH_MS;
-
-      const promises = [
-        monitoringApi.getHostStat(hostUid),
-        monitoringApi.getBrokerList(hostUid),
-        isHA ? monitoringApi.getHaHeartbeatList(hostUid) : Promise.resolve(undefined),
-        // A disk failure must not fail the whole status poll: null = tried
-        // and failed (keep the last value), undefined = not due this tick.
-        shouldFetchDisk ? monitoringApi.getSysDiskInfo(hostUid).catch(() => null) : Promise.resolve(undefined),
-      ];
-
-      const [hostStat, brokers, haHeartbeat, diskInfo] = await Promise.all(promises);
-      return { hostStat, brokers, haHeartbeat, diskInfo };
-    } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
-    }
+  async (hostUid, { getState, rejectWithValue, fulfillWithValue }) => {
+    const result = await monitoringReads(readKey(hostUid), () => readMonitoringData(hostUid, getState()));
+    if (!result.ok) return rejectWithValue(result.error.response?.data || result.error.message);
+    return fulfillWithValue(result.value, { seq: result.seq });
   }
 );
 
 // Lightweight companion to fetchMonitoringData — used to poll just the HA
 // heartbeat during a suspected failover (see ServerContent's fast-poll
-// effect), instead of re-fetching hostStat/brokers too at a 1s cadence.
+// effect), instead of re-fetching hostStat/brokers too at a 1s cadence. It
+// shares a heartbeatlist already in flight, so the 1s watch can't pile up.
 export const fetchHaHeartbeatOnly = createAsyncThunk(
   'monitoring/fetchHaHeartbeatOnly',
   async (hostUid, { rejectWithValue }) => {
-    try {
-      const haHeartbeat = await monitoringApi.getHaHeartbeatList(hostUid);
-      return { haHeartbeat };
-    } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
-    }
+    const result = await readHeartbeat(hostUid);
+    if (!result.ok) return rejectWithValue(result.error.response?.data || result.error.message);
+    return { haHeartbeat: result.value, heartbeatSeq: result.seq };
   }
 );
 
@@ -105,8 +115,11 @@ const monitoringSlice = createSlice({
         if (!hostData) return;
 
         hostData.loading = false;
+        // Every view sharing this sample gets it; apply it only once.
+        if (action.meta.seq <= (hostData.appliedSeq ?? 0)) return;
+        hostData.appliedSeq = action.meta.seq;
         hostData.error = null;
-        const { hostStat, brokers, haHeartbeat, diskInfo } = action.payload;
+        const { hostStat, brokers, haHeartbeat, heartbeatSeq, diskInfo } = action.payload;
         const now = Date.now();
 
         // 1. TPS/QPS: per-second rates from the brokers' cumulative counters
@@ -165,9 +178,10 @@ const monitoringSlice = createSlice({
         });
         hostData.history = hostData.history.filter(h => now - h.timestamp < MAX_HISTORY_MS);
 
-        // 6. Update HA Heartbeat Info if available
-        if (haHeartbeat) {
+        // 6. Update HA Heartbeat Info if available and newer than shown
+        if (haHeartbeat && heartbeatSeq > (hostData.heartbeatSeq ?? 0)) {
           hostData.haHeartbeat = haHeartbeat;
+          hostData.heartbeatSeq = heartbeatSeq;
         }
 
         // 6. Calculate Averages — only over samples that had a real value
@@ -194,9 +208,10 @@ const monitoringSlice = createSlice({
         const hostUid = action.meta.arg;
         const hostData = state.hostsData[hostUid];
         if (!hostData) return;
-        const { haHeartbeat } = action.payload;
-        if (haHeartbeat) {
+        const { haHeartbeat, heartbeatSeq } = action.payload;
+        if (haHeartbeat && heartbeatSeq > (hostData.heartbeatSeq ?? 0)) {
           hostData.haHeartbeat = haHeartbeat;
+          hostData.heartbeatSeq = heartbeatSeq;
         }
       });
   }
