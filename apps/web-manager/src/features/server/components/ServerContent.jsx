@@ -1,4 +1,5 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
+import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 import React, { useState, useRef, useEffect } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
@@ -122,7 +123,9 @@ const Component = function ServerContent({ hostUid }) {
   };
 
   const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
-  const isTabActive = activeMainTab === `host:${hostUid}`;
+  // The system status and HA heartbeat polls stop while a modal covers the dashboard.
+  const anyModalOpen = useAnyModalOpen();
+  const isTabActive = activeMainTab === `host:${hostUid}` && !anyModalOpen;
 
   const haHeartbeat = hostData?.haHeartbeat;
 

@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { usePollingRefresh } from './usePollingRefresh';
+import { markModalOpen } from './useAnyModalOpen';
 
 const deferred = () => {
   let resolve;
@@ -201,4 +202,24 @@ it('does not fire an extra fetch or reset the timer when another host joins or l
     await vi.advanceTimersByTimeAsync(5000);
   });
   expect(fetchCalls.length).toBe(2);
+});
+
+it('stops polling while a modal is open and refreshes once when it closes', async () => {
+  const onFetch = (silent) => () => {
+    fetchCalls.push(silent);
+    return Promise.resolve();
+  };
+  await render({ pollingIntervalSeconds: 1, onFetch });
+  expect(fetchCalls.length).toBe(1);
+
+  let closeModal;
+  await act(async () => { closeModal = markModalOpen(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(fetchCalls.length).toBe(1);
+
+  await act(async () => { closeModal(); });
+  expect(fetchCalls).toEqual([false, true]);
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(fetchCalls.length).toBe(3);
 });

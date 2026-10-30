@@ -15,6 +15,7 @@ import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { EmptyState } from '../../../../components/ds/feedback/EmptyState';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
+import { useRefreshWhenShown } from './useRefreshWhenShown';
 
 /** lockdb dashboard row → gettransactioninfo / killtransaction shape */
 function lockRowToTransaction(row) {
@@ -47,14 +48,7 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
     refresh();
   }, [transactionKillSignal, hostUid, dbname]);
 
-  const wasActiveAndExpanded = useRef(isTabActive && !isCollapsed);
-  useEffect(() => {
-    const currentActiveAndExpanded = isTabActive && !isCollapsed;
-    if (currentActiveAndExpanded && !wasActiveAndExpanded.current) {
-      refresh();
-    }
-    wasActiveAndExpanded.current = currentActiveAndExpanded;
-  }, [isTabActive, isCollapsed, hostUid, dbname]);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
 
   useEffect(() => {
     let interval;

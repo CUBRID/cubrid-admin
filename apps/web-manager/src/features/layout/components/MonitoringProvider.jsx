@@ -3,6 +3,7 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { dbKey } from '../../database/dbKey';
+import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 // Stable fallback reference — `activeDatabasesByHost[selectedHostUid] || []`
 // would otherwise hand the effect below a brand-new array every render for
@@ -57,7 +58,10 @@ export default function MonitoringProvider({ children }) {
   // enters/leaves the queue — depending on the whole array would restart
   // both timers (and their immediate refresh()) whenever any other host did.
   const isPendingReconnect = Boolean(selectedHostUid && reconnectQueue.includes(selectedHostUid));
-  const isMonitoringTab = activeMainTab?.startsWith('host:') || activeMainTab?.startsWith('db:');
+  // Nothing behind an open modal can be read, so both timers stop and restart
+  // (with an immediate refresh) when it closes.
+  const anyModalOpen = useAnyModalOpen();
+  const isMonitoringTab = (activeMainTab?.startsWith('host:') || activeMainTab?.startsWith('db:')) && !anyModalOpen;
 
   // Dashboard Interval Refresh (Databases & Volumes)
   useEffect(() => {
