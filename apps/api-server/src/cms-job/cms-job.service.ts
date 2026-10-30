@@ -511,7 +511,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Best-effort: a failure here must not flip an already-successful rename
-   * job to "failed" (the rename itself did happen on CMS).
+   * job to "failed" (the rename itself did happen on CMS). Also renames the
+   * database in cubrid.conf, which renamedb leaves alone.
    */
   private async clearRenameAliasCaches(job: CmsJobRecord): Promise<void> {
     try {
@@ -525,6 +526,15 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     } catch (err: unknown) {
       this.logger.warn(
         `Failed to clear stale login profile/cache after renaming database ${job.dbname}: ` +
+        `${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+    try {
+      const renameTo = (job.payload as RenameDatabaseRequest)?.rename;
+      await this.managementService.renameInCubridConfAfterRename(job.userId, job.hostUid, job.dbname, renameTo);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Failed to rename database ${job.dbname} in cubrid.conf (autostart list, [@dbname] section): ` +
         `${err instanceof Error ? err.message : String(err)}`
       );
     }

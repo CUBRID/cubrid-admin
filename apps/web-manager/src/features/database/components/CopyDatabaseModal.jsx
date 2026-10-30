@@ -20,6 +20,7 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { buildCopyVolumeList, toCopyVolumes } from '../copyDbVolumes';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
 
@@ -108,23 +109,12 @@ export default function CopyDatabaseModal() {
             const sizeMB = res?.dbsize != null ? `${Math.round(res.dbsize / (1024 * 1024))} (MB)` : '-';
             setDiskInfo({ freeSpace: freeMB, dbSize: sizeMB });
 
-            const validTypes = ['generic', 'data', 'index', 'temp', 'permanent'];
             const logVol = (res?.spaceinfo || []).find(s => s?.type?.toLowerCase() === 'active_log');
             if (logVol?.location) {
               setSrcLogDir(logVol.location);
             }
 
-            const filteredSpaces = (res?.spaceinfo || []).filter(space =>
-              space.type && validTypes.includes(space.type.toLowerCase())
-            ).map(space => ({
-              spacename: space.spacename,
-              type: space.type,
-              location: space.location,
-              newVolumeName: space.spacename,
-              newLocation: space.location || defaultPath,
-              isNameEdited: false,
-              isLocationEdited: false,
-            }));
+            const filteredSpaces = toCopyVolumes(res?.spaceinfo, defaultPath);
             setVolumes(filteredSpaces);
           })
           .catch((err) => {
@@ -174,13 +164,13 @@ export default function CopyDatabaseModal() {
       return changed ? next : prev;
     });
 
-    setVolumes(prev => prev.map((vol, idx) => {
+    setVolumes(prev => prev.map((vol) => {
       let newName = vol.newVolumeName;
       if (!vol.isNameEdited) {
-        if (idx === 0) {
+        if (vol.volid === 0) {
           newName = formData.destName;
         } else {
-          const numStr = String(idx).padStart(3, '0');
+          const numStr = String(vol.volid).padStart(3, '0');
           newName = `${formData.destName}_x${numStr}`;
         }
       }
@@ -284,23 +274,8 @@ export default function CopyDatabaseModal() {
 
     if (formData.copyIndividual) {
       advanced = 'on';
-      const volumeMap = {};
-      volumes.forEach((vol) => {
-        const separator = getPathSeparator(vol.location || formData.destPath || '/');
-        const oldLoc = vol.location || '';
-        const oldPath = oldLoc
-          ? (oldLoc.endsWith('/') || oldLoc.endsWith('\\') ? `${oldLoc}${vol.spacename}` : `${oldLoc}${separator}${vol.spacename}`)
-          : vol.spacename;
-        const newLoc = vol.newLocation || formData.destPath;
-        const newVolName = vol.newVolumeName || vol.spacename;
-        const newPath = newLoc
-          ? (newLoc.endsWith('/') || newLoc.endsWith('\\') ? `${newLoc}${newVolName}` : `${newLoc}${separator}${newVolName}`)
-          : newVolName;
-        volumeMap[oldPath] = newPath;
-      });
-      if (Object.keys(volumeMap).length > 0) {
-        volumeList = [volumeMap];
-      }
+      volumeList = buildCopyVolumeList(volumes, formData.destPath);
+      if (volumeList.length === 0) volumeList = undefined;
     }
 
     const payload = {

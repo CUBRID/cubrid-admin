@@ -27,6 +27,9 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { summarizeLocks } from './lock-summary';
+import { renameDbInCubridConf } from './rename-in-cubrid-conf';
+import { CmsConfigService } from '@cms-config/cms-config.service';
+import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import {
   BaseService,
   HandleCmsErrors,
@@ -79,7 +82,8 @@ export class DatabaseManagementService extends BaseService {
     hostService: HostService,
     cmsClient: CmsHttpsClientService,
     private readonly databaseInfoService: DatabaseInfoService,
-    private readonly databaseUserService: DatabaseUserService
+    private readonly databaseUserService: DatabaseUserService,
+    private readonly cmsConfigService: CmsConfigService
   ) {
     super(hostService, cmsClient);
   }
@@ -510,6 +514,7 @@ export class DatabaseManagementService extends BaseService {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
     await this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename);
+    await this.renameInCubridConfAfterRename(userId, hostUid, dbname, request.rename);
     return await this.getDatabaseStartInfo(userId, hostUid);
   }
 
@@ -533,6 +538,27 @@ export class DatabaseManagementService extends BaseService {
     await this.databaseUserService.deleteDbProfile(userId, hostUid, oldDbname);
     if (newDbname && newDbname !== oldDbname) {
       await this.databaseUserService.deleteDbProfile(userId, hostUid, newDbname);
+    }
+  }
+
+  /**
+   * renamedb leaves cubrid.conf alone, so the `[service]` autostart list and
+   * the database's `[@dbname]` section would still name the old database
+   * (renameDbInCubridConf). Rewrites them to the new name.
+   */
+  async renameInCubridConfAfterRename(
+    userId: string,
+    hostUid: string,
+    oldDbname: string,
+    newDbname: string
+  ): Promise<void> {
+    if (!newDbname || newDbname === oldDbname) return;
+    const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+    const confdata = conf.conflist?.[0]?.confdata;
+    if (!confdata || confdata.length === 0) return;
+    const updated = renameDbInCubridConf(confdata, oldDbname, newDbname);
+    if (updated) {
+      await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
     }
   }
 
