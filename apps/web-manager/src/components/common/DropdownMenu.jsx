@@ -30,7 +30,9 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
   useLayoutEffect(() => {
     if (open && menuRef.current && containerRef.current && !isPositioned) {
       const parentRect = containerRef.current.getBoundingClientRect();
-      const menuRect = menuRef.current.getBoundingClientRect();
+      // Layout size: the submenu opens at scale(0.95), which getBoundingClientRect
+      // would include, leaving its bottom/right edge past the clamp.
+      const menuRect = { width: menuRef.current.offsetWidth, height: menuRef.current.offsetHeight };
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       
@@ -39,10 +41,12 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
 
       // Horizontal positioning
       let left = parentRect.right + 4; // Small gap
-      if (left + menuRect.width > viewportWidth) {
+      if (left + menuRect.width > viewportWidth - 20) {
         newX = 'left';
         left = parentRect.left - menuRect.width - 4;
       }
+      // Narrow windows may have room on neither side; overlap the parent rather than go off-screen.
+      left = Math.max(20, Math.min(left, viewportWidth - menuRect.width - 20));
       
       // Vertical positioning with screen-boundary awareness
       let top = parentRect.top;
@@ -78,6 +82,15 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
     };
     document.addEventListener('scroll', handleScroll, true);
     return () => document.removeEventListener('scroll', handleScroll, true);
+  }, [open]);
+
+  // A resize also moves the parent menu (ContextMenuWrapper re-clamps it), so
+  // measure again from the parent row's new place.
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleResize = () => setIsPositioned(false);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [open]);
 
   const menuStyle = isPositioned ? {
@@ -231,7 +244,7 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
 /**
  * Enhanced menu item for the professional ecosystem.
  */
-export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled = false }) {
+export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled = false, title }) {
   const { closeMenu } = useContext(MenuContext);
   const baseClasses = `flex items-center gap-2.5 px-3 py-2 text-14 font-medium tracking-wide transition-all w-full text-left rounded-lg font-sans relative group overflow-hidden`;
   
@@ -265,14 +278,26 @@ export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled 
 
   if (href && !disabled) {
     return (
-      <a role="menuitem" className={`${baseClasses} ${stateClasses}`} href={href} onClick={handleClick}>
+      <a role="menuitem" className={`${baseClasses} ${stateClasses}`} href={href} onClick={handleClick} title={title}>
         {content}
       </a>
     );
   }
 
+  if (disabled && title) {
+    // Disabled buttons do not get mouse events in every browser, so the
+    // tooltip (usually the reason it is disabled) hangs off a wrapper instead.
+    return (
+      <div title={title} className="cursor-not-allowed">
+        <button type="button" role="menuitem" className={`${baseClasses} ${stateClasses} pointer-events-none`} onClick={handleClick} disabled>
+          {content}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <button type="button" role="menuitem" className={`${baseClasses} ${stateClasses}`} onClick={handleClick} disabled={disabled}>
+    <button type="button" role="menuitem" className={`${baseClasses} ${stateClasses}`} onClick={handleClick} disabled={disabled} title={title}>
       {content}
     </button>
   );

@@ -123,6 +123,7 @@ export const CM_KO = {
     backup: '데이터베이스 백업',
     delete: '데이터베이스 삭제',
   },
+  manageDatabaseHaDisabledHint: 'HA 구성 DB에서는 사용할 수 없습니다.',
 
   createDatabaseMsg: '새 데이터베이스를 생성합니다.',
   createDbJobComplete: (job) => `${job} 작업이 완료되었습니다.`,
