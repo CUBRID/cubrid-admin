@@ -4,6 +4,8 @@ import { databaseApi } from '../database/databaseApi';
 import { fetchDatabaseStartInfo } from '../database/databaseSlice';
 import { fetchBrokerList } from '../broker/brokerSlice';
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
+import { hostLoginErrorMessage } from './hostLoginError';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 import { findHaPeersNeedingMerge,
   findRegisteredHaPeersInSameGroup,
   findUndiscoveredHaPeers,
@@ -15,6 +17,22 @@ function purgeHostClientState(state, hostUid) {
   state.authorizedHosts = state.authorizedHosts.filter((uid) => uid !== hostUid);
   delete state.haInfo[hostUid];
   delete state.hostEnvs[hostUid];
+  delete state.hostAuthErrors[hostUid];
+}
+
+// A failed login records its message twice: per host (sidebar overlay,
+// reconnect modal) and as the slice-wide `error` the host modals show. Only
+// the per-host copy used to be cleared by a later login, so a success left
+// the old failure in `error` for the next Add/Edit Host modal to show.
+// `loginErrorHostUid` names the host that wrote `error`, so one host's retry
+// can't clear another host's failure that happens to read the same.
+function clearHostLoginError(state, hostUid) {
+  const message = state.hostAuthErrors[hostUid];
+  if (message === undefined) return;
+  if (state.loginErrorHostUid === hostUid && state.error === message) {
+    state.error = null;
+    state.loginErrorHostUid = null;
+  }
   delete state.hostAuthErrors[hostUid];
 }
 
@@ -254,7 +272,9 @@ export const stopService = createAsyncThunk(
 // Async thunk to explicitly login/forward to a specific host
 export const loginToHost = createAsyncThunk(
   'host/loginToHost',
-  async (hostUid, { rejectWithValue }) => {
+  async (hostUid, { rejectWithValue, getState }) => {
+    // Same locale source as useCM: the message is stored as shown.
+    const CM = getCM(getState().user?.preferences?.uiLocale ?? getStoredLocale());
     try {
       const response = await hostApi.loginToHost(hostUid);
       // The API returns { success: true, isHA: boolean, ... }
@@ -263,11 +283,11 @@ export const loginToHost = createAsyncThunk(
         response?.data === false ||
         (response && typeof response === 'object' && response.success === false)
       ) {
-        return rejectWithValue('Host login failed (bad credentials or unavailable)');
+        return rejectWithValue(CM.hostLoginFailedMsg);
       }
       return { hostUid, ...response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to login to host ${hostUid}`);
+      return rejectWithValue(hostLoginErrorMessage(err, CM));
     }
   }
 );
@@ -458,6 +478,7 @@ const initialState = {
   isEditCmsUserModalOpen: false,
   cmsUserToEdit: null, // { hostUid, user }
   error: null,
+  loginErrorHostUid: null, // host whose failed login wrote `error`
   reconnectQueue: [],
 };
 
@@ -719,9 +740,7 @@ const hostSlice = createSlice({
           state.loading = true;
         }
         // Clean up previous error for this host if any
-        if (state.hostAuthErrors[action.meta.arg]) {
-          delete state.hostAuthErrors[action.meta.arg];
-        }
+        clearHostLoginError(state, action.meta.arg);
       })
       .addCase(loginToHost.fulfilled, (state, action) => {
         if (!state.isBatchHostLogin) {
@@ -729,6 +748,9 @@ const hostSlice = createSlice({
           state.loading = false;
         }
         const { hostUid, ...haInfo } = action.payload;
+        // Again here: a concurrent attempt for this host (e.g. the silent
+        // re-login in apiClient) may have failed after this one started.
+        clearHostLoginError(state, hostUid);
         if (!state.authorizedHosts.includes(hostUid)) {
           state.authorizedHosts.push(hostUid);
         }
@@ -756,6 +778,7 @@ const hostSlice = createSlice({
         state.hostAuthErrors[action.meta.arg] = action.payload;
         if (!state.isBatchHostLogin) {
           state.error = action.payload;
+          state.loginErrorHostUid = action.meta.arg;
         }
       })
       // Silent background refresh — no loading/error state, so a failure

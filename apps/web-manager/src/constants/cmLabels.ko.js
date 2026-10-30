@@ -1623,6 +1623,9 @@ export const CM_KO = {
   hostLoginTitle: '호스트 로그인',
   establishingSession: '보안 세션을 설정하는 중...',
   connectionFailed: '연결 실패',
+  hostLoginFailedMsg: '호스트에 로그인하지 못했습니다.',
+  hostLoginNoResponseMsg: 'CMS가 응답하지 않습니다. 호스트에서 CMS가 실행 중인지, 주소와 포트가 올바른지 확인하세요.',
+  hostLoginTlsErrorMsg: 'CMS와 신뢰할 수 있는 연결을 설정하지 못했습니다. CMS 서버의 TLS 인증서를 확인하세요.',
   tryAgain: '다시 시도',
   allBrokers: '모든 브로커',
   brokerLogs: '브로커 로그',
@@ -1740,6 +1743,11 @@ export const CM_KO = {
   importSummaryMsg: (addedCount, groupSummary, skippedCount) =>
     `${groupSummary}에 호스트 ${addedCount}개를 가져왔습니다. ${skippedCount}개 항목은 건너뛰었습니다.`,
   importRolledBackMsg: '가져오기가 롤백되었습니다. 호스트가 추가되지 않았습니다.',
+  importRollbackIncompleteMsg: (groupCount, hostNames) => [
+    groupCount > 0 ? `가져온 그룹 ${groupCount}개를 지우지 못했습니다.` : '',
+    hostNames.length > 0 ? `가져온 호스트를 지우지 못했습니다: ${hostNames.join(', ')}.` : '',
+    '다시 가져오기 전에 호스트 목록에서 지워 주세요.',
+  ].filter(Boolean).join(' '),
   importFailedMsg: '호스트를 가져오지 못했습니다.',
   failedToCreateImportGroupMsg: (name) => `가져오기 그룹 "${name}"을(를) 생성하지 못했습니다.`,
   passwordSavedMsg: (count) => `호스트 ${count}개에 비밀번호가 저장되었습니다. 준비되면 사이드바에서 로그인하세요.`,

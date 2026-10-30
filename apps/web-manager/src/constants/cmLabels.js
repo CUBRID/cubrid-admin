@@ -1665,6 +1665,9 @@ export const CM = {
   hostLoginTitle: 'Host login',
   establishingSession: 'Establishing secure session...',
   connectionFailed: 'Connection failed',
+  hostLoginFailedMsg: 'Could not log in to the host.',
+  hostLoginNoResponseMsg: 'No response from the CMS. Check that the CMS is running on the host and that the address and port are correct.',
+  hostLoginTlsErrorMsg: "Could not establish a trusted connection to the CMS. Check the CMS server's TLS certificate.",
   tryAgain: 'Try Again',
   allBrokers: 'All Brokers',
   brokerLogs: 'Broker Logs',
@@ -1782,6 +1785,11 @@ export const CM = {
   importSummaryMsg: (addedCount, groupSummary, skippedCount) =>
     `Imported ${addedCount} host(s) into ${groupSummary}. ${skippedCount} item(s) were skipped.`,
   importRolledBackMsg: 'Import was rolled back. No hosts were added.',
+  importRollbackIncompleteMsg: (groupCount, hostNames) => [
+    groupCount > 0 ? `${groupCount} imported group(s) could not be removed.` : '',
+    hostNames.length > 0 ? `These imported hosts could not be removed: ${hostNames.join(', ')}.` : '',
+    'Delete them from the host list before importing again.',
+  ].filter(Boolean).join(' '),
   importFailedMsg: 'Failed to import hosts.',
   failedToCreateImportGroupMsg: (name) => `Failed to create import group "${name}".`,
   passwordSavedMsg: (count) => `Password saved for ${count} host(s). Log in from the sidebar when ready.`,
