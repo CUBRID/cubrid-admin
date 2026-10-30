@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
+import { checkDbPassword, DB_PASSWORD_MAX_BYTES } from '@api-interfaces';
 import { createDatabaseUser, updateDatabaseUser, fetchDatabaseUsers } from '../userSlice';
 import { dbKey } from '../../database/dbKey';
 
@@ -99,14 +100,16 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
   };
 
   // CMS createuser/updateuser only accept a username and password, so editing
-  // an existing user can only change the password — it's required in both modes.
-  const isSaveDisabled = !formData.name || (isEditMode && !formData.password);
+  // an existing user can only change the password. An empty one means no
+  // password, as the engine allows, in both modes.
+  const isSaveDisabled = !formData.name;
 
   const validate = () => {
     const errs = {};
     if (!formData.name.trim()) errs.name = CM.usernameRequired;
-    if (!formData.password) errs.password = CM.passwordRequired;
-    if (formData.password && formData.password !== formData.confirmPassword) {
+    if (checkDbPassword(formData.password) === 'tooLong') errs.password = CM.dbPasswordTooLongMsg(DB_PASSWORD_MAX_BYTES);
+    // Compared even when empty: an empty password removes it, so it must be confirmed too.
+    if (formData.password !== formData.confirmPassword) {
       errs.confirmPassword = CM.passwordsDoNotMatch;
     }
     return errs;
@@ -243,8 +246,8 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             </Typography>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" required />
-            <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" required />
+            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" description={CM.dbPasswordRuleHint(DB_PASSWORD_MAX_BYTES, true)} />
+            <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" />
           </div>
           {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
             <div className="flex items-center gap-2 text-13 text-rose-500 font-bold px-1">

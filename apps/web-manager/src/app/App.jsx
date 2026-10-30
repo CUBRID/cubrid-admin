@@ -12,6 +12,7 @@ import Footer from '../features/layout/components/Footer';
 import AddHostModal from '../features/host/components/AddHostModal';
 import HostGroupNameModal from '../features/host/components/HostGroupNameModal';
 import ChangeHostPasswordModal from '../features/host/components/ChangeHostPasswordModal';
+import DefaultCmsPasswordModal from '../features/host/components/DefaultCmsPasswordModal';
 import DeleteHostGroupModal from '../features/host/components/DeleteHostGroupModal';
 import ManageGroupMembersModal from '../features/host/components/ManageGroupMembersModal';
 import ServerContent from '../features/server/components/ServerContent';
@@ -455,6 +456,7 @@ function DashboardLayout() {
         <ManageGroupMembersModal />
         <EditHostModal />
         <ChangeHostPasswordModal />
+        <DefaultCmsPasswordModal />
         <ServerVersionModal />
         <ImportExportHostModal />
         <ReconnectHostModal />

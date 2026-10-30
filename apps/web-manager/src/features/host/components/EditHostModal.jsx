@@ -7,6 +7,7 @@ import { setActiveMainTab } from '../../layout/layoutSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { Toggle } from '../../../components/ds/forms/Toggle';
 import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
@@ -31,6 +32,9 @@ export default function EditHostModal() {
     groupId: UNGROUPED_GROUP_ID,
   });
   const [errors, setErrors] = useState({});
+  // The stored password is kept unless the user asks to change it; then an
+  // empty field means an empty password.
+  const [changePassword, setChangePassword] = useState(false);
 
   const groupOptions = useMemo(() => orderedGroupEntries(hostGroups).map(([groupId, group]) => ({
     value: groupId,
@@ -54,6 +58,7 @@ export default function EditHostModal() {
         });
       }
       setErrors({});
+      setChangePassword(false);
     }
   }, [isEditHostModalOpen, hostToEditUid]);
 
@@ -89,7 +94,7 @@ export default function EditHostModal() {
       port: Number(formData.port),
       alias: formData.alias,
     };
-    if (formData.password) {
+    if (changePassword) {
       payload.password = formData.password;
     }
     return payload;
@@ -292,18 +297,25 @@ export default function EditHostModal() {
               disabled={loading}
               required
             />
-            <Input
-              label={CM.password}
-              labelExtra="(optional)"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              error={errors.password || (isCredentialError ? apiError : undefined)}
-              placeholder={CM.leaveBlankToKeep}
-              icon="key"
-              disabled={loading}
-            />
+            <div className="space-y-2">
+              <Toggle
+                testId="edit-host-change-password-toggle"
+                label={CM.changePassword}
+                checked={changePassword}
+                onChange={setChangePassword}
+                disabled={loading}
+              />
+              <Input
+                label={CM.password}
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                error={errors.password || (isCredentialError ? apiError : undefined)}
+                icon="key"
+                disabled={loading || !changePassword}
+              />
+            </div>
           </div>
         </div>
 

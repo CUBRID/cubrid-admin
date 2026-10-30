@@ -24,6 +24,10 @@ const initialState = {
   },
   refreshCounter: 0,
   refreshTabId: null,
+  // Hosts whose CMS login still uses the installed admin/admin, waiting to
+  // be pointed out, and hosts already pointed out this session.
+  defaultCmsPasswordHosts: [],
+  defaultCmsPasswordNoticed: [],
 };
 
 const layoutSlice = createSlice({
@@ -135,6 +139,23 @@ const layoutSlice = createSlice({
       state.refreshCounter += 1;
       state.refreshTabId = action.payload || state.activeMainTab;
     },
+    dismissDefaultCmsPassword: (state, action) => {
+      state.defaultCmsPasswordHosts = action.payload
+        ? state.defaultCmsPasswordHosts.filter((uid) => uid !== action.payload)
+        : [];
+    },
+  },
+  extraReducers: (builder) => {
+    // Matched by type so this slice does not import hostSlice.
+    builder.addMatcher(
+      (action) => action.type === 'host/loginToHost/fulfilled' && action.payload?.usesDefaultPassword,
+      (state, action) => {
+        const { hostUid } = action.payload;
+        if (state.defaultCmsPasswordNoticed.includes(hostUid)) return;
+        state.defaultCmsPasswordNoticed.push(hostUid);
+        state.defaultCmsPasswordHosts.push(hostUid);
+      }
+    );
   },
 });
 
@@ -154,6 +175,7 @@ export const {
   showStatusModal,
   closeStatusModal,
   triggerRefreshActiveTab,
+  dismissDefaultCmsPassword,
 } = layoutSlice.actions;
 
 export default layoutSlice.reducer;

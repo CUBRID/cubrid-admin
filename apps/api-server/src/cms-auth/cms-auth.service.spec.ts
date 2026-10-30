@@ -75,6 +75,19 @@ describe('CMSAuthService', () => {
       expect(saved().cmsTokenActiveTimeSec).toBeUndefined();
     });
 
+    it('flags a CMS account still on the installed admin/admin password', async () => {
+      cmsConfig.getAllSystemParam.mockResolvedValue({ conflist: [] });
+      saved().password = 'admin';
+
+      await expect(service.login('u1', 'h1')).resolves.toEqual({ success: true, isHA: false, usesDefaultPassword: true });
+    });
+
+    it('does not flag admin with a changed password', async () => {
+      cmsConfig.getAllSystemParam.mockResolvedValue({ conflist: [] });
+
+      await expect(service.login('u1', 'h1')).resolves.toEqual({ success: true, isHA: false });
+    });
+
     it('forgets the session on disconnect but keeps the token', async () => {
       saved().cmsTokenIssuedAt = 123;
 
