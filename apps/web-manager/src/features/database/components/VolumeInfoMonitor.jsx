@@ -18,7 +18,7 @@ const parseNumber = (value) => {
 
 const formatNumber = (value) => parseNumber(value).toLocaleString();
 
-const formatMegabytes = (value) => `${value.toFixed(2)} MB`;
+const formatMegabytes = (value) => `${value.toFixed(2)} MiB`;
 
 const clampPercent = (value) => Math.min(100, Math.max(0, value));
 

@@ -152,7 +152,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     // all (every AS under a broker shares that broker's own listen port),
     // so this column just shows the broker's port for every row.
     { header: CM.port, accessor: 'as_port', width: '80px', render: () => <span className="font-mono">{basicInfo.port ?? '—'}</span> },
-    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{(parseInt(v) / 1024).toFixed(1)} KB</span> },
+    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{(parseInt(v) / 1024).toFixed(1)} MiB</span> },
     { 
       header: CM.status, 
       accessor: 'as_status', 
@@ -351,6 +351,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             data={asInfoWithRates}
             sortable
             zebra
+            maxRows={15}
             emptyMessage={CM.noAppServersActiveMsg}
           />
         </Card>
@@ -372,6 +373,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             data={jobInfo}
             sortable
             zebra
+            maxRows={15}
             emptyMessage={CM.jobQueueEmptyMsg}
           />
         </Card>

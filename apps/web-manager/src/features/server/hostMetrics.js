@@ -91,3 +91,21 @@ export function mapDiskInfo(response) {
   const used = total - free;
   return { total, used, pct: (used / total) * 100, names };
 }
+
+/**
+ * Which of CUBRID Admin's three volume groups a dbspaceinfo `spaceinfo` row
+ * belongs to: permanent volumes with permanent data, permanent volumes with
+ * temporary data, and temporary volumes. Pre-10.1 engines report the purpose
+ * as the type (DATA/INDEX/GENERIC, TEMP). Log volumes belong to none.
+ *
+ * @returns {'permPerm'|'permTemp'|'tempTemp'|null}
+ */
+export function volumeGroup(space) {
+  const type = (space?.type || '').toUpperCase();
+  const purpose = (space?.purpose || '').toUpperCase();
+  if (type === 'DATA' || type === 'INDEX' || type === 'GENERIC') return 'permPerm';
+  if (type === 'TEMP') return 'permTemp';
+  if (type === 'PERMANENT') return purpose === 'TEMPORARY' ? 'permTemp' : 'permPerm';
+  if (type === 'TEMPORARY') return 'tempTemp';
+  return null;
+}

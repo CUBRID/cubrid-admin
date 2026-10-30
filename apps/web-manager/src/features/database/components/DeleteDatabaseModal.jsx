@@ -254,7 +254,7 @@ export default function DeleteDatabaseModal() {
                       {v.type}
                     </span>
                     <div className="shrink-0 text-right min-w-[60px]">
-                      <p className="text-13 font-mono font-bold text-slate-700 dark:text-slate-200 leading-none tabular-nums">{v.sizeMB} MB</p>
+                      <p className="text-13 font-mono font-bold text-slate-700 dark:text-slate-200 leading-none tabular-nums">{v.sizeMB} MiB</p>
                       <p className="text-11 text-slate-400 font-medium tabular-nums">{CM.freeSpaceLabel(v.free)}</p>
                     </div>
                   </div>

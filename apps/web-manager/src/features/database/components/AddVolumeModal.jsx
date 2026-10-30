@@ -35,13 +35,13 @@ const PURPOSE_OPTIONS = [
 ];
 
 const SIZE_PRESETS = [
-  { label: '128 MB', mb: 128 },
-  { label: '256 MB', mb: 256 },
-  { label: '512 MB', mb: 512 },
-  { label: '1 GB', mb: 1024 },
-  { label: '4 GB', mb: 4096 },
-  { label: '10 GB', mb: 10240 },
-  { label: '20 GB', mb: 20480 },
+  { label: '128 MiB', mb: 128 },
+  { label: '256 MiB', mb: 256 },
+  { label: '512 MiB', mb: 512 },
+  { label: '1 GiB', mb: 1024 },
+  { label: '4 GiB', mb: 4096 },
+  { label: '10 GiB', mb: 10240 },
+  { label: '20 GiB', mb: 20480 },
 ];
 
 export default function AddVolumeModal() {
@@ -68,15 +68,15 @@ export default function AddVolumeModal() {
   const [purpose, setPurpose] = useState('data');
   const [path, setPath] = useState('');
   const [sizeMB, setSizeMB] = useState(512);
-  const [sizeUnit, setSizeUnit] = useState('MB');
+  const [sizeUnit, setSizeUnit] = useState('MiB');
   const [fetchingStatus, setFetchingStatus] = useState(false);
 
   // Custom-capacity input displays/accepts whichever unit is selected, but
-  // sizeMB itself (used for numberOfPages/payload/presets) always stays in MB.
-  const displaySize = sizeUnit === 'GB' ? parseFloat((sizeMB / 1024).toFixed(3)) : sizeMB;
+  // sizeMB itself (used for numberOfPages/payload/presets) always stays in MiB.
+  const displaySize = sizeUnit === 'GiB' ? parseFloat((sizeMB / 1024).toFixed(3)) : sizeMB;
   const handleDisplaySizeChange = (value) => {
     const parsed = parseFloat(value) || 0;
-    setSizeMB(sizeUnit === 'GB' ? parsed * 1024 : parsed);
+    setSizeMB(sizeUnit === 'GiB' ? parsed * 1024 : parsed);
   };
 
   const numberOfPages = Math.floor(sizeMB * 1024 / 16);
@@ -284,8 +284,8 @@ export default function AddVolumeModal() {
               suffix={
                 <button
                   type="button"
-                  onClick={() => setSizeUnit((u) => (u === 'MB' ? 'GB' : 'MB'))}
-                  className="text-12 font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
+                  onClick={() => setSizeUnit((u) => (u === 'MiB' ? 'GiB' : 'MiB'))}
+                  className="text-12 font-medium text-slate-400 dark:text-slate-500 hover:text-amber-500 tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-amber-500/10 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5 hover:border-amber-500/30 transition-all cursor-pointer"
                   title={CM.switchUnit}
                 >
                   {sizeUnit}
