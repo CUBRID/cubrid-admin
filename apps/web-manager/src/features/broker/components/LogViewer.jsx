@@ -122,6 +122,7 @@ function LogViewer({ hostUid, path }) {
   const fileName   = path.split('/').pop();
   const lowerFileName = fileName.toLowerCase();
   const isErrorLogFile = lowerFileName.endsWith('.err') || lowerFileName.endsWith('.error');
+  const isRawOnlyLog = isErrorLogFile || /\.access(?:\.|$)/i.test(lowerFileName);
   const totalLines = parseInt(logState?.data?.total || '0');
   
   const startLine  = isAll ? 1 : (currentPage - 1) * pageSize + 1;
@@ -135,10 +136,10 @@ function LogViewer({ hostUid, path }) {
   }, [dispatch, hostUid, path, currentPage, isAll, startLine, endLine]);
 
   useEffect(() => {
-    if (isErrorLogFile && viewMode !== 'raw') {
+    if (isRawOnlyLog && viewMode !== 'raw') {
       setViewMode('raw');
     }
-  }, [isErrorLogFile, viewMode]);
+  }, [isRawOnlyLog, viewMode]);
 
   useEffect(() => {
     if (!toolbarMenu) return undefined;
@@ -151,7 +152,7 @@ function LogViewer({ hostUid, path }) {
     return () => document.removeEventListener('mousedown', closeMenu, true);
   }, [toolbarMenu]);
 
-  const activeViewMode = isErrorLogFile ? 'raw' : viewMode;
+  const activeViewMode = isRawOnlyLog ? 'raw' : viewMode;
   const sqls = activeViewMode === 'sql' ? extractSQL(lines) : [];
   const top  = activeViewMode === 'top' ? extractTopSQL(lines) : [];
 
@@ -181,7 +182,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
     a.click();
   };
 
-  const modeSwitcher = !isErrorLogFile ? (
+  const modeSwitcher = !isRawOnlyLog ? (
     <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg p-0.5 shrink-0">
       {MODE_KEYS.map(m => (
         <button
@@ -217,7 +218,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
           <>
 
           {/* Export Excel */}
-          {!isErrorLogFile && (
+          {!isRawOnlyLog && (
             <>
               <button
                 type="button"
@@ -364,6 +365,12 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
             }}
           />
         </ContextMenuWrapper>
+      )}
+
+      {logState?.error && (
+        <div role="alert" className="px-4 py-3 text-sm text-rose-600 bg-rose-50 dark:bg-rose-950/20">
+          {logState.error}
+        </div>
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
