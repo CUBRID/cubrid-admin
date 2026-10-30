@@ -21,14 +21,34 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
-const lockResponse = (...pnames) => ({
-  lockinfo: [{
-    dinterval: '1000',
+const lockResponse = (...pnames) => lockResponseWithTimeouts(pnames.map(() => ':'), ...pnames);
+
+const lockResponseWithTimeouts = (timeouts, ...pnames) => ({
+  overview: {
     esc: '100000',
-    lot: [{ numlocked: '1', numallocated: '10', entry: [] }],
-    transaction: pnames.map((pname, i) => ({ index: String(i + 1), pname, isolevel: 'READ COMMITTED' })),
-  }],
+    dinterval: '1.00',
+    numlocked: '1',
+    numallocated: '1000',
+    sizelock: '242K',
+    maxnumlock: '',
+    transactions: pnames.map((program, i) => ({
+      index: String(i + 1), program, user: 'DBA', host: 'app1', pid: '111', isolation: 'COMMITTED READ', timeout: timeouts[i],
+    })),
+  },
+  summary: {
+    totalLocks: 3,
+    rows: pnames.length ? [
+      { index: '1', user: 'DBA', host: 'app1', pid: '111', program: pnames[0], obj: 'Instance of class = dba.t1', mode: 'X_LOCK', count: 2 },
+      { index: '1', user: 'DBA', host: 'app1', pid: '111', program: pnames[0], obj: 'Class = dba.t1', mode: 'IX_LOCK', count: 1 },
+    ] : [],
+  },
 });
+
+const objectResponse = {
+  objects: [
+    { oid: '0|201|-32763', obj: 'Class = dba.t1', holders: [{ index: '1', mode: 'IX_LOCK', count: '1' }], numHolders: '1', numBlockedHolders: '0', numWaiters: '0' },
+  ],
+};
 
 const makeStore = () => configureStore({
   reducer: {
@@ -114,5 +134,98 @@ describe('LockInformationModal', () => {
     await act(async () => q('lock-information-retry-btn').click());
     expect(q('lock-information-error')).toBeNull();
     expect(q('lock-information-modal').textContent).toContain('csql');
+  });
+
+  it('shows the transaction lock count, no ":" timeout, and the CMS units', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse('csql'));
+    await render(makeStore());
+
+    expect(databaseApi.getLockInfo).toHaveBeenCalledWith('host1', 'demodb', { summary: true });
+    const cells = [...document.querySelectorAll('tbody tr td')].map((td) => td.textContent);
+    expect(cells).toContain('3');
+    expect(cells).not.toContain(':');
+
+    await act(async () => document.querySelector('[data-testid="lock-information-tab-objects"]')?.click());
+    const frame = q('lock-information-modal');
+    expect(frame.textContent).toContain(CM.allocatedLockObjNum);
+    expect(frame.textContent).toContain('242');
+    expect(frame.textContent).toContain('KiB');
+    expect(frame.textContent).toContain('Instance of class = dba.t1');
+  });
+
+  it('shows the timeout a fixed CMS sends as seconds or a wait label', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(
+      lockResponseWithTimeouts(['3.00', 'Infinite wait', 'No wait', ':'], 'csql', 'cas', 'cub_cas', 'loaddb'),
+    );
+    await render(makeStore());
+
+    const cells = [...document.querySelectorAll('tbody tr td')].map((td) => td.textContent);
+    expect(cells).toContain(`3.00 ${CM.secondsSuffix}`);
+    expect(cells).toContain(CM.lockTimeoutInfinite);
+    expect(cells).toContain(CM.lockTimeoutNoWait);
+    expect(cells).not.toContain(':');
+  });
+
+  it('loads per-object rows only when that view is opened', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse('csql'));
+    await render(makeStore());
+    await act(async () => document.querySelector('[data-testid="lock-information-tab-objects"]')?.click());
+    expect(databaseApi.getLockInfo).toHaveBeenCalledTimes(1);
+
+    databaseApi.getLockInfo.mockResolvedValueOnce({ ...lockResponse('csql'), ...objectResponse });
+    await act(async () => q('lock-information-object-view').click());
+
+    // One request for both, so the server runs lockdb once.
+    expect(databaseApi.getLockInfo).toHaveBeenCalledTimes(2);
+    expect(databaseApi.getLockInfo).toHaveBeenLastCalledWith('host1', 'demodb', { summary: true, objects: true });
+    expect(q('lock-information-objects').textContent).toContain('0|201|-32763');
+  });
+
+  const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
+  const rowsIn = (testId) => Array.from(q(testId).querySelectorAll('tbody tr'));
+  const clickPage = (testId, label) => act(async () => Array.from(q(testId).querySelectorAll('button'))
+    .find((b) => b.textContent === label || b.getAttribute('aria-label') === label).click());
+
+  it('pages the lock summary and the per-object rows 20 at a time', async () => {
+    const summary = lockResponse('csql');
+    summary.summary.rows = range(30).map((i) => ({
+      index: '1', user: 'DBA', host: 'app1', pid: '111', program: 'csql', obj: `Class = dba.t${i}`, mode: 'IX_LOCK', count: 1,
+    }));
+    databaseApi.getLockInfo.mockResolvedValueOnce(summary);
+    await render(makeStore());
+    await act(async () => q('lock-information-tab-objects').click());
+
+    const frame = q('lock-information-modal');
+    expect(frame.textContent).toContain('dba.t20');
+    expect(frame.textContent).not.toContain('dba.t21');
+    expect(q('lock-information-summary-pages').textContent).toContain('Showing 1–20 of 30');
+    await clickPage('lock-information-summary-pages', CM.nextPage);
+    expect(frame.textContent).toContain('dba.t30');
+    expect(frame.textContent).not.toContain('dba.t20');
+
+    const objects = {
+      objects: range(45).map((i) => ({
+        oid: `0|${i}|1`, obj: 'Instance of class = dba.t1', holders: [{ index: '1', mode: 'X_LOCK', count: '1' }],
+        numHolders: '1', numBlockedHolders: '0', numWaiters: '0',
+      })),
+    };
+    databaseApi.getLockInfo.mockResolvedValueOnce({ ...summary, ...objects });
+    await act(async () => q('lock-information-object-view').click());
+
+    expect(rowsIn('lock-information-objects')).toHaveLength(20);
+    expect(q('lock-information-summary-pages')).toBeNull();
+    await clickPage('lock-information-objects-pages', '3');
+    expect(rowsIn('lock-information-objects').map((tr) => tr.textContent.match(/0\|\d+\|1/)[0]))
+      .toEqual(range(5).map((i) => `0|${40 + i}|1`));
+  });
+
+  it('pages the transaction list when there are more than 20 sessions', async () => {
+    databaseApi.getLockInfo.mockResolvedValueOnce(lockResponse(...range(25).map((i) => `app${i}`)));
+    await render(makeStore());
+
+    expect(q('lock-information-sessions-pages').textContent).toContain('Showing 1–20 of 25');
+    await clickPage('lock-information-sessions-pages', '2');
+    expect(q('lock-information-modal').textContent).toContain('app25');
+    expect(q('lock-information-modal').textContent).not.toContain('app20');
   });
 });

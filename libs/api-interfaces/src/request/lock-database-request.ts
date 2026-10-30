@@ -12,4 +12,10 @@ export type LockDatabaseRequest = {
    * entries when a transaction locks many rows.
    */
   summary?: boolean;
+
+  /**
+   * Return one row per locked object (OID, holders, waiter counts) instead
+   * of the raw lock table, in which CMS splits each object over two entries.
+   */
+  objects?: boolean;
 };

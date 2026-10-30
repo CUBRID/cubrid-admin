@@ -1,7 +1,9 @@
 import React from 'react';
 import { Icon } from '../foundation/Icon';
-import { Button } from '../foundation/Button';
 import { useCM } from '../../../constants/useCM';
+
+// Same box as the page number buttons. (Button adds a text gap after its icon.)
+const STEP_CLASS = 'min-w-[32px] h-8 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-white dark:disabled:hover:bg-slate-900';
 
 export const Pagination = ({
   currentPage = 1,
@@ -38,13 +40,15 @@ export const Pagination = ({
 
   return (
     <nav className={`flex items-center justify-center gap-1 ${className}`} aria-label={CM.paginationAriaLabel}>
-      <Button
-        variant="outline"
-        size="icon"
-        icon="chevron_left"
+      <button
+        type="button"
+        aria-label={CM.previousPage}
+        className={STEP_CLASS}
         disabled={currentPage === 1}
         onClick={() => onPageChange(currentPage - 1)}
-      />
+      >
+        <Icon name="chevron_left" size="19px" />
+      </button>
       
       {getPageNumbers().map((page, idx) => {
         if (page === '...') {
@@ -55,6 +59,8 @@ export const Pagination = ({
         return (
           <button
             key={page}
+            type="button"
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => onPageChange(page)}
             className={`min-w-[32px] h-8 flex items-center justify-center rounded-md text-sm font-medium transition-colors ${
               isActive
@@ -67,13 +73,32 @@ export const Pagination = ({
         );
       })}
       
-      <Button
-        variant="outline"
-        size="icon"
-        icon="chevron_right"
+      <button
+        type="button"
+        aria-label={CM.nextPage}
+        className={STEP_CLASS}
         disabled={currentPage === totalPages}
         onClick={() => onPageChange(currentPage + 1)}
-      />
+      >
+        <Icon name="chevron_right" size="19px" />
+      </button>
     </nav>
+  );
+};
+
+/**
+ * The row range and page buttons under a table paged with
+ * useClientPagination. Renders nothing while everything fits on one page.
+ */
+export const TablePagination = ({ pager, testId, className = '' }) => {
+  const CM = useCM();
+  if (pager.totalPages <= 1) return null;
+  return (
+    <div data-testid={testId} className={`flex items-center justify-between gap-3 ${className}`}>
+      <span className="text-12 font-bold text-slate-400 dark:text-slate-500 font-mono">
+        {CM.showingRangeOfTotal(pager.from, pager.to, pager.total)}
+      </span>
+      <Pagination currentPage={pager.page} totalPages={pager.totalPages} onPageChange={pager.setPage} />
+    </div>
   );
 };

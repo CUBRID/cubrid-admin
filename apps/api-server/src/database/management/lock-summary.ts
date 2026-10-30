@@ -1,7 +1,14 @@
-import { LockSummary, LockSummaryRow } from '@api-interfaces';
+import { LockObjectRow, LockOverview, LockSummary, LockSummaryRow } from '@api-interfaces';
 
-type Holder = { tran_index?: unknown; granted_mode?: unknown };
-type Entry = { ob_type?: unknown; oid?: unknown; lock_holders?: Holder | Holder[] };
+type Holder = { tran_index?: unknown; granted_mode?: unknown; count?: unknown };
+type Entry = {
+  ob_type?: unknown;
+  oid?: unknown;
+  num_holders?: unknown;
+  num_b_holders?: unknown;
+  num_waiters?: unknown;
+  lock_holders?: Holder | Holder[];
+};
 type Transaction = { index?: unknown; '@uid'?: unknown; uid?: unknown; host?: unknown; pid?: unknown; pname?: unknown };
 
 function asArray<T>(value: T | T[] | null | undefined): T[] {
@@ -98,4 +105,69 @@ export function summarizeLocks(lockinfo: unknown): LockSummary {
 
   const rows = [...groups.values()].sort((a, b) => b.count - a.count);
   return { rows, totalLocks };
+}
+
+const firstOf = (value: unknown) =>
+  asArray(value as Record<string, unknown> | Record<string, unknown>[])[0];
+
+/**
+ * Everything lockdb reports except the per-object lock table: settings,
+ * lock table counters and the transactions, small enough to send with the
+ * summary.
+ */
+export function lockOverview(lockinfo: unknown): LockOverview {
+  const info = firstOf(lockinfo);
+  const lot = firstOf(info?.lot);
+  return {
+    esc: text(info?.esc),
+    dinterval: text(info?.dinterval),
+    numlocked: text(lot?.numlocked),
+    numallocated: text(lot?.numallocated),
+    sizelock: text(lot?.sizelock),
+    // CMS sends -1 here for 11.4 and later, which report numallocated instead.
+    maxnumlock: text(lot?.maxnumlock) === '-1' ? '' : text(lot?.maxnumlock),
+    transactions: asArray(info?.transaction as Transaction | Transaction[]).map((tran) => ({
+      index: text(tran.index),
+      user: text(tran['@uid'] ?? tran.uid),
+      host: text(tran.host),
+      pid: text(tran.pid),
+      program: text(tran.pname),
+      isolation: text((tran as Record<string, unknown>).isolevel),
+      timeout: text((tran as Record<string, unknown>).timeout),
+    })),
+  };
+}
+
+/** "0|   553|   1" as printed by the engine (%2d|%6d|%4d) → "0|553|1". */
+export const compactOid = (oid: unknown) =>
+  text(oid)
+    .split('|')
+    .map((part) => part.trim())
+    .join('|') || '-';
+
+/**
+ * CMS reads the holder counts from a fixed line; when the engine prints an
+ * "MVCC info: insert ID = …" line there instead, it reports "inser", "missing"
+ * and "=". Such values are dropped rather than shown as counts.
+ */
+const lockCount = (value: unknown) => (/^\d+$/.test(text(value)) ? text(value) : '-');
+
+/** One row per locked object, with its holders put back together. */
+export function listLockObjects(lockinfo: unknown): LockObjectRow[] {
+  const lot = firstOf(firstOf(lockinfo)?.lot);
+  return mergeLotEntries(lot?.entry).map((entry) => {
+    const holders = asArray(entry.lock_holders).map((holder) => ({
+      index: text(holder.tran_index) || '-',
+      mode: text(holder.granted_mode) || '-',
+      count: text(holder.count),
+    }));
+    return {
+      oid: compactOid(entry.oid),
+      obj: text(entry.ob_type) || '-',
+      holders,
+      numHolders: lockCount(entry.num_holders),
+      numBlockedHolders: lockCount(entry.num_b_holders),
+      numWaiters: lockCount(entry.num_waiters),
+    };
+  });
 }

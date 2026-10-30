@@ -91,4 +91,16 @@ describe('CmsConfigController', () => {
       expect(cmsConfigService.stopStatDumpWatcher).toHaveBeenCalledWith('u1', 'h1', 'demodb');
     });
   });
+  describe('paramdump', () => {
+    it('passes both=y through as a request for client parameters', async () => {
+      cmsConfigService.getParamDump.mockResolvedValue({ dbname: 'demodb', server: [] });
+      const req = { user: { sub: 'user-123' } };
+
+      await controller.paramdump(req as any, 'host-uid-1', 'demodb', 'y');
+      expect(cmsConfigService.getParamDump).toHaveBeenCalledWith('user-123', 'host-uid-1', 'demodb', true);
+
+      await controller.paramdump(req as any, 'host-uid-1', 'demodb');
+      expect(cmsConfigService.getParamDump).toHaveBeenLastCalledWith('user-123', 'host-uid-1', 'demodb', false);
+    });
+  });
 });

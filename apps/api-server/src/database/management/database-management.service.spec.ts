@@ -1385,10 +1385,40 @@ describe('DatabaseManagementService', () => {
       const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true });
 
       expect(result).not.toHaveProperty('lockinfo');
+      expect(result.overview).toMatchObject({ esc: '100000', dinterval: '1.00' });
       expect(result.summary?.totalLocks).toBeGreaterThan(0);
       expect(result.summary?.rows).toEqual(
         expect.arrayContaining([expect.objectContaining({ index: '1', obj: 'Class = code', mode: 'IS_LOCK', count: 1 })])
       );
+    });
+
+    it('returns one row per locked object when asked for objects', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { objects: true });
+
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.objects?.[0]).toEqual({
+        oid: '0|201|-32763',
+        obj: 'Class = code',
+        holders: [{ index: '1', mode: 'IS_LOCK', count: '1' }],
+        numHolders: '1',
+        numBlockedHolders: '0',
+        numWaiters: '0',
+      });
+      expect(result.objects?.[1]).toMatchObject({ oid: '0|833|2', holders: [], numHolders: '-' });
+    });
+
+    it('returns the summary and the per-object rows from a single lockdb', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true, objects: true });
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.summary?.totalLocks).toBeGreaterThan(0);
+      expect(result.overview).toMatchObject({ esc: '100000' });
+      expect(result.objects?.[0]).toMatchObject({ oid: '0|201|-32763' });
     });
 
     it('should successfully get lock information (legacy format without lock_holders)', async () => {
