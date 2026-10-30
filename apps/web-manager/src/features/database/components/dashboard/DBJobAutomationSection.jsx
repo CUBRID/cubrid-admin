@@ -187,6 +187,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
         />
       ) : (
         <Table
+          maxRows={15}
           columns={backupColumns}
           data={backupSchedules}
           onRowClick={openBackupDetail}
@@ -215,6 +216,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
         />
       ) : (
         <Table
+          maxRows={15}
           columns={queryColumns}
           data={queryPlans}
           onRowClick={openQueryDetail}

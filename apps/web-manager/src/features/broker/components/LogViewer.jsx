@@ -126,7 +126,8 @@ function LogViewer({ hostUid, path }) {
   const fileName   = path.split('/').pop();
   const lowerFileName = fileName.toLowerCase();
   const isErrorLogFile = lowerFileName.endsWith('.err') || lowerFileName.endsWith('.error');
-  const activeViewMode = isErrorLogFile ? 'raw' : viewMode;
+  const isRawOnlyLog = isErrorLogFile || /\.access(?:\.|$)/i.test(lowerFileName);
+  const activeViewMode = isRawOnlyLog ? 'raw' : viewMode;
   const isTop = activeViewMode === 'top';
   const currentAnalysis = topAnalysis?.hostUid === hostUid && topAnalysis?.path === path
     && topAnalysis?.revision === topRevision ? topAnalysis : null;
@@ -166,10 +167,10 @@ function LogViewer({ hostUid, path }) {
   }, [hostUid, path, topRevision, isTop]);
 
   useEffect(() => {
-    if (isErrorLogFile && viewMode !== 'raw') {
+    if (isRawOnlyLog && viewMode !== 'raw') {
       setViewMode('raw');
     }
-  }, [isErrorLogFile, viewMode]);
+  }, [isRawOnlyLog, viewMode]);
 
   useEffect(() => {
     if (!toolbarMenu) return undefined;
@@ -217,7 +218,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
     URL.revokeObjectURL(a.href);
   };
 
-  const modeSwitcher = !isErrorLogFile ? (
+  const modeSwitcher = !isRawOnlyLog ? (
     <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-lg p-0.5 shrink-0">
       {MODE_KEYS.map(m => (
         <button
@@ -256,7 +257,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
           <>
 
           {/* Export Excel */}
-          {!isErrorLogFile && (
+          {!isRawOnlyLog && (
             <>
               <button
                 type="button"
@@ -407,10 +408,10 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
         </ContextMenuWrapper>
       )}
 
-      {topError && (
-        <div role="alert" className="px-4 py-3 text-sm text-rose-500">
-          {topError === 'LOG_CHANGED' ? CM.topSQLLogChanged
-            : topError === 'LOG_INCOMPLETE' ? CM.topSQLReadFailed : topError}
+      {error && (
+        <div role="alert" className="px-4 py-3 text-sm text-rose-600 bg-rose-50 dark:bg-rose-950/20">
+          {isTop && topError === 'LOG_CHANGED' ? CM.topSQLLogChanged
+            : isTop && topError === 'LOG_INCOMPLETE' ? CM.topSQLReadFailed : error}
         </div>
       )}
 

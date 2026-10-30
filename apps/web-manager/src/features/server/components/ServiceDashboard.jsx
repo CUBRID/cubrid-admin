@@ -525,6 +525,7 @@ const Component = function ServiceDashboard() {
       <div className="flex-1 overflow-y-auto p-6 space-y-4 relative">
         <Card testId="service-dashboard-table" noPadding className="overflow-hidden border-slate-200 dark:border-white/10 shadow-sm rounded-xl bg-white dark:bg-white/1">
           <Table
+            maxRows={15}
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}

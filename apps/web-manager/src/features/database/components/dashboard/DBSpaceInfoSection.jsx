@@ -70,6 +70,7 @@ export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, polling
         columns={columns}
         data={spaceInfo}
         emptyState={<FetchEmptyState status={spaceInfoStatus} title={CM.fileDistribution} />}
+        maxRows={15}
       />
     </Card>
   );
