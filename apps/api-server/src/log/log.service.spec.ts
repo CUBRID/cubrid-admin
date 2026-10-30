@@ -43,4 +43,37 @@ describe('LogService', () => {
     postAuthenticated.mockResolvedValue({ status: 'failure', note: 'Cannot open file', err: 'not log content' });
     await expect(service.viewLog('user', 'host', '/missing.access', '1', '100')).rejects.toBeDefined();
   });
+  it('captures all lines with exactly one bounded CMS request', async () => {
+    const lines = Array(1003).fill('log line');
+    postAuthenticated.mockResolvedValue({ status: 'success', note: 'none', task: 'viewlog', total: '1003', log: [{ line: lines }] });
+    await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).resolves.toEqual({
+      path: '/broker.sql.log', start: '1', end: '1003', total: '1003', log: [{ line: lines }],
+    });
+    expect(postAuthenticated).toHaveBeenCalledTimes(1);
+    expect(postAuthenticated).toHaveBeenCalledWith('https://localhost:8001/cm_api', {
+      task: 'viewlog', path: '/broker.sql.log', start: '1', end: '100000', token: 'cms-token',
+    }, { timeoutMs: 30_000, maxResponseBytes: 16 * 1024 * 1024 });
+  });
+
+  it.each([100001, 200000])('rejects logs with %i lines without reading another range', async total => {
+    postAuthenticated.mockResolvedValue({ status: 'success', total: String(total), log: [] });
+    await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).rejects.toMatchObject({ status: 413 });
+    expect(postAuthenticated).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an oversized byte payload', async () => {
+    postAuthenticated.mockResolvedValue({ status: 'success', total: '1', log: [{ line: ['x'.repeat(16 * 1024 * 1024)] }] });
+    await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).rejects.toMatchObject({ status: 413 });
+  });
+
+  it('rejects an incomplete capture', async () => {
+    postAuthenticated.mockResolvedValue({ status: 'success', total: '1003', log: [{ line: ['one line'] }] });
+    await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('accepts an empty capture', async () => {
+    postAuthenticated.mockResolvedValue({ status: 'success', total: '0', log: [] });
+    expect((await service.captureLogSnapshot('user', 'host', '/broker.sql.log')).total).toBe('0');
+  });
+
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractTopSQL } from './logParsingUtils';
+import { createTopSQLAccumulator, extractTopSQL } from './logParsingUtils';
 
 describe('extractTopSQL', () => {
   // Real broker SQL log sample from RND-2876: a query that fails CAS-side
@@ -102,5 +102,54 @@ describe('extractTopSQL', () => {
     expect(row.e).toBe(0);
     expect(row.max).toBe('0.010');
     expect(row.min).toBe('0.002');
+  });
+});
+
+describe('Top SQL template grouping', () => {
+  it('aggregates different bind values without changing SQL literals', () => {
+    const lines = [
+      "26-10-28 10:00:00.000 (1) execute srv_h_id 1 SELECT '?' AS marker FROM t WHERE id = ?",
+      '26-10-28 10:00:00.001 (1) bind 1 : INT 1',
+      '26-10-28 10:00:00.002 (1) execute 0 tuple 1 time 0.002',
+      "26-10-28 10:00:01.000 (1) execute srv_h_id 1 SELECT '?' AS marker FROM t WHERE id = ?",
+      '26-10-28 10:00:01.001 (1) bind 1 : INT 2',
+      '26-10-28 10:00:01.004 (1) execute error:-1 tuple 0 time 0.004',
+    ];
+    expect(extractTopSQL(lines)).toEqual([{
+      id: 'Q1', sql: "SELECT '?' AS marker FROM t WHERE id = ?",
+      c: 2, e: 1, min: '0.002', max: '0.004', avg: '0.003',
+    }]);
+  });
+
+  it('keeps queries with different literal SQL separate', () => {
+    const lines = [
+      "26-10-28 10:00:00.000 (1) execute srv_h_id 1 SELECT 'a  b' FROM db_root",
+      '26-10-28 10:00:00.001 (1) execute 0 tuple 1 time 0.001',
+      "26-10-28 10:00:01.000 (1) execute srv_h_id 1 SELECT 'a b' FROM db_root",
+      '26-10-28 10:00:01.001 (1) execute 0 tuple 1 time 0.001',
+    ];
+    expect(extractTopSQL(lines)).toHaveLength(2);
+  });
+});
+
+
+describe('unfinished execution prefixes', () => {
+  it.each(['execute', 'execute_all', 'srv_execute:', 'srv_prepare:'])('preserves %s before a newline and SQL body', command => {
+    const accumulator = createTopSQLAccumulator();
+    accumulator.addLines([`26-10-28 10:00:00.000 (1) ${command} srv_h_id 1 `]);
+    accumulator.addLines(['SELECT 1 FROM db_root', '26-10-28 10:00:00.004 (1) execute error:-670 tuple 0 time 0.004']);
+    expect(accumulator.finish()).toEqual([{ id: 'Q1', sql: 'SELECT 1 FROM db_root',
+      c: 1, e: 1, min: '0.004', max: '0.004', avg: '0.004' }]);
+  });
+
+  it('keeps a following incomplete prefix when the preceding execution is complete', () => {
+    const accumulator = createTopSQLAccumulator();
+    accumulator.addLines([
+      '26-10-28 10:00:00.000 (1) execute srv_h_id 1 SELECT 1 FROM db_root',
+      '26-10-28 10:00:00.001 (1) execute 0 tuple 1 time 0.001',
+      '26-10-28 10:00:00.002 (1) execute srv_h_id 1 ',
+    ]);
+    accumulator.addLines(['SELECT 1 FROM db_root', '26-10-28 10:00:00.004 (1) execute 0 tuple 1 time 0.002']);
+    expect(accumulator.finish()[0].c).toBe(2);
   });
 });

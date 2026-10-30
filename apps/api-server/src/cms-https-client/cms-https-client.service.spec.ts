@@ -4,7 +4,7 @@ import { ConfigService } from '@config/config.service';
 import { HostService } from '@host';
 import { EncryptionService } from '@security';
 import { CmsHttpsClientService } from './cms-https-client.service';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 describe('CmsHttpsClientService', () => {
   let service: CmsHttpsClientService;
@@ -43,6 +43,26 @@ describe('CmsHttpsClientService', () => {
     expect(post.mock.calls[1][2].timeout).toBeUndefined();
     await service.postAuthenticated('https://cms/cm_api', { task: 'dbspaceinfo', token: 'test' }, { timeoutMs: 120000 });
     expect(post.mock.calls[2][2].timeout).toBe(120000);
+  });
+
+  it('applies the snapshot response limit only to the requested call', async () => {
+    post.mockReturnValue(of({ data: { status: 'success' } }));
+    await service.postAuthenticated('https://cms/cm_api', { task: 'viewlog', token: 'test' },
+      { timeoutMs: 30_000, maxResponseBytes: 16 * 1024 * 1024 });
+    expect(post.mock.calls[0][2]).toMatchObject({ timeout: 30_000, maxContentLength: 16 * 1024 * 1024 });
+    await service.postAuthenticated('https://cms/cm_api', { task: 'viewlog', token: 'test' });
+    expect(post.mock.calls[1][2].maxContentLength).toBeUndefined();
+    expect(post.mock.calls[1][2].timeout).toBeUndefined();
+  });
+
+  it('reports an exceeded response limit without retrying or misreporting a timeout', async () => {
+    post.mockReturnValue(throwError(() => Object.assign(new Error('maxContentLength size exceeded'),
+      { code: 'ERR_BAD_RESPONSE', request: {} })));
+    await expect(service.postAuthenticated('https://cms/cm_api', { task: 'viewlog', token: 'test' },
+      { maxResponseBytes: 16 * 1024 * 1024 })).rejects.toMatchObject({
+        code: 'REQUEST_FAILED', additionalData: { message: expect.stringContaining('analysis size limit') },
+      });
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it('releases the host queue after a failed read without retrying it', async () => {

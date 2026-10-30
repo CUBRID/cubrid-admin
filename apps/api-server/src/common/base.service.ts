@@ -42,7 +42,8 @@ export abstract class BaseService {
   >(
     userId: string,
     hostUid: string,
-    cmsRequest: TRequest
+    cmsRequest: TRequest,
+    options?: { timeoutMs?: number; maxResponseBytes?: number }
   ): Promise<TResponse> {
     const host = await this.hostService.findHostInternal(userId, hostUid);
     const url = `https://${host.address}:${host.port}/cm_api`;
@@ -62,10 +63,9 @@ export abstract class BaseService {
       })
     );
 
-    const response = await this.cmsClient.postAuthenticated<TRequest, TResponse>(
-      url,
-      requestWithToken
-    );
+    const response = await (options
+      ? this.cmsClient.postAuthenticated<TRequest, TResponse>(url, requestWithToken, options)
+      : this.cmsClient.postAuthenticated<TRequest, TResponse>(url, requestWithToken));
     const cmsResponse = response as {
       status?: string;
       task?: string;
