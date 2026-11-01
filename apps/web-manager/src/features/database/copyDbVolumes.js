@@ -41,11 +41,16 @@ export function toCopyVolumes(spaceinfo, defaultPath) {
 // copydb's `volume` argument: one { source: target } object per volume, in
 // volid order. CMS writes each array element as the next control-file line,
 // while the keys of a single object would come out sorted by path.
+//
+// Always with `/`: CMS (ts_copydb) cuts the target at its last `/` to make
+// the lob directory before a Windows CMS turns `/` into `\` (nt_style_path),
+// so a `\` path would get a lob directory named after the volume file.
 export function buildCopyVolumeList(volumes, destPath) {
+  const slashes = (path) => path.replace(/\\/g, '/');
   return volumes.map((vol) => {
     const separator = separatorOf(vol.location || destPath || '/');
     const oldPath = joinPath(vol.location || '', vol.spacename, separator);
     const newPath = joinPath(vol.newLocation || destPath, vol.newVolumeName || vol.spacename, separator);
-    return { [oldPath]: newPath };
+    return { [slashes(oldPath)]: slashes(newPath) };
   });
 }

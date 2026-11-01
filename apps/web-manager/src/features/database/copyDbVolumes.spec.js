@@ -9,6 +9,16 @@ describe('splitVolumePath', () => {
     });
   });
 
+  it('sends Windows paths with / separators, which a Windows CMS converts after making the lob directory', () => {
+    const volumes = toCopyVolumes([
+      { type: 'PERMANENT', volid: '0', spacename: 'C:\\CUBRID\\databases\\demodb\\demodb', location: 'C:\\CUBRID\\databases\\demodb\\demodb' },
+    ], 'C:\\CUBRID\\databases\\copydb').map((v) => ({ ...v, newLocation: 'C:\\CUBRID\\databases\\copydb', newVolumeName: 'copydb' }));
+
+    expect(buildCopyVolumeList(volumes, 'C:\\CUBRID\\databases\\copydb')).toEqual([
+      { 'C:/CUBRID/databases/demodb/demodb': 'C:/CUBRID/databases/copydb/copydb' },
+    ]);
+  });
+
   it('keeps the root as the directory of a volume right under it', () => {
     expect(splitVolumePath('/testdb', '/testdb')).toEqual({ name: 'testdb', dir: '/' });
     expect(buildCopyVolumeList([{ spacename: 'testdb', location: '/', newLocation: '/copy', newVolumeName: 'copydb' }], '/copy'))
