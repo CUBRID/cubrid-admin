@@ -29,17 +29,20 @@ export const restartServiceKeepingDatabases = (hostUid) => async (dispatch, getS
   }
 
   let notRestarted = [];
+  // Until the status is read, every database that was running counts as
+  // possibly not back; after it, only the ones it shows stopped.
+  let toStart = wasRunning;
   try {
     const info = await dispatch(fetchDatabaseStartInfo(hostUid)).unwrap();
     const running = activeNames(info);
-    const toStart = wasRunning.filter((dbname) => !running.has(dbname));
+    toStart = wasRunning.filter((dbname) => !running.has(dbname));
     if (toStart.length > 0) {
       const result = await dispatch(runSelectedDatabasesAction({ hostUid, action: 'start', dbnames: toStart })).unwrap();
       notRestarted = result.failed || [];
       if (result.succeeded?.length) dispatch(fetchDatabaseStartInfo(hostUid));
     }
   } catch (err) {
-    notRestarted = wasRunning.map((dbname) => ({ dbname, error: errorText(err) }));
+    notRestarted = toStart.map((dbname) => ({ dbname, error: errorText(err) }));
   }
   return { problems, notRestarted };
 };

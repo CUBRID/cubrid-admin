@@ -108,6 +108,13 @@ import { openCreateGroupModal, openDeleteGroupModal, openRenameGroupModal, openA
 import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME, orderedGroupEntries } from '../../host/hostGroupUtils';
 import { useHostActivation } from '../../host/useHostActivation';
 
+// A selection updater keeping only the names in `namesText` (newline-joined).
+const keepOnly = (namesText) => (prev) => {
+  const names = new Set(namesText.split('\n'));
+  const next = new Set([...prev].filter((name) => names.has(name)));
+  return next.size === prev.size ? prev : next;
+};
+
 export default function Sidebar({ isCollapsed, onAddHost }) {
   const CM = useCM();
   const {
@@ -184,12 +191,28 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
   const { databasesByHost, activeDatabasesByHost, loggedInDatabases, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { brokersByHost } = useSelector((state) => state.broker, shallowEqual);
+  // The lists the trees show; a multi-selection is kept within them.
+  const navigatorDbNames = useSelector(
+    (state) => (state.database.navigatorDatabasesByHost?.[state.host.selectedHostUid] || []).map((db) => db.dbname).join('\n')
+  );
+  const navigatorBrokerNames = useSelector(
+    (state) => (state.broker.navigatorBrokersByHost?.[state.host.selectedHostUid] || []).map((b) => b.name).join('\n')
+  );
   // Sidebar's BrokerTree/DatabaseTree are keyed by selectedHostUid (fully
   // remounted on host switch) and every list here is scoped to whichever
   // host is currently selected — read straight out of the per-host maps so
   // a still in-flight response for a host the user has since switched away
   // from can never be mistaken for this host's own data.
   const databases = databasesByHost[selectedHostUid] || [];
+  // A deleted (or renamed) database or broker leaves the selection, so it
+  // can't be acted on unseen, or come back selected under a reused name.
+  useEffect(() => {
+    setSelectedDbNames(keepOnly(navigatorDbNames));
+  }, [navigatorDbNames]);
+  useEffect(() => {
+    setSelectedBrokerNames(keepOnly(navigatorBrokerNames));
+  }, [navigatorBrokerNames]);
+
   // The database tree remounts per host; its multi-selection starts empty too.
   useEffect(() => {
     setSelectedDbNames(new Set());
