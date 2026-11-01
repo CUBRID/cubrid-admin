@@ -36,8 +36,11 @@ export default function CopyDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isCopyDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  // copydb's "delete source" removes an HA member locally while ha_db_list
+  // and the peers still name it, like a rename or delete (both blocked for HA).
+  const isSourceHa = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
@@ -186,7 +189,10 @@ export default function CopyDatabaseModal() {
         newLocation: newLoc,
       };
     }));
-  }, [formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths]);
+    // volumes.length: the volume list arrives after the name is often already
+    // typed; without it those rows would keep the source's own name and
+    // directory, mapping each volume onto itself.
+  }, [formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths, volumes.length]);
 
   if (!isCopyDatabaseModalOpen) return null;
 
@@ -267,16 +273,22 @@ export default function CopyDatabaseModal() {
   const handleCopy = async () => {
     if (!formData.destName.trim()) return;
 
-    startAction();
-
     let advanced = 'off';
     let volumeList;
 
     if (formData.copyIndividual) {
       advanced = 'on';
       volumeList = buildCopyVolumeList(volumes, formData.destPath);
+      // copydb would format the target over the source volume itself.
+      const ontoItself = volumeList.find((entry) => Object.entries(entry).some(([from, to]) => from === to));
+      if (ontoItself) {
+        endError(CM.copyVolumeOntoItselfMsg(Object.keys(ontoItself)[0]));
+        return;
+      }
       if (volumeList.length === 0) volumeList = undefined;
     }
+
+    startAction();
 
     const payload = {
       srcdbname: selectedDatabase,
@@ -285,7 +297,7 @@ export default function CopyDatabaseModal() {
       exvolpath: formData.extPath,
       logpath: formData.logPath,
       overwrite: formData.replaceExisting ? 'y' : 'n',
-      move: formData.deleteSource ? 'y' : 'n',
+      move: formData.deleteSource && !isSourceHa ? 'y' : 'n',
       advanced,
       ...(volumeList && { volume: volumeList }),
     };
@@ -542,7 +554,8 @@ export default function CopyDatabaseModal() {
           />
           <Checkbox
             label={CM.btnDeleteSrcDb || 'Delete a source database'}
-            checked={formData.deleteSource}
+            checked={formData.deleteSource && !isSourceHa}
+            disabled={isSourceHa}
             onChange={e => handleInputChange('deleteSource', e.target.checked)}
           />
         </div>

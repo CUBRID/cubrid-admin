@@ -5,6 +5,7 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { CmsConfigService } from '@cms-config/cms-config.service';
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import { DatabaseError } from '@error/database/database-error';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
@@ -52,6 +53,7 @@ describe('DatabaseManagementService', () => {
   const mockHostUid = 'host-uid-1';
   const mockDbname = 'testdb';
   let cmsConfigService: { getAllSystemParam: jest.Mock; setSystemParam: jest.Mock };
+  let databaseConfigService: { ensureDbHaModeOff: jest.Mock };
   const mockStartInfoResponse = { activelist: { active: [] }, dblist: { dbs: [] } };
 
   beforeEach(async () => {
@@ -74,6 +76,7 @@ describe('DatabaseManagementService', () => {
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
+    databaseConfigService = { ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined) };
     cmsConfigService = {
       getAllSystemParam: jest.fn().mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] }),
       setSystemParam: jest.fn().mockResolvedValue({ success: true }),
@@ -85,6 +88,10 @@ describe('DatabaseManagementService', () => {
         {
           provide: CmsConfigService,
           useValue: cmsConfigService,
+        },
+        {
+          provide: DatabaseConfigService,
+          useValue: databaseConfigService,
         },
         {
           provide: HostService,
@@ -882,6 +889,45 @@ describe('DatabaseManagementService', () => {
       await expect(
         service.compactDatabase(mockUserId, mockHostUid, mockDbname, request)
       ).rejects.toThrow(CmsError);
+    });
+  });
+
+  describe('copyDb guards and bookkeeping', () => {
+    const copyReq = {
+      srcdbname: 'srcdb', destdbname: 'newdb', destdbpath: '/db/newdb', exvolpath: '/db/newdb', logpath: '/db/newdb',
+      overwrite: 'n', move: 'n', advanced: 'off',
+    };
+
+    it('refuses to copy a volume onto itself', async () => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...copyReq, advanced: 'on', volume: [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb' }],
+      })).rejects.toMatchObject({ code: 'INVALID_PARAMETER' });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('refuses "delete source" for an HA database', async () => {
+      const info = (service as any).databaseInfoService;
+      info.effectiveHaDbForDbname.mockResolvedValueOnce(true);
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, { ...copyReq, move: 'y' }))
+        .rejects.toMatchObject({ code: 'RENAME_NOT_SUPPORTED_FOR_HA_DATABASE' });
+    });
+
+    it('marks the copy ha_mode=off on an HA-configured host, and nothing else for a plain copy', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[common]', 'ha_mode=on'] }] });
+
+      await service.finishCopy(mockUserId, mockHostUid, copyReq as any);
+
+      expect(databaseConfigService.ensureDbHaModeOff).toHaveBeenCalledWith(mockUserId, mockHostUid, 'newdb');
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('treats "delete source" as a rename of the source in cubrid.conf', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=srcdb'] }] });
+
+      await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=newdb']);
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
     });
   });
 

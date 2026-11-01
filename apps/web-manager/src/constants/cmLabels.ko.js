@@ -1739,6 +1739,7 @@ export const CM_KO = {
   importNoValidHostsMsg: '가져올 유효한 호스트가 선택되지 않았습니다.',
   importSummaryMsg: (addedCount, groupSummary, skippedCount) =>
     `${groupSummary}에 호스트 ${addedCount}개를 가져왔습니다. ${skippedCount}개 항목은 건너뛰었습니다.`,
+  copyVolumeOntoItselfMsg: (path) => `${path}의 대상이 원본과 같은 파일입니다. 새 이름이나 경로를 바꾸세요.`,
   importRolledBackMsg: '가져오기가 롤백되었습니다. 호스트가 추가되지 않았습니다.',
   importFailedMsg: '호스트를 가져오지 못했습니다.',
   failedToCreateImportGroupMsg: (name) => `가져오기 그룹 "${name}"을(를) 생성하지 못했습니다.`,

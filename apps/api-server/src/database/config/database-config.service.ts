@@ -30,7 +30,6 @@ import {
   HandleCmsErrors,
 } from '@common';
 import { ConfigError } from '@error/config/config-error';
-import { ConfigErrorCode } from '@error/config/config-error-code';
 import { ValidationError } from '@error/validation/validation-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
@@ -57,6 +56,7 @@ import {
 } from '@type/cms-response';
 import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
 import { parseConfigParams, withHostConfigMutex } from '@util';
+import { forgetDbInCubridConf } from '@database/management/rename-in-cubrid-conf';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 
 /**
@@ -421,17 +421,19 @@ export class DatabaseConfigService extends BaseService {
   }
 
   /**
-   * removeAutoStart for a database that was just deleted: no login gate (it
-   * can't log in any more — its stored login is already gone — and the
-   * delete itself went through the gate), and no error when it isn't listed.
+   * After a database is deleted: takes it out of the `[service]` autostart
+   * list and drops its `[@dbname]` section (forgetDbInCubridConf). No login
+   * gate — the deleted database can't log in any more, and the delete itself
+   * went through the gate.
    */
-  async removeAutoStartAfterDelete(userId: string, hostUid: string, dbname: string): Promise<void> {
+  async forgetDatabaseAfterDelete(userId: string, hostUid: string, dbname: string): Promise<void> {
     await withHostConfigMutex(hostUid, async () => {
-      try {
-        await this.removeAutoStartUnlocked(userId, hostUid, { confname: CMS_CONFNAME_CUBRID, dbname });
-      } catch (error: unknown) {
-        if (error instanceof ConfigError && error.code === ConfigErrorCode.DBNAME_NOT_FOUND) return;
-        throw error;
+      const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      const confdata = conf.conflist?.[0]?.confdata;
+      if (!confdata || confdata.length === 0) return;
+      const updated = forgetDbInCubridConf(confdata, dbname);
+      if (updated) {
+        await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
       }
     });
   }

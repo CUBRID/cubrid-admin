@@ -516,6 +516,11 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
    * failure here must not flip an already-successful job to "failed".
    */
   private async followDatabaseMove(job: CmsJobRecord): Promise<void> {
+    if (job.type === 'copy') {
+      // Move bookkeeping and the HA ha_mode=off marker; best-effort inside.
+      await this.managementService.finishCopy(job.userId, job.hostUid, job.payload as CopyDbRequest);
+      return;
+    }
     const moved = movedDatabaseNames(job);
     if (!moved) return;
     try {

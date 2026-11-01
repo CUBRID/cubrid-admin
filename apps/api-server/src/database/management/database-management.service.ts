@@ -28,8 +28,9 @@ import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { summarizeLocks } from './lock-summary';
 import { renameDbInCubridConf } from './rename-in-cubrid-conf';
-import { withHostConfigMutex } from '@util';
+import { isHostHaModeOnFromCubridConf, withHostConfigMutex } from '@util';
 import { CmsConfigService } from '@cms-config/cms-config.service';
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import {
   BaseService,
@@ -84,7 +85,8 @@ export class DatabaseManagementService extends BaseService {
     cmsClient: CmsHttpsClientService,
     private readonly databaseInfoService: DatabaseInfoService,
     private readonly databaseUserService: DatabaseUserService,
-    private readonly cmsConfigService: CmsConfigService
+    private readonly cmsConfigService: CmsConfigService,
+    private readonly databaseConfigService: DatabaseConfigService
   ) {
     super(hostService, cmsClient);
   }
@@ -127,13 +129,40 @@ export class DatabaseManagementService extends BaseService {
   ): Promise<CmsSuccessClientResponse> {
     const response = await this.copyDbCmsResponse(userId, hostUid, request);
     checkCmsStatusError(response);
-    // move=y deletes the source, so it is a rename as far as cubrid.conf and
-    // the stored logins are concerned (CmsJobService.followDatabaseMove).
-    if (request.move === 'y') {
-      await this.clearDbAliasCachesAfterRename(userId, hostUid, request.srcdbname, request.destdbname);
-      await this.renameInCubridConfAfterRename(userId, hostUid, request.srcdbname, request.destdbname);
-    }
+    await this.finishCopy(userId, hostUid, request);
     return { success: true };
+  }
+
+  /**
+   * Bookkeeping after a successful copydb, best-effort (the copy did
+   * happen; a failure here is logged, not returned):
+   * - move=y deletes the source, so it is a rename as far as cubrid.conf and
+   *   the stored logins are concerned;
+   * - on an HA-configured host the copy gets `[@dest] ha_mode=off`, as a
+   *   created database does — otherwise `cubrid server start` refuses it
+   *   (HA mode) and it can't be deleted either.
+   */
+  async finishCopy(userId: string, hostUid: string, request: CopyDbRequest): Promise<void> {
+    if (request.move === 'y') {
+      await this.bestEffort(`clear stored login of moved database ${request.srcdbname}`, () =>
+        this.clearDbAliasCachesAfterRename(userId, hostUid, request.srcdbname, request.destdbname));
+      await this.bestEffort(`rename moved database ${request.srcdbname} in cubrid.conf`, () =>
+        this.renameInCubridConfAfterRename(userId, hostUid, request.srcdbname, request.destdbname));
+    }
+    await this.bestEffort(`set ha_mode=off for copied database ${request.destdbname}`, async () => {
+      const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      if (isHostHaModeOnFromCubridConf(conf)) {
+        await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, request.destdbname);
+      }
+    });
+  }
+
+  private async bestEffort(what: string, fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err: unknown) {
+      this.logger.warn(`Failed to ${what}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   async copyDbCmsResponse(
@@ -142,6 +171,21 @@ export class DatabaseManagementService extends BaseService {
     request: CopyDbRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CopyDbCmsResponse> {
+    // "Delete source" removes an HA member locally while ha_db_list and the
+    // peers still name it — the reason rename and delete are blocked for HA.
+    if (request.move === 'y' && (await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, request.srcdbname))) {
+      throw DatabaseError.RenameNotSupportedForHaDatabase({ dbname: request.srcdbname });
+    }
+    // copydb would format the target over the source volume itself.
+    const ontoItself = (request.volume || []).flatMap((entry) => Object.entries(entry)).find(([from, to]) => from === to);
+    if ((request.advanced === 'on' || request.advanced === 'y') && ontoItself) {
+      throw DatabaseError.InvalidParameter(`Volume ${ontoItself[0]} would be copied onto itself`, {
+        hostUid,
+        dbname: request.srcdbname,
+        reason: 'COPY_VOLUME_ONTO_ITSELF',
+      });
+    }
+
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.srcdbname);
 
     const cmsRequest: CopyDbCmsRequest = {
@@ -520,8 +564,10 @@ export class DatabaseManagementService extends BaseService {
   ): Promise<StartInfoClientResponse> {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
-    await this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename);
-    await this.renameInCubridConfAfterRename(userId, hostUid, dbname, request.rename);
+    await this.bestEffort(`clear stored login after renaming ${dbname}`, () =>
+      this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename));
+    await this.bestEffort(`rename ${dbname} in cubrid.conf`, () =>
+      this.renameInCubridConfAfterRename(userId, hostUid, dbname, request.rename));
     return await this.getDatabaseStartInfo(userId, hostUid);
   }
 

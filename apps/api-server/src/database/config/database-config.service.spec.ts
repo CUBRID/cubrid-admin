@@ -721,25 +721,25 @@ describe('DatabaseConfigService', () => {
     });
   });
 
-  describe('removeAutoStartAfterDelete', () => {
-    it('removes a deleted database from the autostart list without its login gate', async () => {
+  describe('forgetDatabaseAfterDelete', () => {
+    it('removes a deleted database from the autostart list and drops its section, without its login gate', async () => {
       const ensureDbLogin = (service as any).databaseUserService.ensureDbLogin as jest.Mock;
       ensureDbLogin.mockRejectedValue(new Error('no stored login'));
       cmsConfigService.getAllSystemParam.mockResolvedValue({
-        conflist: [{ confdata: ['[service]', 'server=demodb,gone'] }],
+        conflist: [{ confdata: ['[service]', 'server=demodb,gone', '[@gone]', 'ha_mode=off', '[@demodb]', 'a=1'] }],
       } as any);
       cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as any);
 
-      await service.removeAutoStartAfterDelete('u', 'h', 'gone');
+      await service.forgetDatabaseAfterDelete('u', 'h', 'gone');
 
       expect(ensureDbLogin).not.toHaveBeenCalled();
-      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith('u', 'h', 'cubridconf', ['[service]', 'server=demodb']);
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith('u', 'h', 'cubridconf', ['[service]', 'server=demodb', '[@demodb]', 'a=1']);
     });
 
     it('is quiet when the database was not in the autostart list', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] } as any);
 
-      await expect(service.removeAutoStartAfterDelete('u', 'h', 'gone')).resolves.toBeUndefined();
+      await expect(service.forgetDatabaseAfterDelete('u', 'h', 'gone')).resolves.toBeUndefined();
       expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
     });
   });

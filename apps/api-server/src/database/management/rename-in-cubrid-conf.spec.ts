@@ -1,4 +1,4 @@
-import { renameDbInCubridConf } from './rename-in-cubrid-conf';
+import { forgetDbInCubridConf, renameDbInCubridConf } from './rename-in-cubrid-conf';
 
 describe('renameDbInCubridConf', () => {
   it('renames the database in the [service] autostart list and its own section', () => {
@@ -64,5 +64,17 @@ describe('renameDbInCubridConf', () => {
     expect(renameDbInCubridConf(['[ Service ]', 'server=olddb', '[@OLDDB]'], 'olddb', 'newdb')).toEqual([
       '[ Service ]', 'server=newdb', '[@OLDDB]',
     ]);
+  });
+});
+
+describe('forgetDbInCubridConf', () => {
+  it('takes the database out of the autostart list and drops its own section only', () => {
+    const conf = ['[service]', 'server="a, gone, b"  # x', '[@gone]', 'ha_mode=off', '', '[@b]', 'a=1'];
+
+    expect(forgetDbInCubridConf(conf, 'gone')).toEqual(['[service]', 'server="a,b"  # x', '[@b]', 'a=1']);
+  });
+
+  it('returns null when nothing names the database', () => {
+    expect(forgetDbInCubridConf(['[service]', 'server=a', '[@gonex]'], 'gone')).toBeNull();
   });
 });
