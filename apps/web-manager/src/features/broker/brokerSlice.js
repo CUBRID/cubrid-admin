@@ -245,13 +245,23 @@ export const updateBrokerConfig = createAsyncThunk(
   }
 );
 
-// One foreground list read for the host settled. The spinner stays while
-// another one is still pending.
-const endForegroundRead = (state, hostUid) => {
-  if (!(hostUid in state.foregroundReadsByHost)) return; // host closed meanwhile
-  const left = state.foregroundReadsByHost[hostUid] - 1;
-  state.foregroundReadsByHost[hostUid] = left;
-  state.loadingByHost[hostUid] = left > 0;
+// Reads are tracked per host from pending to settled, as { requestId:
+// foreground }. Closing the host drops its entries, so a read started on the
+// earlier connection (still in flight, or queued behind one) can neither
+// write the evicted slots nor end the new connection's spinner when it
+// settles. Returns whether the read still belongs to the host's connection.
+const startRead = (state, hostUid, requestId, foreground) => {
+  (state.pendingReadsByHost[hostUid] ??= {})[requestId] = foreground;
+  if (foreground) state.loadingByHost[hostUid] = true;
+};
+
+const settleRead = (state, hostUid, requestId) => {
+  const reads = state.pendingReadsByHost[hostUid];
+  if (!reads || !(requestId in reads)) return false;
+  const foreground = reads[requestId];
+  delete reads[requestId];
+  if (foreground) state.loadingByHost[hostUid] = Object.values(reads).some(Boolean);
+  return true;
 };
 
 // Which views a list read (or its failure) may update: only those that have
@@ -305,8 +315,8 @@ const initialState = {
   dbLogsByDbName: {}, // { dbname: [logs] }
   dbLogsLoading: false,
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
-  // { hostUid: number } — foreground list reads still pending, behind loadingByHost.
-  foregroundReadsByHost: {},
+  // { hostUid: { requestId: foreground } } — reads started on the host's current connection; see startRead.
+  pendingReadsByHost: {},
   // { hostUid: seq } — the newest list each view applied. A read is stamped
   // when sent, so a slow one can never overwrite a newer one; a background
   // poll never moves the navigator.
@@ -371,16 +381,13 @@ const brokerSlice = createSlice({
     builder
       .addCase(fetchBrokerList.pending, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        if (!action.meta.arg?.isBackground) {
-          state.foregroundReadsByHost[hostUid] = (state.foregroundReadsByHost[hostUid] ?? 0) + 1;
-          state.loadingByHost[hostUid] = true;
-        }
+        startRead(state, hostUid, action.meta.requestId, !action.meta.arg?.isBackground);
         state.error = null;
       })
       .addCase(fetchBrokerList.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
-        if (!isBackground) endForegroundRead(state, hostUid);
+        if (!settleRead(state, hostUid, action.meta.requestId)) return; // host closed since
         const { updateLive, updateNavigator } = claimSeq(state, hostUid, action.meta.seq, isBackground);
         const newBrokers = action.payload;
         if (updateLive) {
@@ -402,7 +409,7 @@ const brokerSlice = createSlice({
       .addCase(fetchBrokerList.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
-        if (!isBackground) endForegroundRead(state, hostUid);
+        if (!settleRead(state, hostUid, action.meta.requestId)) return; // host closed since
         // A background poll failure leaves the navigator's tree alone; only
         // an explicit fetch failure empties it. brokerListFailedByHost lets
         // the host dashboard (Brokers.jsx) tell a failure from an empty list.
@@ -638,7 +645,7 @@ const brokerSlice = createSlice({
             delete state.appliedLiveSeqByHost[hostUid];
             delete state.appliedNavigatorSeqByHost[hostUid];
           }
-          delete state.foregroundReadsByHost[hostUid];
+          delete state.pendingReadsByHost[hostUid];
           delete state.loadingByHost[hostUid];
           delete state.brokerListFailedByHost[hostUid];
         }
