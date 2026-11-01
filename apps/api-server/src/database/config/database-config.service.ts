@@ -30,6 +30,7 @@ import {
   HandleCmsErrors,
 } from '@common';
 import { ConfigError } from '@error/config/config-error';
+import { ConfigErrorCode } from '@error/config/config-error-code';
 import { ValidationError } from '@error/validation/validation-error';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
@@ -417,6 +418,22 @@ export class DatabaseConfigService extends BaseService {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
     // Same per-host cubrid.conf queue as ensureDbHaModeOff and rename.
     return withHostConfigMutex(hostUid, () => this.removeAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  /**
+   * removeAutoStart for a database that was just deleted: no login gate (it
+   * can't log in any more — its stored login is already gone — and the
+   * delete itself went through the gate), and no error when it isn't listed.
+   */
+  async removeAutoStartAfterDelete(userId: string, hostUid: string, dbname: string): Promise<void> {
+    await withHostConfigMutex(hostUid, async () => {
+      try {
+        await this.removeAutoStartUnlocked(userId, hostUid, { confname: CMS_CONFNAME_CUBRID, dbname });
+      } catch (error: unknown) {
+        if (error instanceof ConfigError && error.code === ConfigErrorCode.DBNAME_NOT_FOUND) return;
+        throw error;
+      }
+    });
   }
 
   private async removeAutoStartUnlocked(

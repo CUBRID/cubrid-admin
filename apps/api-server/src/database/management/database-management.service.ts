@@ -127,6 +127,12 @@ export class DatabaseManagementService extends BaseService {
   ): Promise<CmsSuccessClientResponse> {
     const response = await this.copyDbCmsResponse(userId, hostUid, request);
     checkCmsStatusError(response);
+    // move=y deletes the source, so it is a rename as far as cubrid.conf and
+    // the stored logins are concerned (CmsJobService.followDatabaseMove).
+    if (request.move === 'y') {
+      await this.clearDbAliasCachesAfterRename(userId, hostUid, request.srcdbname, request.destdbname);
+      await this.renameInCubridConfAfterRename(userId, hostUid, request.srcdbname, request.destdbname);
+    }
     return { success: true };
   }
 
