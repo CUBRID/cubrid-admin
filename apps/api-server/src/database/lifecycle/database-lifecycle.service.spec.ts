@@ -470,6 +470,31 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('a second start/stop of the same database', () => {
+    it('is turned away while the first is still running', async () => {
+      jest.spyOn(databaseInfoService as any, 'effectiveHaDbForDbname').mockResolvedValue(true);
+      let finishStart!: () => void;
+      cmsClient.postAuthenticated.mockImplementation((_url, body) => {
+        if (body.task === 'ha_start') {
+          return new Promise((r) => { finishStart = () => r({ __EXEC_TIME: '1 ms', note: 'none', status: 'success', task: 'ha_start' }); });
+        }
+        return Promise.resolve({ __EXEC_TIME: '1 ms', note: 'none', status: 'success', task: body.task });
+      });
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({});
+
+      const start = service.startDatabase(mockUserId, mockHostUid, 'hadb1');
+      await new Promise((r) => setTimeout(r, 0));
+      await expect(service.stopDatabase(mockUserId, mockHostUid, 'hadb1')).rejects.toMatchObject({
+        code: 'DATABASE_ACTION_IN_PROGRESS',
+      });
+      expect(cmsClient.postAuthenticated.mock.calls.filter(([, body]) => body.task === 'ha_stop')).toHaveLength(0);
+
+      finishStart();
+      await start;
+      await expect(service.stopDatabase(mockUserId, mockHostUid, 'hadb1')).resolves.toBeDefined();
+    });
+  });
+
   describe('startAllDatabases', () => {
     const successResponse = {
       __EXEC_TIME: '10 ms',
