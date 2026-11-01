@@ -416,3 +416,49 @@ describe('fetchBrokerList after a broker action', () => {
   });
 
 });
+
+describe('reads from a closed connection', () => {
+  it('does not let a read queued before the host closed repopulate it', async () => {
+    const poll = deferred();
+    const queued = deferred();
+    let call = 0;
+    brokerApi.getBrokerList.mockImplementation(() => (++call === 1 ? poll.promise : queued.promise));
+    const store = makeStore();
+
+    const dispatchPoll = store.dispatch(fetchBrokerList({ hostUid: 'hostA', isBackground: true, skipStatusEnrichment: true }));
+    const dispatchQueued = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+    store.dispatch(closeHostTabs('hostA'));
+
+    poll.resolve({ result: [{ name: 'old', pid: '1' }] });
+    await dispatchPoll;
+    await vi.waitFor(() => expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(2));
+    queued.resolve({ result: [{ name: 'queued', pid: '2' }] });
+    await dispatchQueued;
+
+    expect(store.getState().broker.brokersByHost.hostA).toBeUndefined();
+    expect(store.getState().broker.navigatorBrokersByHost.hostA).toBeUndefined();
+    expect(store.getState().broker.loadingByHost.hostA).toBeUndefined();
+  });
+
+  it("keeps the reconnected host's spinner until its own read settles", async () => {
+    const before = deferred();
+    const after = deferred();
+    let call = 0;
+    brokerApi.getBrokerList.mockImplementation(() => (++call === 1 ? before.promise : after.promise));
+    const store = makeStore();
+
+    const dispatchBefore = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+    store.dispatch(closeHostTabs('hostA'));
+    const dispatchAfter = store.dispatch(fetchBrokerList({ hostUid: 'hostA', skipStatusEnrichment: true }));
+
+    before.resolve({ result: [{ name: 'before', pid: '1' }] });
+    await dispatchBefore;
+    expect(store.getState().broker.loadingByHost.hostA).toBe(true);
+
+    await vi.waitFor(() => expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(2));
+    after.resolve({ result: [{ name: 'after', pid: '2' }] });
+    await dispatchAfter;
+    expect(store.getState().broker.loadingByHost.hostA).toBe(false);
+    expect(store.getState().broker.brokersByHost.hostA).toEqual([expect.objectContaining({ name: 'after' })]);
+  });
+});

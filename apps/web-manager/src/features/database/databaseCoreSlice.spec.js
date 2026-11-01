@@ -508,3 +508,49 @@ describe('start-info isLoggedIn syncs the padlock to the server-side DB login st
     expect(store.getState().loggedInDatabases).toEqual([]);
   });
 });
+
+describe('reads from a closed connection', () => {
+  it('does not let a read queued before the host closed repopulate it', async () => {
+    const poll = deferred();
+    const queued = deferred();
+    let call = 0;
+    databaseApi.getStartInfo.mockImplementation(() => (++call === 1 ? poll.promise : queued.promise));
+    const store = configureStore({ reducer });
+
+    const dispatchPoll = store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    const dispatchQueued = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    store.dispatch(closeHostTabs('hostA'));
+
+    poll.resolve({ dblist: { dbs: [{ dbname: 'old' }] } });
+    await dispatchPoll;
+    await vi.waitFor(() => expect(databaseApi.getStartInfo).toHaveBeenCalledTimes(2));
+    queued.resolve({ dblist: { dbs: [{ dbname: 'queued' }] } });
+    await dispatchQueued;
+
+    expect(store.getState().databasesByHost.hostA).toBeUndefined();
+    expect(store.getState().navigatorDatabasesByHost.hostA).toBeUndefined();
+    expect(store.getState().loadingByHost.hostA).toBeUndefined();
+  });
+
+  it("keeps the reconnected host's spinner until its own read settles", async () => {
+    const before = deferred();
+    const after = deferred();
+    let call = 0;
+    databaseApi.getStartInfo.mockImplementation(() => (++call === 1 ? before.promise : after.promise));
+    const store = configureStore({ reducer });
+
+    const dispatchBefore = store.dispatch(fetchDatabaseStartInfo('hostA'));
+    store.dispatch(closeHostTabs('hostA'));
+    const dispatchAfter = store.dispatch(fetchDatabaseStartInfo('hostA'));
+
+    before.resolve({ dblist: { dbs: [{ dbname: 'before' }] } });
+    await dispatchBefore;
+    expect(store.getState().loadingByHost.hostA).toBe(true);
+
+    await vi.waitFor(() => expect(databaseApi.getStartInfo).toHaveBeenCalledTimes(2));
+    after.resolve({ dblist: { dbs: [{ dbname: 'after' }] } });
+    await dispatchAfter;
+    expect(store.getState().loadingByHost.hostA).toBe(false);
+    expect(store.getState().databasesByHost.hostA).toEqual([{ dbname: 'after' }]);
+  });
+});

@@ -297,13 +297,23 @@ const parseDbResponse = (state, payload, hostUid, { updateLive, updateNavigator,
   }
 };
 
-// One foreground start-info read for the host settled. The spinner stays
-// while another one is still pending.
-const endForegroundRead = (state, hostUid) => {
-  if (!(hostUid in state.foregroundReadsByHost)) return; // host closed meanwhile
-  const left = state.foregroundReadsByHost[hostUid] - 1;
-  state.foregroundReadsByHost[hostUid] = left;
-  state.loadingByHost[hostUid] = left > 0;
+// Reads are tracked per host from pending to settled, as { requestId:
+// foreground }. Closing the host drops its entries, so a read started on the
+// earlier connection (still in flight, or queued behind one) can neither
+// write the evicted slots nor end the new connection's spinner when it
+// settles. Returns whether the read still belongs to the host's connection.
+const startRead = (state, hostUid, requestId, foreground) => {
+  (state.pendingReadsByHost[hostUid] ??= {})[requestId] = foreground;
+  if (foreground) state.loadingByHost[hostUid] = true;
+};
+
+const settleRead = (state, hostUid, requestId) => {
+  const reads = state.pendingReadsByHost[hostUid];
+  if (!reads || !(requestId in reads)) return false;
+  const foreground = reads[requestId];
+  delete reads[requestId];
+  if (foreground) state.loadingByHost[hostUid] = Object.values(reads).some(Boolean);
+  return true;
 };
 
 // Applies a start-info response to each view only if it is newer than what
@@ -351,8 +361,8 @@ const initialState = {
   // host's own spinner.
   actionLoading: false,
   error: null,
-  // { hostUid: number } — foreground start-info reads still pending, behind loadingByHost.
-  foregroundReadsByHost: {},
+  // { hostUid: { requestId: foreground } } — reads started on the host's current connection; see startRead.
+  pendingReadsByHost: {},
   // { hostUid: seq } — the newest start-info each view applied; see applyStartInfo.
   appliedLiveSeqByHost: {},
   appliedNavigatorSeqByHost: {},
@@ -438,22 +448,19 @@ const databaseCoreSlice = createSlice({
     builder
       .addCase(fetchDatabaseStartInfo.pending, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
-        if (!action.meta.arg?.isBackground) {
-          state.foregroundReadsByHost[hostUid] = (state.foregroundReadsByHost[hostUid] ?? 0) + 1;
-          state.loadingByHost[hostUid] = true;
-        }
+        startRead(state, hostUid, action.meta.requestId, !action.meta.arg?.isBackground);
         state.error = null;
       })
       .addCase(fetchDatabaseStartInfo.fulfilled, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
-        if (!isBackground) endForegroundRead(state, hostUid);
+        if (!settleRead(state, hostUid, action.meta.requestId)) return; // host closed since
         applyStartInfo(state, hostUid, action.payload, { seq: action.meta.seq, isBackground });
       })
       .addCase(fetchDatabaseStartInfo.rejected, (state, action) => {
         const hostUid = typeof action.meta.arg === 'string' ? action.meta.arg : action.meta.arg?.hostUid;
         const isBackground = !!action.meta.arg?.isBackground;
-        if (!isBackground) endForegroundRead(state, hostUid);
+        if (!settleRead(state, hostUid, action.meta.requestId)) return; // host closed since
         // A background poll failure is transient: it keeps the lists the
         // dashboards show. Only an explicit fetch failure, when nothing newer
         // was applied meanwhile, empties them and the tree.
@@ -675,7 +682,7 @@ const databaseCoreSlice = createSlice({
             delete state.appliedLiveSeqByHost[hostUid];
             delete state.appliedNavigatorSeqByHost[hostUid];
           }
-          delete state.foregroundReadsByHost[hostUid];
+          delete state.pendingReadsByHost[hostUid];
           delete state.loadingByHost[hostUid];
         }
       );
