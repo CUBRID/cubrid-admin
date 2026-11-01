@@ -263,6 +263,12 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'Invalid volume information.';
       case DatabaseErrorCode.DUPLICATED_FILE:
         return 'File already exists.';
+      case DatabaseErrorCode.DATABASE_ACTION_IN_PROGRESS: {
+        const dbname = additionalData?.dbname;
+        return dbname
+          ? `"${dbname}" is already being started or stopped. Try again once that finishes.`
+          : 'This database is already being started or stopped. Try again once that finishes.';
+      }
       case DatabaseErrorCode.OPERATION_IN_PROGRESS: {
         const dbname = additionalData?.dbname;
         return dbname

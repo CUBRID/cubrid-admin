@@ -51,6 +51,7 @@ import {
 } from '@util';
 import { BrokerService } from '@broker';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
+import { withDatabaseActionLock } from './database-action-lock';
 
 /**
  * startdb/stopdb now go through executeAsyncCmsJobRequest, so each one
@@ -183,6 +184,16 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<StartInfoClientResponse> {
+    return this.holdingDatabases(userId, hostUid, [dbname], 'startDatabase', () =>
+      this.startDatabaseUnlocked(userId, hostUid, dbname)
+    );
+  }
+
+  private async startDatabaseUnlocked(
+    userId: string,
+    hostUid: string,
+    dbname: string
+  ): Promise<StartInfoClientResponse> {
     await this.assertNoActiveJob(userId, hostUid);
 
     const useHa = await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname);
@@ -212,6 +223,16 @@ export class DatabaseLifecycleService extends BaseService {
    */
   @HandleCmsErrors()
   async stopDatabase(
+    userId: string,
+    hostUid: string,
+    dbname: string
+  ): Promise<StartInfoClientResponse> {
+    return this.holdingDatabases(userId, hostUid, [dbname], 'stopDatabase', () =>
+      this.stopDatabaseUnlocked(userId, hostUid, dbname)
+    );
+  }
+
+  private async stopDatabaseUnlocked(
     userId: string,
     hostUid: string,
     dbname: string
@@ -311,6 +332,16 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<StartInfoClientResponse> {
+    return this.holdingDatabases(userId, hostUid, [dbname], 'restartDatabase', () =>
+      this.restartDatabaseUnlocked(userId, hostUid, dbname)
+    );
+  }
+
+  private async restartDatabaseUnlocked(
+    userId: string,
+    hostUid: string,
+    dbname: string
+  ): Promise<StartInfoClientResponse> {
     await this.assertNoActiveJob(userId, hostUid);
 
     const useHa = await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname);
@@ -381,6 +412,26 @@ export class DatabaseLifecycleService extends BaseService {
     });
   }
 
+  /**
+   * Runs `fn` while holding `dbnames` against any other start/stop/restart of
+   * the same databases on this CMS host (database-action-lock.ts); throws
+   * DatabaseActionInProgress instead of running when one is already held.
+   */
+  private async holdingDatabases<T>(
+    userId: string,
+    hostUid: string,
+    dbnames: string[],
+    action: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    const outcome = await withDatabaseActionLock(`${host.address}:${host.port}`, dbnames, action, fn);
+    if ('busy' in outcome) {
+      throw DatabaseError.DatabaseActionInProgress({ hostUid, dbname: outcome.busy.dbname });
+    }
+    return outcome.result;
+  }
+
   /** Names of the databases start-info lists as running; throws if it can't be read. */
   private async readActiveDbnames(userId: string, hostUid: string): Promise<Set<string>> {
     const info = await this.databaseInfoService.startInfo(userId, hostUid);
@@ -415,6 +466,17 @@ export class DatabaseLifecycleService extends BaseService {
     await this.assertNoActiveJob(userId, hostUid);
 
     const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
+    return this.holdingDatabases(userId, hostUid, [...haDbNames, ...dbnames], 'startAllDatabases', () =>
+      this.startAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames)
+    );
+  }
+
+  private async startAllDatabasesUnlocked(
+    userId: string,
+    hostUid: string,
+    dbnames: string[],
+    haDbNames: Set<string>
+  ): Promise<BulkDatabaseActionResult> {
     const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d));
 
     const succeeded: string[] = [];
@@ -461,6 +523,17 @@ export class DatabaseLifecycleService extends BaseService {
     await this.assertNoActiveJob(userId, hostUid);
 
     const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
+    return this.holdingDatabases(userId, hostUid, [...haDbNames, ...dbnames], 'stopAllDatabases', () =>
+      this.stopAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames)
+    );
+  }
+
+  private async stopAllDatabasesUnlocked(
+    userId: string,
+    hostUid: string,
+    dbnames: string[],
+    haDbNames: Set<string>
+  ): Promise<BulkDatabaseActionResult> {
     const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d));
 
     const succeeded: string[] = [];
