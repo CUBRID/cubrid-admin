@@ -692,6 +692,25 @@ describe('DatabaseLifecycleService', () => {
       expect(result.failed).toEqual([{ dbname: 'db2', error: expect.any(String), phase: 'stop' }]);
     });
 
+    it('is turned away while a single action on one of the selected databases is still running', async () => {
+      hostState(['hadb1']);
+      jest.spyOn(databaseInfoService as any, 'effectiveHaDbForDbname').mockResolvedValue(true);
+      let finishStop!: () => void;
+      cmsClient.postAuthenticated.mockImplementation((_url, body) => {
+        if (body.task === 'ha_stop') return new Promise((r) => { finishStop = () => r(cmsApplies(body as { task: string; dbname?: string })); });
+        return Promise.resolve(cmsApplies(body as { task: string; dbname?: string }));
+      });
+
+      const single = service.stopDatabase(mockUserId, mockHostUid, 'hadb1');
+      await new Promise((r) => setTimeout(r, 0));
+      await expect(service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['hadb1'])).rejects.toMatchObject({
+        code: 'DATABASE_ACTION_IN_PROGRESS',
+      });
+
+      finishStop();
+      await single;
+    });
+
     it('fails a database that is not logged in, without touching it', async () => {
       hostState([]);
       databaseUserService.ensureDbLogin.mockImplementation(async (_u, _h, dbname) => {
