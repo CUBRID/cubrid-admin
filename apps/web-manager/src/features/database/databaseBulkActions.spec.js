@@ -175,15 +175,16 @@ describe('Restart All: bulk stop then bulk start, each failed database reported 
 
   // The stop request itself failing (client timeout, lost response) must
   // not skip the start phase: the server may already have stopped them.
-  it('still runs the start phase when the stop request itself fails, reporting only dbs still running', async () => {
+  it('when the stop request itself fails, starts only the dbs that did stop and reports the others once', async () => {
     databaseApi.stopAllDatabases.mockRejectedValue({ response: { data: { message: 'stop-all timed out' } } });
     databaseApi.getStartInfo.mockResolvedValue({ dblist: { dbs: [] }, activelist: { active: ['otherdb'] } });
-    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['demodb', 'otherdb'], failed: [], skipped: [] });
+    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [] });
     const store = configureStore({ reducer });
 
     const { failed } = await restartDatabasesInBulk(store.dispatch, 'hostA', ['demodb', 'otherdb']);
 
-    expect(databaseApi.startAllDatabases).toHaveBeenCalledWith('hostA', ['demodb', 'otherdb']);
+    // otherdb is still running, so it isn't sent a start that would fail "already running".
+    expect(databaseApi.startAllDatabases).toHaveBeenCalledWith('hostA', ['demodb']);
     expect(failed).toEqual([{ dbname: 'otherdb', phase: 'stop', error: 'stop-all timed out' }]);
   });
 

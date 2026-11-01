@@ -19,6 +19,7 @@ import {
 } from '@api-interfaces';
 import { extractCmsLongJobFailureMessage, isCmsLongJobFailure, pollCmsAsyncJob } from '@common';
 import { AppError } from '@error';
+import { busyDatabase } from '@database/lifecycle/database-action-lock';
 import { DatabaseError } from '@error/database/database-error';
 import { DatabaseManagementService } from '@database/management/database-management.service';
 import { DatabaseLifecycleService } from '@database/lifecycle/database-lifecycle.service';
@@ -205,6 +206,13 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     const hKey = await this.hostKey(userId, hostUid);
     const operationKey = buildOperationKey(hKey, lockDbname);
     const jobId = uuidv4();
+
+    // A start/stop/restart still running on this database (CMS doesn't turn
+    // away a backup or unload under an ha_stop) — see database-action-lock.ts.
+    const busy = busyDatabase(hKey, [lockDbname]);
+    if (busy) {
+      throw DatabaseError.DatabaseActionInProgress({ hostUid, dbname: busy.dbname });
+    }
 
     await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async () => {
       const ops = await this.store.readGlobalOperations();

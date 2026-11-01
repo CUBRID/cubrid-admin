@@ -480,7 +480,7 @@ describe('DatabaseLifecycleService', () => {
         }
         return Promise.resolve({ __EXEC_TIME: '1 ms', note: 'none', status: 'success', task: body.task });
       });
-      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({});
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [] } });
 
       const start = service.startDatabase(mockUserId, mockHostUid, 'hadb1');
       await new Promise((r) => setTimeout(r, 0));
@@ -492,6 +492,30 @@ describe('DatabaseLifecycleService', () => {
       finishStart();
       await start;
       await expect(service.stopDatabase(mockUserId, mockHostUid, 'hadb1')).resolves.toBeDefined();
+    });
+  });
+
+  describe('startDatabase on an HA database that is already running', () => {
+    it('does not send ha_start, which could stop it again', async () => {
+      jest.spyOn(databaseInfoService as any, 'effectiveHaDbForDbname').mockResolvedValue(true);
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [{ dbname: 'hadb1' }] } });
+
+      await service.startDatabase(mockUserId, mockHostUid, 'hadb1');
+
+      expect(cmsClient.postAuthenticated.mock.calls.filter(([, body]) => body.task === 'ha_start')).toHaveLength(0);
+    });
+  });
+
+  describe('Start/Stop All leave a database already in the wanted state alone', () => {
+    it('does not stopdb a database that is not running', async () => {
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [{ dbname: 'db1' }] } });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ __EXEC_TIME: '1 ms', note: 'none', status: 'success', task: body.task }));
+
+      const result = await service.stopAllDatabases(mockUserId, mockHostUid, ['db1', 'db2']);
+
+      expect(cmsClient.postAuthenticated.mock.calls.filter(([, body]) => body.task === 'stopdb').map(([, body]) => (body as { dbname?: string }).dbname)).toEqual(['db1']);
+      expect(result.failed).toEqual([]);
     });
   });
 

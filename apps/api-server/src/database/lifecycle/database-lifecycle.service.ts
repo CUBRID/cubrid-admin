@@ -220,6 +220,17 @@ export class DatabaseLifecycleService extends BaseService {
       // dbmtuserlogin of its own, but every database action goes through
       // this gate regardless.
       await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
+      // `heartbeat start <db>` on a running database can stop it again (its
+      // start check stops the database when a log process it spawns exits),
+      // so a stale screen asking to start a running HA database is a no-op.
+      const info = await this.databaseInfoService.startInfo(userId, hostUid);
+      let alreadyRunning = false;
+      try {
+        alreadyRunning = activeDbnamesOf(info).has(dbname);
+      } catch {
+        // No running list in the reply: start as before.
+      }
+      if (alreadyRunning) return info;
       await this.haService.haStart(userId, hostUid, dbname);
     } else {
       await this.startNonHaDatabase(userId, hostUid, dbname);
@@ -397,13 +408,14 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string,
     haDbNames: string[],
     action: 'start' | 'stop',
-    out: BulkDatabaseActionResult
+    out: BulkDatabaseActionResult,
+    knownRunning?: Set<string> | null
   ): Promise<void> {
     if (haDbNames.length === 0) return;
 
     let running: Set<string>;
     try {
-      running = await this.readActiveDbnames(userId, hostUid);
+      running = knownRunning ?? (await this.readActiveDbnames(userId, hostUid));
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : String(err);
       haDbNames.forEach((dbname) => out.failed.push({ dbname, error }));
@@ -577,13 +589,22 @@ export class DatabaseLifecycleService extends BaseService {
     dbnames: string[],
     haDbNames: Set<string>
   ): Promise<BulkDatabaseActionResult> {
-    const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d));
-
     const succeeded: string[] = [];
     const failed: Array<{ dbname: string; error: string }> = [];
     const skipped: Array<{ dbname: string; reason: string }> = [];
 
-    await this.runHaBulkAction(userId, hostUid, [...haDbNames], 'start', { succeeded, failed, skipped });
+    // A database already in the wanted state is left out: CMS answers a
+    // second start with an error ("already running" / not active). If the
+    // running list can't be read, every listed database is tried.
+    let running: Set<string> | null = null;
+    try {
+      running = await this.readActiveDbnames(userId, hostUid);
+    } catch {
+      running = null;
+    }
+    const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d) && (running === null || !running.has(d)));
+
+    await this.runHaBulkAction(userId, hostUid, [...haDbNames], 'start', { succeeded, failed, skipped }, running);
 
     const results = await mapWithConcurrency(
       nonHaTargets,
@@ -634,13 +655,22 @@ export class DatabaseLifecycleService extends BaseService {
     dbnames: string[],
     haDbNames: Set<string>
   ): Promise<BulkDatabaseActionResult> {
-    const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d));
-
     const succeeded: string[] = [];
     const failed: Array<{ dbname: string; error: string }> = [];
     const skipped: Array<{ dbname: string; reason: string }> = [];
 
-    await this.runHaBulkAction(userId, hostUid, [...haDbNames], 'stop', { succeeded, failed, skipped });
+    // A database already in the wanted state is left out: CMS answers a
+    // second stop with an error ("already running" / not active). If the
+    // running list can't be read, every listed database is tried.
+    let running: Set<string> | null = null;
+    try {
+      running = await this.readActiveDbnames(userId, hostUid);
+    } catch {
+      running = null;
+    }
+    const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d) && (running === null || running.has(d)));
+
+    await this.runHaBulkAction(userId, hostUid, [...haDbNames], 'stop', { succeeded, failed, skipped }, running);
 
     const results = await mapWithConcurrency(
       nonHaTargets,
@@ -711,11 +741,18 @@ export class DatabaseLifecycleService extends BaseService {
       .filter(Boolean);
 
     if (serviceEnabled) {
-      const { failed: dbFailed, skipped } = await this.startAllDatabases(userId, hostUid, autoStartServers);
-      failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
-      // No `skipped` in this response shape — a skipped HA database didn't
-      // start, so it's reported as not started rather than dropped silently.
-      failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
+      // Brokers may already be up; a database step that throws as a whole
+      // (busy database, job check, HA list read) is reported, not thrown —
+      // same as stopWholeService.
+      try {
+        const { failed: dbFailed, skipped } = await this.startAllDatabases(userId, hostUid, autoStartServers);
+        failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+        // No `skipped` in this response shape — a skipped HA database didn't
+        // start, so it's reported as not started rather than dropped silently.
+        failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
+      } catch (err: unknown) {
+        failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+      }
     }
 
     return { failed };
