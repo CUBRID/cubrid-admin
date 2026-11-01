@@ -27,6 +27,15 @@ describe('renameDbInCubridConf', () => {
     ]);
   });
 
+  it('renames inside a quoted autostart list and keeps the quotes', () => {
+    expect(renameDbInCubridConf(['[service]', 'server="demodb, olddb"  # x'], 'olddb', 'newdb')).toEqual([
+      '[service]', 'server="demodb,newdb"  # x',
+    ]);
+    expect(renameDbInCubridConf(['[service]', "server='olddb'"], 'olddb', 'newdb')).toEqual([
+      '[service]', "server='newdb'",
+    ]);
+  });
+
   it('returns null when nothing names the old database', () => {
     expect(renameDbInCubridConf(['[service]', 'server=demodb', '[@olddbx]'], 'olddb', 'newdb')).toBeNull();
   });

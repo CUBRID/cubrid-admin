@@ -31,6 +31,7 @@ export {
   convertExvolArrayToCmsFormat,
 } from './cubrid/parse-exvol';
 export { mapWithConcurrency } from './concurrency/map-with-concurrency';
+export { withHostConfigMutex } from './concurrency/host-config-mutex';
 export {
   parseHaDbListDbNamesFromHaConf,
   isHostHaModeOnFromCubridConf,

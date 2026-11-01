@@ -9,6 +9,12 @@ describe('splitVolumePath', () => {
     });
   });
 
+  it('keeps the root as the directory of a volume right under it', () => {
+    expect(splitVolumePath('/testdb', '/testdb')).toEqual({ name: 'testdb', dir: '/' });
+    expect(buildCopyVolumeList([{ spacename: 'testdb', location: '/', newLocation: '/copy', newVolumeName: 'copydb' }], '/copy'))
+      .toEqual([{ '/testdb': '/copy/copydb' }]);
+  });
+
   it('keeps a bare name and its separate directory from older versions', () => {
     expect(splitVolumePath('testdb_x001', '/db/testdb')).toEqual({ name: 'testdb_x001', dir: '/db/testdb' });
   });

@@ -34,15 +34,26 @@ export function renameDbInCubridConf(confdata: string[], oldName: string, newNam
     if (section !== 'service' || trimmed.startsWith('#') || trimmed.startsWith(';')) return;
     const eq = trimmed.indexOf('=');
     if (eq < 0 || trimmed.slice(0, eq).trim().toLowerCase() !== 'server') return;
-    // The engine stops a value at the first `;` or `#`; that tail is kept.
-    const rest = trimmed.slice(eq + 1);
-    const commentAt = rest.search(/[;#]/);
-    const value = commentAt === -1 ? rest : rest.slice(0, commentAt);
-    const comment = commentAt === -1 ? '' : ` ${rest.slice(commentAt)}`;
+    // Read the value as the engine does (parseConfText): a quoted value runs
+    // to its closing quote, anything else stops at the first `;` or `#`.
+    // The quotes and whatever follows the value are kept.
+    const rest = trimmed.slice(eq + 1).trimStart();
+    const quote = rest[0] === '"' || rest[0] === "'" ? rest[0] : '';
+    let value: string;
+    let tail: string;
+    if (quote) {
+      const close = rest.indexOf(quote, 1);
+      value = close === -1 ? rest.slice(1) : rest.slice(1, close);
+      tail = close === -1 ? '' : rest.slice(close + 1);
+    } else {
+      const commentAt = rest.search(/[;#]/);
+      value = commentAt === -1 ? rest : rest.slice(0, commentAt);
+      tail = commentAt === -1 ? '' : ` ${rest.slice(commentAt)}`;
+    }
     const names = value.split(',').map((name) => name.trim()).filter(Boolean);
     if (!names.includes(oldName)) return;
-    const renamed = names.map((name) => (name === oldName ? newName : name));
-    lines[index] = `server=${[...new Set(renamed)].join(',')}${comment}`;
+    const renamed = [...new Set(names.map((name) => (name === oldName ? newName : name)))].join(',');
+    lines[index] = `server=${quote}${renamed}${quote}${tail}`;
     changed = true;
   });
 

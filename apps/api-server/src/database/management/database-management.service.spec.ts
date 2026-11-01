@@ -956,6 +956,26 @@ describe('DatabaseManagementService', () => {
       );
     });
 
+    it('keeps both of two concurrent renames on one host in cubrid.conf', async () => {
+      let stored = ['[service]', 'server=a,b'];
+      cmsConfigService.getAllSystemParam.mockImplementation(async () => {
+        const snapshot = [...stored];
+        await new Promise((r) => setTimeout(r, 5));
+        return { conflist: [{ confdata: snapshot }] };
+      });
+      cmsConfigService.setSystemParam.mockImplementation(async (_u, _h, _c, confdata) => {
+        stored = confdata;
+        return { success: true };
+      });
+
+      await Promise.all([
+        service.renameInCubridConfAfterRename(mockUserId, mockHostUid, 'a', 'a2'),
+        service.renameInCubridConfAfterRename(mockUserId, mockHostUid, 'b', 'b2'),
+      ]);
+
+      expect(stored).toEqual(['[service]', 'server=a2,b2']);
+    });
+
     it('leaves cubrid.conf alone when nothing in it names the database', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
 

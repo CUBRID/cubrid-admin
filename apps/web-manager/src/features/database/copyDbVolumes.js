@@ -11,7 +11,8 @@ export function splitVolumePath(spacename, location) {
   const full = spacename || '';
   const cut = Math.max(full.lastIndexOf('/'), full.lastIndexOf('\\'));
   if (cut < 0) return { name: full, dir: location || '' };
-  return { name: full.slice(cut + 1), dir: full.slice(0, cut) };
+  // A volume right under the root keeps the root as its directory.
+  return { name: full.slice(cut + 1), dir: cut === 0 ? full[0] : full.slice(0, cut) };
 }
 
 // Permanent volumes from a volume-info response, in volid order — copydb's

@@ -55,7 +55,7 @@ import {
   GetAutoAddVolLogCmsResponse,
 } from '@type/cms-response';
 import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
-import { parseConfigParams } from '@util';
+import { parseConfigParams, withHostConfigMutex } from '@util';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 
 /**
@@ -209,6 +209,15 @@ export class DatabaseConfigService extends BaseService {
     request: SetAutoStartRequest
   ): Promise<SetAutoStartResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
+    // Same per-host cubrid.conf queue as ensureDbHaModeOff and rename.
+    return withHostConfigMutex(hostUid, () => this.setAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  private async setAutoStartUnlocked(
+    userId: string,
+    hostUid: string,
+    request: SetAutoStartRequest
+  ): Promise<SetAutoStartResponse> {
 
     const confname = CMS_CONFNAME_CUBRID;
 
@@ -334,7 +343,7 @@ export class DatabaseConfigService extends BaseService {
     // other's write. Serialize the whole read-modify-write per host (not
     // per dbname, unlike withQueryPlanMutex above) so concurrent callers on
     // the same host queue instead of racing.
-    return this.withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
+    return withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
   }
 
   private async ensureDbHaModeOffUnlocked(userId: string, hostUid: string, dbname: string): Promise<void> {
@@ -406,6 +415,15 @@ export class DatabaseConfigService extends BaseService {
     request: RemoveAutoStartRequest
   ): Promise<RemoveAutoStartResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
+    // Same per-host cubrid.conf queue as ensureDbHaModeOff and rename.
+    return withHostConfigMutex(hostUid, () => this.removeAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  private async removeAutoStartUnlocked(
+    userId: string,
+    hostUid: string,
+    request: RemoveAutoStartRequest
+  ): Promise<RemoveAutoStartResponse> {
 
     const confname = CMS_CONFNAME_CUBRID;
 
@@ -808,27 +826,6 @@ export class DatabaseConfigService extends BaseService {
       resolve();
       if (this.queryPlanMutex.get(key) === next) {
         this.queryPlanMutex.delete(key);
-      }
-    }
-  }
-
-  // Serializes concurrent cubridconf read-modify-write operations per hostUid
-  // (not per dbname — unlike queryPlanMutex, two different databases on the
-  // same host still share one physical conflist and must not interleave).
-  private readonly hostConfigMutex = new Map<string, Promise<void>>();
-
-  private async withHostConfigMutex<T>(hostUid: string, fn: () => Promise<T>): Promise<T> {
-    const pending = this.hostConfigMutex.get(hostUid) ?? Promise.resolve();
-    let resolve!: () => void;
-    const next = new Promise<void>((r) => (resolve = r));
-    this.hostConfigMutex.set(hostUid, next);
-    try {
-      await pending;
-      return await fn();
-    } finally {
-      resolve();
-      if (this.hostConfigMutex.get(hostUid) === next) {
-        this.hostConfigMutex.delete(hostUid);
       }
     }
   }

@@ -28,6 +28,7 @@ import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { summarizeLocks } from './lock-summary';
 import { renameDbInCubridConf } from './rename-in-cubrid-conf';
+import { withHostConfigMutex } from '@util';
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import {
@@ -553,13 +554,17 @@ export class DatabaseManagementService extends BaseService {
     newDbname: string
   ): Promise<void> {
     if (!newDbname || newDbname === oldDbname) return;
-    const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
-    const confdata = conf.conflist?.[0]?.confdata;
-    if (!confdata || confdata.length === 0) return;
-    const updated = renameDbInCubridConf(confdata, oldDbname, newDbname);
-    if (updated) {
-      await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
-    }
+    // Two renames (or a rename and an autostart change) on one host would
+    // otherwise both read the file and the second write would undo the first.
+    await withHostConfigMutex(hostUid, async () => {
+      const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      const confdata = conf.conflist?.[0]?.confdata;
+      if (!confdata || confdata.length === 0) return;
+      const updated = renameDbInCubridConf(confdata, oldDbname, newDbname);
+      if (updated) {
+        await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
+      }
+    });
   }
 
   async renameDatabaseCmsResponse(
