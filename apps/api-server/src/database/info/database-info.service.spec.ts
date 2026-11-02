@@ -142,9 +142,9 @@ describe('DatabaseInfoService', () => {
         CMS_CONFNAME_HACONF
       );
       expect(result).toEqual({
-        activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
+        activelist: { active: [{ dbname: 'testdb', isProfileExists: false, isLoggedIn: false, isLoggedOut: false }] },
         dblist: {
-          dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false, isLoggedIn: false }],
+          dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false, isLoggedIn: false, isLoggedOut: false }],
         },
         haDbNames: [],
       });
@@ -165,7 +165,7 @@ describe('DatabaseInfoService', () => {
 
       expect(databaseUserService.isDbLoginActive).toHaveBeenCalledWith(mockUserId, mockHostUid, 'testdb', 'test-token');
       expect(result.dblist.dbs.map((d) => [d.dbname, d.isLoggedIn])).toEqual([['testdb', true], ['otherdb', false]]);
-      expect(result.activelist.active).toEqual([{ dbname: 'testdb', isLoggedIn: true }]);
+      expect(result.activelist.active).toEqual([{ dbname: 'testdb', isProfileExists: false, isLoggedIn: true, isLoggedOut: false }]);
     });
   });
 

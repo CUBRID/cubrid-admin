@@ -18,6 +18,7 @@ import { DatabaseError } from '@error/database/database-error';
 import { CmsError, CmsErrorCode, HostError } from '@error/index';
 import { getHost } from '@host/host-group.util';
 import { ValidationError } from '@error/validation/validation-error';
+import { ValidationErrorCode } from '@error/validation/validation-error-code';
 import { FileService } from '@file/file.service';
 import { HaService } from '@ha';
 import { HostService } from '@host';
@@ -86,18 +87,51 @@ function activeDbnamesOf(info: { activelist?: { active?: unknown } } | null | un
 /** A broker or database step of a whole-service start/stop that failed. */
 export type ServiceFailure = { name: string; error: string };
 
+/**
+ * A database a whole-service step left alone because the user isn't logged
+ * in to it: nothing was sent to it, so it is still in the state it was in.
+ */
+export type ServiceSkip = { name: string; reason: string };
+
 /** What restartWholeService reports; see there. */
 export type ServiceRestartResult = {
   stopFailed: ServiceFailure[];
   startFailed: ServiceFailure[];
   notRestarted: Array<{ dbname: string; error: string }>;
+  skipped: ServiceSkip[];
 };
 
 export const BULK_SKIP_REASON = {
   notFound: 'Not a database on this host',
   alreadyRunning: 'Already running',
   notRunning: 'Not running',
+  loggedOut: 'Logged out',
+  notLoggedIn: 'Not logged in',
 } as const;
+
+/**
+ * The skip reason when `err` is ensureDbLogin's "no login" error, else null.
+ * A bulk or service step skips such a database instead of failing it: the
+ * check runs before anything is sent to CMS.
+ */
+function notLoggedInSkipReason(err: unknown): string | null {
+  if (!(err instanceof ValidationError) || err.code !== ValidationErrorCode.MISSING_DB_CREDENTIALS) return null;
+  return err.additionalData?.reason === 'loggedOut' ? BULK_SKIP_REASON.loggedOut : BULK_SKIP_REASON.notLoggedIn;
+}
+
+/** Adds one database's settled result to `out`: succeeded, skipped (no login) or failed. */
+function addOutcome(out: BulkDatabaseActionResult, dbname: string, result: PromiseSettledResult<unknown>): void {
+  if (result.status === 'fulfilled') {
+    out.succeeded.push(dbname);
+    return;
+  }
+  const reason = notLoggedInSkipReason(result.reason);
+  if (reason) {
+    out.skipped.push({ dbname, reason });
+  } else {
+    out.failed.push({ dbname, error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
+  }
+}
 
 /**
  * Service for managing database lifecycle operations.
@@ -441,15 +475,7 @@ export class DatabaseLifecycleService extends BaseService {
         await this.haService.haStop(userId, hostUid, dbname);
       }
     });
-    results.forEach((result, index) => {
-      const dbname = targets[index];
-      if (result.status === 'fulfilled') {
-        out.succeeded.push(dbname);
-      } else {
-        const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-        out.failed.push({ dbname, error });
-      }
-    });
+    results.forEach((result, index) => addOutcome(out, targets[index], result));
   }
 
   /**
@@ -482,8 +508,11 @@ export class DatabaseLifecycleService extends BaseService {
       // databases to act on: none on the host, or CMS could not resolve the
       // host's own name, which it still reports as success with no dblist.
       // Either way every selected database is skipped, nothing is run.
-      const known = new Set((info?.dblist?.dbs || []).map((db) => db.dbname));
+      // A running database can be missing from dblist (CMS lists only the
+      // databases.txt entries whose host field matches), so the running ones
+      // count as known too.
       const running = activeDbnamesOf(info);
+      const known = new Set([...(info?.dblist?.dbs || []).map((db) => db.dbname), ...running]);
       const targets: string[] = [];
       for (const dbname of requested) {
         if (!known.has(dbname)) {
@@ -518,15 +547,7 @@ export class DatabaseLifecycleService extends BaseService {
           ? this.startNonHaDatabase(userId, hostUid, dbname)
           : this.stopNonHaDatabase(userId, hostUid, dbname)
       );
-      results.forEach((result, index) => {
-        const dbname = nonHa[index];
-        if (result.status === 'fulfilled') {
-          phaseOut.succeeded.push(dbname);
-        } else {
-          const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          phaseOut.failed.push({ dbname, error });
-        }
-      });
+      results.forEach((result, index) => addOutcome(phaseOut, nonHa[index], result));
       return phaseOut;
     };
 
@@ -534,14 +555,18 @@ export class DatabaseLifecycleService extends BaseService {
       const result = await runPhase(action, targets);
       out.succeeded.push(...result.succeeded);
       out.failed.push(...result.failed);
+      out.skipped.push(...result.skipped);
       return out;
     }
 
+    // A database skipped at the stop (no login) is neither stopped nor started.
     const stopped = await runPhase('stop', targets);
     out.failed.push(...stopped.failed.map((f) => ({ ...f, phase: 'stop' as const })));
+    out.skipped.push(...stopped.skipped);
     const started = await runPhase('start', stopped.succeeded);
     out.succeeded.push(...started.succeeded);
     out.failed.push(...started.failed.map((f) => ({ ...f, phase: 'start' as const })));
+    out.skipped.push(...started.skipped);
     return out;
   }
 
@@ -627,15 +652,7 @@ export class DatabaseLifecycleService extends BaseService {
       NON_HA_BULK_ACTION_CONCURRENCY,
       (dbname) => this.startNonHaDatabase(userId, hostUid, dbname)
     );
-    results.forEach((result, index) => {
-      const dbname = nonHaTargets[index];
-      if (result.status === 'fulfilled') {
-        succeeded.push(dbname);
-      } else {
-        const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-        failed.push({ dbname, error });
-      }
-    });
+    results.forEach((result, index) => addOutcome({ succeeded, failed, skipped }, nonHaTargets[index], result));
 
     return { succeeded, failed, skipped };
   }
@@ -693,15 +710,7 @@ export class DatabaseLifecycleService extends BaseService {
       NON_HA_BULK_ACTION_CONCURRENCY,
       (dbname) => this.stopNonHaDatabase(userId, hostUid, dbname)
     );
-    results.forEach((result, index) => {
-      const dbname = nonHaTargets[index];
-      if (result.status === 'fulfilled') {
-        succeeded.push(dbname);
-      } else {
-        const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-        failed.push({ dbname, error });
-      }
-    });
+    results.forEach((result, index) => addOutcome({ succeeded, failed, skipped }, nonHaTargets[index], result));
 
     return { succeeded, failed, skipped };
   }
@@ -725,7 +734,7 @@ export class DatabaseLifecycleService extends BaseService {
   async startWholeService(
     userId: string,
     hostUid: string
-  ): Promise<{ failed: ServiceFailure[] }> {
+  ): Promise<{ failed: ServiceFailure[]; skipped: ServiceSkip[] }> {
     // Checked once, up front — brokers start before databases below, and a
     // job-in-progress error surfacing only at the database step would mean
     // brokers already started for a service-start we should have blocked
@@ -744,8 +753,9 @@ export class DatabaseLifecycleService extends BaseService {
     userId: string,
     hostUid: string,
     startDatabases: (autoStartServers: string[]) => Promise<BulkDatabaseActionResult>
-  ): Promise<{ failed: ServiceFailure[] }> {
+  ): Promise<{ failed: ServiceFailure[]; skipped: ServiceSkip[] }> {
     const failed: ServiceFailure[] = [];
+    const skipped: ServiceSkip[] = [];
 
     try {
       await this.brokerService.startAllBrokers(userId, hostUid);
@@ -774,17 +784,16 @@ export class DatabaseLifecycleService extends BaseService {
       // (busy database, job check, HA list read) is reported, not thrown —
       // same as stopWholeService.
       try {
-        const { failed: dbFailed, skipped } = await startDatabases(autoStartServers);
+        const { failed: dbFailed, skipped: dbSkipped } = await startDatabases(autoStartServers);
         failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
-        // No `skipped` in this response shape — a skipped HA database didn't
-        // start, so it's reported as not started rather than dropped silently.
-        failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
+        // Not logged in: left stopped, nothing sent to it.
+        skipped.push(...dbSkipped.map(({ dbname, reason }) => ({ name: dbname, reason })));
       } catch (err: unknown) {
         failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
       }
     }
 
-    return { failed };
+    return { failed, skipped };
   }
 
   /**
@@ -804,7 +813,7 @@ export class DatabaseLifecycleService extends BaseService {
   async stopWholeService(
     userId: string,
     hostUid: string
-  ): Promise<{ failed: ServiceFailure[] }> {
+  ): Promise<{ failed: ServiceFailure[]; skipped: ServiceSkip[] }> {
     // See startWholeService's matching comment — checked once, up front, so
     // a job-in-progress block can't happen only after brokers already
     // stopped.
@@ -822,8 +831,9 @@ export class DatabaseLifecycleService extends BaseService {
     userId: string,
     hostUid: string,
     stopDatabases: (dbnames: string[]) => Promise<BulkDatabaseActionResult>
-  ): Promise<{ failed: ServiceFailure[] }> {
+  ): Promise<{ failed: ServiceFailure[]; skipped: ServiceSkip[] }> {
     const failed: ServiceFailure[] = [];
+    const skipped: ServiceSkip[] = [];
 
     try {
       await this.brokerService.stopAllBrokers(userId, hostUid);
@@ -852,7 +862,7 @@ export class DatabaseLifecycleService extends BaseService {
       ];
     } catch (err: unknown) {
       failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
-      return { failed };
+      return { failed, skipped };
     }
 
     // stopAllDatabases itself can throw uncaught (its own assertNoActiveJob
@@ -861,15 +871,16 @@ export class DatabaseLifecycleService extends BaseService {
     // above, so it gets the same treatment instead of losing the brokers
     // failure already collected.
     try {
-      const { failed: dbFailed, skipped } = await stopDatabases(dbnames);
+      const { failed: dbFailed, skipped: dbSkipped } = await stopDatabases(dbnames);
       failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
-      // See startWholeService's matching comment.
-      failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
+      // Not logged in: databases are stopped one by one here (no whole-host
+      // `cubrid service stop`), so a skipped one keeps running.
+      skipped.push(...dbSkipped.map(({ dbname, reason }) => ({ name: dbname, reason })));
     } catch (err: unknown) {
       failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
     }
 
-    return { failed };
+    return { failed, skipped };
   }
 
   /**
@@ -900,12 +911,15 @@ export class DatabaseLifecycleService extends BaseService {
     ];
     return this.holdingDatabases(userId, hostUid, held, 'restartWholeService', async () => {
       const wasRunning = await this.readActiveDbnames(userId, hostUid);
-      const { failed: stopFailed } = await this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
+      const { failed: stopFailed, skipped: stopSkipped } = await this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
         this.stopAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames)
       );
-      const { failed: startFailed } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
+      const { failed: startFailed, skipped: startSkipped } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
         this.startAllDatabasesUnlocked(userId, hostUid, autoStart, haDbNames)
       );
+      // A database skipped at the stop kept running, so it is not counted as
+      // not restarted below; one skipped at the start stayed stopped.
+      const skipped = [...new Map([...stopSkipped, ...startSkipped].map((s) => [s.name, s])).values()];
 
       // Until the status is read, every database that was running counts as
       // possibly not back; after it, only the ones it shows stopped.
@@ -918,12 +932,15 @@ export class DatabaseLifecycleService extends BaseService {
           const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
           await this.runSelectedDatabasesActionUnlocked(userId, hostUid, 'start', toStart, out);
           notRestarted = out.failed.map(({ dbname, error }) => ({ dbname, error }));
+          for (const { dbname, reason } of out.skipped) {
+            if (!skipped.some((s) => s.name === dbname)) skipped.push({ name: dbname, reason });
+          }
         }
       } catch (err: unknown) {
         const error = err instanceof Error ? err.message : String(err);
         notRestarted = toStart.map((dbname) => ({ dbname, error }));
       }
-      return { stopFailed, startFailed, notRestarted };
+      return { stopFailed, startFailed, notRestarted, skipped };
     });
   }
 

@@ -89,6 +89,8 @@ export class AppError extends Error {
       // Per-line reasons from the conf text check (validateConfText) —
       // { lineNo, key, message }, no host data.
       'problems',
+      // Why a database has no login: 'loggedOut' or 'notLoggedIn'.
+      'reason',
     ];
 
     const sensitiveFields = [
