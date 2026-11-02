@@ -20,6 +20,7 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
 
@@ -108,24 +109,11 @@ export default function CopyDatabaseModal() {
             const sizeMB = res?.dbsize != null ? `${Math.round(res.dbsize / (1024 * 1024))} (MB)` : '-';
             setDiskInfo({ freeSpace: freeMB, dbSize: sizeMB });
 
-            const validTypes = ['generic', 'data', 'index', 'temp', 'permanent'];
             const logVol = (res?.spaceinfo || []).find(s => s?.type?.toLowerCase() === 'active_log');
             if (logVol?.location) {
               setSrcLogDir(logVol.location);
             }
-
-            const filteredSpaces = (res?.spaceinfo || []).filter(space =>
-              space.type && validTypes.includes(space.type.toLowerCase())
-            ).map(space => ({
-              spacename: space.spacename,
-              type: space.type,
-              location: space.location,
-              newVolumeName: space.spacename,
-              newLocation: space.location || defaultPath,
-              isNameEdited: false,
-              isLocationEdited: false,
-            }));
-            setVolumes(filteredSpaces);
+            setVolumes(normalizeCopyVolumes(res?.spaceinfo));
           })
           .catch((err) => {
             if (!cancelled) console.error('Failed to fetch volume info for copy:', err);
@@ -154,7 +142,7 @@ export default function CopyDatabaseModal() {
 
     const parentDir = getParentDirectory(currentDb?.dbdir || '');
     const separator = getPathSeparator(currentDb?.dbdir || '');
-    const targetPath = parentDir ? `${parentDir}${separator}${formData.destName}` : (currentDb?.dbdir || '');
+    const targetPath = parentDir ? `${parentDir}${separator}${formData.destName.trim()}` : (currentDb?.dbdir || '');
 
     setFormData(prev => {
       let changed = false;
@@ -173,30 +161,25 @@ export default function CopyDatabaseModal() {
       }
       return changed ? next : prev;
     });
-
-    setVolumes(prev => prev.map((vol, idx) => {
-      let newName = vol.newVolumeName;
-      if (!vol.isNameEdited) {
-        if (idx === 0) {
-          newName = formData.destName;
-        } else {
-          const numStr = String(idx).padStart(3, '0');
-          newName = `${formData.destName}_x${numStr}`;
-        }
-      }
-
-      const newLoc = !vol.isLocationEdited && targetPath ? targetPath : vol.newLocation;
-      if (newName === vol.newVolumeName && newLoc === vol.newLocation) {
-        return vol;
-      }
-
-      return {
-        ...vol,
-        newVolumeName: newName,
-        newLocation: newLoc,
-      };
-    }));
   }, [formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths]);
+
+  // Derive defaults from the latest name and metadata, including when the
+  // user types a name before getVolumeInfo finishes. Keep explicit edits.
+  const parentDir = getParentDirectory(currentDb?.dbdir || '');
+  const separator = getPathSeparator(currentDb?.dbdir || '');
+  const targetPath = parentDir ? `${parentDir}${separator}${formData.destName.trim()}` : (currentDb?.dbdir || '');
+  const copyVolumes = volumes.map(volume => ({
+    ...volume,
+    newVolumeName: volume.isNameEdited ? volume.newVolumeName
+      : formData.destName.trim() ? (volume.volid === 0 ? formData.destName.trim()
+        : `${formData.destName.trim()}_x${String(volume.volid).padStart(3, '0')}`) : volume.spacename,
+    newLocation: volume.isLocationEdited ? volume.newLocation
+      : formData.destName.trim() ? targetPath : volume.location,
+  }));
+  const individualVolumesValid = !volInfoLoading && canCopyIndividualVolumes(copyVolumes);
+  const isDestinationSameAsSource = !!formData.destName.trim() && formData.destName.trim() === selectedDatabase;
+  const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource &&
+    (!formData.copyIndividual || individualVolumesValid);
 
   if (!isCopyDatabaseModalOpen) return null;
 
@@ -265,43 +248,18 @@ export default function CopyDatabaseModal() {
     },
   ];
 
-  const volumeRows = volumes.map((volume, volumeIndex) => ({
+  const volumeRows = copyVolumes.map((volume, volumeIndex) => ({
     ...volume,
-    rowKey: `${volume.location || ''}/${volume.spacename || volumeIndex}`,
+    rowKey: volume.fullPath || volumeIndex,
     volumeIndex,
-    fullPath: volume.location
-      ? `${volume.location.endsWith('/') || volume.location.endsWith('\\') ? volume.location : `${volume.location}/`}${volume.spacename}`
-      : volume.spacename,
   }));
 
   const handleCopy = async () => {
-    if (!formData.destName.trim()) return;
+    if (!canSubmit) return;
 
     startAction();
-
-    let advanced = 'off';
-    let volumeList;
-
-    if (formData.copyIndividual) {
-      advanced = 'on';
-      const volumeMap = {};
-      volumes.forEach((vol) => {
-        const separator = getPathSeparator(vol.location || formData.destPath || '/');
-        const oldLoc = vol.location || '';
-        const oldPath = oldLoc
-          ? (oldLoc.endsWith('/') || oldLoc.endsWith('\\') ? `${oldLoc}${vol.spacename}` : `${oldLoc}${separator}${vol.spacename}`)
-          : vol.spacename;
-        const newLoc = vol.newLocation || formData.destPath;
-        const newVolName = vol.newVolumeName || vol.spacename;
-        const newPath = newLoc
-          ? (newLoc.endsWith('/') || newLoc.endsWith('\\') ? `${newLoc}${newVolName}` : `${newLoc}${separator}${newVolName}`)
-          : newVolName;
-        volumeMap[oldPath] = newPath;
-      });
-      if (Object.keys(volumeMap).length > 0) {
-        volumeList = [volumeMap];
-      }
-    }
+    const advanced = formData.copyIndividual ? 'on' : 'off';
+    const volumeList = formData.copyIndividual ? buildCopyVolumeMappings(copyVolumes) : undefined;
 
     const payload = {
       srcdbname: selectedDatabase,
@@ -389,7 +347,7 @@ export default function CopyDatabaseModal() {
       maxWidth="820px"
       testId="copy-database"
       onSubmit={handleCopy}
-      submitDisabled={!formData.destName.trim()}
+      submitDisabled={!canSubmit}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="copy-database-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -399,7 +357,7 @@ export default function CopyDatabaseModal() {
             onClick={handleCopy} 
             icon="content_copy"
             className="min-w-[140px]"
-            disabled={!formData.destName.trim()}
+            disabled={!canSubmit}
           >
             {CM.ok}
           </Button>
@@ -467,6 +425,7 @@ export default function CopyDatabaseModal() {
                 <Input
                   data-testid="copy-database-dest-name-input"
                   value={formData.destName}
+                  error={isDestinationSameAsSource ? CM.copyDestinationSameAsSource : undefined}
                   onChange={e => handleInputChange('destName', e.target.value)}
                   placeholder="e.g. demodb_copy"
                   autoFocus
@@ -531,6 +490,7 @@ export default function CopyDatabaseModal() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <Checkbox
+              data-testid="copy-database-individual-toggle"
               label={CM.btnCopyVolume || 'Copy individual volumes'}
               checked={formData.copyIndividual}
               onChange={e => handleInputChange('copyIndividual', e.target.checked)}
@@ -538,6 +498,9 @@ export default function CopyDatabaseModal() {
             />
           </div>
 
+          {formData.copyIndividual && !volInfoLoading && !individualVolumesValid && (
+            <p role="alert" className="text-14 text-rose-600 dark:text-rose-400">{CM.copyVolumeMappingInvalid}</p>
+          )}
           <div className={`border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden mt-2 bg-white dark:bg-white/2 transition-all ${
             !formData.copyIndividual ? 'opacity-50 pointer-events-none select-none bg-slate-50/50 dark:bg-white/[0.01]' : ''
           }`}>

@@ -723,6 +723,8 @@ export const CM_KO = {
   lblDescLogPathName: '로그 볼륨 경로:',
   lblVolumePathName: '확장 볼륨 경로:',
   btnCopyVolume: '개별 볼륨 복사 설정',
+  copyDestinationSameAsSource: 'Destination database name must be different from the source.',
+  copyVolumeMappingInvalid: 'Individual-volume copy requires complete volume information and a valid name and absolute directory for every destination. Reopen this dialog to reload volume information.',
   tblColumnCurrentVolName: '기존 볼륨 이름',
   tblColumnCopyNewVolName: '새 볼륨 이름',
   tblColumnCopyNewDirPath: '새 경로',

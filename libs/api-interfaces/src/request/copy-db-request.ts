@@ -1,5 +1,6 @@
 /**
- * Volume mapping: one object with source path -> destination path.
+ * Volume mapping: one source file path -> destination file path per object.
+ * Array entries must follow physical volume order (numeric volid).
  * Only included when advanced is "on".
  */
 export type CopyDbVolumeItem = Record<string, string>;
@@ -16,6 +17,6 @@ export type CopyDbRequest = {
   overwrite: string;
   move: string;
   advanced: string;
-  /** Volume path mappings. Only when advanced is "on". */
+  /** Ordered volume path mappings. Required when advanced is "on" (or "y"). */
   volume?: CopyDbVolumeItem[];
 };

@@ -766,6 +766,8 @@ export const CM = {
   lblDescLogPathName: 'Log file path:',
   lblVolumePathName: 'Extend volume path:',
   btnCopyVolume: 'Copy individual volumes',
+  copyDestinationSameAsSource: 'Destination database name must be different from the source.',
+  copyVolumeMappingInvalid: 'Individual-volume copy requires complete volume information and a valid name and absolute directory for every destination. Reopen this dialog to reload volume information.',
   tblColumnCurrentVolName: 'Current volume name',
   tblColumnCopyNewVolName: 'New volume name',
   tblColumnCopyNewDirPath: 'New directory path',
