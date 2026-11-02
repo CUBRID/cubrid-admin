@@ -48,8 +48,14 @@ describe('CmsConfigService statdump watcher', () => {
         interval: String(STATDUMP_WATCHER_INTERVAL_SEC),
         token: 'tok',
       });
-      // Starting a watcher needs no database login.
-      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(databaseUserService.ensureDbLogin).toHaveBeenCalledWith('u1', 'h1', 'testdb29');
+    });
+
+    it('starts nothing for a database the user is not logged in to', async () => {
+      databaseUserService.ensureDbLogin.mockRejectedValue(new Error('MISSING_DB_CREDENTIALS'));
+
+      await expect(service.startStatDumpWatcher('u1', 'h1', 'testdb29')).rejects.toBeDefined();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 
     it('treats "already running" (status none) as running', async () => {
@@ -184,10 +190,9 @@ describe('CmsConfigService statdump watcher', () => {
       ]);
     });
 
-    it('does not let a start from a user without the host take over the lease', async () => {
-      hostService.findHostInternal.mockImplementation(async (userId: string) => {
-        if (userId !== 'u1') throw new Error('No such host');
-        return { address: '10.0.0.1', port: 8001, token: 'tok' };
+    it('does not let a start from a user not logged in to the database take over the lease', async () => {
+      databaseUserService.ensureDbLogin.mockImplementation(async (userId: string) => {
+        if (userId !== 'u1') throw new Error('MISSING_DB_CREDENTIALS');
       });
       await service.startStatDumpWatcher('u1', 'h1', 'testdb29');
       await expect(service.startStatDumpWatcher('u2', 'h1', 'testdb29')).rejects.toBeDefined();

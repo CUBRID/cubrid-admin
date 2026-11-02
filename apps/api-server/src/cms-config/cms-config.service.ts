@@ -218,9 +218,9 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     hostUid: string,
     dbname: string
   ): Promise<StatdumpWatcherClientResponse> {
-    // Only a user who has this host may renew its lease (the sweeper stops
-    // as the user who renewed it last).
-    await this.hostService.findHostInternal(userId, hostUid);
+    // Only a user logged in to this database may start or renew the watcher
+    // (the sweeper stops as the user who renewed it last).
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
     const key = statdumpLeaseKey(hostUid, dbname);
     // Renew even if the start fails: CMS can mark a failed start as running.
     this.statdumpLeases.set(key, { userId, hostUid, dbname, renewedAt: Date.now() });
