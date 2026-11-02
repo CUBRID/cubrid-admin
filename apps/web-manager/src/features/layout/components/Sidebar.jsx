@@ -23,7 +23,9 @@ import {
   loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
-import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
+import { restartDatabasesInBulk, bulkResultStatusModal, serviceSkippedTable } from '../../database/databaseBulkActions';
+import { autoStartServers, loginSkipsOf, readStartInfoDatabases } from '../../database/loginSkips';
+import { hostApi } from '../../host/hostApi';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
 import { restartServiceKeepingDatabases } from '../../host/hostServiceRestart';
 import {
@@ -185,6 +187,28 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // dialog; onConfirm calls run() and clears this, onCancel just clears it.
   const [pendingActionConfirm, setPendingActionConfirm] = useState(null);
   const requestActionConfirm = (config) => setPendingActionConfirm(config);
+  const withLoginSkipWarning = (description, skips) => (skips.count > 0 ? (
+    <>
+      {description}
+      <span className="block mt-2 text-amber-600 dark:text-amber-400">{CM.loginSkipWarning(skips.loggedOut, skips.notLoggedIn)}</span>
+    </>
+  ) : description);
+  // Confirms a bulk or service action after naming the databases it will
+  // skip because the user isn't logged in to them, from a start-info read
+  // made as the dialog opens (the server skips them too). With
+  // blockWhenAllSkipped, nothing runs when every target would be skipped.
+  const confirmWithLoginSkips = async (hostUid, pickTargets, config, { blockWhenAllSkipped = true } = {}) => {
+    const databases = await dispatch(readStartInfoDatabases(hostUid));
+    const targets = databases ? pickTargets(databases) : [];
+    const skips = loginSkipsOf(databases || [], targets);
+    if (blockWhenAllSkipped && targets.length > 0 && skips.count === targets.length) {
+      dispatch(showStatusModal({ type: 'info', title: config.confirmLabel, message: CM.noDatabasesToRunMsg }));
+      return;
+    }
+    requestActionConfirm({ ...config, description: withLoginSkipWarning(config.description, skips) });
+  };
+  const runningDbs = (databases) => databases.filter((db) => db.running).map((db) => db.dbname);
+  const stoppedDbs = (databases) => databases.filter((db) => !db.running).map((db) => db.dbname);
   // { initialSelected: dbname[] } while the database selection modal is open.
   const [selectDatabasesModal, setSelectDatabasesModal] = useState(null);
 
@@ -263,7 +287,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     if (targets.length === 0) return;
     const label = CM.multiDbActions[action];
     const haCount = ['start', 'stop', 'restart'].includes(action) ? targets.filter((row) => row.isHa).length : 0;
-    requestActionConfirm({
+    // Start/stop/restart skip the selected databases the user isn't logged in to.
+    const confirm = ['start', 'stop', 'restart'].includes(action)
+      ? (config) => confirmWithLoginSkips(hostUid, () => targets.map((row) => row.dbname), config)
+      : requestActionConfirm;
+    confirm({
       title: CM.multiDbConfirmTitle(label),
       description: [
         CM.multiDbConfirmDesc(label, targets.map((row) => row.dbname)),
@@ -386,27 +414,59 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setLoadingText(action === 'start' ? CM.startingService : CM.stoppingService);
     startAction();
     try {
-      if (action === 'start') {
-        await dispatch(startService(hostUid)).unwrap();
-      } else {
-        await dispatch(stopService(hostUid)).unwrap();
-      }
+      const { problem, skipped } = await dispatch(action === 'start' ? startService(hostUid) : stopService(hostUid)).unwrap();
       resetAction();
+      if (problem || skipped.length > 0) {
+        dispatch(showStatusModal({
+          type: problem ? 'error' : 'info',
+          title: action === 'start' ? CM.startService : CM.stopService,
+          message: [problem, skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : ''].filter(Boolean).join('\n'),
+          tables: skipped.length > 0 ? [serviceSkippedTable(CM, skipped, action)] : [],
+        }));
+      }
     } catch (err) {
       endError(err);
     }
+  };
+
+  // Service start brings up the autostart list and the HA databases; the
+  // ones of those not running and not logged in are named before it runs.
+  const requestStartService = async (hostUid) => {
+    if (!hostUid) return;
+    const [databases, autoStart] = await Promise.all([
+      dispatch(readStartInfoDatabases(hostUid)),
+      hostApi.getHostConfig(hostUid, 'cubridconf')
+        .then((response) => new Set(autoStartServers(response?.conflist?.[0]?.confdata)))
+        .catch(() => new Set()),
+    ]);
+    const targets = (databases || []).filter((db) => !db.running && (db.isHa || autoStart.has(db.dbname))).map((db) => db.dbname);
+    const skips = loginSkipsOf(databases || [], targets);
+    if (skips.count === 0) {
+      handleServiceAction(hostUid, 'start');
+      return;
+    }
+    requestActionConfirm({
+      title: CM.startService,
+      description: withLoginSkipWarning(null, skips),
+      confirmLabel: CM.startService,
+      variant: 'primary',
+      run: () => handleServiceAction(hostUid, 'start'),
+    });
   };
 
   const closeStopServiceConfirm = () => {
     setStopServiceConfirm(prev => ({ ...prev, isOpen: false }));
   };
 
-  const requestStopService = (hostUid, serverName) => {
+  const requestStopService = async (hostUid, serverName) => {
     if (!hostUid) return;
+    const databases = await dispatch(readStartInfoDatabases(hostUid));
     setStopServiceConfirm({
       isOpen: true,
       hostUid,
       serverName: serverName || hostUid,
+      // Running databases not logged in are skipped and keep running.
+      skips: loginSkipsOf(databases || [], runningDbs(databases || [])),
     });
   };
 
@@ -1190,7 +1250,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             onClick={() => {
               const hostUid = contextMenu.hostUid;
               setContextMenu(null);
-              handleServiceAction(hostUid, 'start');
+              requestStartService(hostUid);
             }}
           />
           <MenuItem
@@ -1212,7 +1272,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               const hostUid = contextMenu.hostUid;
               const serverName = contextMenu.alias || contextMenu.server || hostUid;
               setContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(hostUid, runningDbs, {
                 title: CM.confirmRestartServiceTitle,
                 description: CM.confirmRestartServiceDesc(serverName),
                 confirmLabel: CM.restartService,
@@ -1220,17 +1280,20 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 run: async () => {
                   setLoadingText(CM.restartingService);
                   startAction();
-                  const { problems, notRestarted } = await dispatch(restartServiceKeepingDatabases(hostUid));
+                  const { problems, notRestarted, skipped } = await dispatch(restartServiceKeepingDatabases(hostUid));
                   resetAction();
                   const issues = [
                     ...problems,
                     notRestarted.length > 0 ? CM.serviceRestartNotRestartedMsg(notRestarted.map((f) => f.dbname)) : '',
                   ].filter(Boolean);
+                  const tables = skipped.length > 0 ? [serviceSkippedTable(CM, skipped, 'restart')] : [];
                   dispatch(showStatusModal(issues.length > 0
-                    ? { type: 'error', title: CM.restartService, message: issues.join('\n') }
-                    : { type: 'success', title: CM.restartService, message: CM.serviceRestartedMsg }));
+                    ? { type: 'error', title: CM.restartService, message: issues.join('\n'), tables }
+                    : skipped.length > 0
+                      ? { type: 'info', title: CM.restartService, message: `${CM.serviceRestartedMsg} ${CM.someDatabasesSkippedMsg(skipped.length)}`, tables }
+                      : { type: 'success', title: CM.restartService, message: CM.serviceRestartedMsg }));
                 },
-              });
+              }, { blockWhenAllSkipped: false });
             }}
           />
           <MenuDivider />
@@ -1796,7 +1859,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.startAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(selectedHostUid, stoppedDbs, {
                 title: CM.confirmStartAllDatabasesTitle,
                 description: CM.confirmStartAllDatabasesDesc,
                 confirmLabel: CM.startAllDatabases,
@@ -1829,7 +1892,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.stopAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(selectedHostUid, runningDbs, {
                 title: CM.confirmStopAllDatabasesTitle,
                 description: CM.confirmStopAllDatabasesDesc,
                 confirmLabel: CM.stopAllDatabases,
@@ -1860,7 +1923,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.restartAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(selectedHostUid, runningDbs, {
                 title: CM.confirmRestartAllDatabasesTitle,
                 description: CM.confirmRestartAllDatabasesDesc,
                 confirmLabel: CM.restartAllDatabases,
@@ -2633,7 +2696,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       <ConfirmDialog
         isOpen={stopServiceConfirm.isOpen}
         title={CM.stopServicesConfirmTitle}
-        description={CM.stopServicesConfirmDesc(stopServiceConfirm.serverName)}
+        description={withLoginSkipWarning(CM.stopServicesConfirmDesc(stopServiceConfirm.serverName), stopServiceConfirm.skips || { count: 0 })}
         confirmLabel={CM.stopAllServices}
         variant="danger"
         onConfirm={() => {

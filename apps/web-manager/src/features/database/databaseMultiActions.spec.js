@@ -31,8 +31,8 @@ describe('databaseSelectionRows', () => {
     });
 
     expect(databaseSelectionRows(store.getState(), 'h1')).toEqual([
-      { dbname: 'a', running: true, loggedIn: true, hasProfile: true, isHa: true },
-      { dbname: 'b', running: false, loggedIn: false, hasProfile: false, isHa: false },
+      { dbname: 'a', running: true, loggedIn: true, loggedOut: false, hasProfile: true, isHa: true },
+      { dbname: 'b', running: false, loggedIn: false, loggedOut: false, hasProfile: false, isHa: false },
     ]);
   });
 

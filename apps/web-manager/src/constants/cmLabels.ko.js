@@ -2054,6 +2054,24 @@ export const CM_KO = {
   },
   multiDbConfirmTitle: (action) => `선택한 데이터베이스 ${action}`,
   multiDbConfirmDesc: (action, names) => `${action} (${names.length}개): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`,
+  loginSkipWarning: (loggedOut, notLoggedIn) => {
+    const list = (names) => `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`;
+    return `로그인하지 않은 DB는 건너뜁니다 — ${[
+      loggedOut.length > 0 ? `로그아웃함: ${list(loggedOut)}` : '',
+      notLoggedIn.length > 0 ? `로그인 안 함: ${list(notLoggedIn)}` : '',
+    ].filter(Boolean).join(' / ')}`;
+  },
+  noDatabasesToRunMsg: '실행할 DB가 없습니다. 대상 DB에 모두 로그인되어 있지 않습니다.',
+  bulkSkipReasonLabel: (reason) => ({
+    'Logged out': '로그아웃함',
+    'Not logged in': '로그인 안 함',
+    'Already running': '이미 실행 중',
+    'Not running': '실행 중 아님',
+    'Not a database on this host': '이 호스트의 DB가 아님',
+  }[reason] ?? reason),
+  skippedStillRunning: '계속 실행 중',
+  skippedNotStarted: '시작 안 함',
+  skippedStoppedNotStarted: '중지됨, 시작 안 함',
   multiDbHaWarning: (count) => `HA 데이터베이스 ${count}개가 포함되어 있습니다. 하나씩 처리하며, 이 노드의 HA 상태가 바뀔 수 있습니다.`,
   multiDbFailedMsg: (action, count) => ({
     start: `데이터베이스 ${count}개를 시작하지 못했습니다.`,

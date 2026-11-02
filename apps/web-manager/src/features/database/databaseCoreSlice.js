@@ -258,8 +258,14 @@ const parseDbResponse = (state, payload, hostUid, { updateLive, updateNavigator,
       ? [...rawList, ...missingActiveNames.map((dbname) => {
         const activeEntry = (Array.isArray(activeFound) ? activeFound : [activeFound])
           .find((a) => a && typeof a === 'object' && a.dbname === dbname);
+        // The server sets the login fields on active-list entries too.
         return activeEntry && 'isLoggedIn' in activeEntry
-          ? { dbname, isProfileExists: false, isLoggedIn: activeEntry.isLoggedIn }
+          ? {
+            dbname,
+            isProfileExists: activeEntry.isProfileExists === true,
+            isLoggedIn: activeEntry.isLoggedIn,
+            isLoggedOut: activeEntry.isLoggedOut === true,
+          }
           : { dbname, isProfileExists: false };
       })]
       : rawList;

@@ -2096,6 +2096,20 @@ export const CM = {
   },
   multiDbConfirmTitle: (action) => `${action} Selected Databases`,
   multiDbConfirmDesc: (action, names) => `${action} (${names.length}): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}`,
+  // Databases a bulk or service action skips because the user isn't logged in to them.
+  loginSkipWarning: (loggedOut, notLoggedIn) => {
+    const list = (names) => `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}`;
+    return `Skipped, not logged in: ${[
+      loggedOut.length > 0 ? `logged out: ${list(loggedOut)}` : '',
+      notLoggedIn.length > 0 ? `not logged in: ${list(notLoggedIn)}` : '',
+    ].filter(Boolean).join('; ')}.`;
+  },
+  noDatabasesToRunMsg: 'Nothing to run: you are not logged in to any of these databases.',
+  // Server skip reasons (English from the api-server) shown in result tables.
+  bulkSkipReasonLabel: (reason) => reason,
+  skippedStillRunning: 'still running',
+  skippedNotStarted: 'not started',
+  skippedStoppedNotStarted: 'stopped, not started',
   multiDbHaWarning: (count) => `${count} HA database(s) included. They are handled one at a time and may change the HA state of this node.`,
   multiDbFailedMsg: (action, count) => ({
     start: `Could not start ${count} database(s).`,

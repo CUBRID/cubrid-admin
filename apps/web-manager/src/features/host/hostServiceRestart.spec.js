@@ -47,7 +47,7 @@ it('restarts the service with one request and reads the host again afterwards', 
   expect(databaseApi.startWholeService).not.toHaveBeenCalled();
   expect(databaseApi.runSelectedDatabasesAction).not.toHaveBeenCalled();
   expect(databaseApi.readStartInfo).toHaveBeenCalled();
-  expect(result).toEqual({ problems: [], notRestarted: [] });
+  expect(result).toEqual({ problems: [], notRestarted: [], skipped: [] });
 });
 
 it('reports the stop and start failures and the databases not started again', async () => {
@@ -64,11 +64,22 @@ it('reports the stop and start failures and the databases not started again', as
   expect(result.notRestarted).toEqual([{ dbname: 'manual', error: 'boom' }]);
 });
 
+it('passes on the databases the server skipped for no login, with their phase', async () => {
+  const skipped = [{ name: 'manual', reason: 'Not logged in', phase: 'stop' }];
+  databaseApi.restartWholeService.mockResolvedValue({ stopFailed: [], startFailed: [], notRestarted: [], skipped });
+  const store = makeStore();
+
+  const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
+
+  expect(result.skipped).toEqual(skipped);
+  expect(result.problems).toEqual([]);
+});
+
 it('reports a refused or failed request as the problem', async () => {
   databaseApi.restartWholeService.mockRejectedValue({ response: { data: { message: 'testdb is already being started or stopped' } } });
   const store = makeStore();
 
   const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
 
-  expect(result).toEqual({ problems: ['testdb is already being started or stopped'], notRestarted: [] });
+  expect(result).toEqual({ problems: ['testdb is already being started or stopped'], notRestarted: [], skipped: [] });
 });

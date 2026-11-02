@@ -30,6 +30,7 @@ export function databaseSelectionRows(state, hostUid) {
     dbname: entry.dbname,
     running: active.has(entry.dbname),
     loggedIn: loggedIn.has(dbKey(hostUid, entry.dbname)),
+    loggedOut: entry.isLoggedOut === true,
     hasProfile: entry.isProfileExists === true,
     isHa: ha.has(entry.dbname),
   }));

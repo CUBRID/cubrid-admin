@@ -101,7 +101,7 @@ export function bulkResultStatusModal(CM, {
       nameLabel,
       variant: 'skipped',
       testId: 'bulk-skipped-table',
-      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: sk.reason }] })),
+      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: CM.bulkSkipReasonLabel?.(sk.reason) ?? sk.reason }] })),
     });
   }
   return {
@@ -112,5 +112,27 @@ export function bulkResultStatusModal(CM, {
       skippedList.length > 0 ? skippedMsg(skippedList.length) : '',
     ].filter(Boolean).join(' '),
     tables,
+  };
+}
+
+// Skipped-databases table for a service start/stop/restart result. The
+// server sent these nothing, so each is still as it was: `action` 'stop'
+// leaves them running, 'start' leaves them stopped; a restart's `phase` says
+// which step skipped it.
+export function serviceSkippedTable(CM, skipped, action) {
+  const state = (phase) => {
+    if (phase === 'stop' || action === 'stop') return CM.skippedStillRunning;
+    if (action === 'restart') return CM.skippedStoppedNotStarted;
+    return CM.skippedNotStarted;
+  };
+  return {
+    title: CM.failureTableSkippedTitle,
+    nameLabel: CM.database,
+    variant: 'skipped',
+    testId: 'service-skipped-table',
+    rows: (skipped || []).map(({ name, reason, phase }) => ({
+      name,
+      reasons: [{ reason: `${CM.bulkSkipReasonLabel?.(reason) ?? reason} · ${state(phase)}` }],
+    })),
   };
 }

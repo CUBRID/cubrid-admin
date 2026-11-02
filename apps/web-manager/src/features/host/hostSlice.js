@@ -211,16 +211,15 @@ export const startService = createAsyncThunk(
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
       dispatch(hostSlice.actions.setServiceProgressMessage('Starting service...'));
-      const { failed } = await databaseApi.startWholeService(hostUid);
+      const { failed = [], skipped = [] } = await databaseApi.startWholeService(hostUid);
 
       dispatch(hostSlice.actions.setServiceProgressMessage('Refreshing status...'));
       dispatch(fetchDatabaseStartInfo(hostUid));
       dispatch(fetchBrokerList(hostUid));
       dispatch(refreshHaInfo(hostUid));
-      if (failed.length > 0) {
-        return rejectWithValue(formatServiceFailures('start service', failed));
-      }
-      return true;
+      // Partial results come back as they are, so the caller can show the
+      // failed and the skipped (not logged in) databases together.
+      return { problem: failed.length > 0 ? formatServiceFailures('start service', failed) : '', skipped };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to start service');
     }
@@ -235,16 +234,15 @@ export const stopService = createAsyncThunk(
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
       dispatch(hostSlice.actions.setServiceProgressMessage('Stopping service...'));
-      const { failed } = await databaseApi.stopWholeService(hostUid);
+      const { failed = [], skipped = [] } = await databaseApi.stopWholeService(hostUid);
 
       dispatch(hostSlice.actions.setServiceProgressMessage('Refreshing status...'));
       dispatch(fetchDatabaseStartInfo(hostUid));
       dispatch(fetchBrokerList(hostUid));
       dispatch(refreshHaInfo(hostUid));
-      if (failed.length > 0) {
-        return rejectWithValue(formatServiceFailures('stop service', failed));
-      }
-      return true;
+      // Partial results come back as they are, so the caller can show the
+      // failed and the skipped (not logged in) databases together.
+      return { problem: failed.length > 0 ? formatServiceFailures('stop service', failed) : '', skipped };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to stop service');
     }
