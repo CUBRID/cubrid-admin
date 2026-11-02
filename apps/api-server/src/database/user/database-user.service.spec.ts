@@ -663,6 +663,84 @@ describe('DatabaseUserService', () => {
       expect(mockHost.dbProfiles.demodb).toHaveProperty('loggedOut', true);
     });
 
+    const deferred = <T,>() => {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((r) => { resolve = r; });
+      return { promise, resolve };
+    };
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    it('fails an automatic login whose CMS answer arrives after a logout', async () => {
+      const cms = deferred<typeof successResponse>();
+      cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
+
+      const login = service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+      await flush();
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      cms.resolve(successResponse);
+
+      await expect(login).rejects.toThrow(ValidationError);
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+      expect(mockHost.dbProfiles.demodb).toHaveProperty('loggedOut', true);
+    });
+
+    it('fails a login the user asked for when they logged out while it waited for CMS', async () => {
+      const cms = deferred<typeof successResponse>();
+      cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
+
+      const login = service.loginDatabase(mockUserId, mockHostUid, 'demodb', 'dba', 'dba-password');
+      await flush();
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      cms.resolve(successResponse);
+
+      await expect(login).rejects.toMatchObject({ code: 'LOGIN_DATABASE_FAILED' });
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+      expect(mockHost.dbProfiles.demodb).toHaveProperty('loggedOut', true);
+    });
+
+    it('leaves no login behind when an automatic login starts while the logout is storing its mark', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      const storing = deferred<void>();
+      const atomic = repository.atomicUpdateUser.getMockImplementation()!;
+      repository.atomicUpdateUser.mockImplementationOnce(async (id: string, cb: any) => {
+        await storing.promise;
+        return atomic(id, cb);
+      });
+
+      const logout = service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      await flush();
+      // The mark isn't stored yet, so this reads the profile as usable.
+      const login = service.ensureDbLogin(mockUserId, mockHostUid, 'demodb').catch((err) => err);
+      await flush();
+      storing.resolve();
+      await logout;
+      await login;
+
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+      await expect(service.ensureDbLogin(mockUserId, mockHostUid, 'demodb')).rejects.toThrow(ValidationError);
+    });
+
+    it('fails an automatic login whose logout finished between its host read and its CMS answer', async () => {
+      const cms = deferred<typeof successResponse>();
+      cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
+      const hostRead = deferred<void>();
+      hostService.findHostInternal.mockImplementationOnce(async () => {
+        const snapshot = JSON.parse(JSON.stringify(mockHost));
+        await hostRead.promise;
+        return snapshot;
+      });
+
+      const login = service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
+      await flush();
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      hostRead.resolve();
+      await flush();
+      cms.resolve(successResponse);
+
+      await expect(login).rejects.toThrow(ValidationError);
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+    });
+
     it('creates no profile for a database without one', async () => {
       await service.logoutDatabase(mockUserId, mockHostUid, 'otherdb');
 

@@ -51,6 +51,9 @@ export class DatabaseUserService extends BaseService {
   // Lost on api-server restart, which is safe: worst case is one redundant
   // re-login next time.
   private readonly dbLoginCache = new Map<string, { loggedInAt: number; hostToken: string }>();
+  // Bumped by every logout, same keys. A login that started before a logout
+  // finished must not write the cache once its CMS answer arrives.
+  private readonly logoutGenerations = new Map<string, number>();
 
   constructor(
     private readonly repository: UserRepositoryService,
@@ -98,6 +101,7 @@ export class DatabaseUserService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<{ reauthenticated: boolean }> {
+    const generation = this.logoutGeneration(userId, hostUid, dbname);
     const host = await this.hostService.findHostInternal(userId, hostUid);
 
     if (this.isDbLoginActive(userId, hostUid, dbname, host.token)) {
@@ -113,7 +117,7 @@ export class DatabaseUserService extends BaseService {
       // No clientId/clientPassword — DBAuthResolver falls through to the
       // stored profile, and loginDatabase itself freshens the cache on
       // success.
-      await this.loginDatabase(userId, hostUid, dbname);
+      await this.loginDatabase(userId, hostUid, dbname, undefined, undefined, generation);
     } catch (err) {
       if (this.isBadDbPasswordError(err)) {
         await this.deleteDbProfile(userId, hostUid, dbname);
@@ -183,8 +187,17 @@ export class DatabaseUserService extends BaseService {
    * like the profile it overrides. Logging in clears it.
    */
   async logoutDatabase(userId: string, hostUid: string, dbname: string): Promise<void> {
-    this.dbLoginCache.delete(`${userId}:${hostUid}:${dbname}`);
+    const key = `${userId}:${hostUid}:${dbname}`;
     await this.setProfileLoggedOut(userId, hostUid, dbname, true);
+    // In one synchronous step after the mark is stored: a login that started
+    // earlier fails its generation check, and one that already finished is
+    // dropped here. One that starts from now on reads the mark.
+    this.logoutGenerations.set(key, this.logoutGeneration(userId, hostUid, dbname) + 1);
+    this.dbLoginCache.delete(key);
+  }
+
+  private logoutGeneration(userId: string, hostUid: string, dbname: string): number {
+    return this.logoutGenerations.get(`${userId}:${hostUid}:${dbname}`) ?? 0;
   }
 
   private async setProfileLoggedOut(userId: string, hostUid: string, dbname: string, loggedOut: boolean): Promise<void> {
@@ -199,6 +212,12 @@ export class DatabaseUserService extends BaseService {
 
   /**
    * Login to a database using profile or client-provided credentials.
+   *
+   * `autoLoginGeneration` is set by ensureDbLogin: the logout generation it
+   * read before its host lookup. If the user logged out while this login
+   * waited for CMS, it fails instead of logging the database back in — as
+   * MissingDBCredentials for ensureDbLogin, or as a failed login when the
+   * user asked for it, since the logout came last.
    */
   @HandleCmsErrors()
   async loginDatabase(
@@ -206,8 +225,10 @@ export class DatabaseUserService extends BaseService {
     hostUid: string,
     dbname: string,
     clientId?: string,
-    clientPassword?: string
+    clientPassword?: string,
+    autoLoginGeneration?: number
   ): Promise<boolean> {
+    const generation = autoLoginGeneration ?? this.logoutGeneration(userId, hostUid, dbname);
     const host = await this.hostService.findHostInternal(userId, hostUid);
     const dbAuth = DBAuthResolver.resolve(host, dbname, clientId, clientPassword);
 
@@ -224,6 +245,12 @@ export class DatabaseUserService extends BaseService {
       hostUid,
       cmsRequest
     );
+
+    if (this.logoutGeneration(userId, hostUid, dbname) !== generation) {
+      throw autoLoginGeneration === undefined
+        ? DatabaseError.LoginDatabaseFailed({ dbname, message: 'Logged out while logging in.' })
+        : ValidationError.MissingDBCredentials(dbname, ['id', 'password']);
+    }
 
     // Freshen ensureDbLogin's cache regardless of which credentials were
     // used (profile or client-provided) — any successful dbmtuserlogin
