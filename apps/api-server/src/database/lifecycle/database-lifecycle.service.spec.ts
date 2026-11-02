@@ -88,6 +88,7 @@ describe('DatabaseLifecycleService', () => {
       getUserInfo: jest.fn().mockResolvedValue({ user: [] }),
       ensureDbLogin: jest.fn().mockResolvedValue(undefined),
       isDbLoginActive: jest.fn().mockReturnValue(false),
+      isDbLoginRestoring: jest.fn().mockReturnValue(false),
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 

@@ -145,6 +145,11 @@ export class DatabaseUserService extends BaseService {
     }
   }
 
+  /** Whether a re-login of this database after a host login is still running. */
+  isDbLoginRestoring(userId: string, hostUid: string, dbname: string): boolean {
+    return this.pendingRelogins.has(`${userId}:${hostUid}:${dbname}`);
+  }
+
   /**
    * One database of restoreDbLoginsAfterHostLogin; never rejects. `login` is
    * the cache entry it replaces: it only drops or replaces that entry (or

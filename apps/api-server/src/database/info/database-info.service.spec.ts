@@ -34,7 +34,7 @@ describe('DatabaseInfoService', () => {
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let cmsConfigService: jest.Mocked<CmsConfigService>;
-  let databaseUserService: { isDbLoginActive: jest.Mock };
+  let databaseUserService: { isDbLoginActive: jest.Mock; isDbLoginRestoring: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -66,7 +66,7 @@ describe('DatabaseInfoService', () => {
         { provide: HostService, useValue: mockHostService },
         { provide: CmsHttpsClientService, useValue: mockCmsClient },
         { provide: CmsConfigService, useValue: mockCmsConfigService },
-        { provide: DatabaseUserService, useValue: { isDbLoginActive: jest.fn().mockReturnValue(false) } },
+        { provide: DatabaseUserService, useValue: { isDbLoginActive: jest.fn().mockReturnValue(false), isDbLoginRestoring: jest.fn().mockReturnValue(false) } },
       ],
     }).compile();
 
@@ -166,6 +166,22 @@ describe('DatabaseInfoService', () => {
       expect(databaseUserService.isDbLoginActive).toHaveBeenCalledWith(mockUserId, mockHostUid, 'testdb', 'test-token');
       expect(result.dblist.dbs.map((d) => [d.dbname, d.isLoggedIn])).toEqual([['testdb', true], ['otherdb', false]]);
       expect(result.activelist.active).toEqual([{ dbname: 'testdb', isProfileExists: false, isLoggedIn: true, isLoggedOut: false }]);
+    });
+
+    it('reports a database whose login is being restored after a host login as logged in', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        __EXEC_TIME: '10 ms',
+        note: 'none',
+        status: 'success',
+        task: 'startinfo',
+        dblist: [{ dbs: [{ dbname: 'testdb', dbdir: '/path' }] }],
+        activelist: [{ active: [{ dbname: 'testdb' }] }],
+      });
+      databaseUserService.isDbLoginRestoring.mockImplementation((_u, _h, dbname) => dbname === 'testdb');
+
+      const result = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(result.dblist.dbs[0].isLoggedIn).toBe(true);
     });
   });
 

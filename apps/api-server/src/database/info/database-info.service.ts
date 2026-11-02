@@ -67,8 +67,12 @@ export class DatabaseInfoService extends BaseService {
       this.startInfoInternal(userId, hostUid),
       this.getHaDbNames(userId, hostUid),
     ]);
+    // A login being restored after a host login counts as logged in, so the
+    // client keeps its views open meanwhile; if the restore fails, the next
+    // start-info says so.
     return mapStartInfoToClientResponse(cmsStart, host.dbProfiles, haDbNames, (dbname) =>
       this.databaseUserService.isDbLoginActive(userId, hostUid, dbname, host.token)
+        || this.databaseUserService.isDbLoginRestoring(userId, hostUid, dbname)
     );
   }
 

@@ -772,6 +772,18 @@ describe('DatabaseUserService', () => {
       expect(loginCache().has(key('demodb'))).toBe(false);
     });
 
+    it('reports the database as being restored until the re-login settles', async () => {
+      const cms = deferred<typeof ok>();
+      cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
+      hostLogin('new-token');
+      await settle();
+
+      expect(service.isDbLoginRestoring(mockUserId, mockHostUid, 'demodb')).toBe(true);
+      cms.resolve(ok);
+      await settle();
+      expect(service.isDbLoginRestoring(mockUserId, mockHostUid, 'demodb')).toBe(false);
+    });
+
     it('makes ensureDbLogin wait for the database\'s re-login', async () => {
       const cms = deferred<typeof ok>();
       cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
