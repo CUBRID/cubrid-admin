@@ -19,7 +19,8 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   const { navigatorDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const databases = navigatorDatabasesByHost[hostUid] || [];
   const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDb, dbLogsLoadingByDb } = useSelector((state) => state.broker, shallowEqual);
-  const { authorizedHosts, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
+  const authorizedHosts = useSelector((state) => state.host?.authorizedHosts) || [];
+  const reconnectQueue = useSelector((state) => state.host?.reconnectQueue) || [];
   const brokers = navigatorBrokersByHost[hostUid] || [];
   const dbLogs = (dbname) => dbLogsByDb[dbKey(hostUid, dbname)];
   const dbLogsLoading = (dbname) => !!dbLogsLoadingByDb[dbKey(hostUid, dbname)];
@@ -31,7 +32,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   // mounted while hidden, so a retry here would repeat unseen.
   const openedDbs = useRef(new Set());
   const prevLoggedIn = useRef(loggedInDatabases);
-  const hostConnected = authorizedHosts.includes(hostUid) && !(reconnectQueue || []).includes(hostUid);
+  const hostConnected = authorizedHosts.includes(hostUid) && !reconnectQueue.includes(hostUid);
   useEffect(() => {
     const prev = prevLoggedIn.current;
     prevLoggedIn.current = loggedInDatabases;
