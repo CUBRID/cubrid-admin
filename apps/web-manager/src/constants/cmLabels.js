@@ -767,6 +767,8 @@ export const CM = {
   lblDescLogPathName: 'Log file path:',
   lblVolumePathName: 'Extend volume path:',
   btnCopyVolume: 'Copy individual volumes',
+  copyDestinationSameAsSource: 'Destination database name must be different from the source.',
+  copyVolumeMappingInvalid: 'Individual-volume copy requires complete volume information and a valid name and absolute directory for every destination. Reopen this dialog to reload volume information.',
   tblColumnCurrentVolName: 'Current volume name',
   tblColumnCopyNewVolName: 'New volume name',
   tblColumnCopyNewDirPath: 'New directory path',
@@ -1785,7 +1787,6 @@ export const CM = {
   importNoValidHostsMsg: 'No valid hosts selected for import.',
   importSummaryMsg: (addedCount, groupSummary, skippedCount) =>
     `Imported ${addedCount} host(s) into ${groupSummary}. ${skippedCount} item(s) were skipped.`,
-  copyVolumeOntoItselfMsg: (path) => `The target of ${path} is the same file. Change its new name or directory.`,
   importRolledBackMsg: 'Import was rolled back. No hosts were added.',
   importFailedMsg: 'Failed to import hosts.',
   failedToCreateImportGroupMsg: (name) => `Failed to create import group "${name}".`,
@@ -1934,6 +1935,9 @@ export const CM = {
   countLabel: 'Count',
   errorsLabel: 'Errors',
   sqlPattern: 'SQL Pattern',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: 'No queries found to analyze.',
 
   // AllLogsViewer

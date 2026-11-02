@@ -1,4 +1,5 @@
 import {
+  copyVolumePathKey,
   AddVolDbRequest,
   AddVolDbResponse,
   CheckDatabaseRequest,
@@ -176,16 +177,46 @@ export class DatabaseManagementService extends BaseService {
     if (request.move === 'y' && (await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, request.srcdbname))) {
       throw DatabaseError.RenameNotSupportedForHaDatabase({ dbname: request.srcdbname });
     }
-    // copydb would format the target over the source volume itself.
-    const ontoItself = (request.volume || []).flatMap((entry) => Object.entries(entry)).find(([from, to]) => from === to);
-    if ((request.advanced === 'on' || request.advanced === 'y') && ontoItself) {
-      throw DatabaseError.InvalidParameter(`Volume ${ontoItself[0]} would be copied onto itself`, {
-        hostUid,
-        dbname: request.srcdbname,
-        reason: 'COPY_VOLUME_ONTO_ITSELF',
-      });
+    if (request.destdbname.trim() === request.srcdbname.trim()) {
+      throw DatabaseError.InvalidParameter('Destination database name must be different from the source');
     }
-
+    const advanced = request.advanced === 'on' || request.advanced === 'y';
+    let volume: Record<string, string>[] | undefined;
+    if (advanced) {
+      if (!Array.isArray(request.volume) || request.volume.length === 0) {
+        throw DatabaseError.InvalidParameter('Individual-volume copy requires volume mappings');
+      }
+      volume = [];
+      const sources = new Set<string>();
+      const destinations = new Set<string>();
+      for (const item of request.volume) {
+        if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length === 0) {
+          throw DatabaseError.InvalidParameter('Invalid copy volume mapping');
+        }
+        for (const [source, destination] of Object.entries(item)) {
+          if (!source.trim() || typeof destination !== 'string' || !destination.trim() ||
+              sources.has(copyVolumePathKey(source)) || destinations.has(copyVolumePathKey(destination))) {
+            throw DatabaseError.InvalidParameter('Copy volume paths must be non-empty and unique');
+          }
+          sources.add(copyVolumePathKey(source));
+          destinations.add(copyVolumePathKey(destination));
+          // Preserve the caller's physical volume order through CMS's JSON
+          // conversion, which sorts keys within an object but retains arrays.
+          volume.push({ [source]: destination });
+        }
+      }
+      // copydb formats each target file, removing whatever is there first,
+      // so a target that is a source volume (its own or another volume's)
+      // would destroy the source while it is being copied.
+      const onSource = [...destinations].find((key) => sources.has(key));
+      if (onSource) {
+        throw DatabaseError.InvalidParameter(`Volume ${onSource} would be copied onto a source volume`, {
+          hostUid,
+          dbname: request.srcdbname,
+          reason: 'COPY_VOLUME_ONTO_SOURCE',
+        });
+      }
+    }
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.srcdbname);
 
     const cmsRequest: CopyDbCmsRequest = {
@@ -197,12 +228,10 @@ export class DatabaseManagementService extends BaseService {
       logpath: request.logpath,
       overwrite: request.overwrite,
       move: request.move,
-      advanced: request.advanced,
+      advanced: advanced ? 'on' : request.advanced,
     };
-    if (request.advanced === 'on' || request.advanced === 'y') {
-      if (request.volume && request.volume.length > 0) {
-        cmsRequest.volume = request.volume;
-      }
+    if (volume) {
+      cmsRequest.volume = volume;
     }
 
     return this.executeAsyncCmsJobRequest<CopyDbCmsRequest, CopyDbCmsResponse>(

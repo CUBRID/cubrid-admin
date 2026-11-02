@@ -1,9 +1,9 @@
 import { BaseCmsRequest } from './base-cms-request';
 
 /**
- * One volume's source path -> destination path. `volume` holds one per
- * permanent volume, in volid order: CMS writes each element as the next
- * copydb control-file line. Used when advanced is "on".
+ * Volume mapping: one source path -> destination path per object.
+ * Array entries follow physical volume order so CMS cannot reorder object keys.
+ * Used when advanced is "on".
  */
 export type CopyDbVolumeItem = Record<string, string>;
 

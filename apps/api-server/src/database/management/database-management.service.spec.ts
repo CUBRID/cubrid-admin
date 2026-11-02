@@ -10,6 +10,7 @@ import { DatabaseError } from '@error/database/database-error';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import {
+  CopyDbRequest,
   UnloadDatabaseRequest,
   LoadDatabaseRequest,
   CheckDatabaseRequest,
@@ -127,6 +128,87 @@ describe('DatabaseManagementService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('copyDb', () => {
+    const request: CopyDbRequest = {
+      srcdbname: 'source', destdbname: 'clone', destdbpath: '/copy',
+      exvolpath: '/copy', logpath: '/copy', overwrite: 'n', move: 'n', advanced: 'on',
+      volume: [{ '/z/source': '/copy/clone' }, { '/a/extra': '/copy/clone_x001' }],
+    };
+
+    it('preserves physical mapping order and sends one key per CMS volume object', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/z/source': '/copy/clone', '/a/extra': '/copy/clone_x001' }],
+      });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ advanced: 'on', volume: request.volume }), expect.any(Object)
+      );
+    });
+
+    it('normalizes the supported advanced=y alias to CMS advanced=on', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, advanced: 'y' });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ advanced: 'on', volume: request.volume }), expect.any(Object)
+      );
+    });
+
+    it.each([
+      undefined, [], [{}], [null], [{ '/db/source': '' }], [{ '/db/source': 123 }],
+      [{ '/db/source': '/copy/clone' }, { '/db/source': '/copy/other' }],
+      [{ '/db/source': '/copy/clone' }, { '/db/extra': '/copy/clone' }],
+    ].map(volume => [volume]))('rejects invalid advanced mappings before CMS is called: %j', async volume => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: volume as CopyDbRequest['volume'],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['/copy/clone', '/copy/./clone'],
+      ['/copy/clone', '/copy/sub/../clone'],
+      ['/copy/clone', '/copy//clone'],
+      ['C:\\copy\\clone', 'c:/copy/./clone'],
+      ['C:\\copy\\clone', 'C:\\COPY\\sub\\..\\clone'],
+      ['\\\\server\\share\\copy\\clone', '\\\\SERVER\\share\\copy\\.\\clone'],
+    ])('rejects aliased destinations before CMS: %s and %s', async (first, second) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': first }, { '/db/extra': second }],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('rejects aliased source paths before CMS', async () => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': '/copy/clone' }, { '/db/./source': '/copy/extra' }],
+      })).rejects.toThrow(DatabaseError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('preserves valid POSIX paths, including case-distinct filenames, in the CMS request', async () => {
+      const volume = [{ '/db/source': '/copy/./Clone' }, { '/db/extra': '/copy/sub/../clone' }];
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, volume });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).toEqual(expect.objectContaining({ volume }));
+    });
+
+    it.each(['on', 'off'])('rejects copying onto the source before CMS is called (advanced=%s)', async advanced => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, destdbname: ' source ', advanced, overwrite: 'y',
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('omits mappings for normal copy', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, advanced: 'off' });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).not.toHaveProperty('volume');
+    });
   });
 
   describe('unloadDatabase', () => {
@@ -898,10 +980,13 @@ describe('DatabaseManagementService', () => {
       overwrite: 'n', move: 'n', advanced: 'off',
     };
 
-    it('refuses to copy a volume onto itself', async () => {
-      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
-        ...copyReq, advanced: 'on', volume: [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb' }],
-      })).rejects.toMatchObject({ code: 'INVALID_PARAMETER' });
+    it.each([
+      ['its own source', [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb' }]],
+      ['another volume\'s source', [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb_x001' }, { '/db/srcdb/srcdb_x001': '/copy/newdb_x001' }]],
+      ['a source written another way', [{ '/db/srcdb/srcdb': '/copy/newdb' }, { '/db/srcdb/srcdb_x001': '/db/srcdb/./srcdb' }]],
+    ])('refuses a target that is %s, before calling CMS', async (_label, volume) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, { ...copyReq, advanced: 'on', volume }))
+        .rejects.toMatchObject({ code: 'INVALID_PARAMETER', additionalData: { reason: 'COPY_VOLUME_ONTO_SOURCE' } });
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 

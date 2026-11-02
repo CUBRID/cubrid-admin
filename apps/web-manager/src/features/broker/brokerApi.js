@@ -26,6 +26,9 @@ export const brokerApi = {
   getBrokerLogs: (hostUid, brokerName) => {
     return apiClient.get(`/${hostUid}/log/broker/${brokerName}`);
   },
+  captureLogSnapshot: (hostUid, path) => {
+    return apiClient.post(`/${hostUid}/log/snapshot`, { path });
+  },
   viewLog: (hostUid, logParams) => {
     return apiClient.post(`/${hostUid}/log/view`, logParams);
   },

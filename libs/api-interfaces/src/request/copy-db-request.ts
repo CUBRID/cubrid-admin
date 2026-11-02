@@ -1,7 +1,7 @@
 /**
- * One volume's source path -> destination path. `volume` holds one per
- * permanent volume, in volid order: CMS writes each element as the next
- * copydb control-file line. Used when advanced is "on".
+ * Volume mapping: one source file path -> destination file path per object.
+ * Array entries must follow physical volume order (numeric volid).
+ * Only included when advanced is "on".
  */
 export type CopyDbVolumeItem = Record<string, string>;
 
@@ -17,6 +17,6 @@ export type CopyDbRequest = {
   overwrite: string;
   move: string;
   advanced: string;
-  /** Volume path mappings. Only when advanced is "on". */
+  /** Ordered volume path mappings. Required when advanced is "on" (or "y"). */
   volume?: CopyDbVolumeItem[];
 };
