@@ -8,3 +8,11 @@ export type HaStartDatabaseCmsRequest = BaseCmsRequest & {
   /** Required, like `ha_stop`'s: one database per call. */
   dbname: string;
 };
+
+/**
+ * CMS `ha_start` for the whole node (`cubrid heartbeat start`): the engine
+ * decides which HA databases come up. Only a whole-service start sends it.
+ */
+export type HaStartNodeCmsRequest = BaseCmsRequest & {
+  task: 'ha_start';
+};

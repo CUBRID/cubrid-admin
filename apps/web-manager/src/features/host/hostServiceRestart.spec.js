@@ -47,7 +47,7 @@ it('restarts the service with one request and reads the host again afterwards', 
   expect(databaseApi.startWholeService).not.toHaveBeenCalled();
   expect(databaseApi.runSelectedDatabasesAction).not.toHaveBeenCalled();
   expect(databaseApi.readStartInfo).toHaveBeenCalled();
-  expect(result).toEqual({ problems: [], skipped: [], leftStopped: [] });
+  expect(result).toEqual({ problems: [], skipped: [], leftStopped: [], haNodeFailed: false });
 });
 
 it('reports the stop and start failures, and passes on the databases left stopped', async () => {
@@ -82,5 +82,16 @@ it('reports a refused or failed request as the problem', async () => {
 
   const result = await store.dispatch(restartHostService('h1'));
 
-  expect(result).toEqual({ problems: ['testdb is already being started or stopped'], skipped: [], leftStopped: [] });
+  expect(result).toEqual({ problems: ['testdb is already being started or stopped'], skipped: [], leftStopped: [], haNodeFailed: false });
+});
+
+it('says when the node-wide ha_start failed, so HA on the node may be off', async () => {
+  databaseApi.restartWholeService.mockResolvedValue({
+    stopFailed: [], startFailed: [{ name: 'HA databases (heartbeat)', error: 'x' }], skipped: [], leftStopped: [],
+  });
+  const store = makeStore();
+
+  const result = await store.dispatch(restartHostService('h1'));
+
+  expect(result.haNodeFailed).toBe(true);
 });

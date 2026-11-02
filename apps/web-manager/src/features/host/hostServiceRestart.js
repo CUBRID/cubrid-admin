@@ -1,4 +1,5 @@
 import { formatServiceFailures, refreshHaInfo } from './hostSlice';
+import { HA_NODE_STEP } from './haNodeStep';
 import { databaseApi } from '../database/databaseApi';
 import { fetchDatabaseStartInfo } from '../database/databaseCoreSlice';
 import { fetchBrokerList } from '../broker/brokerSlice';
@@ -11,10 +12,11 @@ const errorText = (err) => err?.response?.data?.message || (typeof err === 'stri
  * up only the autostart list and the HA databases (see the api-server's
  * restartWholeService). Afterwards the host's lists are read again.
  *
- * @returns {Promise<{ problems: string[], skipped: {name, reason, phase}[], leftStopped: string[] }>}
+ * @returns {Promise<{ problems: string[], skipped: {name, reason, phase}[], leftStopped: string[], haNodeFailed: boolean }>}
  *   `skipped`: databases the user isn't logged in to, sent nothing.
  *   `leftStopped`: databases that were running and are stopped now because
  *   they are not in the autostart list.
+ *   `haNodeFailed`: the node-wide ha_start failed, so HA on the node may be off.
  */
 export const restartHostService = (hostUid) => async (dispatch) => {
   try {
@@ -23,9 +25,9 @@ export const restartHostService = (hostUid) => async (dispatch) => {
       stopFailed.length > 0 ? formatServiceFailures('stop service', stopFailed) : '',
       startFailed.length > 0 ? formatServiceFailures('start service', startFailed) : '',
     ].filter(Boolean);
-    return { problems, skipped, leftStopped };
+    return { problems, skipped, leftStopped, haNodeFailed: startFailed.some((f) => f.name === HA_NODE_STEP) };
   } catch (err) {
-    return { problems: [errorText(err)], skipped: [], leftStopped: [] };
+    return { problems: [errorText(err)], skipped: [], leftStopped: [], haNodeFailed: false };
   } finally {
     dispatch(fetchDatabaseStartInfo(hostUid));
     dispatch(fetchBrokerList(hostUid));

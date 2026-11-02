@@ -39,19 +39,28 @@ export function loginSkipsOf(databases, targets) {
   return { loggedOut, notLoggedIn, count: loggedOut.length + notLoggedIn.length };
 }
 
-/** What a service start brings up: the autostart list and the HA databases, those not running. */
+/**
+ * The non-HA databases a service start brings up: the stopped ones in the
+ * autostart list. HA databases go up with one node-wide ha_start, whatever
+ * the logins, so a service action never skips them.
+ */
 export function serviceStartTargets(databases, autoStart) {
-  return (databases || []).filter((db) => !db.running && (db.isHa || autoStart.has(db.dbname))).map((db) => db.dbname);
+  return (databases || []).filter((db) => !db.isHa && !db.running && autoStart.has(db.dbname)).map((db) => db.dbname);
+}
+
+/** The running non-HA databases a service stop takes down one by one. */
+export function serviceStopTargets(databases) {
+  return (databases || []).filter((db) => !db.isHa && db.running).map((db) => db.dbname);
 }
 
 /**
  * The databases a service restart skips for no login, by step: running ones
  * are not stopped and keep running; stopped ones the start would bring up
- * stay stopped.
+ * stay stopped. HA databases are never skipped (see serviceStartTargets).
  */
 export function restartLoginSkips(databases, autoStart) {
   const names = (skips) => [...skips.loggedOut, ...skips.notLoggedIn];
-  const running = (databases || []).filter((db) => db.running).map((db) => db.dbname);
+  const running = serviceStopTargets(databases);
   return {
     keepsRunning: names(loginSkipsOf(databases, running)),
     notStarted: names(loginSkipsOf(databases, serviceStartTargets(databases, autoStart))),

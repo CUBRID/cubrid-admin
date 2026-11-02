@@ -12,3 +12,12 @@ export type HaStopDatabaseCmsRequest = BaseCmsRequest & {
    */
   dbname: string;
 };
+
+/**
+ * CMS `ha_stop` for the whole node (`cubrid heartbeat stop`): deactivates
+ * heartbeat on the node and takes all its HA databases down. Only a
+ * whole-service stop sends it, where that is what the user asked for.
+ */
+export type HaStopNodeCmsRequest = BaseCmsRequest & {
+  task: 'ha_stop';
+};

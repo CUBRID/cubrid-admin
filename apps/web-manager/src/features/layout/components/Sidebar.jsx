@@ -24,7 +24,7 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal, serviceSkippedTable } from '../../database/databaseBulkActions';
-import { autoStartServers, loginSkipsOf, readStartInfoDatabases, restartLoginSkips, serviceStartTargets } from '../../database/loginSkips';
+import { autoStartServers, loginSkipsOf, readStartInfoDatabases, restartLoginSkips, serviceStartTargets, serviceStopTargets } from '../../database/loginSkips';
 import { hostApi } from '../../host/hostApi';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
 import { restartHostService } from '../../host/hostServiceRestart';
@@ -191,6 +191,17 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     <>
       {description}
       <span className="block mt-2 text-amber-600 dark:text-amber-400">{CM.loginSkipWarning(skips.loggedOut, skips.notLoggedIn)}</span>
+    </>
+  ) : description);
+  // A service action on an HA host takes the HA databases down and up with
+  // one node-wide ha_stop/ha_start, whatever the logins; its confirm dialog
+  // says so, and what that can do to the node.
+  const withHaServiceNotes = (description, hasHa, { starts }) => (hasHa ? (
+    <>
+      {description}
+      {[CM.serviceHaNoteLogin, CM.serviceHaNoteRole, ...(starts ? [CM.serviceHaNoteStartFail] : [])].map((note) => (
+        <span key={note} className="block mt-1 text-slate-500 dark:text-slate-400">{note}</span>
+      ))}
     </>
   ) : description);
   // Confirms a bulk or service action after naming the databases it will
@@ -414,13 +425,17 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setLoadingText(action === 'start' ? CM.startingService : CM.stoppingService);
     startAction();
     try {
-      const { problem, skipped } = await dispatch(action === 'start' ? startService(hostUid) : stopService(hostUid)).unwrap();
+      const { problem, skipped, haNodeFailed } = await dispatch(action === 'start' ? startService(hostUid) : stopService(hostUid)).unwrap();
       resetAction();
       if (problem || skipped.length > 0) {
         dispatch(showStatusModal({
           type: problem ? 'error' : 'info',
           title: action === 'start' ? CM.startService : CM.stopService,
-          message: [problem, skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : ''].filter(Boolean).join('\n'),
+          message: [
+            problem,
+            action === 'start' && haNodeFailed ? CM.haNodeStartFailedMsg : '',
+            skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : '',
+          ].filter(Boolean).join('\n'),
           tables: skipped.length > 0 ? [serviceSkippedTable(CM, skipped, action)] : [],
         }));
       }
@@ -432,20 +447,22 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const readAutoStart = (hostUid) => hostApi.getHostConfig(hostUid, 'cubridconf')
     .then((response) => new Set(autoStartServers(response?.conflist?.[0]?.confdata)))
     .catch(() => new Set());
-  // Service start brings up the autostart list and the HA databases; the
-  // ones of those not running and not logged in are named before it runs.
+  // Service start brings up the autostart list and, on an HA host, the HA
+  // databases with one node-wide ha_start. The autostart ones not running
+  // and not logged in are named before it runs, with the HA notes.
   const requestStartService = async (hostUid) => {
     if (!hostUid) return;
     const [databases, autoStart] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readAutoStart(hostUid)]);
     const targets = serviceStartTargets(databases || [], autoStart);
     const skips = loginSkipsOf(databases || [], targets);
-    if (skips.count === 0) {
+    const hasHa = (databases || []).some((db) => db.isHa);
+    if (skips.count === 0 && !hasHa) {
       handleServiceAction(hostUid, 'start');
       return;
     }
     requestActionConfirm({
       title: CM.startService,
-      description: withLoginSkipWarning(null, skips),
+      description: withHaServiceNotes(withLoginSkipWarning(null, skips), hasHa, { starts: true }),
       confirmLabel: CM.startService,
       variant: 'primary',
       run: () => handleServiceAction(hostUid, 'start'),
@@ -459,13 +476,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     if (!hostUid) return;
     const [databases, autoStart] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readAutoStart(hostUid)]);
     const { keepsRunning, notStarted } = restartLoginSkips(databases || [], autoStart);
-    const description = keepsRunning.length + notStarted.length === 0 ? CM.confirmRestartServiceDesc(serverName) : (
+    const hasHa = (databases || []).some((db) => db.isHa);
+    const description = withHaServiceNotes(keepsRunning.length + notStarted.length === 0 ? CM.confirmRestartServiceDesc(serverName) : (
       <>
         {CM.confirmRestartServiceDesc(serverName)}
         {keepsRunning.length > 0 && <span className="block mt-2 text-amber-600 dark:text-amber-400">{CM.restartSkipKeepsRunningMsg(keepsRunning)}</span>}
         {notStarted.length > 0 && <span className="block mt-1 text-amber-600 dark:text-amber-400">{CM.restartSkipNotStartedMsg(notStarted)}</span>}
       </>
-    );
+    ), hasHa, { starts: true });
     requestActionConfirm({
       title: CM.confirmRestartServiceTitle,
       description,
@@ -474,10 +492,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       run: async () => {
         setLoadingText(CM.restartingService);
         startAction();
-        const { problems, skipped, leftStopped } = await dispatch(restartHostService(hostUid));
+        const { problems, skipped, leftStopped, haNodeFailed } = await dispatch(restartHostService(hostUid));
         resetAction();
         const tables = skipped.length > 0 ? [serviceSkippedTable(CM, skipped, 'restart')] : [];
         const notes = [
+          haNodeFailed ? CM.haNodeStartFailedMsg : '',
           skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : '',
           leftStopped.length > 0 ? CM.serviceRestartLeftStoppedMsg(leftStopped) : '',
         ].filter(Boolean);
@@ -501,8 +520,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       isOpen: true,
       hostUid,
       serverName: serverName || hostUid,
-      // Running databases not logged in are skipped and keep running.
-      skips: loginSkipsOf(databases || [], runningDbs(databases || [])),
+      // Running non-HA databases not logged in are skipped and keep running;
+      // HA ones go down with the node-wide ha_stop.
+      skips: loginSkipsOf(databases || [], serviceStopTargets(databases || [])),
+      hasHa: (databases || []).some((db) => db.isHa),
     });
   };
 
@@ -2711,7 +2732,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       <ConfirmDialog
         isOpen={stopServiceConfirm.isOpen}
         title={CM.stopServicesConfirmTitle}
-        description={withLoginSkipWarning(CM.stopServicesConfirmDesc(stopServiceConfirm.serverName), stopServiceConfirm.skips || { count: 0 })}
+        description={withHaServiceNotes(
+          withLoginSkipWarning(CM.stopServicesConfirmDesc(stopServiceConfirm.serverName), stopServiceConfirm.skips || { count: 0 }),
+          stopServiceConfirm.hasHa,
+          { starts: false }
+        )}
         confirmLabel={CM.stopAllServices}
         variant="danger"
         onConfirm={() => {

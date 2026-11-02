@@ -5,7 +5,9 @@ import { Injectable } from '@nestjs/common';
 import {
   HaReloadCmsRequest,
   HaStartDatabaseCmsRequest,
+  HaStartNodeCmsRequest,
   HaStopDatabaseCmsRequest,
+  HaStopNodeCmsRequest,
   HeartbeatListCmsRequest,
 } from '@type/cms-request';
 import {
@@ -89,7 +91,8 @@ export class HaService extends BaseService {
   /**
    * CMS `ha_stop` — `{ task, dbname }` + token; success envelope `task: 'ha_stop'`.
    * Always one database (`cubrid heartbeat stop <db>`) — see
-   * HaStopDatabaseCmsRequest for why a dbname-less call is never sent.
+   * HaStopDatabaseCmsRequest for why only haStopNode, for a whole-service
+   * stop, sends it without one.
    */
   @HandleCmsErrors()
   async haStop(
@@ -104,6 +107,31 @@ export class HaService extends BaseService {
       cmsRequest
     );
   }
+  /**
+   * CMS `ha_start` without a dbname (`cubrid heartbeat start`): starts
+   * cub_master if needed, activates HA and brings up every `ha_db_list`
+   * database. If one of them fails, the engine takes the node's HA down
+   * again. Only the whole-service start sends it (its own type, so no
+   * other path can leave the dbname out).
+   */
+  @HandleCmsErrors()
+  async haStartNode(userId: string, hostUid: string): Promise<HaStartDatabaseCmsResponse> {
+    const cmsRequest: HaStartNodeCmsRequest = { task: 'ha_start' };
+    return this.executeAsyncCmsJobRequest<HaStartNodeCmsRequest, HaStartDatabaseCmsResponse>(userId, hostUid, cmsRequest);
+  }
+
+  /**
+   * CMS `ha_stop` without a dbname (`cubrid heartbeat stop`): deactivates
+   * heartbeat on the node, stopping its HA servers, copylogdb and applylogdb;
+   * cub_master, CMS and non-HA databases keep running. Only the
+   * whole-service stop sends it.
+   */
+  @HandleCmsErrors()
+  async haStopNode(userId: string, hostUid: string): Promise<HaStopDatabaseCmsResponse> {
+    const cmsRequest: HaStopNodeCmsRequest = { task: 'ha_stop' };
+    return this.executeAsyncCmsJobRequest<HaStopNodeCmsRequest, HaStopDatabaseCmsResponse>(userId, hostUid, cmsRequest);
+  }
+
 
   /**
    * CMS `ha_reload` — `{ task: 'ha_reload' }` + token; success envelope `task: 'ha_reload'`.

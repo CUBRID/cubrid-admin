@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoStartServers, loginSkipsOf, restartLoginSkips, serviceStartTargets, startInfoDatabases } from './loginSkips';
+import { autoStartServers, loginSkipsOf, restartLoginSkips, serviceStartTargets, serviceStopTargets, startInfoDatabases } from './loginSkips';
 import { serviceSkippedTable } from './databaseBulkActions';
 import { CM } from '../../constants/cmLabels';
 
@@ -71,14 +71,15 @@ describe('service restart skips', () => {
   ];
   const autoStart = new Set(['auto_on', 'auto_on_nologin', 'auto_off_nologin']);
 
-  it('brings up the stopped autostart and HA databases on a service start', () => {
-    expect(serviceStartTargets(databases, autoStart)).toEqual(['auto_off_nologin', 'ha_off_nologin']);
+  it('counts only non-HA databases as service start and stop targets', () => {
+    expect(serviceStartTargets(databases, autoStart)).toEqual(['auto_off_nologin']);
+    expect(serviceStopTargets([...databases, db('ha_on', true, false, { isHa: true })])).toEqual(['auto_on', 'auto_on_nologin', 'manual_nologin']);
   });
 
-  it('names the running databases not logged in as kept running, and the stopped ones the start would bring up as not started', () => {
+  it('names the running databases not logged in as kept running, and the stopped autostart ones as not started; never HA ones', () => {
     expect(restartLoginSkips(databases, autoStart)).toEqual({
       keepsRunning: ['manual_nologin', 'auto_on_nologin'],
-      notStarted: ['auto_off_nologin', 'ha_off_nologin'],
+      notStarted: ['auto_off_nologin'],
     });
   });
 
