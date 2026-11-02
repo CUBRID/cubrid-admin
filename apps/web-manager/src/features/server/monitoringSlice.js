@@ -3,6 +3,7 @@ import monitoringApi from './monitoringApi';
 import { computeBrokerRates, mapDiskInfo } from './hostMetrics';
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
+import { readSharedBrokerList } from '../broker/brokerSlice';
 
 // Disk usage changes slowly and gethoststat has no disk field, so the
 // separate getsysdiskinfo call runs at most this often per host.
@@ -27,7 +28,7 @@ const readMonitoringData = async (hostUid, state) => {
 
   const [hostStat, brokers, heartbeat, diskInfo] = await Promise.all([
     monitoringApi.getHostStat(hostUid),
-    monitoringApi.getBrokerList(hostUid),
+    readSharedBrokerList(hostUid),
     isHA ? readHeartbeat(hostUid) : Promise.resolve(undefined),
     // A disk failure must not fail the whole status poll: null = tried
     // and failed (keep the last value), undefined = not due this tick.

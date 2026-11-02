@@ -71,6 +71,19 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
   });
 };
 
+/**
+ * The broker list as the host dashboard's own fetchBrokerList reads it, for
+ * another reader in the same refresh (the system status' TPS/QPS): it takes
+ * the read already in flight instead of sending one more. Resolves to the
+ * `{ result: [...] }` shape of the raw response; rejects like the read.
+ */
+export const readSharedBrokerList = async (hostUid) => {
+  const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, false]);
+  const result = await brokerListReads(key, () => readBrokerList(hostUid, false));
+  if (!result.ok) throw result.error;
+  return { result: result.value };
+};
+
 export const fetchBrokerList = createAsyncThunk(
   'broker/fetchBrokerList',
   async (arg, { rejectWithValue, fulfillWithValue }) => {

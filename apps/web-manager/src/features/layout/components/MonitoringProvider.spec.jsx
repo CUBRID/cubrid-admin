@@ -28,13 +28,16 @@ const initialState = {
   user: { preferences: { dashboardInterval: 10, brokerStatusInterval: 10 } },
   host: { selectedHostUid: 'host1', authorizedHosts: ['host1', 'host2'], reconnectQueue: [] },
   database: { activeDatabasesByHost: {}, loggedInDatabases: [] },
-  layout: { activeMainTab: 'host:host1' },
+  layout: { activeMainTab: 'db:host1:demodb' },
 };
 
 const reducer = (state = initialState, action) => {
   // What a failed start-info does to the live list: a fresh empty array.
   if (action.type === 'test/startInfoFailed') {
     return { ...state, database: { ...state.database, activeDatabasesByHost: { host1: [] } } };
+  }
+  if (action.type === 'test/setTab') {
+    return { ...state, layout: { activeMainTab: action.payload } };
   }
   if (action.type === 'test/setReconnectQueue') {
     return { ...state, host: { ...state.host, reconnectQueue: action.payload } };
@@ -155,4 +158,13 @@ it('stops polling the host while a modal is open and refreshes once when it clos
   await act(async () => { closeModal(); });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
   expect(countOf('test/fetchBrokerList')).toBe(2);
+});
+
+it('leaves a host dashboard to its own refresh, so nothing is read twice per interval', async () => {
+  await act(async () => store.dispatch({ type: 'test/setTab', payload: 'host:host1' }));
+  const before = dispatched.length;
+
+  await act(async () => vi.advanceTimersByTime(30_000));
+
+  expect(dispatched.length).toBe(before);
 });

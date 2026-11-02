@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./monitoringApi', () => ({
   default: {
     getHostStat: vi.fn(),
-    getBrokerList: vi.fn(),
     getHaHeartbeatList: vi.fn(),
     getSysDiskInfo: vi.fn(),
   },
 }));
 
+// The broker list is the host dashboard's shared read (brokerSlice).
+vi.mock('../broker/brokerSlice', () => ({ readSharedBrokerList: vi.fn() }));
+
 import monitoringApi from './monitoringApi';
+import { readSharedBrokerList } from '../broker/brokerSlice';
 import reducer, { fetchMonitoringData, fetchHaHeartbeatOnly } from './monitoringSlice';
 import apiClient from '../../api/apiClient';
 
@@ -43,7 +46,7 @@ afterEach(() => now.mockRestore());
 const poll = async (store, at, { stat, brokers }) => {
   now.mockReturnValue(at);
   monitoringApi.getHostStat.mockResolvedValueOnce(stat);
-  monitoringApi.getBrokerList.mockResolvedValueOnce(brokers);
+  readSharedBrokerList.mockResolvedValueOnce(brokers);
   await store.dispatch(fetchMonitoringData(HOST)).unwrap();
 };
 
@@ -109,7 +112,7 @@ describe('reads shared between views of the same host', () => {
 
     now.mockReturnValue(102_000);
     monitoringApi.getHostStat.mockResolvedValueOnce(hostStat(150, 950));
-    monitoringApi.getBrokerList.mockResolvedValueOnce(brokerList(1100, 5400));
+    readSharedBrokerList.mockResolvedValueOnce(brokerList(1100, 5400));
     await Promise.all([store.dispatch(fetchMonitoringData(HOST)), store.dispatch(fetchMonitoringData(HOST))]);
 
     expect(monitoringApi.getHostStat).toHaveBeenCalledTimes(2);
@@ -122,7 +125,7 @@ describe('reads shared between views of the same host', () => {
     const heartbeat = deferred();
     monitoringApi.getHaHeartbeatList.mockReturnValue(heartbeat.promise);
     monitoringApi.getHostStat.mockResolvedValue(hostStat(100, 900));
-    monitoringApi.getBrokerList.mockResolvedValue(brokerList(1000, 5000));
+    readSharedBrokerList.mockResolvedValue(brokerList(1000, 5000));
     now.mockReturnValue(100_000);
 
     const full = store.dispatch(fetchMonitoringData(HOST));

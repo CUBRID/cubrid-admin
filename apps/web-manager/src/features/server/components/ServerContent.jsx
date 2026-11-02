@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
 import { fetchHostEnv } from '../../host/hostSlice';
@@ -62,6 +62,11 @@ const Component = function ServerContent({ hostUid }) {
   const hostLabel = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
 
+  // The system status section is read by this refresh while it is expanded,
+  // so its broker list is the one fetchBrokerList below is reading.
+  const systemStatusExpanded = useRef(true);
+  const handleSystemStatusExpanded = useCallback((expanded) => { systemStatusExpanded.current = expanded; }, []);
+
   const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
     tabId: `host:${hostUid}`,
@@ -86,13 +91,15 @@ const Component = function ServerContent({ hostUid }) {
       // info for a database the user already logged out of.
       const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
 
-      // 2. Then fetch other data, using the just-fetched active databases list
+      // 2. Then fetch other data, using the just-fetched active databases list.
+      // fetchBrokerList goes first: the system status (fetchMonitoringData,
+      // also the HA heartbeat) takes that broker list read instead of its own.
       await Promise.all([
         dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)),
         dispatch(fetchHostEnv(hostUid)),
         dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newLoggedInActiveDatabases })),
         fetchAutoStartInfo(),
-        isHA ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
+        isHA || systemStatusExpanded.current ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
       ]);
     }
   });
@@ -285,7 +292,7 @@ const Component = function ServerContent({ hostUid }) {
         <HaClusterStatusSection hostUid={hostUid} />
         <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
         <Brokers hostUid={hostUid} isSection={true} />
-        <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} />
+        <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} onExpandedChange={handleSystemStatusExpanded} />
         <DatabaseListSection dbListDisplay={dbListDisplay} dbListStatus={dbListStatus} />
         <SystemInfo hostUid={hostUid} />
       </div>

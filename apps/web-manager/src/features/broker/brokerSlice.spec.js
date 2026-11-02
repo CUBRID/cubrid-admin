@@ -15,7 +15,7 @@ vi.mock('./brokerApi', () => ({
 }));
 
 import { brokerApi } from './brokerApi';
-import reducer, { fetchBrokerList } from './brokerSlice';
+import reducer, { fetchBrokerList, readSharedBrokerList } from './brokerSlice';
 import apiClient from '../../api/apiClient';
 import { closeHostTabs } from '../layout/layoutSlice';
 
@@ -460,5 +460,27 @@ describe('reads from a closed connection', () => {
     await dispatchAfter;
     expect(store.getState().broker.loadingByHost.hostA).toBe(false);
     expect(store.getState().broker.brokersByHost.hostA).toEqual([expect.objectContaining({ name: 'after' })]);
+  });
+});
+
+describe('readSharedBrokerList', () => {
+  it('takes the dashboard\'s broker list read in flight instead of sending another', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [{ ...rawBroker('broker1'), tran: '10', query: '40' }] });
+    brokerApi.getBrokerStatusBulk.mockResolvedValue({});
+    const store = makeStore();
+
+    const [, shared] = await Promise.all([
+      store.dispatch(fetchBrokerList({ hostUid: 'host1', isBackground: true })),
+      readSharedBrokerList('host1'),
+    ]);
+
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
+    expect(shared.result[0]).toMatchObject({ name: 'broker1', tran: '10', query: '40' });
+  });
+
+  it('rejects when the read fails', async () => {
+    brokerApi.getBrokerList.mockRejectedValue(new Error('No response was received from CMS'));
+
+    await expect(readSharedBrokerList('host1')).rejects.toThrow('No response was received from CMS');
   });
 });
