@@ -35,7 +35,7 @@ describe('rename autostart configuration', () => {
   });
 
   it('updates repeated service definitions without touching commented server lines', () => {
-    expect(renameAutostart(['[service]', '#server=old', 'server=old', '[service]', 'server=other,new'.replace('new', 'old')], 'old', 'new')).toEqual([
+    expect(renameAutostart(['[service]', '#server=old', 'server=old', '[service]', 'server=other,old'], 'old', 'new')).toEqual([
       '[service]', '#server=old', 'server=new', '[service]', 'server=other,new',
     ]);
   });
@@ -51,7 +51,7 @@ describe('editServerList', () => {
   const add = (dbname: string) => (names: string[]) => [...names, dbname];
 
   it('adds a name keeping indentation, key case, spacing around =, the list spacing and the comment', () => {
-    expect(editServerList(['[service]', '\tServer = a, b   # autostart', 'x=1'], add('c'), { firstOnly: true })).toEqual([
+    expect(editServerList(['[service]', '\tServer = a, b   # autostart', 'x=1'], add('c'), { lastOnly: true })).toEqual([
       '[service]', '\tServer = a, b, c   # autostart', 'x=1',
     ]);
   });
@@ -71,8 +71,8 @@ describe('editServerList', () => {
     expect(removeAutostart(conf, 'gone')).toBe(conf);
   });
 
-  it('only edits the first server= key with firstOnly', () => {
-    expect(editServerList(['[service]', 'server=a', 'server=b'], add('c'), { firstOnly: true })).toEqual(['[service]', 'server=a,c', 'server=b']);
+  it('only edits the last server= key, the one the engine uses, with lastOnly', () => {
+    expect(editServerList(['[service]', 'server=a', 'server=b'], add('c'), { lastOnly: true })).toEqual(['[service]', 'server=a', 'server=b,c']);
   });
 
   it('removes the last name, leaving an empty value with its comment', () => {
@@ -83,6 +83,11 @@ describe('editServerList', () => {
     expect(isAutostart(['[service]', 'server=a,\\', ' b'], 'b')).toBe(true);
     expect(isAutostart(['[service]', '#server=b'], 'b')).toBe(false);
     expect(isAutostart(['[common]', 'server=b'], 'b')).toBe(false);
+  });
+
+  it('reads only the last server= key, as the engine does, when [service] has several', () => {
+    expect(isAutostart(['[service]', 'server=b', 'server=a'], 'b')).toBe(false);
+    expect(isAutostart(['[service]', 'server=a', 'server=b'], 'b')).toBe(true);
   });
 });
 

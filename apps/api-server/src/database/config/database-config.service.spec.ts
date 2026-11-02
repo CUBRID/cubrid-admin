@@ -811,6 +811,12 @@ describe('DatabaseConfigService', () => {
       ]);
     });
 
+    it('setAutoStart adds to the last server= key, the one the engine uses, even if an earlier key lists the name', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=newdb', 'server=demodb'] }] } as any);
+      await service.setAutoStart(mockUserId, mockHostUid, { dbname: 'newdb' } as any);
+      expect(written()).toEqual(['[service]', 'server=newdb', 'server=demodb,newdb']);
+    });
+
     it('removeAutoStart takes the name out of the value only', async () => {
       await service.removeAutoStart(mockUserId, mockHostUid, { dbname: 'old' } as any);
       expect(written()).toEqual([

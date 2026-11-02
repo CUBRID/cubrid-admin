@@ -71,7 +71,8 @@ function editServerValue(line: string, edit: (names: string[]) => string[], cont
 
 /**
  * cubrid.conf with the database list of `[service] server=` passed through
- * `edit` (every such key, or only the first with `firstOnly`). A key whose
+ * `edit` (every such key, or with `lastOnly` only the last, which is the
+ * one the engine uses: a later key replaces an earlier one). A key whose
  * list changes and that was continued over several lines with `\` becomes one
  * line, since its pieces can't be told apart once names move. Returns
  * `confdata` itself when nothing changes.
@@ -79,12 +80,12 @@ function editServerValue(line: string, edit: (names: string[]) => string[], cont
 export function editServerList(
   confdata: string[],
   edit: (names: string[]) => string[],
-  { firstOnly = false }: { firstOnly?: boolean } = {}
+  { lastOnly = false }: { lastOnly?: boolean } = {}
 ): string[] {
   const entries = serverEntries(confdata);
   let updated = confdata;
   // Back to front, so joining a continued key keeps the earlier indexes.
-  for (const entry of (firstOnly ? entries.slice(0, 1) : entries).reverse()) {
+  for (const entry of (lastOnly ? entries.slice(-1) : entries).reverse()) {
     const start = entry.lineNo - 1;
     const { end, line } = logicalLine(confdata, start);
     const rewritten = editServerValue(line, edit, end > start);
@@ -111,9 +112,10 @@ export function serviceHeaderLine(confdata: string[]): number | undefined {
 
 const listNames = (value: string) => value.split(',').map((name) => name.trim()).filter(Boolean);
 
-/** Whether some `[service] server=` key lists `dbname`. */
+/** Whether `dbname` is in the autostart list the engine uses: the last `[service] server=` key. */
 export function isAutostart(confdata: string[], dbname: string): boolean {
-  return serverEntries(confdata).some((entry) => listNames(entry.value).includes(dbname));
+  const entries = serverEntries(confdata);
+  return entries.length > 0 && listNames(entries[entries.length - 1].value).includes(dbname);
 }
 
 /** `oldName` renamed in every autostart list; a resulting duplicate is dropped. */

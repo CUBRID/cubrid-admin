@@ -275,7 +275,7 @@ export class DatabaseConfigService extends BaseService {
       );
       return currentConfig as unknown as SetAutoStartResponse;
     } else {
-      updatedConfdata = editServerList(confdata, (names) => [...names, request.dbname], { firstOnly: true });
+      updatedConfdata = editServerList(confdata, (names) => [...names, request.dbname], { lastOnly: true });
     }
 
     const rv = await this.cmsConfigService.setSystemParam(
