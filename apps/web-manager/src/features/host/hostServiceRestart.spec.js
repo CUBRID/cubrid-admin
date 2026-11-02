@@ -38,9 +38,11 @@ beforeEach(() => {
 });
 
 it('starts again the databases that were running before but not after the service start', async () => {
-  const info = { dblist: { dbs: [{ dbname: 'auto' }, { dbname: 'manual' }] }, activelist: { active: [{ dbname: 'auto' }] } };
+  const before = { dblist: { dbs: [{ dbname: 'auto' }, { dbname: 'manual' }] }, activelist: { active: [{ dbname: 'auto' }, { dbname: 'manual' }] } };
+  const info = { ...before, activelist: { active: [{ dbname: 'auto' }] } };
+  let reads = 0;
   databaseApi.getStartInfo.mockResolvedValue(info);
-  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: true, value: info, seq: 1 }));
+  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: true, value: reads++ === 0 ? before : info, seq: reads }));
   databaseApi.runSelectedDatabasesAction.mockResolvedValue({ succeeded: ['manual'], failed: [], skipped: [] });
   const store = storeWithRunning(['auto', 'manual']);
 
@@ -62,4 +64,31 @@ it('still starts the service when the stop reported failures', async () => {
 
   expect(databaseApi.startWholeService).toHaveBeenCalled();
   expect(result.problems).toHaveLength(1);
+});
+
+it('reads which databases were running from the host, not from lists that may be empty', async () => {
+  const before = { dblist: { dbs: [{ dbname: 'auto' }, { dbname: 'manual' }] }, activelist: { active: [{ dbname: 'auto' }, { dbname: 'manual' }] } };
+  const after = { ...before, activelist: { active: [{ dbname: 'auto' }] } };
+  let reads = 0;
+  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: true, value: reads++ === 0 ? before : after, seq: reads }));
+  databaseApi.runSelectedDatabasesAction.mockResolvedValue({ succeeded: ['manual'], failed: [], skipped: [] });
+  // The client has no list for this host (another host is selected).
+  const store = storeWithRunning(undefined);
+
+  const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
+
+  expect(databaseApi.runSelectedDatabasesAction).toHaveBeenCalledWith('h1', 'start', ['manual']);
+  expect(result).toEqual({ problems: [], notRestarted: [] });
+});
+
+it('does not stop the service when it cannot read which databases are running', async () => {
+  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: false, error: new Error('No response was received from CMS'), seq: 1 }));
+  const store = storeWithRunning(['auto']);
+
+  const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
+
+  expect(databaseApi.stopWholeService).not.toHaveBeenCalled();
+  expect(databaseApi.startWholeService).not.toHaveBeenCalled();
+  expect(result.problems).toHaveLength(1);
+  expect(result.notRestarted).toEqual([]);
 });

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseLifecycleService } from './database-lifecycle.service';
+import { busyDatabase } from './database-action-lock';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { UserRepositoryService } from '@repository';
@@ -697,6 +698,35 @@ describe('DatabaseLifecycleService', () => {
       expect(tasks()).toEqual([['ha_stop', 'hadb1']]);
       expect(result.succeeded).toEqual(['hadb1']);
       expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not running' }]);
+    });
+
+    it('decides which databases apply only while holding them', async () => {
+      hostState(['db1']);
+      const heldWhenRead: Array<{ dbname: string; action: string } | null> = [];
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async () => {
+        heldWhenRead.push(busyDatabase(`${mockHost.address}:${mockHost.port}`, ['db1', 'db2']));
+        return {
+          dblist: { dbs: ['db1', 'db2'].map((dbname) => ({ dbname })) },
+          activelist: { active: [...running].map((dbname) => ({ dbname })) },
+        };
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => cmsApplies(body));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['db1', 'db2']);
+
+      expect(heldWhenRead[0]).toEqual({ dbname: 'db1', action: 'stopSelectedDatabases' });
+      expect(result.succeeded).toEqual(['db1']);
+      expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not running' }]);
+    });
+
+    it('fails instead of skipping everything when the database list cannot be read', async () => {
+      hostState([]);
+      (databaseInfoService.startInfo as jest.Mock).mockResolvedValue({ dblist: null, activelist: { active: [] } });
+
+      await expect(
+        service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'start', ['db1'])
+      ).rejects.toThrow('Could not read the databases of this host');
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 
     it('restarts by stopping then starting, and does not start one whose stop failed', async () => {

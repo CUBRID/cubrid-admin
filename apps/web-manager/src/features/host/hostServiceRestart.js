@@ -12,10 +12,19 @@ const activeNames = (info) => new Set(
  * brings up the `server=` autostart list and HA databases. The start is
  * attempted even if the stop reported failures (part of it did stop).
  *
+ * Which databases were running is read from the host first, not taken from
+ * the client's lists, which may be empty for a host other than the selected
+ * one. If that read fails, nothing is stopped and the reason is the problem.
+ *
  * @returns {Promise<{ problems: string[], notRestarted: {dbname, error}[] }>}
  */
-export const restartServiceKeepingDatabases = (hostUid) => async (dispatch, getState) => {
-  const wasRunning = [...(getState().database.activeDatabasesByHost?.[hostUid] || [])];
+export const restartServiceKeepingDatabases = (hostUid) => async (dispatch) => {
+  let wasRunning;
+  try {
+    wasRunning = [...activeNames(await dispatch(fetchDatabaseStartInfo(hostUid)).unwrap())];
+  } catch (err) {
+    return { problems: [errorText(err)], notRestarted: [] };
+  }
   const problems = [];
   try {
     await dispatch(stopService(hostUid)).unwrap();

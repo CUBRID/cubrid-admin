@@ -83,6 +83,15 @@ function activeDbnamesOf(info: { activelist?: { active?: unknown } } | null | un
   return new Set(active.map((a: { dbname: string } | string) => (typeof a === 'string' ? a : a?.dbname)));
 }
 
+/** Names of the databases start-info lists; throws if it can't be read. */
+function knownDbnamesOf(info: { dblist?: { dbs?: unknown } } | null | undefined): Set<string> {
+  const dbs = info?.dblist?.dbs;
+  if (!Array.isArray(dbs)) {
+    throw new Error('Could not read the databases of this host');
+  }
+  return new Set(dbs.map((db: { dbname: string }) => db?.dbname));
+}
+
 export const BULK_SKIP_REASON = {
   notFound: 'Not a database on this host',
   alreadyRunning: 'Already running',
@@ -452,6 +461,10 @@ export class DatabaseLifecycleService extends BaseService {
    *
    * A restart stops the targets, then starts the ones that stopped; a
    * database whose stop failed is not started, and failures carry the phase.
+   *
+   * Every requested database is held (as for single and all-database
+   * actions) before start-info decides which apply, so a start or stop that
+   * finished just before can't leave a target decided on stale state.
    */
   async runSelectedDatabasesAction(
     userId: string,
@@ -460,29 +473,27 @@ export class DatabaseLifecycleService extends BaseService {
     dbnames: string[]
   ): Promise<BulkDatabaseActionResult> {
     await this.assertNoActiveJob(userId, hostUid);
-
-    const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
-    const info = await this.databaseInfoService.startInfo(userId, hostUid);
-    const known = new Set((info?.dblist?.dbs || []).map((db) => db.dbname));
-    const running = activeDbnamesOf(info);
-    const targets: string[] = [];
-    for (const dbname of new Set(dbnames)) {
-      if (!known.has(dbname)) {
-        out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notFound });
-      } else if (action === 'start' && running.has(dbname)) {
-        out.skipped.push({ dbname, reason: BULK_SKIP_REASON.alreadyRunning });
-      } else if (action !== 'start' && !running.has(dbname)) {
-        out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notRunning });
-      } else {
-        targets.push(dbname);
+    const requested = [...new Set(dbnames)];
+    return this.holdingDatabases(userId, hostUid, requested, `${action}SelectedDatabases`, async () => {
+      const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
+      const info = await this.databaseInfoService.startInfo(userId, hostUid);
+      const known = knownDbnamesOf(info);
+      const running = activeDbnamesOf(info);
+      const targets: string[] = [];
+      for (const dbname of requested) {
+        if (!known.has(dbname)) {
+          out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notFound });
+        } else if (action === 'start' && running.has(dbname)) {
+          out.skipped.push({ dbname, reason: BULK_SKIP_REASON.alreadyRunning });
+        } else if (action !== 'start' && !running.has(dbname)) {
+          out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notRunning });
+        } else {
+          targets.push(dbname);
+        }
       }
-    }
-    if (targets.length === 0) return out;
-
-    // Same per-database hold as single and all-database actions.
-    return this.holdingDatabases(userId, hostUid, targets, `${action}SelectedDatabases`, () =>
-      this.runSelectedDatabasesActionUnlocked(userId, hostUid, action, targets, out)
-    );
+      if (targets.length === 0) return out;
+      return this.runSelectedDatabasesActionUnlocked(userId, hostUid, action, targets, out);
+    });
   }
 
   private async runSelectedDatabasesActionUnlocked(
