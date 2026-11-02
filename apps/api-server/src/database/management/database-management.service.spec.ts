@@ -1,3 +1,4 @@
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseManagementService } from './database-management.service';
 import { HostService } from '@host';
@@ -32,6 +33,7 @@ import {
 describe('DatabaseManagementService', () => {
   let service: DatabaseManagementService;
   let hostService: jest.Mocked<HostService>;
+  let configService: { renameAutoStart: jest.Mock };
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let databaseUserService: { loginDatabase: jest.Mock; ensureDbLogin: jest.Mock; deleteDbProfile: jest.Mock };
 
@@ -75,6 +77,7 @@ describe('DatabaseManagementService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseManagementService,
+        { provide: DatabaseConfigService, useValue: { renameAutoStart: jest.fn().mockResolvedValue(undefined) } },
         {
           provide: HostService,
           useValue: mockHostService,
@@ -98,6 +101,8 @@ describe('DatabaseManagementService', () => {
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
     databaseUserService = mockDatabaseUserService;
+
+    configService = module.get(DatabaseConfigService);
 
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
@@ -893,6 +898,33 @@ describe('DatabaseManagementService', () => {
         '/old/path2': '/new/path2',
       },
     ];
+
+    it('updates autostart only after a successful physical rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(configService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'newdb');
+      expect(cmsClient.postAuthenticated.mock.invocationCallOrder[0]).toBeLessThan(configService.renameAutoStart.mock.invocationCallOrder[0]);
+    });
+
+    it('returns a warning without failing or resubmitting an already committed rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      configService.renameAutoStart.mockRejectedValue(new Error('config write failed'));
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(result.warnings?.[0]).toContain('Do not repeat the rename');
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not change autostart after a failed CMS rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'failure', task: 'renamedb', note: 'rename failed' });
+      await expect(service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      })).rejects.toThrow();
+      expect(configService.renameAutoStart).not.toHaveBeenCalled();
+    });
 
     it('should successfully rename database with advanced "on" and volume', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);

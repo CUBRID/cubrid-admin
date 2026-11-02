@@ -33,6 +33,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
       renameDatabaseCmsResponse: jest.fn().mockResolvedValue({ status: 'success' }),
       getDatabaseStartInfo: jest.fn().mockResolvedValue({ dblist: { dbs: [] } }),
       clearDbAliasCachesAfterRename: jest.fn().mockResolvedValue(undefined),
+      updateAutoStartAfterRename: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
     const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
@@ -85,6 +86,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
 
     expect(job.status).toBe('failed');
     expect(managementService.clearDbAliasCachesAfterRename).not.toHaveBeenCalled();
+    expect(managementService.updateAutoStartAfterRename).not.toHaveBeenCalled();
   });
 
   it('still finalizes a reconciled rename as succeeded if the cache cleanup throws', async () => {
@@ -97,4 +99,33 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     expect(job.status).toBe('succeeded');
     expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
   });
+  it('updates autostart for a normal rename, preserving success if list refresh fails', async () => {
+    const job = renameJob();
+    store.getJob.mockResolvedValue(job);
+    managementService.getDatabaseStartInfo.mockRejectedValue(new Error('unavailable'));
+    await (service as any).runJob('ukey', job.jobId, 'op-key');
+    expect(managementService.updateAutoStartAfterRename).toHaveBeenCalledWith('user-1', 'host-1', 'olddb', 'newdb');
+    expect(job.status).toBe('succeeded');
+    expect(job.warnings?.[0]).toContain('could not be refreshed');
+    expect(managementService.renameDatabaseCmsResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists and exposes config warnings on a completed job', async () => {
+    const job = renameJob();
+    store.getJob.mockResolvedValue(job);
+    managementService.updateAutoStartAfterRename.mockResolvedValue(['Rename succeeded; autostart needs attention.']);
+    await (service as any).runJob('ukey', job.jobId, 'op-key');
+    expect(job.status).toBe('succeeded');
+    expect(store.saveJob).toHaveBeenLastCalledWith('ukey', expect.objectContaining({ warnings: job.warnings }));
+    expect((service as any).toStatusResponse(job).warnings).toEqual(job.warnings);
+  });
+
+  it('updates autostart during reconciliation without resubmitting the physical rename', async () => {
+    (pollCmsAsyncJob as jest.Mock).mockResolvedValue({ response: { status: 'success' } });
+    const job = renameJob();
+    await (service as any).tryReconcileOrphanedJob('ukey', job);
+    expect(managementService.updateAutoStartAfterRename).toHaveBeenCalledWith('user-1', 'host-1', 'olddb', 'newdb');
+    expect(managementService.renameDatabaseCmsResponse).not.toHaveBeenCalled();
+  });
+
 });

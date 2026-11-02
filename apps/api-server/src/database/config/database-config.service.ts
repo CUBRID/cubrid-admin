@@ -1,3 +1,4 @@
+import { renameAutostart } from './rename-autostart';
 import {
   GetAutoAddVolClientResponse,
   GetDbSizeClientResponse,
@@ -208,6 +209,10 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: SetAutoStartRequest
   ): Promise<SetAutoStartResponse> {
+    return this.withHostConfigMutex(userId, hostUid, () => this.setAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  private async setAutoStartUnlocked(userId: string, hostUid: string, request: SetAutoStartRequest): Promise<SetAutoStartResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
 
     const confname = CMS_CONFNAME_CUBRID;
@@ -334,7 +339,7 @@ export class DatabaseConfigService extends BaseService {
     // other's write. Serialize the whole read-modify-write per host (not
     // per dbname, unlike withQueryPlanMutex above) so concurrent callers on
     // the same host queue instead of racing.
-    return this.withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
+    return this.withHostConfigMutex(userId, hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
   }
 
   private async ensureDbHaModeOffUnlocked(userId: string, hostUid: string, dbname: string): Promise<void> {
@@ -405,6 +410,10 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: RemoveAutoStartRequest
   ): Promise<RemoveAutoStartResponse> {
+    return this.withHostConfigMutex(userId, hostUid, () => this.removeAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  private async removeAutoStartUnlocked(userId: string, hostUid: string, request: RemoveAutoStartRequest): Promise<RemoveAutoStartResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
 
     const confname = CMS_CONFNAME_CUBRID;
@@ -466,6 +475,18 @@ export class DatabaseConfigService extends BaseService {
       confname,
       updatedConfdata
     );
+  }
+
+  /** No-op when the old name was not configured, including reconciliation retries. */
+  async renameAutoStart(userId: string, hostUid: string, oldName: string, newName: string): Promise<void> {
+    return this.withHostConfigMutex(userId, hostUid, async () => {
+      const current = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      const confdata = current.conflist?.[0]?.confdata;
+      if (!confdata?.length) throw ConfigError.NoConfdata(CMS_CONFNAME_CUBRID);
+      const updated = renameAutostart(confdata, oldName, newName);
+      if (updated.length === confdata.length && updated.every((line, index) => line === confdata[index])) return;
+      await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
+    });
   }
 
   /**
@@ -812,23 +833,26 @@ export class DatabaseConfigService extends BaseService {
     }
   }
 
-  // Serializes concurrent cubridconf read-modify-write operations per hostUid
+  // Serializes concurrent cubridconf read-modify-write operations per physical host
   // (not per dbname — unlike queryPlanMutex, two different databases on the
   // same host still share one physical conflist and must not interleave).
-  private readonly hostConfigMutex = new Map<string, Promise<void>>();
+  // Static because DatabaseModule and CmsJobModule provide separate instances.
+  private static readonly hostConfigMutex = new Map<string, Promise<void>>();
 
-  private async withHostConfigMutex<T>(hostUid: string, fn: () => Promise<T>): Promise<T> {
-    const pending = this.hostConfigMutex.get(hostUid) ?? Promise.resolve();
+  private async withHostConfigMutex<T>(userId: string, hostUid: string, fn: () => Promise<T>): Promise<T> {
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    const key = JSON.stringify([host.address, host.port]);
+    const pending = DatabaseConfigService.hostConfigMutex.get(key) ?? Promise.resolve();
     let resolve!: () => void;
     const next = new Promise<void>((r) => (resolve = r));
-    this.hostConfigMutex.set(hostUid, next);
+    DatabaseConfigService.hostConfigMutex.set(key, next);
     try {
       await pending;
       return await fn();
     } finally {
       resolve();
-      if (this.hostConfigMutex.get(hostUid) === next) {
-        this.hostConfigMutex.delete(hostUid);
+      if (DatabaseConfigService.hostConfigMutex.get(key) === next) {
+        DatabaseConfigService.hostConfigMutex.delete(key);
       }
     }
   }
