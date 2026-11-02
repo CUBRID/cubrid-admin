@@ -19,7 +19,7 @@ describe('Load database numeric input validation', () => {
   const createLoadJob = jest.fn();
   let logError: jest.SpyInstance;
   beforeAll(async () => {
-    logError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    logError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const module = await Test.createTestingModule({
       controllers: [DatabaseManagementController],
       providers: [
