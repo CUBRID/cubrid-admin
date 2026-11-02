@@ -89,8 +89,9 @@ export class DatabaseUserService extends BaseService {
    * repeatedly failing silently against a dead password.
    *
    * No-ops (and never touches the cache) when no profile is stored for this
-   * db — the resulting ValidationError.MissingDBCredentials is meant to
-   * propagate and prompt for manual login, same as today.
+   * db, or the user logged out of it — the resulting
+   * ValidationError.MissingDBCredentials is meant to propagate and prompt
+   * for manual login, same as today.
    */
   async ensureDbLogin(
     userId: string,
@@ -103,7 +104,8 @@ export class DatabaseUserService extends BaseService {
       return { reauthenticated: false };
     }
 
-    if (!host.dbProfiles?.[dbname]) {
+    const profile = host.dbProfiles?.[dbname];
+    if (!profile || profile.loggedOut) {
       throw ValidationError.MissingDBCredentials(dbname, ['id', 'password']);
     }
 
@@ -175,11 +177,24 @@ export class DatabaseUserService extends BaseService {
    * There's no CMS-side counterpart to actually invalidate the server's own
    * conlist entry (no such API exists — see ensureDbLogin's doc comment on
    * conlist having no expiry/removal mechanism at all), so this is purely
-   * our own bookkeeping. The next action will re-authenticate using the
-   * profile if one is still stored, or prompt for manual login otherwise.
+   * our own bookkeeping. A stored profile is marked loggedOut, so the next
+   * action prompts for login instead of quietly logging in with it again;
+   * the mark is stored with the profile so it outlives an api-server restart,
+   * like the profile it overrides. Logging in clears it.
    */
   async logoutDatabase(userId: string, hostUid: string, dbname: string): Promise<void> {
     this.dbLoginCache.delete(`${userId}:${hostUid}:${dbname}`);
+    await this.setProfileLoggedOut(userId, hostUid, dbname, true);
+  }
+
+  private async setProfileLoggedOut(userId: string, hostUid: string, dbname: string, loggedOut: boolean): Promise<void> {
+    await this.repository.atomicUpdateUser(userId, async (user) => {
+      const profile = getHost(user, hostUid)?.dbProfiles?.[dbname];
+      if (!profile) return user;
+      if (loggedOut) profile.loggedOut = true;
+      else delete profile.loggedOut;
+      return user;
+    });
   }
 
   /**
@@ -217,6 +232,9 @@ export class DatabaseUserService extends BaseService {
       loggedInAt: Date.now(),
       hostToken: host.token,
     });
+    if (host.dbProfiles?.[dbname]?.loggedOut) {
+      await this.setProfileLoggedOut(userId, hostUid, dbname, false);
+    }
 
     return true;
   }

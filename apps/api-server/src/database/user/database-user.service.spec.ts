@@ -620,26 +620,53 @@ describe('DatabaseUserService', () => {
   });
 
   describe('logoutDatabase', () => {
-    it('clears the ensureDbLogin cache without touching the stored profile', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue({
-        __EXEC_TIME: '10 ms',
-        note: 'none',
-        status: 'success',
-        task: 'dbmtuserlogin',
-      });
+    const successResponse = {
+      __EXEC_TIME: '10 ms',
+      note: 'none',
+      status: 'success',
+      task: 'dbmtuserlogin',
+    };
+
+    it('keeps the stored profile but stops ensureDbLogin from logging in with it again', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
       await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
       cmsClient.postAuthenticated.mockClear();
 
       await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
 
-      // Profile untouched — logout is not the same as forgetting credentials.
-      expect(repository.atomicUpdateUser).not.toHaveBeenCalled();
-      expect(mockHost.dbProfiles).toHaveProperty('demodb');
+      // Logout is not the same as forgetting credentials.
+      expect(mockHost.dbProfiles.demodb).toMatchObject({ id: 'dba', password: 'dba-password', loggedOut: true });
+      await expect(service.ensureDbLogin(mockUserId, mockHostUid, 'demodb')).rejects.toThrow(ValidationError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
 
-      // But the cache is gone, so the next ensureDbLogin re-authenticates.
-      const result = await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
-      expect(result).toEqual({ reauthenticated: true });
-      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+    it('lets a login (with the saved profile) clear the mark, so ensureDbLogin works again', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+
+      await service.loginDatabase(mockUserId, mockHostUid, 'demodb');
+
+      expect(mockHost.dbProfiles.demodb).not.toHaveProperty('loggedOut');
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      await service.loginDatabase(mockUserId, mockHostUid, 'demodb');
+      cmsClient.postAuthenticated.mockClear();
+      expect(await service.ensureDbLogin(mockUserId, mockHostUid, 'demodb')).toEqual({ reauthenticated: false });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('keeps the mark when the login fails', async () => {
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, status: 'failure', note: 'boom' });
+
+      await expect(service.loginDatabase(mockUserId, mockHostUid, 'demodb')).rejects.toThrow();
+
+      expect(mockHost.dbProfiles.demodb).toHaveProperty('loggedOut', true);
+    });
+
+    it('creates no profile for a database without one', async () => {
+      await service.logoutDatabase(mockUserId, mockHostUid, 'otherdb');
+
+      expect(mockHost.dbProfiles).not.toHaveProperty('otherdb');
     });
   });
 });
