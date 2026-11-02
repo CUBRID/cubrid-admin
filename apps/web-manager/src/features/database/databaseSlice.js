@@ -22,7 +22,7 @@ export {
 } from './databaseMonitoringSlice';
 
 export {
-  createDatabase, copyDatabase, deleteDatabase, renameDatabase, fetchCreateDatabaseInfo,
+  createDatabase, copyDatabase, renameDatabase, fetchCreateDatabaseInfo,
   addVolume, fetchBackupSchedule, addBackupSchedule,
   editBackupSchedule, deleteBackupSchedule, fetchBackupList, fetchBackupDbInfo,
   fetchAutoBackupLog, checkDatabase, compactDatabase, optimizeDatabase, loadDatabase,

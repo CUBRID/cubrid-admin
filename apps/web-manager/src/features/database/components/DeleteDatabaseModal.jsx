@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { closeDeleteDatabaseModal, deleteDatabase, fetchDatabaseStartInfo } from '../databaseSlice';
+import { closeDeleteDatabaseModal, fetchDatabaseStartInfo } from '../databaseSlice';
+import { clearDatabaseLogin } from '../databaseCoreSlice';
 import { databaseApi } from '../databaseApi';
+import { databaseJobApi } from '../databaseJobApi';
+import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
+import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -44,6 +48,11 @@ export default function DeleteDatabaseModal() {
     isSuccess,
     isError
   } = useActionState();
+  const { runJob, background, wasBackgrounded } = useCmsJob();
+  const [jobStatus, setJobStatus] = useState(null);
+  // The database being deleted, for the loading and success views: a
+  // successful delete refreshes start-info, which clears selectedDatabase.
+  const [deletingDb, setDeletingDb] = useState('');
 
   const [step, setStep] = useState(1); // 1: Review, 2: Auth
   const [deleteBackup, setDeleteBackup] = useState(false);
@@ -58,6 +67,8 @@ export default function DeleteDatabaseModal() {
       setDbId('dba');
       setPassword('');
       setDeleteBackup(false);
+      setJobStatus(null);
+      setDeletingDb('');
       resetAction();
       setFetchingVolumes(true);
       databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
@@ -80,7 +91,10 @@ export default function DeleteDatabaseModal() {
         .catch(() => {})
         .finally(() => setFetchingVolumes(false));
     }
-  }, [isDeleteDBModalOpen, selectedDatabase, selectedHostUid, resetAction]);
+    // Only when the modal opens: a successful delete clears selectedDatabase,
+    // and re-running this then would reset the success view to the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDeleteDBModalOpen]);
 
   if (!isDeleteDBModalOpen) return null;
 
@@ -91,24 +105,37 @@ export default function DeleteDatabaseModal() {
     }
 
     startAction();
+    setJobStatus(null);
+    const hostUid = selectedHostUid;
+    const dbname = selectedDatabase;
+    setDeletingDb(dbname);
+    // wasBackgrounded() is about the last runJob call; a failed login never
+    // reaches one, so its error must show regardless.
+    let submitted = false;
     try {
-      const loginRes = await databaseApi.loginDatabase(selectedHostUid, selectedDatabase, {
+      const loginRes = await databaseApi.loginDatabase(hostUid, dbname, {
         id: dbId, password,
       });
-      if (loginRes.success || loginRes.status === 'success' || (!loginRes.error && !loginRes.code)) {
-        await dispatch(deleteDatabase({
-          hostUid: selectedHostUid,
-          dbname: selectedDatabase,
-          payload: { delbackup: deleteBackup ? 'y' : 'n' },
-        })).unwrap();
-        
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
-        endSuccess(CM.databaseDeletedMsg(selectedDatabase));
-      } else {
+      if (!(loginRes.success || loginRes.status === 'success' || (!loginRes.error && !loginRes.code))) {
         throw loginRes;
       }
+      submitted = true;
+      await runJob(
+        () => databaseJobApi.submitDelete(hostUid, dbname, { delbackup: deleteBackup ? 'y' : 'n' }),
+        { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
+      );
+      // Mirrors the backend forgetting the deleted database's stored login
+      // (DatabaseLifecycleService.forgetDeletedDatabase). Runs even if
+      // backgrounded — it uses the names captured at submit time above.
+      dispatch(clearDatabaseLogin({ hostUid, dbname }));
+      dispatch(fetchDatabaseStartInfo(hostUid));
+      // A backgrounded job's outcome belongs to the job panel, not this
+      // modal, which may already be open for another database.
+      if (!wasBackgrounded()) endSuccess(CM.databaseDeletedMsg(dbname));
     } catch (err) {
-      endError(typeof err === 'string' ? err : (err.message || CM.authOrOperationFailedMsg));
+      if (!submitted || !wasBackgrounded()) {
+        endError(typeof err === 'string' ? err : (err?.message || err?.note || CM.authOrOperationFailedMsg));
+      }
     }
   };
 
@@ -126,13 +153,16 @@ export default function DeleteDatabaseModal() {
     typeColors[type] || 'text-slate-400 bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10';
 
   /* ─── LOADING view ─── */
+  // The job can be left running in the background once it is submitted;
+  // before that, the loading view is the DBA login.
   if (isLoading) {
     return (
       <Modal isOpen title={CM.dbaConfirm} icon="delete_forever" onClose={handleClose} maxWidth="440px" showCloseButton={false} testId="delete-database">
         <ModalStatusLoading
           title={CM.deletingDatabase}
-          subtitle={selectedDatabase}
+          subtitle={getCmsJobLoadingSubtitle(deletingDb, jobStatus, CM)}
           variant="danger"
+          onBackground={jobStatus ? () => { background(); handleClose(); } : undefined}
         />
       </Modal>
     );
@@ -144,7 +174,7 @@ export default function DeleteDatabaseModal() {
       <Modal isOpen title={CM.deleteSuccessful} icon="delete_forever" iconVariant="success" onClose={handleClose} maxWidth="440px" testId="delete-database">
         <ModalStatusSuccess
           title={CM.success}
-          message={selectedDatabase}
+          message={deletingDb}
           onConfirm={handleClose}
           confirmText={CM.ok}
         />

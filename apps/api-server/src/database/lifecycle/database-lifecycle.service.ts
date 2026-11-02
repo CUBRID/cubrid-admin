@@ -1088,24 +1088,25 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Delete a database.
-   * Also removes the database name from the server parameter in cubridconf if it exists.
-   * Returns start-info (db list) on success.
+   * Delete a database (CMS task: deletedb), run as a CMS job. Refused for a
+   * database that still takes part in HA. The bookkeeping after a successful
+   * delete is forgetDeletedDatabase, which the job runs.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
    * @param dbname Database name
    * @param request Client request containing delbackup option
-   * @returns StartInfoClientResponse Latest database list (start-info) on success
-   * @throws DatabaseError If request fails or CMS status is fail
+   * @returns The final deletedb response
+   * @throws DatabaseError If the database is in HA or the request fails
    */
   @HandleCmsErrors()
-  async deleteDatabase(
+  async deleteDatabaseCmsResponse(
     userId: string,
     hostUid: string,
     dbname: string,
-    request: DeleteDatabaseRequest
-  ): Promise<StartInfoClientResponse> {
+    request: DeleteDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
+  ): Promise<DeleteDatabaseCmsResponse> {
     const cubridConf = await this.cmsConfigService.getAllSystemParam(
       userId,
       hostUid,
@@ -1140,12 +1141,20 @@ export class DatabaseLifecycleService extends BaseService {
 
     this.logger.debug(`Deleting database: ${dbname} on host: ${hostUid}`);
 
-    await this.executeAsyncCmsJobRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
       userId,
       hostUid,
-      cmsRequest
+      cmsRequest,
+      { skipStatusCheck: true, onUuid }
     );
+  }
 
+  /**
+   * After a successful delete: forgets the database's stored login and
+   * removes it from cubrid.conf. Best-effort — the database is already gone,
+   * so a failure here is only logged.
+   */
+  async forgetDeletedDatabase(userId: string, hostUid: string, dbname: string): Promise<void> {
     // Forget this dbname's stored login profile and ensureDbLogin cache
     // entry — both are keyed by dbname alone (see DatabaseUserService), so
     // without this a database later created or renamed to reuse this exact
@@ -1192,8 +1201,5 @@ export class DatabaseLifecycleService extends BaseService {
         );
       }
     }
-
-    // Return latest db list (start-info)
-    return await this.databaseInfoService.startInfo(userId, hostUid);
   }
 }

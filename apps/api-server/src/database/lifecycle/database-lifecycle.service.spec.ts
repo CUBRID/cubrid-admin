@@ -95,6 +95,7 @@ describe('DatabaseLifecycleService', () => {
       setAutoStart: jest.fn(),
       removeAutoStart: jest.fn(),
       ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined),
+      forgetDatabaseAfterDelete: jest.fn().mockResolvedValue(undefined),
     };
 
     const mockBrokerService = {
@@ -1552,7 +1553,7 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
-  describe('deleteDatabase', () => {
+  describe('deleteDatabaseCmsResponse', () => {
     const mockSuccessResponse: DeleteDatabaseCmsResponse = {
       __EXEC_TIME: '848 ms',
       note: 'none',
@@ -1560,26 +1561,13 @@ describe('DatabaseLifecycleService', () => {
       task: 'deletedb',
     };
 
-    const mockStartInfoAfterDelete = {
-      activelist: { active: [] },
-      dblist: { dbs: [] },
-    };
-
-    it('should successfully delete database with delbackup "y" and return start-info', async () => {
+    it('sends deletedb with delbackup "y" as an async CMS task and returns its response', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
+      const onUuid = jest.fn();
 
-      const result = await service.deleteDatabase(
-        mockUserId,
-        mockHostUid,
-        mockDbname,
-        request
-      );
+      const result = await service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' }, onUuid);
 
-      expect(hostService.findHostInternal).toHaveBeenCalledWith(mockUserId, mockHostUid);
+      expect(databaseUserService.ensureDbLogin).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         `https://${mockHost.address}:${mockHost.port}/cm_api`,
         {
@@ -1591,86 +1579,54 @@ describe('DatabaseLifecycleService', () => {
         },
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
-      expect(result).toEqual(mockStartInfoAfterDelete);
+      expect(result).toEqual(mockSuccessResponse);
     });
 
-    it('should successfully delete database with delbackup "n" and return start-info', async () => {
+    it('sends delbackup "n"', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'n',
-      };
 
-      const result = await service.deleteDatabase(
-        mockUserId,
-        mockHostUid,
-        mockDbname,
-        request
-      );
+      await service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'n' });
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({
-          task: 'deletedb',
-          delbackup: 'n',
-        }),
+        expect.objectContaining({ task: 'deletedb', delbackup: 'n' }),
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
-      expect(result).toEqual(mockStartInfoAfterDelete);
     });
 
-    it('should throw HostError if host is not found', async () => {
-      cmsConfigService.getAllSystemParam.mockRejectedValue(
-        HostError.NoSuchHost({ hostUid: mockHostUid })
-      );
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
+    it('does not clean up anything itself (the job does that after success)', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      await service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' });
+
+      expect(databaseUserService.deleteDbProfile).not.toHaveBeenCalled();
+      expect(databaseConfigService.forgetDatabaseAfterDelete).not.toHaveBeenCalled();
+    });
+
+    it('returns a CMS "fail" response as is, for the job to report', async () => {
+      const failed = { __EXEC_TIME: '0 ms', note: 'operation failed', status: 'fail', task: 'deletedb' } as any;
+      cmsClient.postAuthenticated.mockResolvedValue(failed);
 
       await expect(
-        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
+        service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' })
+      ).resolves.toEqual(failed);
+    });
+
+    it('throws HostError if host is not found', async () => {
+      cmsConfigService.getAllSystemParam.mockRejectedValue(HostError.NoSuchHost({ hostUid: mockHostUid }));
+
+      await expect(
+        service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' })
       ).rejects.toThrow(HostError);
     });
 
-    it('clears the stored login profile + dbmt-login cache for the deleted dbname, so a later database reusing this name cannot inherit it', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
-
-      await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
-
-      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(
-        mockUserId,
-        mockHostUid,
-        mockDbname
-      );
-    });
-
-    it('does not fail the delete if clearing the stored login profile afterward throws', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
-      databaseUserService.deleteDbProfile.mockRejectedValueOnce(new Error('disk write failed'));
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
-
-      const result = await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
-
-      expect(result).toEqual(mockStartInfoAfterDelete);
-    });
-
-    it('should throw DatabaseError when host is HA (deletedb blocked)', async () => {
+    it('throws DatabaseError when host is HA (deletedb blocked)', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=ON'] }],
       } as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
 
       await expect(
-        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
+        service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' })
       ).rejects.toThrow(DatabaseError);
 
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
@@ -1684,78 +1640,51 @@ describe('DatabaseLifecycleService', () => {
         conflist: [{ confdata: ['[common]', 'ha_mode=on', `[@${mockDbname}]`, 'ha_mode=off'] }],
       } as any);
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue(mockStartInfoAfterDelete as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
 
-      const result = await service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request);
+      await service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' });
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ task: 'deletedb', dbname: mockDbname }),
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
-      expect(result).toEqual(mockStartInfoAfterDelete);
     });
 
     it('still blocks deletion on an HA host for a different database without the per-db override', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
         conflist: [{ confdata: ['[common]', 'ha_mode=on', '[@some_other_db]', 'ha_mode=off'] }],
       } as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
 
       await expect(
-        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
+        service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' })
       ).rejects.toThrow(DatabaseError);
 
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 
-    it('should throw CmsError if CMS request fails', async () => {
-      cmsClient.postAuthenticated.mockRejectedValue(
-        CmsError.RequestFailed({ message: 'CMS request failed' })
-      );
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
+    it('throws CmsError if the CMS request fails', async () => {
+      cmsClient.postAuthenticated.mockRejectedValue(CmsError.RequestFailed({ message: 'CMS request failed' }));
 
       await expect(
-        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
+        service.deleteDatabaseCmsResponse(mockUserId, mockHostUid, mockDbname, { delbackup: 'y' })
       ).rejects.toThrow(CmsError);
     });
+  });
 
-    it('should throw CmsError when executeCmsRequest reports invalid token', async () => {
-      const execSpy = jest
-        .spyOn(service as any, 'executeCmsRequest')
-        .mockRejectedValueOnce(CmsError.InvalidToken({ response: { note: 'invalid token' } }));
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
+  describe('forgetDeletedDatabase', () => {
+    it('clears the stored login profile + dbmt-login cache and removes the database from cubrid.conf', async () => {
+      await service.forgetDeletedDatabase(mockUserId, mockHostUid, mockDbname);
 
-      await expect(
-        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
-      ).rejects.toThrow(CmsError);
-
-      execSpy.mockRestore();
+      expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
+      expect(databaseConfigService.forgetDatabaseAfterDelete).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
     });
 
-    it('should throw CmsError if CMS status is fail', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue({
-        __EXEC_TIME: '0 ms',
-        note: 'operation failed',
-        status: 'fail',
-        task: 'deletedb',
-      } as any);
-      const request: DeleteDatabaseRequest = {
-        delbackup: 'y',
-      };
+    it('does not throw when either cleanup fails, and still tries the other', async () => {
+      databaseUserService.deleteDbProfile.mockRejectedValueOnce(new Error('disk write failed'));
+      databaseConfigService.forgetDatabaseAfterDelete.mockRejectedValueOnce(new Error('setsysparam failed'));
 
-      await expect(
-        service.deleteDatabase(mockUserId, mockHostUid, mockDbname, request)
-      ).rejects.toThrow(CmsError);
+      await expect(service.forgetDeletedDatabase(mockUserId, mockHostUid, mockDbname)).resolves.toBeUndefined();
+      expect(databaseConfigService.forgetDatabaseAfterDelete).toHaveBeenCalled();
     });
   });
 });

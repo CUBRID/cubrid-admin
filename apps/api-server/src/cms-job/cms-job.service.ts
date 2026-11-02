@@ -11,6 +11,7 @@ import {
   CmsJobStatusResponse,
   CmsJobType,
   CreateCmsJobResponse,
+  DeleteDatabaseRequest,
   LoadDatabaseRequest,
   OptimizeDatabaseRequest,
   RenameDatabaseRequest,
@@ -165,7 +166,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
 
       const succeeded = this.applyCmsOutcome(job, response);
       if (succeeded) {
-        await this.followDatabaseMove(job);
+        await this.followUpAfterSuccess(job);
       }
       job.finishedAt = job.finishedAt ?? new Date().toISOString();
       await this.store.finalizeOrphanedJob(userKey, job);
@@ -433,6 +434,14 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           payload as RenameDatabaseRequest,
           onUuid
         );
+      case 'delete':
+        return this.lifecycleService.deleteDatabaseCmsResponse(
+          userId,
+          hostUid,
+          job.dbname,
+          payload as DeleteDatabaseRequest,
+          onUuid
+        );
       case 'backupdb':
         return this.backupService.backupDb(
           userId,
@@ -466,10 +475,10 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       const cmsResponse = await this.executeCmsForJob(uKey, job);
       const succeeded = this.applyCmsOutcome(job, cmsResponse);
 
-      // Before the startinfo lookup below: the rename already happened on
-      // CMS, so a failure of that separate lookup must not skip this.
+      // Before the startinfo lookup below: the rename/copy/delete already
+      // happened on CMS, so a failure of that separate lookup must not skip this.
       if (succeeded) {
-        await this.followDatabaseMove(job);
+        await this.followUpAfterSuccess(job);
       }
 
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
@@ -510,12 +519,19 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * A rename, and a copy with move=y (copydb then deletes the source), leave
-   * the old name behind: clears both names' stored login and renames the
-   * database in cubrid.conf, which neither CMS task touches. Best-effort: a
-   * failure here must not flip an already-successful job to "failed".
+   * What CMS leaves behind after a successful job. A rename, and a copy with
+   * move=y (copydb then deletes the source), leave the old name behind:
+   * clears both names' stored login and renames the database in cubrid.conf,
+   * which neither CMS task touches. A delete forgets the database's stored
+   * login and removes it from cubrid.conf. Best-effort: a failure here must
+   * not flip an already-successful job to "failed".
    */
-  private async followDatabaseMove(job: CmsJobRecord): Promise<void> {
+  private async followUpAfterSuccess(job: CmsJobRecord): Promise<void> {
+    if (job.type === 'delete') {
+      // Best-effort inside.
+      await this.lifecycleService.forgetDeletedDatabase(job.userId, job.hostUid, job.dbname);
+      return;
+    }
     if (job.type === 'copy') {
       // Move bookkeeping and the HA ha_mode=off marker; best-effort inside.
       await this.managementService.finishCopy(job.userId, job.hostUid, job.payload as CopyDbRequest);

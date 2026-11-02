@@ -157,7 +157,7 @@ export abstract class BaseService {
 
   /**
    * CMS calls that CMS itself may run asynchronously (unload/load/create/optimize/
-   * check/compact/copy/addvol/rename/backupdb/restoredb). Sends `async:"yes"`; if CMS
+   * check/compact/copy/addvol/rename/deletedb/backupdb/restoredb). Sends `async:"yes"`; if CMS
    * replies with `job-status:"running"` (either because we asked, or because CMS's own
    * internal http timeout elapsed and it fell back to async on its own), polls
    * `gettaskstatus` until the job reaches a terminal state, then returns that final
