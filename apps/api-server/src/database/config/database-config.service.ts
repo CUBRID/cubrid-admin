@@ -1,4 +1,3 @@
-import { renameAutostart } from './rename-autostart';
 import {
   GetAutoAddVolClientResponse,
   GetDbSizeClientResponse,
@@ -57,7 +56,16 @@ import {
 } from '@type/cms-response';
 import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
 import { parseConfigParams } from '@util';
-import { forgetDbInCubridConf, renameDbSection } from '@database/management/rename-in-cubrid-conf';
+import {
+  editServerList,
+  forgetDbInCubridConf,
+  isAutostart,
+  removeAutostart,
+  renameAutostart,
+  renameDbSection,
+  serverEntries,
+  serviceHeaderLine,
+} from './cubrid-conf-edit';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 
 /**
@@ -241,72 +249,33 @@ export class DatabaseConfigService extends BaseService {
     }
     this.logger.debug(JSON.stringify(currentConfig));
 
-    // Find the server parameter in the [service] section
-    const params = parseConfigParams(currentConfig as GetAllSysParamCmsResponse);
-    const serverParam = params.find(
-      (param) => param.key === 'server' && param.section === 'service'
-    );
-
+    // Only the server= value changes (cubrid-conf-edit), so the file's
+    // comments, indentation and quoting stay as they were.
     let updatedConfdata: string[];
 
-    if (!serverParam) {
-      // Server parameter does not exist in [service] section
-      // Find [service] section in confdata (case-sensitive, lowercase)
-      let serviceSectionStartIndex = -1;
-
-      for (let i = 0; i < confdata.length; i++) {
-        const line = confdata[i].trim();
-
-        // Check for [service] section (case-sensitive, lowercase)
-        if (line === '[service]') {
-          serviceSectionStartIndex = i;
-          break;
-        }
-      }
-
-      if (serviceSectionStartIndex === -1) {
-        // [service] section does not exist, throw error
+    if (serverEntries(confdata).length === 0) {
+      // No server= in [service]: add one right after the section header.
+      const headerLine = serviceHeaderLine(confdata);
+      if (headerLine === undefined) {
         throw ConfigError.ServerParamNotFound(confname, {
           message: '[service] section not found in configuration file',
         });
       }
-
-      // [service] section exists, add server parameter after the section header
-      const insertIndex = serviceSectionStartIndex + 1;
       updatedConfdata = [
-        ...confdata.slice(0, insertIndex),
+        ...confdata.slice(0, headerLine),
         `server=${request.dbname}`,
-        ...confdata.slice(insertIndex),
+        ...confdata.slice(headerLine),
       ];
       this.logger.debug(
-        `Server parameter not found in [service] section, adding server=${request.dbname} at line ${insertIndex + 1}`
+        `Server parameter not found in [service] section, adding server=${request.dbname} at line ${headerLine + 1}`
       );
+    } else if (isAutostart(confdata, request.dbname)) {
+      this.logger.debug(
+        `Database name ${request.dbname} already exists in server parameter, returning current configuration`
+      );
+      return currentConfig as unknown as SetAutoStartResponse;
     } else {
-      // Parse existing server values
-      const existingDbnames = serverParam.value
-        ? serverParam.value
-            .split(',')
-            .map((db) => db.trim())
-            .filter((db) => db.length > 0)
-        : [];
-
-      // Check if dbname already exists - if it does, return success without modification
-      if (existingDbnames.includes(request.dbname)) {
-        this.logger.debug(
-          `Database name ${request.dbname} already exists in server parameter, returning current configuration`
-        );
-        const rv: SetAutoStartResponse = currentConfig as unknown as SetAutoStartResponse;
-        this.logger.debug(JSON.stringify(rv));
-        return rv;
-      }
-
-      // Append new dbname
-      const updatedDbnames = [...existingDbnames, request.dbname];
-      const updatedServerLine = `server=${updatedDbnames.join(',')}`;
-
-      // Update confdata with new server line (lineNumber is 1-based, convert to 0-based index)
-      updatedConfdata = [...confdata];
-      updatedConfdata[serverParam.lineNumber - 1] = updatedServerLine;
+      updatedConfdata = editServerList(confdata, (names) => [...names, request.dbname], { firstOnly: true });
     }
 
     const rv = await this.cmsConfigService.setSystemParam(
@@ -463,39 +432,16 @@ export class DatabaseConfigService extends BaseService {
       throw ConfigError.NoConfdata(confname);
     }
 
-    // Find the server parameter in the [service] section
-    const params = parseConfigParams(currentConfig as GetAllSysParamCmsResponse);
-    const serverParam = params.find(
-      (param) => param.key === 'server' && param.section === 'service'
-    );
-
-    if (!serverParam) {
+    if (serverEntries(confdata).length === 0) {
       throw ConfigError.ServerParamNotFound(confname, {
         message: 'server parameter not found in [service] section',
       });
     }
-
-    // Parse existing server values
-    const existingDbnames = serverParam.value
-      ? serverParam.value
-          .split(',')
-          .map((db) => db.trim())
-          .filter((db) => db.length > 0)
-      : [];
-
-    // Check if dbname exists
-    if (!existingDbnames.includes(request.dbname)) {
+    if (!isAutostart(confdata, request.dbname)) {
       throw ConfigError.DbnameNotFound(confname, request.dbname);
     }
-
-    // Remove dbname
-    const updatedDbnames = existingDbnames.filter((db) => db !== request.dbname);
-    const updatedServerLine =
-      updatedDbnames.length > 0 ? `server=${updatedDbnames.join(',')}` : 'server=';
-
-    // Update confdata with updated server line (lineNumber is 1-based, convert to 0-based index)
-    const updatedConfdata = [...confdata];
-    updatedConfdata[serverParam.lineNumber - 1] = updatedServerLine;
+    // Only the server= value changes (cubrid-conf-edit).
+    const updatedConfdata = removeAutostart(confdata, request.dbname);
 
     // Set updated configuration
     return await this.cmsConfigService.setSystemParam(

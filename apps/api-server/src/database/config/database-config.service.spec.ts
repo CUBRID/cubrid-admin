@@ -778,6 +778,71 @@ describe('DatabaseConfigService', () => {
     });
   });
 
+  describe('cubrid.conf formatting kept by every write path', () => {
+    // Indentation, key case, spacing, quotes, comments and a continued
+    // server= key, as a hand-edited cubrid.conf may have them.
+    const conf = [
+      '# CUBRID configuration',
+      '[service]',
+      '  # databases started with the service',
+      '  Server = "demodb, old,\\',
+      '            other"   # autostart',
+      '',
+      '  [ @old ]',
+      '  # settings of old',
+      '  ha_mode=off',
+      '',
+      '# settings of demodb',
+      '[@demodb]',
+      '  data_buffer_size=512M',
+    ];
+    const written = () => cmsConfigService.setSystemParam.mock.calls[0][3];
+    beforeEach(() => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: [...conf] }] } as any);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as any);
+    });
+
+    it('setAutoStart adds the name inside the existing value', async () => {
+      await service.setAutoStart(mockUserId, mockHostUid, { dbname: 'newdb' } as any);
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, old, other, newdb"   # autostart',
+        ...conf.slice(5),
+      ]);
+    });
+
+    it('removeAutoStart takes the name out of the value only', async () => {
+      await service.removeAutoStart(mockUserId, mockHostUid, { dbname: 'old' } as any);
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, other"   # autostart',
+        ...conf.slice(5),
+      ]);
+    });
+
+    it('a rename changes the name in the value and inside the section brackets only', async () => {
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'renamed');
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, renamed, other"   # autostart',
+        '',
+        '  [ @renamed ]',
+        ...conf.slice(7),
+      ]);
+    });
+
+    it("a delete drops the database's section up to its last key and keeps the next section's comment", async () => {
+      await service.forgetDatabaseAfterDelete(mockUserId, mockHostUid, 'old');
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, other"   # autostart',
+        '',
+        '',
+        ...conf.slice(10),
+      ]);
+    });
+  });
+
   describe('forgetDatabaseAfterDelete', () => {
     it('removes a deleted database from the autostart list and drops its section, without its login gate', async () => {
       const ensureDbLogin = (service as any).databaseUserService.ensureDbLogin as jest.Mock;
