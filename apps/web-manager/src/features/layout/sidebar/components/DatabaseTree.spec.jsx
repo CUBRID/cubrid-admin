@@ -118,6 +118,16 @@ it('takes a database out with Ctrl/Cmd-click, including the plain-clicked one', 
   expect([...selection]).toEqual(['b']);
 });
 
+it('does not bring back a database taken out with Ctrl/Cmd-click when Ctrl/Cmd-clicking another', async () => {
+  await render();
+  await clickDb('a', { ctrlKey: true });
+  await clickDb('a', { ctrlKey: true });
+  expect([...selection]).toEqual([]);
+
+  await clickDb('b', { ctrlKey: true });
+  expect([...selection]).toEqual(['b']);
+});
+
 it('selects the range from the plain-clicked database with Shift', async () => {
   await render();
   await clickDb('b');

@@ -29,6 +29,9 @@ export default function HostGroupTree({
   // shift (plain or cmd/ctrl click). Not reset by shift-clicks themselves,
   // matching standard file-manager range-select behavior.
   const lastClickedHostUidRef = useRef(null);
+  // The host picked with the last plain click, until a Ctrl/Cmd or Shift
+  // click: only it joins a multi-selection that starts empty.
+  const plainClickedHostUidRef = useRef(null);
 
   // External activation (or host deletion) should bring list focus back in
   // sync. Merely focusing another row does not change selectedHostUid.
@@ -168,6 +171,7 @@ export default function HostGroupTree({
       if (startIdx !== -1 && endIdx !== -1) {
         const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
         onSelectedHostUidsChange(new Set(flattenedHostUids.slice(from, to + 1)));
+        plainClickedHostUidRef.current = null;
         return;
       }
     }
@@ -176,7 +180,8 @@ export default function HostGroupTree({
     // plain click A, then Ctrl/Cmd-click B selects both
     // (useTreeMultiSelect follows the same rules).
     if (e.metaKey || e.ctrlKey) {
-      const anchor = lastClickedHostUidRef.current;
+      const anchor = plainClickedHostUidRef.current;
+      plainClickedHostUidRef.current = null;
       onSelectedHostUidsChange((prev) => {
         const next = new Set(
           prev.size === 0 && anchor !== null && anchor !== uid && flattenedHostUids.includes(anchor) ? [anchor] : prev
@@ -197,6 +202,7 @@ export default function HostGroupTree({
     // out from under a multi-host drag before handleGroupDrop ever saw it.
     if (selectedHostUids?.has(uid)) {
       lastClickedHostUidRef.current = uid;
+      plainClickedHostUidRef.current = uid;
       return;
     }
 
@@ -205,6 +211,7 @@ export default function HostGroupTree({
     // single-select/activate-tab logic for this case.
     onSelectedHostUidsChange(new Set());
     lastClickedHostUidRef.current = uid;
+    plainClickedHostUidRef.current = uid;
   }, [flattenedHostUids, onSelectedHostUidsChange, selectedHostUids]);
 
   return (

@@ -15,6 +15,9 @@ import { useRef } from 'react';
  */
 export function useTreeMultiSelect(order, selected, onSelectedChange) {
   const lastClickedRef = useRef(null);
+  // The item picked with the last plain click, until a Ctrl/Cmd or Shift
+  // click: only it joins a multi-selection that starts empty.
+  const plainClickedRef = useRef(null);
   return (e, key) => {
     if (!onSelectedChange) return false;
     if (e?.shiftKey && lastClickedRef.current) {
@@ -23,11 +26,13 @@ export function useTreeMultiSelect(order, selected, onSelectedChange) {
       if (startIdx !== -1 && endIdx !== -1) {
         const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
         onSelectedChange(new Set(order.slice(from, to + 1)));
+        plainClickedRef.current = null;
         return true;
       }
     }
     if (e?.metaKey || e?.ctrlKey) {
-      const anchor = lastClickedRef.current;
+      const anchor = plainClickedRef.current;
+      plainClickedRef.current = null;
       onSelectedChange((prev) => {
         // Nothing multi-selected yet: start from the plain-clicked item.
         const next = new Set(prev.size === 0 && anchor !== null && anchor !== key && order.includes(anchor) ? [anchor] : prev);
@@ -39,6 +44,7 @@ export function useTreeMultiSelect(order, selected, onSelectedChange) {
       return true;
     }
     lastClickedRef.current = key;
+    plainClickedRef.current = key;
     if (selected?.size > 0 && !selected.has(key)) onSelectedChange(new Set());
     return false;
   };

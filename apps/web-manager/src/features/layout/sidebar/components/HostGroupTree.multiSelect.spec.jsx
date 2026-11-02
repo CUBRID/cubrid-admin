@@ -69,3 +69,13 @@ it('selects the range from the plain-clicked host with Shift, and a plain click 
   await clickHost('h2');
   expect([...selection]).toEqual(['h1', 'h2', 'h3']);
 });
+
+it('does not bring back a host taken out with Ctrl/Cmd-click when Ctrl/Cmd-clicking another', async () => {
+  await render();
+  await clickHost('h1', { ctrlKey: true });
+  await clickHost('h1', { ctrlKey: true });
+  expect([...selection]).toEqual([]);
+
+  await clickHost('h2', { metaKey: true });
+  expect([...selection]).toEqual(['h2']);
+});
