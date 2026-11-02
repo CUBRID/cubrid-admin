@@ -11,6 +11,7 @@ export * from './update-db-request';
 export * from './update-user-info-request';
 export * from './broker_request';
 export * from './broker-set-param-client-request';
+export * from './set-sys-param-client-request';
 export * from './base-database-request';
 export * from './database-login-client-request';
 export * from './check-file-request';

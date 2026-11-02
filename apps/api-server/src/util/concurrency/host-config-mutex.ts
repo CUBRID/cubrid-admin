@@ -1,7 +1,8 @@
 /**
- * One queue per host for read-modify-write of that host's cubrid.conf.
- * CMS only reads and writes the whole file, so two writers that both read
- * before either writes lose one change. Module-level so every service
+ * One queue per host for read-modify-write of that host's conf files
+ * (cubrid.conf, and the raw editors' cm.conf and broker.conf saves). CMS
+ * only reads and writes a whole file, so two writers that both read before
+ * either writes lose one change. Module-level so every service
  * instance shares it (DatabaseModule and CmsJobModule each create their own
  * DatabaseConfigService/DatabaseManagementService).
  */
