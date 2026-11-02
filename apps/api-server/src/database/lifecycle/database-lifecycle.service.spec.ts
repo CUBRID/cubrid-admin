@@ -86,7 +86,7 @@ describe('DatabaseLifecycleService', () => {
       updateUser: jest.fn(),
       loginDatabase: jest.fn().mockResolvedValue({}),
       getUserInfo: jest.fn().mockResolvedValue({ user: [] }),
-      ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      ensureDbLogin: jest.fn().mockResolvedValue(undefined),
       isDbLoginActive: jest.fn().mockReturnValue(false),
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
@@ -571,7 +571,7 @@ describe('DatabaseLifecycleService', () => {
       jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [] } });
       databaseUserService.ensureDbLogin.mockImplementation(async (_u, _h, dbname) => {
         if (dbname === 'hadb1') throw new Error('no login');
-        return { reauthenticated: false };
+        return;
       });
       cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...successResponse, task: body.task }));
 
@@ -759,7 +759,7 @@ describe('DatabaseLifecycleService', () => {
       hostState([]);
       databaseUserService.ensureDbLogin.mockImplementation(async (_u, _h, dbname) => {
         if (dbname === 'hadb2') throw new Error('no login');
-        return { reauthenticated: false };
+        return;
       });
       cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
 

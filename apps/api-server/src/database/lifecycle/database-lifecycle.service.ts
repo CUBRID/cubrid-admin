@@ -1253,10 +1253,9 @@ export class DatabaseLifecycleService extends BaseService {
     // CmsJobService.createJob before executeCmsForJob invokes us), so
     // startDatabase()'s assertNoActiveJob() would see that same still-running
     // job and always throw OPERATION_IN_PROGRESS on itself. And
-    // startNonHaDatabase() gates on ensureDbLogin(), which requires a stored
-    // db-login profile — a database this job just created can never have
-    // one (nothing has logged into it before), so it would always throw
-    // MissingDBCredentials. Neither check means anything for a database
+    // startNonHaDatabase() gates on ensureDbLogin(), which requires a live
+    // DB login — a database this job just created has none yet, so it would
+    // always throw MissingDBCredentials. Neither check means anything for a database
     // we're still in the middle of creating in this same job, and `startdb`
     // itself needs no db user credentials (see ensureDbLogin's own comment),
     // so both gates are just skipped here rather than satisfied indirectly.
