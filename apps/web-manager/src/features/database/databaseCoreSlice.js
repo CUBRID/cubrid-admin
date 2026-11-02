@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createAction } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { dbKey } from './dbKey';
@@ -155,6 +155,12 @@ export const deleteDatabaseProfile = createAsyncThunk(
     }
   }
 );
+
+// Raised once per database that leaves loggedInDatabases, whatever removed
+// it (logout, an expired login, a start-info sync, ...) — see
+// useLoggedOutDbCleanup. Slices holding per-db data fetched under that login
+// drop it on this. Payload: { hostUid, dbname }.
+export const databaseLoginLost = createAction('database/loginLost');
 
 // The client just changed its own belief about this db's login (login,
 // logout, a gated start/stop, ...). Remember when (`seq`, taken as the

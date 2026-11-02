@@ -3,6 +3,7 @@ import { databaseApi } from './databaseApi';
 import { fetchDatabaseStartInfo } from './databaseCoreSlice';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { dbKey } from './dbKey';
+import { isDbLoginGone, dbOfLoginGone } from './dbLoginGone';
 
 // Lifecycle Operations
 export const createDatabase = createAsyncThunk(
@@ -520,12 +521,12 @@ const databaseOperationSlice = createSlice({
         state.logsError = action.payload;
       })
       // Drop cached backup schedules/query plans once a database's dbmt
-      // login is gone (explicit logout or forgetting its saved credentials)
-      // — otherwise the stale list from the old login stays visible.
+      // login is gone (see dbLoginGone.js) — otherwise the stale list from
+      // the old login stays visible.
       .addMatcher(
-        (action) => action.type === 'database/logoutDatabase/fulfilled' || action.type === 'database/deleteDatabaseProfile/fulfilled',
+        isDbLoginGone,
         (state, action) => {
-          const { hostUid, dbname } = action.meta.arg;
+          const { hostUid, dbname } = dbOfLoginGone(action);
           const key = dbKey(hostUid, dbname);
           delete state.backupSchedules[key];
           delete state.backupSchedulesLoading[key];

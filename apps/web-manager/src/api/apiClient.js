@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { nextSeq } from '../infrastructure/utils/singleFlight';
 
 export const hostActions = {
   revokeHostLogin: (hostUid) => ({ type: 'host/revokeHostLogin', payload: hostUid }),
@@ -10,11 +11,14 @@ export const hostActions = {
 // Plain action-type objects (not imported slice creators) to avoid a
 // circular import — most feature slices import this module, so this module
 // can't import back from databaseCoreSlice. Must stay in sync with that
-// slice's name ('databaseCore') and action name (clearDatabaseLogin).
+// slice's name ('databaseCore') and action name (clearDatabaseLogin), and
+// with its prepare callback: the reducer reads meta.seq, so an action
+// without meta throws inside the reducer and the login is never cleared.
 export const databaseActions = {
   clearDatabaseLogin: ({ hostUid, dbname }) => ({
     type: 'databaseCore/clearDatabaseLogin',
     payload: { hostUid, dbname },
+    meta: { seq: nextSeq() },
   }),
 };
 
@@ -475,14 +479,12 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // ensureDbLogin (api-server) grants access via a short-lived session
-    // cache or a saved db-login profile — never both indefinitely. A login
-    // made without "Save Password" only lives in that cache, so once it
-    // expires (or the host token rotates) with no profile to fall back on,
-    // the *next* database action fails here even though nothing the user
-    // did looks like a logout. Bring the UI in line with that: this db no
-    // longer has a usable session, whatever the tree's padlock icon (driven
-    // by loggedInDatabases, set only at explicit login/logout) still shows.
+    // ensureDbLogin (api-server) only accepts a live login the user made; a
+    // saved profile is never used to log in on its own. Once that login
+    // expires (2h), the host token rotates without a re-login, or the user
+    // logged out, the next database action fails here even though nothing
+    // the user did here looks like a logout. Bring the UI in line with that:
+    // this db is not logged in, whatever the tree's padlock still shows.
     if (statusCode === 400 && (apiData?.data?.code || apiData?.code) === 'MISSING_DB_CREDENTIALS') {
       const hostUid = getHostUidFromUrl(requestUrl);
       const dbname = apiData?.data?.dbname || apiData?.dbname;

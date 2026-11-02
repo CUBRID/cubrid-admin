@@ -28,9 +28,10 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const makeStore = () => configureStore({
+const makeStore = (loggedInDatabases = ['h1:demodb']) => configureStore({
   reducer: {
     broker: brokerReducer,
+    database: (s = { loggedInDatabases }) => s,
     user: (s = { preferences: { uiLocale: 'en' } }) => s,
   },
 });
@@ -61,5 +62,15 @@ describe('AllLogsViewer with an unreachable host', () => {
     await settle();
     expect(brokerApi.getDatabaseLogs).toHaveBeenCalledTimes(1);
     expect(brokerApi.viewLog).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AllLogsViewer for a database', () => {
+  it('does not ask for the log list of a database that is not logged in', async () => {
+    await act(async () => {
+      root.render(<Provider store={makeStore([])}><AllLogsViewer type="database" hostUid="h1" targetName="demodb" /></Provider>);
+    });
+    await settle();
+    expect(brokerApi.getDatabaseLogs).not.toHaveBeenCalled();
   });
 });

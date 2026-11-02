@@ -25,6 +25,7 @@ import reducer, {
   clearDatabaseLogin, fetchDatabaseStartInfo, setSelectedDatabase,
 } from './databaseCoreSlice';
 import { closeHostTabs } from '../layout/layoutSlice';
+import { databaseActions } from '../../api/apiClient';
 
 const deferred = () => {
   let resolve;
@@ -152,6 +153,17 @@ describe('loggedInDatabases is scoped per host, not by bare dbname', () => {
     expect(loggedInDatabases).not.toContain('hostA:demodb');
     expect(loggedInDatabases).toContain('hostA:otherdb');
     expect(loggedInDatabases).toContain('hostB:demodb');
+  });
+
+  it("applies the apiClient interceptor's own clearDatabaseLogin action", async () => {
+    databaseApi.loginDatabaseWithProfile.mockResolvedValue(true);
+    const store = configureStore({ reducer });
+    await store.dispatch(loginDatabase({ hostUid: 'hostA', dbname: 'demodb' }));
+
+    // A plain object built without the slice's prepare callback; the
+    // reducer must not throw on it.
+    expect(() => store.dispatch(databaseActions.clearDatabaseLogin({ hostUid: 'hostA', dbname: 'demodb' }))).not.toThrow();
+    expect(store.getState().loggedInDatabases).not.toContain('hostA:demodb');
   });
 });
 

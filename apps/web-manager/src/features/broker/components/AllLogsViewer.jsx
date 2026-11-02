@@ -9,6 +9,7 @@ import { EmptyState } from '../../../components/ds/layout/EmptyState';
 import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuDivider, MenuItem } from '../../../components/common/DropdownMenu';
 import { useCM } from '../../../constants/useCM';
+import { dbKey } from '../../database/dbKey';
 
 // ─── Constants & Helpers (Reused from LogViewer.jsx) ─────────────────────────
 const HighlightedLine = ({ line }) => {
@@ -193,6 +194,9 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
     isDb ? s.broker.dbLogsLoading : s.broker.logsLoading
   );
   const viewingLogs = useSelector(s => s.broker.viewingLogs, shallowEqual);
+  // A database's log list is a per-db request the server refuses without a
+  // DB login; broker logs need none.
+  const canFetchList = useSelector(s => !isDb || s.database.loggedInDatabases.includes(dbKey(hostUid, targetName)));
 
   // Memoized logic filters out everything but .log files for brokers
   const targetLogs = useMemo(() => {
@@ -201,6 +205,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
   }, [logsList, isDb]);
 
   const handleFetchLogsList = () => {
+    if (!canFetchList) return Promise.resolve();
     return isDb 
       ? dispatch(fetchDatabaseLogs({ hostUid, dbname: targetName }))
       : dispatch(fetchBrokerLogs({ hostUid, brokerName: targetName }));
@@ -216,10 +221,10 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       return;
     }
     const key = `${hostUid}:${targetName}`;
-    if (logsLoading || requestedListRef.current === key) return;
+    if (!canFetchList || logsLoading || requestedListRef.current === key) return;
     requestedListRef.current = key;
     handleFetchLogsList();
-  }, [dispatch, hostUid, targetName, logsList, logsLoading, isDb]);
+  }, [dispatch, hostUid, targetName, logsList, logsLoading, isDb, canFetchList]);
 
   // Expand all logs once they are available on the initial mount
   useEffect(() => {

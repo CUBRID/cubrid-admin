@@ -15,6 +15,7 @@ import databaseMonitoringReducer from '../../../database/databaseMonitoringSlice
 import monitoringReducer from '../../../server/monitoringSlice';
 import userReducer from '../../../user/userSlice';
 import layoutReducer from '../../layoutSlice';
+import { loginDatabase } from '../../../database/databaseCoreSlice';
 import DatabaseTree from './DatabaseTree';
 
 let container;
@@ -105,4 +106,17 @@ it('does not select the database or open its node on a multi-select click', asyn
 
   expect(store.getState().database.selectedDatabase).not.toBe('c');
   expect(container.querySelector('[data-testid="tree-node-c"]').open).toBe(false);
+});
+
+it("renders a database's folders only while it is logged in", async () => {
+  await render();
+  expect(container.querySelectorAll('[data-testid="tree-node-Users"]')).toHaveLength(0);
+  expect(container.querySelector('[data-testid="tree-node-a"] summary')).not.toBeNull();
+
+  await act(async () => {
+    store.dispatch(loginDatabase.fulfilled({ dbname: 'a' }, 'login', { hostUid: 'h1', dbname: 'a' }));
+  });
+  const folders = container.querySelectorAll('[data-testid="tree-node-a"] [data-testid="tree-node-Users"], [data-testid="tree-node-a"] [data-testid="tree-node-Space"]');
+  expect(folders).toHaveLength(2);
+  expect(container.querySelectorAll('[data-testid="tree-node-Users"]')).toHaveLength(1);
 });

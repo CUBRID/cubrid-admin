@@ -1,6 +1,7 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs, fetchAdminLogs, fetchCMSLogs, fetchDatabaseLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
+import { dbKey } from '../../../database/dbKey';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Typography } from '../../../../components/ds/foundation/Typography';
@@ -14,7 +15,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   // databasesByHost/brokersByHost — this tree should only move on an
   // explicit user action, not every MonitoringProvider interval poll
   // tick. See databaseCoreSlice.js/brokerSlice.js.
-  const { navigatorDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { navigatorDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const databases = navigatorDatabasesByHost[hostUid] || [];
   const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
   const brokers = navigatorBrokersByHost[hostUid] || [];
@@ -209,52 +210,57 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
         }}
         onContextMenu={(e) => onServerLogRootContextMenu && onServerLogRootContextMenu(e)}
       >
-          {(databases || []).map((db, idx) => (
-            <TreeNode 
-              key={idx} 
-              label={db.dbname}
-              icon="database"
-              level={2}
-              isActive={selectedBrokerSubItem === `log-db-${db.dbname}`}
-              hasChildren={true}
-              onSelect={() => {
-                dispatch(setSelectedBroker(null));
-                dispatch(setSelectedBrokerSubItem(`log-db-${db.dbname}`));
-              }}
-              onToggle={() => {
-                if (!dbLogsByDbName[db.dbname] && !dbLogsLoading) {
-                  dispatch(fetchDatabaseLogs({ hostUid, dbname: db.dbname }));
-                }
-              }}
-              isLoading={dbLogsLoading && !dbLogsByDbName[db.dbname]}
-              onContextMenu={(e) => onDbLogContextMenu && onDbLogContextMenu(e, db.dbname)}
-            >
-                  {(dbLogsByDbName[db.dbname] || []).map((log, lIdx) => {
-                    const fileName = log.path.split('/').pop();
-                    const isLogSelected = selectedBrokerSubItem === log.path;
-                    return (
-                      <TreeNode 
-                        key={lIdx}
-                        label={fileName}
-                        icon="description"
-                        isActive={isLogSelected}
-                        level={3}
-                        onSelect={() => {
-                          dispatch(setSelectedBroker(null));
-                          dispatch(setSelectedBrokerSubItem(log.path));
-                        }}
-                        onDoubleClick={() => dispatch(openTab(`log:${hostUid}:${log.path}`))}
-                      />
-                    );
-                  })}
-                  {!dbLogsLoading && (dbLogsByDbName[db.dbname] || []).length === 0 && (
-                    <div className="px-10 py-3 opacity-60 flex items-center gap-2">
-                       <Icon name="block" size="xs" weight={300} />
-                       <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
-                    </div>
-                  )}
-            </TreeNode>
-          ))}
+          {(databases || []).map((db, idx) => {
+            // A database's log list (and so its log files) is a per-db
+            // request the server refuses without a DB login.
+            const isLoggedIn = loggedInDatabases.includes(dbKey(hostUid, db.dbname));
+            return (
+              <TreeNode 
+                key={idx} 
+                label={db.dbname}
+                icon="database"
+                level={2}
+                isActive={selectedBrokerSubItem === `log-db-${db.dbname}`}
+                hasChildren={true}
+                onSelect={() => {
+                  dispatch(setSelectedBroker(null));
+                  dispatch(setSelectedBrokerSubItem(`log-db-${db.dbname}`));
+                }}
+                onToggle={() => {
+                  if (isLoggedIn && !dbLogsByDbName[db.dbname] && !dbLogsLoading) {
+                    dispatch(fetchDatabaseLogs({ hostUid, dbname: db.dbname }));
+                  }
+                }}
+                isLoading={isLoggedIn && dbLogsLoading && !dbLogsByDbName[db.dbname]}
+                onContextMenu={(e) => onDbLogContextMenu && onDbLogContextMenu(e, db.dbname)}
+              >
+                    {isLoggedIn && (dbLogsByDbName[db.dbname] || []).map((log, lIdx) => {
+                      const fileName = log.path.split('/').pop();
+                      const isLogSelected = selectedBrokerSubItem === log.path;
+                      return (
+                        <TreeNode 
+                          key={lIdx}
+                          label={fileName}
+                          icon="description"
+                          isActive={isLogSelected}
+                          level={3}
+                          onSelect={() => {
+                            dispatch(setSelectedBroker(null));
+                            dispatch(setSelectedBrokerSubItem(log.path));
+                          }}
+                          onDoubleClick={() => dispatch(openTab(`log:${hostUid}:${log.path}`))}
+                        />
+                      );
+                    })}
+                    {isLoggedIn && !dbLogsLoading && (dbLogsByDbName[db.dbname] || []).length === 0 && (
+                      <div className="px-10 py-3 opacity-60 flex items-center gap-2">
+                         <Icon name="block" size="xs" weight={300} />
+                         <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
+                      </div>
+                    )}
+              </TreeNode>
+            );
+          })}
           {(!databases || databases.length === 0) && (
             <div className="px-10 py-5 opacity-70 flex flex-col items-center justify-center">
                <Typography variant="caption" className="italic text-12">{CM.noDatabasesAvailable}</Typography>

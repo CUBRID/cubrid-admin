@@ -568,13 +568,15 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       });
       dispatch(fetchCMSLogs(selectedHostUid));
       dispatch(fetchAdminLogs(selectedHostUid));
+      // A database's log list is a per-db request: logged-in ones only.
       (databases || []).forEach(db => {
+        if (!loggedInDatabases.includes(dbKey(selectedHostUid, db.dbname))) return;
         dispatch(fetchDatabaseLogs({ hostUid: selectedHostUid, dbname: db.dbname }));
       });
     } catch (error) {
       console.error('Failed to refresh logs:', error);
     }
-  }, [dispatch, selectedHostUid, brokers, databases]);
+  }, [dispatch, selectedHostUid, brokers, databases, loggedInDatabases]);
 
   const handleBrokerErrorLogContextMenu = (e) => {
     e.preventDefault();
@@ -2199,6 +2201,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="visibility"
             label={CM.viewAllLogs}
+            disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbLogContextMenu.db))}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(openTab(`all_db_logs:${selectedHostUid}:${dbLogContextMenu.db}`));
@@ -2210,6 +2213,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbLogContextMenu.db))}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(fetchDatabaseLogs({ hostUid: selectedHostUid, dbname: dbLogContextMenu.db }));
@@ -2304,6 +2308,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.refresh}
             onClick={() => {
               (databases || []).forEach(db => {
+                if (!loggedInDatabases.includes(dbKey(selectedHostUid, db.dbname))) return;
                 dispatch(fetchDatabaseLogs({ hostUid: selectedHostUid, dbname: db.dbname }));
               });
               setServerLogRootContextMenu(null);
@@ -2471,6 +2476,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="visibility"
             label={CM.viewDatabase}
+            disabled={!spaceContextMenu.isLoggedIn}
             onClick={() => {
               dispatch(setActiveMainTab(`db_space:${selectedHostUid}:${spaceContextMenu.db}`));
               setSpaceContextMenu(null);

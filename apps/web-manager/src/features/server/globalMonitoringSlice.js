@@ -24,10 +24,15 @@ export const fetchHostSummary = createAsyncThunk(
 
       if (!hostStat) return rejectWithValue('Host unreachable');
 
-      // 2. Fetch Volume data for all databases (needed for Permanent/Temp space)
-      const dbs = dbInfo?.dblist?.dbs || [];
+      // 2. Fetch Volume data (needed for Permanent/Temp space) only for
+      // databases that are running and logged in: volume-info is a per-db
+      // request, and the server refuses it for a db with no DB login.
+      const active = dbInfo?.activelist?.active;
+      const dbnames = (Array.isArray(active) ? active : active ? [active] : [])
+        .filter((a) => a?.isLoggedIn === true && a.dbname)
+        .map((a) => a.dbname);
       const volumesData = await Promise.all(
-        dbs.map(db => databaseApi.getVolumeInfo(hostUid, db.dbname).catch(() => null))
+        dbnames.map(dbname => databaseApi.getVolumeInfo(hostUid, dbname).catch(() => null))
       );
 
       // 3. Process Volume Aggregation (Legacy Logic)

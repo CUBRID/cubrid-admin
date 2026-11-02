@@ -308,55 +308,60 @@ export default function DatabaseTree({
             onDoubleClick={() => handleDbActivate(db, isLoggedIn)}
             onContextMenu={(e) => onContextMenu(e, db.dbname, isActive, isLoggedIn)}
           >
-            {/* Level 2 items */}
+            {/* Level 2 items — only for a logged-in database: every folder
+                below lists or opens per-db data the server refuses without a
+                DB login. The node keeps its chevron (expanding shows nothing)
+                so it stays the same element whether logged in or not. */}
 
-            <UsersFolder
-              db={db}
-              isActive={isActive}
-              isLoggedIn={isLoggedIn}
-              selectedDatabase={selectedDatabase}
-              selectedDatabaseSubItem={selectedDatabaseSubItem}
-              users={databaseUsers[key]}
-              isLoading={databaseUsersLoading[key]}
-              error={databaseUsersError[key]}
-              onUsersContextMenu={onUsersContextMenu}
-              onUserContextMenu={onUserContextMenu}
-              onSelect={handleSelectSubItem}
-              selectedHostUid={selectedHostUid}
-            />
+            {isLoggedIn && (<>
+              <UsersFolder
+                db={db}
+                isActive={isActive}
+                isLoggedIn={isLoggedIn}
+                selectedDatabase={selectedDatabase}
+                selectedDatabaseSubItem={selectedDatabaseSubItem}
+                users={databaseUsers[key]}
+                isLoading={databaseUsersLoading[key]}
+                error={databaseUsersError[key]}
+                onUsersContextMenu={onUsersContextMenu}
+                onUserContextMenu={onUserContextMenu}
+                onSelect={handleSelectSubItem}
+                selectedHostUid={selectedHostUid}
+              />
 
-            <JobAutomationFolder 
-              db={db}
-              isActive={isActive}
-              isLoggedIn={isLoggedIn}
-              selectedDatabase={selectedDatabase}
-              selectedDatabaseSubItem={selectedDatabaseSubItem}
-              backupSchedules={backupSchedules[key]}
-              backupSchedulesLoading={backupSchedulesLoading[key]}
-              queryPlans={queryPlans[key]}
-              queryPlansLoading={queryPlansLoading[key]}
-              onJobAutomationContextMenu={onJobAutomationContextMenu}
-              onBackupPlanContextMenu={onBackupPlanContextMenu}
-              onQueryPlanContextMenu={onQueryPlanContextMenu}
-              onQueryItemContextMenu={onQueryItemContextMenu}
-              onBackupItemContextMenu={onBackupItemContextMenu}
-              onSelect={handleSelectSubItem}
-              selectedHostUid={selectedHostUid}
-            />
+              <JobAutomationFolder 
+                db={db}
+                isActive={isActive}
+                isLoggedIn={isLoggedIn}
+                selectedDatabase={selectedDatabase}
+                selectedDatabaseSubItem={selectedDatabaseSubItem}
+                backupSchedules={backupSchedules[key]}
+                backupSchedulesLoading={backupSchedulesLoading[key]}
+                queryPlans={queryPlans[key]}
+                queryPlansLoading={queryPlansLoading[key]}
+                onJobAutomationContextMenu={onJobAutomationContextMenu}
+                onBackupPlanContextMenu={onBackupPlanContextMenu}
+                onQueryPlanContextMenu={onQueryPlanContextMenu}
+                onQueryItemContextMenu={onQueryItemContextMenu}
+                onBackupItemContextMenu={onBackupItemContextMenu}
+                onSelect={handleSelectSubItem}
+                selectedHostUid={selectedHostUid}
+              />
 
-            <SpaceFolder 
-              db={db}
-              isActive={isActive}
-              isLoggedIn={isLoggedIn}
-              selectedDatabase={selectedDatabase}
-              selectedDatabaseSubItem={selectedDatabaseSubItem}
-              spaceInfo={spaceInfo[key]}
-              spaceInfoLoading={spaceInfoLoading[key]}
-              onSpaceContextMenu={onSpaceContextMenu}
-              onSelect={handleSelectSubItem}
-              onTabOpen={handleTabOpen}
-              selectedHostUid={selectedHostUid}
-            />
+              <SpaceFolder 
+                db={db}
+                isActive={isActive}
+                isLoggedIn={isLoggedIn}
+                selectedDatabase={selectedDatabase}
+                selectedDatabaseSubItem={selectedDatabaseSubItem}
+                spaceInfo={spaceInfo[key]}
+                spaceInfoLoading={spaceInfoLoading[key]}
+                onSpaceContextMenu={onSpaceContextMenu}
+                onSelect={handleSelectSubItem}
+                onTabOpen={handleTabOpen}
+                selectedHostUid={selectedHostUid}
+              />
+            </>)}
           </TreeNode>
         );
       })}
@@ -471,6 +476,7 @@ const JobAutomationFolder = React.memo(({ db, isActive, isLoggedIn, selectedData
                 isActive={isPlanSelected}
                 onSelect={() => onSelect(db.dbname, `backup:${planId}`)}
                 onDoubleClick={() => {
+                  if (!isLoggedIn) return;
                   dispatch(setSelectedDatabase(db.dbname));
                   dispatch(setSelectedBackupId(planId));
                   dispatch(openEditBackupPlanModal());
@@ -504,6 +510,7 @@ const JobAutomationFolder = React.memo(({ db, isActive, isLoggedIn, selectedData
                 isActive={selectedDatabase === db.dbname && selectedDatabaseSubItem === `query:${qId}`}
                 onSelect={() => onSelect(db.dbname, `query:${qId}`)}
                 onDoubleClick={() => {
+                  if (!isLoggedIn) return;
                   dispatch(setSelectedDatabase(db.dbname));
                   dispatch(openEditQueryPlanModal(qId));
                 }}
@@ -520,6 +527,10 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
   const CM = useCM();
   const dispatch = useDispatch();
   const isSelected = selectedDatabase === db.dbname && selectedDatabaseSubItem === 'Space';
+  // Space and volume tabs poll per-db info; none opens without a DB login.
+  const openDbTab = (tabId) => {
+    if (isLoggedIn) onTabOpen(tabId);
+  };
 
   const renderCategory = (id, label, icon, filterFn) => {
     const isCatSelected = selectedDatabase === db.dbname && selectedDatabaseSubItem === id;
@@ -535,7 +546,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
         hasChildren={true}
         isLoading={spaceInfoLoading && !spaceInfo}
         onSelect={() => onSelect(db.dbname, id)}
-        onDoubleClick={() => onTabOpen(`vol_category:${selectedHostUid}:${db.dbname}:${id}`)}
+        onDoubleClick={() => openDbTab(`vol_category:${selectedHostUid}:${db.dbname}:${id}`)}
       >
         {volumes.map(vol => {
           const fileName = vol.spacename.split(/[\\/]/).pop();
@@ -549,7 +560,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
               level={4}
               isActive={selectedDatabase === db.dbname && selectedDatabaseSubItem === subItemId}
               onSelect={() => onSelect(db.dbname, subItemId)}
-              onDoubleClick={() => onTabOpen(`vol_info:${selectedHostUid}:${db.dbname}:${vol.spacename}`)}
+              onDoubleClick={() => openDbTab(`vol_info:${selectedHostUid}:${db.dbname}:${vol.spacename}`)}
             />
           );
         })}
@@ -566,7 +577,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
       isActive={isSelected}
       hasChildren={true}
       onSelect={() => onSelect(db.dbname, 'Space')}
-      onDoubleClick={() => onTabOpen(`db_space:${selectedHostUid}:${db.dbname}`)}
+      onDoubleClick={() => openDbTab(`db_space:${selectedHostUid}:${db.dbname}`)}
       onContextMenu={(e) => onSpaceContextMenu(e, db.dbname, isActive, isLoggedIn)}
       onToggle={() => {
         // Same rule as UsersFolder/JobAutomationFolder's onToggle — never
