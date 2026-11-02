@@ -1010,6 +1010,18 @@ describe('DatabaseLifecycleService', () => {
       expect(result.leftStopped).toEqual([]);
     });
 
+    it('reports the HA databases left stopped when service= has no server, so no ha_start goes out', async () => {
+      running = new Set(['db1', 'hadb1', 'hadb2']);
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', 'service=broker', 'server=db1'] }],
+      } as any);
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(calls().filter((c) => c.task.startsWith('ha_')).map((c) => c.task)).toEqual(['ha_stop']);
+      expect(result.leftStopped.sort()).toEqual(['db1', 'hadb1', 'hadb2']);
+    });
+
     it('holds the HA databases during the restart, so a single HA start in between is refused', async () => {
       const mockBrokerService = (service as any).brokerService;
       let midway: unknown;

@@ -2067,14 +2067,14 @@ export const CM = {
   restartService: 'Restart Service',
   restartingService: 'Restarting Service',
   confirmRestartServiceTitle: 'Restart Service',
-  confirmRestartServiceDesc: (server) => `Stop and start the CUBRID service on ${server}? Only the databases in the autostart list and the HA databases are started; other running databases stay stopped.`,
+  confirmRestartServiceDesc: (server) => `Stop and start the CUBRID service on ${server}? The start does what a service start does: when [service] service= includes server, it starts the databases in the autostart list and the HA databases. Other running databases stay stopped.`,
   serviceRestartedMsg: 'Service restarted.',
   // Whole-service start/stop/restart on an HA host: the HA databases go down and up with one node-wide ha_stop/ha_start.
   serviceHaNoteLogin: 'HA databases are stopped and started by the engine as a whole, whether or not you are logged in to them.',
   serviceHaNoteRole: 'If this node is the master, the master role may move to another node.',
   serviceHaNoteStartFail: 'If any HA database fails to start, the engine may take all HA on this node down again.',
   haNodeStartFailedMsg: 'Starting HA failed. HA on this node may be off; check the HA status.',
-  serviceRestartLeftStoppedMsg: (names) => `Stopped and not started again (not in the autostart list): ${names.join(', ')}`,
+  serviceRestartLeftStoppedMsg: (names) => `Stopped and not started again: ${names.join(', ')}`,
   // Service restart: databases skipped for no login, by the step that skips them.
   restartSkipKeepsRunningMsg: (names) => `Not logged in, so not stopped (keeps running): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}`,
   restartSkipNotStartedMsg: (names) => `Not logged in, so not started: ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}`,

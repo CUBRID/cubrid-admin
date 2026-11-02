@@ -100,7 +100,7 @@ export type ServiceRestartResult = {
   stopFailed: ServiceFailure[];
   startFailed: ServiceFailure[];
   skipped: ServiceSkip[];
-  /** Running before, stopped by the restart and not started again: not in the autostart list. */
+  /** Running before, stopped by the restart and not started again (not in the autostart list, or no server in `service=`). */
   leftStopped: string[];
 };
 
@@ -797,22 +797,26 @@ export class DatabaseLifecycleService extends BaseService {
     // brokers already started for a service-start we should have blocked
     // outright.
     await this.assertNoActiveJob(userId, hostUid);
-    return this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
+    const { failed, skipped } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
       this.startAllDatabases(userId, hostUid, autoStart, { haNode: true })
     );
+    return { failed, skipped };
   }
 
   /**
    * startWholeService's steps; `startDatabases` starts the databases
    * (holding them, or not when the caller already holds them).
+   * `haNodeSent`: the node-wide ha_start was sent (whatever its outcome) —
+   * not when `service=` leaves out server, or no HA database needed it.
    */
   private async startWholeServiceSteps(
     userId: string,
     hostUid: string,
     startDatabases: (autoStartServers: string[]) => Promise<BulkDatabaseActionResult>
-  ): Promise<{ failed: ServiceFailure[]; skipped: ServiceSkip[] }> {
+  ): Promise<{ failed: ServiceFailure[]; skipped: ServiceSkip[]; haNodeSent: boolean }> {
     const failed: ServiceFailure[] = [];
     const skipped: ServiceSkip[] = [];
+    let haNodeSent = false;
 
     try {
       await this.brokerService.startAllBrokers(userId, hostUid);
@@ -841,7 +845,8 @@ export class DatabaseLifecycleService extends BaseService {
       // (busy database, job check, HA list read) is reported, not thrown —
       // same as stopWholeService.
       try {
-        const { failed: dbFailed, skipped: dbSkipped } = await startDatabases(autoStartServers);
+        const { succeeded: dbSucceeded, failed: dbFailed, skipped: dbSkipped } = await startDatabases(autoStartServers);
+        haNodeSent = dbSucceeded.includes(HA_NODE_STEP) || dbFailed.some((f) => f.dbname === HA_NODE_STEP);
         failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
         // Not logged in: left stopped, nothing sent to it.
         skipped.push(...dbSkipped.map(({ dbname, reason }) => ({ name: dbname, reason })));
@@ -850,7 +855,7 @@ export class DatabaseLifecycleService extends BaseService {
       }
     }
 
-    return { failed, skipped };
+    return { failed, skipped, haNodeSent };
   }
 
   /**
@@ -942,9 +947,10 @@ export class DatabaseLifecycleService extends BaseService {
 
   /**
    * Restart the whole service on a host in one call: stop it, then start it
-   * as startWholeService does, which brings up only the `server=` autostart
-   * list and the HA databases. A database that was started by hand and is
-   * not in that list stays stopped. Every database of the host and every HA
+   * as startWholeService does, which (when `service=` includes server)
+   * brings up only the `server=` autostart list and the HA databases. A
+   * database that was started by hand and is not in that list stays
+   * stopped. Every database of the host and every HA
    * database is held for the whole sequence, so no other start/stop or job
    * on them runs in between. Which databases were running is read once they
    * are held, only to report the ones left stopped; if that read fails,
@@ -954,7 +960,8 @@ export class DatabaseLifecycleService extends BaseService {
    * @returns The stop and start failures and skips (as stopWholeService and
    *   startWholeService report them), and the databases that were running
    *   and are stopped now without a failure or skip saying why (not in the
-   *   autostart list); empty when the status can't be read afterwards
+   *   autostart list, or no server in `service=`); empty when the status
+   *   can't be read afterwards
    */
   @HandleCmsErrors()
   async restartWholeService(userId: string, hostUid: string): Promise<ServiceRestartResult> {
@@ -973,7 +980,7 @@ export class DatabaseLifecycleService extends BaseService {
       const { failed: stopFailed, skipped: stopSkipped } = await this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
         this.stopAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames, { haNode: true })
       );
-      const { failed: startFailed, skipped: startSkipped } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
+      const { failed: startFailed, skipped: startSkipped, haNodeSent } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
         this.startAllDatabasesUnlocked(userId, hostUid, autoStart, haDbNames, { haNode: true })
       );
       // A database skipped at the stop kept running; one skipped at the start
@@ -988,8 +995,12 @@ export class DatabaseLifecycleService extends BaseService {
       let leftStopped: string[] = [];
       try {
         const running = await this.readActiveDbnames(userId, hostUid);
-        // HA databases are the engine's to bring up (HA_NODE_STEP reports it).
-        leftStopped = [...wasRunning].filter((dbname) => !running.has(dbname) && !reported.has(dbname) && !haDbNames.has(dbname));
+        // Once the node-wide ha_start went out, the HA databases are the
+        // engine's to bring up (HA_NODE_STEP reports it); without it (no
+        // server in `service=`), a stopped HA database is left stopped too.
+        leftStopped = [...wasRunning].filter(
+          (dbname) => !running.has(dbname) && !reported.has(dbname) && !(haNodeSent && haDbNames.has(dbname))
+        );
       } catch {
         leftStopped = [];
       }
