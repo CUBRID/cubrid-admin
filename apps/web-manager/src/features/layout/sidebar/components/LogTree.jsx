@@ -18,20 +18,30 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   // tick. See databaseCoreSlice.js/brokerSlice.js.
   const { navigatorDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const databases = navigatorDatabasesByHost[hostUid] || [];
-  const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDb, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDb, dbLogsLoadingByDb } = useSelector((state) => state.broker, shallowEqual);
+  const { authorizedHosts, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
   const brokers = navigatorBrokersByHost[hostUid] || [];
   const dbLogs = (dbname) => dbLogsByDb[dbKey(hostUid, dbname)];
+  const dbLogsLoading = (dbname) => !!dbLogsLoadingByDb[dbKey(hostUid, dbname)];
 
   // Databases whose node the user opened. One opened before its login gets
-  // its list read once the login arrives, instead of staying empty.
+  // its list read once, when the login arrives. A failed read is not
+  // retried on its own (only by opening the node again or a refresh), and
+  // nothing is read while the host isn't connected — this tree stays
+  // mounted while hidden, so a retry here would repeat unseen.
   const openedDbs = useRef(new Set());
+  const prevLoggedIn = useRef(loggedInDatabases);
+  const hostConnected = authorizedHosts.includes(hostUid) && !(reconnectQueue || []).includes(hostUid);
   useEffect(() => {
-    openedDbs.current.forEach((dbname) => {
-      if (loggedInDatabases.includes(dbKey(hostUid, dbname)) && !dbLogsByDb[dbKey(hostUid, dbname)] && !dbLogsLoading) {
-        dispatch(fetchDatabaseLogs({ hostUid, dbname }));
-      }
-    });
-  }, [dispatch, hostUid, loggedInDatabases, dbLogsByDb, dbLogsLoading]);
+    const prev = prevLoggedIn.current;
+    prevLoggedIn.current = loggedInDatabases;
+    if (!hostConnected) return;
+    loggedInDatabases
+      .filter((key) => !prev.includes(key) && openedDbs.current.has(key) && !dbLogsByDb[key] && !dbLogsLoadingByDb[key])
+      .forEach((key) => dispatch(fetchDatabaseLogs({ hostUid, dbname: key.slice(key.lastIndexOf(':') + 1) })));
+    // Only a login change triggers this; the lists are read for the check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, hostUid, hostConnected, loggedInDatabases]);
 
   return (
     <div className="space-y-0.5 px-2 py-2">
@@ -239,13 +249,14 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
                   dispatch(setSelectedBroker(null));
                   dispatch(setSelectedBrokerSubItem(`log-db-${db.dbname}`));
                 }}
-                onToggle={() => {
-                  openedDbs.current.add(db.dbname);
-                  if (isLoggedIn && !dbLogs(db.dbname) && !dbLogsLoading) {
+                onToggle={(open) => {
+                  if (open === false) return; // only opening reads
+                  openedDbs.current.add(dbKey(hostUid, db.dbname));
+                  if (isLoggedIn && hostConnected && !dbLogs(db.dbname) && !dbLogsLoading(db.dbname)) {
                     dispatch(fetchDatabaseLogs({ hostUid, dbname: db.dbname }));
                   }
                 }}
-                isLoading={isLoggedIn && dbLogsLoading && !dbLogs(db.dbname)}
+                isLoading={isLoggedIn && dbLogsLoading(db.dbname) && !dbLogs(db.dbname)}
                 onContextMenu={(e) => onDbLogContextMenu && onDbLogContextMenu(e, db.dbname)}
               >
                     {isLoggedIn && (dbLogs(db.dbname) || []).map((log, lIdx) => {
@@ -266,7 +277,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
                         />
                       );
                     })}
-                    {(!isLoggedIn || (!dbLogsLoading && (dbLogs(db.dbname) || []).length === 0)) && (
+                    {(!isLoggedIn || (!dbLogsLoading(db.dbname) && (dbLogs(db.dbname) || []).length === 0)) && (
                       <div className="px-10 py-3 opacity-60 flex items-center gap-2">
                          <Icon name={isLoggedIn ? 'block' : 'lock'} size="xs" weight={300} />
                          <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{isLoggedIn ? CM.emptyListLabel : CM.databaseNotLoggedIn}</Typography>

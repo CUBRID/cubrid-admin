@@ -191,7 +191,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
     shallowEqual
   );
   const logsLoading = useSelector(s => 
-    isDb ? s.broker.dbLogsLoading : s.broker.logsLoading
+    isDb ? !!s.broker.dbLogsLoadingByDb[dbKey(hostUid, targetName)] : s.broker.logsLoading
   );
   const viewingLogs = useSelector(s => s.broker.viewingLogs, shallowEqual);
   // A database's log list is a per-db request the server refuses without a

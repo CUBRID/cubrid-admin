@@ -315,7 +315,8 @@ const initialState = {
   cmsLogsByHost: {}, // { hostUid: { accesslog: [], errorlog: [] } }
   cmsLogsLoading: false,
   dbLogsByDb: {}, // { [dbKey(hostUid, dbname)]: [logs] } — two hosts can share a dbname
-  dbLogsLoading: false,
+  dbLogsLoadingByDb: {}, // { [dbKey]: true } while that database's list is read
+  dbLogsFailedByDb: {}, // { [dbKey]: true } when the last read failed; nothing retries it on its own
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
   // { hostUid: { requestId: foreground } } — reads started on the host's current connection; see startRead.
   pendingReadsByHost: {},
@@ -372,6 +373,8 @@ const brokerSlice = createSlice({
       state.detailedStatus = {};
       state.logsByBroker = {};
       state.dbLogsByDb = {};
+      state.dbLogsLoadingByDb = {};
+      state.dbLogsFailedByDb = {};
       state.viewingLogs = {};
       state.adminLogsByHost = {};
       state.cmsLogsByHost = {};
@@ -555,15 +558,20 @@ const brokerSlice = createSlice({
         // yet); a failed refresh keeps the last logs.
         if (state.cmsLogsByHost[action.meta.arg] === undefined) state.cmsLogsByHost[action.meta.arg] = null;
       })
-      .addCase(fetchDatabaseLogs.pending, (state) => {
-        state.dbLogsLoading = true;
+      .addCase(fetchDatabaseLogs.pending, (state, action) => {
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        state.dbLogsLoadingByDb[key] = true;
+        delete state.dbLogsFailedByDb[key];
       })
       .addCase(fetchDatabaseLogs.fulfilled, (state, action) => {
-        state.dbLogsLoading = false;
-        state.dbLogsByDb[dbKey(action.meta.arg.hostUid, action.payload.dbname)] = action.payload.logs;
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        delete state.dbLogsLoadingByDb[key];
+        state.dbLogsByDb[key] = action.payload.logs;
       })
-      .addCase(fetchDatabaseLogs.rejected, (state) => {
-        state.dbLogsLoading = false;
+      .addCase(fetchDatabaseLogs.rejected, (state, action) => {
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        delete state.dbLogsLoadingByDb[key];
+        state.dbLogsFailedByDb[key] = true;
       })
       .addCase(fetchBrokerConfig.pending, (state, action) => {
         const { hostUid } = action.meta.arg;
@@ -624,7 +632,10 @@ const brokerSlice = createSlice({
       // A database's log list was read under its login; drop it with the login.
       .addMatcher(isDbLoginGone, (state, action) => {
         const { hostUid, dbname } = dbOfLoginGone(action);
-        if (hostUid && dbname) delete state.dbLogsByDb[dbKey(hostUid, dbname)];
+        if (!hostUid || !dbname) return;
+        const key = dbKey(hostUid, dbname);
+        delete state.dbLogsByDb[key];
+        delete state.dbLogsFailedByDb[key];
       })
       .addMatcher(
         (action) => action.type === 'layout/closeHostTabs',
