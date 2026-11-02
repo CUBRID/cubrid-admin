@@ -5,6 +5,7 @@ import AppRouter from './app/AppRouter'
 import { store } from './app/store'
 import './styles/index.css'
 import App from './app/App'
+import GlobalTooltip from './components/common/GlobalTooltip'
 
 import { ToastProvider } from './infrastructure/context/ToastContext'
 import { CmsJobProvider } from './infrastructure/context/CmsJobContext'
@@ -36,6 +37,7 @@ createRoot(document.getElementById('root')).render(
               <ErrorBoundary>
                 <App />
               </ErrorBoundary>
+              <GlobalTooltip />
             </AppRouter>
           </ConfirmProvider>
         </CmsJobProvider>

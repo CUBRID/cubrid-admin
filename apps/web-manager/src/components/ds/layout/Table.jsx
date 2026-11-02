@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../foundation/Icon';
 import { Skeleton } from './Skeleton';
 import { EmptyState } from './EmptyState';
@@ -22,10 +22,17 @@ export const Table = ({
   getRowAriaLabel,
   stickyHeader = false,
   emptyState = null,
+  // With more rows than this, the table keeps the height of this many rows and
+  // scrolls inside; a grip below it drags the height (double-click resets).
+  maxRows,
 }) => {
   const CM = useCM();
   const resolvedEmptyMessage = emptyMessage ?? CM.noDataAvailableMsg;
   const [sortConfig, setSortConfig] = useState(null);
+  const scrollRef = useRef(null);
+  const [capHeight, setCapHeight] = useState(null);
+  const [userHeight, setUserHeight] = useState(null);
+  const dragRef = useRef(null);
 
   const handleSort = (accessor) => {
     if (!accessor) return;
@@ -65,6 +72,85 @@ export const Table = ({
     });
   }, [data, sortConfig, columns]);
 
+  const overLimit = Boolean(maxRows) && sortedData.length > maxRows;
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!overLimit || !el) {
+      // At or under the limit the table renders as before, even after a resize.
+      setCapHeight(null);
+      setUserHeight(null);
+      return undefined;
+    }
+    // Measured, not assumed: rows can be taller than one line (badges, wrapping).
+    const measure = () => {
+      const head = el.querySelector('thead');
+      const rows = el.querySelectorAll('tbody > tr');
+      let height = head ? head.offsetHeight : 0;
+      for (let i = 0; i < maxRows && i < rows.length; i++) height += rows[i].offsetHeight;
+      setCapHeight(height || null);
+    };
+    measure();
+    // Re-measure when cells rewrap (window or column width) or rows change size.
+    const table = el.querySelector('table');
+    if (typeof ResizeObserver === 'undefined' || !table) return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [overLimit, maxRows, sortedData, columns]);
+
+  // The page scrolls too. When the top of the table goes under the top edge of
+  // the page's scroll area, push the sticky header down by that much so it stays
+  // over the visible rows, but never past the bottom of the table box.
+  const followPage = Boolean(maxRows);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!followPage || !el) return undefined;
+    let page = el.parentElement;
+    while (page && !/auto|scroll/.test(getComputedStyle(page).overflowY)) page = page.parentElement;
+    const update = () => {
+      const head = el.querySelector('thead');
+      if (!head) return;
+      const edge = page ? page.getBoundingClientRect().top + page.clientTop : 0;
+      const hidden = Math.max(edge - el.getBoundingClientRect().top, 0);
+      const offset = Math.min(hidden, Math.max(el.clientHeight - head.offsetHeight, 0));
+      head.style.top = offset ? `${offset}px` : '';
+    };
+    update();
+    const target = page ?? window;
+    target.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      target.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [followPage, sortedData, capHeight, userHeight]);
+
+  const scrolling = capHeight != null || userHeight != null;
+  const minHeight = capHeight != null ? Math.min(capHeight, 120) : 120;
+  const resizeBy = (delta) => {
+    const current = scrollRef.current?.getBoundingClientRect().height ?? capHeight ?? 0;
+    setUserHeight(Math.max(minHeight, current + delta));
+  };
+  const onGripPointerDown = (event) => {
+    if (event.button !== 0 || !scrollRef.current) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { y: event.clientY, height: scrollRef.current.getBoundingClientRect().height };
+  };
+  const onGripPointerMove = (event) => {
+    if (!dragRef.current) return;
+    setUserHeight(Math.max(minHeight, dragRef.current.height + event.clientY - dragRef.current.y));
+  };
+  const onGripPointerUp = (event) => {
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+  const onGripKeyDown = (event) => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); resizeBy(40); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); resizeBy(-40); }
+    else if (event.key === 'Home') { event.preventDefault(); setUserHeight(null); }
+  };
+
   if (loading && data.length === 0) {
     return (
       <div className="w-full space-y-2 p-2">
@@ -79,13 +165,24 @@ export const Table = ({
     return emptyState ?? <EmptyState title={resolvedEmptyMessage} icon="table_chart" />;
   }
 
-  return (
-    <div className={`w-full overflow-x-auto ${selectable ? 'select-text' : 'select-none'} ${className} ${bordered ? 'border-b border-slate-200 dark:border-white/[0.08]' : ''}`}>
+  const scrollStyle = userHeight != null
+    ? { height: userHeight }
+    : capHeight != null ? { maxHeight: capHeight } : undefined;
+
+  // The caller's className stays on the element that scrolls, so a caller that
+  // caps the height there (max-h-… overflow-auto) keeps a working stickyHeader.
+  const tableBox = (
+    <div
+      ref={scrollRef}
+      data-testid={scrolling ? 'table-scroll-area' : undefined}
+      className={`w-full ${scrolling ? 'overflow-auto custom-scrollbar' : 'overflow-x-auto'} ${selectable ? 'select-text' : 'select-none'} ${className} ${bordered ? 'border-b border-slate-200 dark:border-white/[0.08]' : ''}`}
+      style={scrollStyle}
+    >
       <table className="w-full text-left border-collapse">
 
         {/* ── Header ── */}
         {headersVisible && (
-          <thead className={stickyHeader ? 'sticky top-0 z-10' : undefined}>
+          <thead className={stickyHeader || scrolling || followPage ? 'sticky top-0 z-10 bg-white dark:bg-background-dark' : undefined}>
             <tr className="bg-slate-100 dark:bg-white/3 border-b border-slate-200 dark:border-white/[0.07]">
             {columns.map((col, idx) => {
                 const canSort = col.sortable ?? sortable;
@@ -208,6 +305,33 @@ export const Table = ({
           )}
         </tbody>
       </table>
+    </div>
+  );
+
+  if (!maxRows) return tableBox;
+
+  return (
+    <div className="w-full">
+      {tableBox}
+      {scrolling && (
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={CM.tableResizeHint}
+          title={CM.tableResizeHint}
+          tabIndex={0}
+          data-testid="table-resize-grip"
+          className="group/grip flex h-3 w-full cursor-row-resize touch-none items-center justify-center border-t border-slate-100 dark:border-white/[0.06] focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500"
+          onPointerDown={onGripPointerDown}
+          onPointerMove={onGripPointerMove}
+          onPointerUp={onGripPointerUp}
+          onPointerCancel={onGripPointerUp}
+          onDoubleClick={() => setUserHeight(null)}
+          onKeyDown={onGripKeyDown}
+        >
+          <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-white/20 group-hover/grip:bg-amber-500" />
+        </div>
+      )}
     </div>
   );
 };

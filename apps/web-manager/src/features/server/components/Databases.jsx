@@ -47,7 +47,7 @@ export default function Databases() {
 
   return (
     <Card title={cardTitle} className="lg:col-span-2 shadow-2xl shadow-black/5" bodyClassName="p-0">
-      <Table columns={columns} data={data} sortable={true} />
+      <Table columns={columns} data={data} sortable={true} maxRows={15} />
     </Card>
   );
 }

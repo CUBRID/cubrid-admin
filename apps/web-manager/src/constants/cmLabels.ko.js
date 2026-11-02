@@ -1887,6 +1887,9 @@ export const CM_KO = {
   countLabel: '횟수',
   errorsLabel: '오류',
   sqlPattern: 'SQL 패턴',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: '분석할 쿼리가 없습니다.',
 
   // 전체 로그 뷰어
@@ -2068,6 +2071,7 @@ export const CM_KO = {
   noDataTitle: '데이터 없음',
   dragToResizeTitle: '드래그하여 크기 조절',
   noDataAvailableMsg: '사용 가능한 데이터가 없습니다',
+  tableResizeHint: '끌어서 높이를 조절합니다. 더블클릭하면 원래 높이로 돌아갑니다.',
 
   // Domain components
   oneHourLabel: '1시간',

@@ -125,6 +125,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
       collapsible
     >
       <Table
+        maxRows={15}
         columns={columns}
         emptyState={<FetchEmptyState status={!hasLoadedOnce ? 'loading' : loadFailed ? 'error' : 'loaded'} title={CM.brokerStatus} />}
         data={brokers}

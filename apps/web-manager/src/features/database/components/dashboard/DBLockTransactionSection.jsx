@@ -144,6 +144,7 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
         onToggle={(v) => setIsCollapsed(v)}
       >
         <Table
+          maxRows={15}
           columns={columns}
           data={locks}
           onRowContextMenu={handleRowContextMenu}
