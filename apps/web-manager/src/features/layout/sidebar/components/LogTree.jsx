@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs, fetchAdminLogs, fetchCMSLogs, fetchDatabaseLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
@@ -17,8 +18,20 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   // tick. See databaseCoreSlice.js/brokerSlice.js.
   const { navigatorDatabasesByHost, loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const databases = navigatorDatabasesByHost[hostUid] || [];
-  const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDbName, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
+  const { navigatorBrokersByHost, logsByBroker, logsLoading, adminLogsByHost, adminLogsLoading, cmsLogsByHost, selectedBrokerSubItem, dbLogsByDb, dbLogsLoading } = useSelector((state) => state.broker, shallowEqual);
   const brokers = navigatorBrokersByHost[hostUid] || [];
+  const dbLogs = (dbname) => dbLogsByDb[dbKey(hostUid, dbname)];
+
+  // Databases whose node the user opened. One opened before its login gets
+  // its list read once the login arrives, instead of staying empty.
+  const openedDbs = useRef(new Set());
+  useEffect(() => {
+    openedDbs.current.forEach((dbname) => {
+      if (loggedInDatabases.includes(dbKey(hostUid, dbname)) && !dbLogsByDb[dbKey(hostUid, dbname)] && !dbLogsLoading) {
+        dispatch(fetchDatabaseLogs({ hostUid, dbname }));
+      }
+    });
+  }, [dispatch, hostUid, loggedInDatabases, dbLogsByDb, dbLogsLoading]);
 
   return (
     <div className="space-y-0.5 px-2 py-2">
@@ -227,14 +240,15 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
                   dispatch(setSelectedBrokerSubItem(`log-db-${db.dbname}`));
                 }}
                 onToggle={() => {
-                  if (isLoggedIn && !dbLogsByDbName[db.dbname] && !dbLogsLoading) {
+                  openedDbs.current.add(db.dbname);
+                  if (isLoggedIn && !dbLogs(db.dbname) && !dbLogsLoading) {
                     dispatch(fetchDatabaseLogs({ hostUid, dbname: db.dbname }));
                   }
                 }}
-                isLoading={isLoggedIn && dbLogsLoading && !dbLogsByDbName[db.dbname]}
+                isLoading={isLoggedIn && dbLogsLoading && !dbLogs(db.dbname)}
                 onContextMenu={(e) => onDbLogContextMenu && onDbLogContextMenu(e, db.dbname)}
               >
-                    {isLoggedIn && (dbLogsByDbName[db.dbname] || []).map((log, lIdx) => {
+                    {isLoggedIn && (dbLogs(db.dbname) || []).map((log, lIdx) => {
                       const fileName = log.path.split('/').pop();
                       const isLogSelected = selectedBrokerSubItem === log.path;
                       return (
@@ -252,10 +266,10 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
                         />
                       );
                     })}
-                    {isLoggedIn && !dbLogsLoading && (dbLogsByDbName[db.dbname] || []).length === 0 && (
+                    {(!isLoggedIn || (!dbLogsLoading && (dbLogs(db.dbname) || []).length === 0)) && (
                       <div className="px-10 py-3 opacity-60 flex items-center gap-2">
-                         <Icon name="block" size="xs" weight={300} />
-                         <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{CM.emptyListLabel}</Typography>
+                         <Icon name={isLoggedIn ? 'block' : 'lock'} size="xs" weight={300} />
+                         <Typography variant="caption" className="italic font-bold uppercase tracking-widest text-10">{isLoggedIn ? CM.emptyListLabel : CM.databaseNotLoggedIn}</Typography>
                       </div>
                     )}
               </TreeNode>

@@ -38,6 +38,8 @@ export function useLoggedOutDbCleanup() {
   const loggedInDatabases = useSelector((state) => state.database.loggedInDatabases);
   const appliedLiveSeqByHost = useSelector((state) => state.database.appliedLiveSeqByHost);
 
+  const appliedLiveSeqRef = useRef(appliedLiveSeqByHost);
+  appliedLiveSeqRef.current = appliedLiveSeqByHost;
   const prevLoggedIn = useRef(loggedInDatabases);
   useEffect(() => {
     const prev = prevLoggedIn.current;
@@ -45,7 +47,12 @@ export function useLoggedOutDbCleanup() {
     prev.filter((key) => !loggedInDatabases.includes(key)).forEach((key) => {
       // A dbname never contains ':', so the last one separates the two.
       const sep = key.lastIndexOf(':');
-      dispatch(databaseLoginLost({ hostUid: key.slice(0, sep), dbname: key.slice(sep + 1) }));
+      const hostUid = key.slice(0, sep);
+      // Not for a host whose state was just reset (another host's
+      // disconnect resets them all): its next start-info restores the
+      // logins, and dropping its caches now would only make them read again.
+      if (appliedLiveSeqRef.current[hostUid] === undefined) return;
+      dispatch(databaseLoginLost({ hostUid, dbname: key.slice(sep + 1) }));
     });
   }, [dispatch, loggedInDatabases]);
 

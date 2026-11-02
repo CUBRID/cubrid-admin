@@ -26,7 +26,12 @@ beforeEach(async () => {
   container = document.createElement('div');
   root = createRoot(container);
   store = configureStore({
-    reducer: combineReducers({ layout: layoutReducer, database: databaseReducer, databaseOperation: databaseOperationReducer }),
+    reducer: combineReducers({
+      layout: layoutReducer,
+      // Like store.js: a host disconnect resets every host's database state.
+      database: (state, action) => databaseReducer(action.type === 'host/revokeHostLogin' ? undefined : state, action),
+      databaseOperation: databaseOperationReducer,
+    }),
   });
   await act(async () => root.render(<Provider store={store}><Probe /></Provider>));
 });
@@ -119,5 +124,14 @@ describe('useLoggedOutDbCleanup', () => {
     await startInfo('h1', [{ dbname: 'a', isLoggedIn: false }]);
 
     expect(store.getState().databaseOperation.backupSchedules['h1:a']).toBeUndefined();
+  });
+
+  it('keeps other hosts\' caches when one host disconnects and the database state is reset', async () => {
+    await startInfo('h1', [{ dbname: 'a', isLoggedIn: true }]);
+    await dispatch(fetchBackupSchedule.fulfilled({ dbname: 'a', schedules: [{ backupid: 'nightly' }] }, 'bk', { hostUid: 'h1', dbname: 'a' }));
+
+    await dispatch({ type: 'host/revokeHostLogin', payload: 'h2' });
+
+    expect(store.getState().databaseOperation.backupSchedules['h1:a']).toBeDefined();
   });
 });

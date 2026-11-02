@@ -187,7 +187,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
 
   // ─── Data Selectors & Resolvers ──────────────────────────────────────────
   const logsList = useSelector(s => 
-    isDb ? s.broker.dbLogsByDbName[targetName] : s.broker.logsByBroker[targetName], 
+    isDb ? s.broker.dbLogsByDb[dbKey(hostUid, targetName)] : s.broker.logsByBroker[targetName], 
     shallowEqual
   );
   const logsLoading = useSelector(s => 
