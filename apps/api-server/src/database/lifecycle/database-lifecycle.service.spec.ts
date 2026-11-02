@@ -719,16 +719,6 @@ describe('DatabaseLifecycleService', () => {
       expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not running' }]);
     });
 
-    it('fails instead of skipping everything when the database list cannot be read', async () => {
-      hostState([]);
-      (databaseInfoService.startInfo as jest.Mock).mockResolvedValue({ dblist: null, activelist: { active: [] } });
-
-      await expect(
-        service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'start', ['db1'])
-      ).rejects.toThrow('Could not read the databases of this host');
-      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
-    });
-
     it('restarts by stopping then starting, and does not start one whose stop failed', async () => {
       hostState(['hadb1', 'db1', 'db2']);
       cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {

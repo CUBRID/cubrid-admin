@@ -83,15 +83,6 @@ function activeDbnamesOf(info: { activelist?: { active?: unknown } } | null | un
   return new Set(active.map((a: { dbname: string } | string) => (typeof a === 'string' ? a : a?.dbname)));
 }
 
-/** Names of the databases start-info lists; throws if it can't be read. */
-function knownDbnamesOf(info: { dblist?: { dbs?: unknown } } | null | undefined): Set<string> {
-  const dbs = info?.dblist?.dbs;
-  if (!Array.isArray(dbs)) {
-    throw new Error('Could not read the databases of this host');
-  }
-  return new Set(dbs.map((db: { dbname: string }) => db?.dbname));
-}
-
 export const BULK_SKIP_REASON = {
   notFound: 'Not a database on this host',
   alreadyRunning: 'Already running',
@@ -477,7 +468,9 @@ export class DatabaseLifecycleService extends BaseService {
     return this.holdingDatabases(userId, hostUid, requested, `${action}SelectedDatabases`, async () => {
       const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
       const info = await this.databaseInfoService.startInfo(userId, hostUid);
-      const known = knownDbnamesOf(info);
+      // An empty dblist (CMS sends `null` for an empty section) means the
+      // host has no databases; a failed read already threw as a CMS failure.
+      const known = new Set((info?.dblist?.dbs || []).map((db) => db.dbname));
       const running = activeDbnamesOf(info);
       const targets: string[] = [];
       for (const dbname of requested) {
