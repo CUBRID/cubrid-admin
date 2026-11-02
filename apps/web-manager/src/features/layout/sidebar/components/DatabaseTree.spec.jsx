@@ -100,6 +100,42 @@ it('keeps the selection on a plain click inside it and ends it on one outside', 
   expect(store.getState().database.selectedDatabase).toBe('d');
 });
 
+it('counts the plain-clicked database when Ctrl/Cmd-clicking another, as a file explorer does', async () => {
+  await render();
+  await clickDb('a');
+  await clickDb('c', { ctrlKey: true });
+  expect([...selection].sort()).toEqual(['a', 'c']);
+
+  await clickDb('d', { metaKey: true });
+  expect([...selection].sort()).toEqual(['a', 'c', 'd']);
+});
+
+it('takes a database out with Ctrl/Cmd-click, including the plain-clicked one', async () => {
+  await render();
+  await clickDb('a');
+  await clickDb('b', { ctrlKey: true });
+  await clickDb('a', { ctrlKey: true });
+  expect([...selection]).toEqual(['b']);
+});
+
+it('selects the range from the plain-clicked database with Shift', async () => {
+  await render();
+  await clickDb('b');
+  await clickDb('d', { shiftKey: true });
+  expect([...selection]).toEqual(['b', 'c', 'd']);
+});
+
+it('keeps the selection on a right-click inside it', async () => {
+  await render();
+  await clickDb('a');
+  await clickDb('b', { ctrlKey: true });
+  await act(async () => {
+    const summary = container.querySelector('[data-testid="tree-node-a"] summary');
+    summary.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  });
+  expect([...selection].sort()).toEqual(['a', 'b']);
+});
+
 it('does not select the database or open its node on a multi-select click', async () => {
   await render();
   await clickDb('c', { ctrlKey: true });

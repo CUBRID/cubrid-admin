@@ -3,9 +3,11 @@ import { useRef } from 'react';
 /**
  * Ctrl/Cmd toggles an item in a tree's multi-selection and Shift selects
  * the range from the last clicked item, the same rules as the host tree
- * (HostGroupTree.handleMultiSelect). A plain click on an item outside the
- * selection ends it; one inside keeps it, so a right-click right after
- * still acts on all of them.
+ * (HostGroupTree.handleMultiSelect). As in a file explorer, the item picked
+ * with a plain click counts too: plain click A, then Ctrl/Cmd-click B
+ * selects both. A plain click on an item outside the selection ends it;
+ * one inside keeps it, so a right-click right after still acts on all of
+ * them.
  *
  * @param {string[]} order - item keys in the order the tree shows them
  * @returns {(event, key) => boolean} true when the click was a
@@ -25,8 +27,10 @@ export function useTreeMultiSelect(order, selected, onSelectedChange) {
       }
     }
     if (e?.metaKey || e?.ctrlKey) {
+      const anchor = lastClickedRef.current;
       onSelectedChange((prev) => {
-        const next = new Set(prev);
+        // Nothing multi-selected yet: start from the plain-clicked item.
+        const next = new Set(prev.size === 0 && anchor !== null && anchor !== key && order.includes(anchor) ? [anchor] : prev);
         if (next.has(key)) next.delete(key);
         else next.add(key);
         return next;

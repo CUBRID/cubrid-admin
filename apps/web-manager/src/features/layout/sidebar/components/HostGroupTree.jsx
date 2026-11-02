@@ -172,9 +172,15 @@ export default function HostGroupTree({
       }
     }
 
+    // As in a file explorer, the host picked with a plain click counts too:
+    // plain click A, then Ctrl/Cmd-click B selects both
+    // (useTreeMultiSelect follows the same rules).
     if (e.metaKey || e.ctrlKey) {
+      const anchor = lastClickedHostUidRef.current;
       onSelectedHostUidsChange((prev) => {
-        const next = new Set(prev);
+        const next = new Set(
+          prev.size === 0 && anchor !== null && anchor !== uid && flattenedHostUids.includes(anchor) ? [anchor] : prev
+        );
         if (next.has(uid)) next.delete(uid);
         else next.add(uid);
         return next;
