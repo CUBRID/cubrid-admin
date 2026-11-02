@@ -973,7 +973,7 @@ describe('DatabaseLifecycleService', () => {
         stopFailed: [],
         startFailed: [],
         notRestarted: [],
-        skipped: [{ name: 'manual', reason: 'Not logged in' }],
+        skipped: [{ name: 'manual', reason: 'Not logged in', phase: 'stop' }],
       });
     });
 

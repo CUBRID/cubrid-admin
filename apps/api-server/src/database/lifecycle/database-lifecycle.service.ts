@@ -89,9 +89,11 @@ export type ServiceFailure = { name: string; error: string };
 
 /**
  * A database a whole-service step left alone because the user isn't logged
- * in to it: nothing was sent to it, so it is still in the state it was in.
+ * in to it: nothing was sent to it, so it is still in the state it was in. A
+ * restart sets `phase`: skipped at the stop, it kept running; skipped at the
+ * start, it was stopped and was not started.
  */
-export type ServiceSkip = { name: string; reason: string };
+export type ServiceSkip = { name: string; reason: string; phase?: 'stop' | 'start' };
 
 /** What restartWholeService reports; see there. */
 export type ServiceRestartResult = {
@@ -919,7 +921,12 @@ export class DatabaseLifecycleService extends BaseService {
       );
       // A database skipped at the stop kept running, so it is not counted as
       // not restarted below; one skipped at the start stayed stopped.
-      const skipped = [...new Map([...stopSkipped, ...startSkipped].map((s) => [s.name, s])).values()];
+      const skipped: ServiceSkip[] = [
+        ...stopSkipped.map((s) => ({ ...s, phase: 'stop' as const })),
+        ...startSkipped
+          .filter((s) => !stopSkipped.some((stop) => stop.name === s.name))
+          .map((s) => ({ ...s, phase: 'start' as const })),
+      ];
 
       // Until the status is read, every database that was running counts as
       // possibly not back; after it, only the ones it shows stopped.
@@ -933,7 +940,7 @@ export class DatabaseLifecycleService extends BaseService {
           await this.runSelectedDatabasesActionUnlocked(userId, hostUid, 'start', toStart, out);
           notRestarted = out.failed.map(({ dbname, error }) => ({ dbname, error }));
           for (const { dbname, reason } of out.skipped) {
-            if (!skipped.some((s) => s.name === dbname)) skipped.push({ name: dbname, reason });
+            if (!skipped.some((s) => s.name === dbname)) skipped.push({ name: dbname, reason, phase: 'start' });
           }
         }
       } catch (err: unknown) {

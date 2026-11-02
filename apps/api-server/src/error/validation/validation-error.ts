@@ -64,7 +64,7 @@ export class ValidationError extends AppError {
     return new ValidationError('VALIDATION', ValidationErrorCode.MISSING_DB_CREDENTIALS, {
       dbname,
       missingFields,
-      message: `Database profile not found for dbname: ${dbname}. Client must provide id and password when profile doesn't exist.`,
+      message: `No saved login for database ${dbname}. Provide an id and password.`,
       ...additionalData,
     });
   }

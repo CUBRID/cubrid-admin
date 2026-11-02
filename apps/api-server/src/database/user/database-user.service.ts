@@ -95,7 +95,12 @@ export class DatabaseUserService extends BaseService {
     const host = await this.hostService.findHostInternal(userId, hostUid);
     if (this.isDbLoginActive(userId, hostUid, dbname, host.token)) return;
     const reason = host.dbProfiles?.[dbname]?.loggedOut ? 'loggedOut' : 'notLoggedIn';
-    throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], { reason });
+    throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], {
+      reason,
+      message: reason === 'loggedOut'
+        ? `Logged out of database ${dbname}. Log in to it first.`
+        : `Not logged in to database ${dbname}. Log in to it first.`,
+    });
   }
 
   /**
