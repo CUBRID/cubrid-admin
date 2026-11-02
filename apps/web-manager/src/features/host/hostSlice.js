@@ -199,7 +199,7 @@ export const setHostPassword = createAsyncThunk(
   }
 );
 
-const formatServiceFailures = (actionLabel, failures) => (
+export const formatServiceFailures = (actionLabel, failures) => (
   `Failed to ${actionLabel} for: ${failures.map(({ name, error }) => `${name} (${error})`).join(', ')}`
 );
 

@@ -838,6 +838,78 @@ describe('DatabaseLifecycleService', () => {
     });
   });
 
+  describe('restartWholeService', () => {
+    // 'auto' is in the autostart list, 'manual' was started by hand, 'off' is stopped.
+    let running: Set<string>;
+    const tasksOf = (task: string) =>
+      cmsClient.postAuthenticated.mock.calls.filter(([, body]) => body.task === task).map(([, body]) => (body as { dbname?: string }).dbname);
+    beforeEach(() => {
+      running = new Set(['auto', 'manual']);
+      jest.spyOn(databaseInfoService, 'startInfo').mockImplementation(async () => ({
+        dblist: { dbs: ['auto', 'manual', 'off'].map((dbname) => ({ dbname })) },
+        activelist: { active: [...running].map((dbname) => ({ dbname })) },
+      }) as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', 'service=server,broker', 'server=auto'] }],
+      } as any);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        const dbname = (body as { dbname?: string }).dbname as string;
+        if (body.task === 'stopdb') running.delete(dbname);
+        if (body.task === 'startdb') running.add(dbname);
+        return { status: 'success', task: body.task } as any;
+      });
+    });
+
+    it('stops, starts, and starts again a database that was started by hand', async () => {
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual']);
+      expect(tasksOf('startdb')).toEqual(['auto', 'manual']);
+      expect([...running].sort()).toEqual(['auto', 'manual']);
+      expect(result).toEqual({ stopFailed: [], startFailed: [], notRestarted: [] });
+    });
+
+    it('holds the databases for the whole sequence, so a single start in between is refused', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      let midway: unknown;
+      mockBrokerService.startAllBrokers.mockImplementation(async () => {
+        midway = await service.startDatabase(mockUserId, mockHostUid, 'off').catch((e) => e);
+        return { success: true };
+      });
+
+      await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(midway).toBeInstanceOf(DatabaseError);
+      expect((midway as DatabaseError).code).toBe(DatabaseErrorCode.DATABASE_ACTION_IN_PROGRESS);
+      expect(tasksOf('startdb')).not.toContain('off');
+    });
+
+    it('stops nothing when it cannot read which databases are running', async () => {
+      let reads = 0;
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async () => {
+        if (++reads > 1) throw new Error('status unavailable');
+        return { dblist: { dbs: [{ dbname: 'auto' }] }, activelist: { active: [{ dbname: 'auto' }] } };
+      });
+      const mockBrokerService = (service as any).brokerService;
+
+      await expect(service.restartWholeService(mockUserId, mockHostUid)).rejects.toThrow();
+      expect(mockBrokerService.stopAllBrokers).not.toHaveBeenCalled();
+      expect(tasksOf('stopdb')).toEqual([]);
+    });
+
+    it('still starts the service when the stop reported failures, and reports both', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockRejectedValueOnce(new Error('broker stop: fail'));
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(result.stopFailed).toEqual([{ name: 'brokers', error: 'broker stop: fail' }]);
+      expect(mockBrokerService.startAllBrokers).toHaveBeenCalled();
+      expect(result.notRestarted).toEqual([]);
+    });
+  });
+
   describe('restartDatabase', () => {
     const mockBaseResponse = {
       __EXEC_TIME: '10 ms',

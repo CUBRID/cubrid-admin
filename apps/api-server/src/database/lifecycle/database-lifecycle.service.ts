@@ -83,6 +83,16 @@ function activeDbnamesOf(info: { activelist?: { active?: unknown } } | null | un
   return new Set(active.map((a: { dbname: string } | string) => (typeof a === 'string' ? a : a?.dbname)));
 }
 
+/** A broker or database step of a whole-service start/stop that failed. */
+export type ServiceFailure = { name: string; error: string };
+
+/** What restartWholeService reports; see there. */
+export type ServiceRestartResult = {
+  stopFailed: ServiceFailure[];
+  startFailed: ServiceFailure[];
+  notRestarted: Array<{ dbname: string; error: string }>;
+};
+
 export const BULK_SKIP_REASON = {
   notFound: 'Not a database on this host',
   alreadyRunning: 'Already running',
@@ -715,14 +725,27 @@ export class DatabaseLifecycleService extends BaseService {
   async startWholeService(
     userId: string,
     hostUid: string
-  ): Promise<{ failed: Array<{ name: string; error: string }> }> {
+  ): Promise<{ failed: ServiceFailure[] }> {
     // Checked once, up front — brokers start before databases below, and a
     // job-in-progress error surfacing only at the database step would mean
     // brokers already started for a service-start we should have blocked
     // outright.
     await this.assertNoActiveJob(userId, hostUid);
+    return this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
+      this.startAllDatabases(userId, hostUid, autoStart)
+    );
+  }
 
-    const failed: Array<{ name: string; error: string }> = [];
+  /**
+   * startWholeService's steps; `startDatabases` starts the databases
+   * (holding them, or not when the caller already holds them).
+   */
+  private async startWholeServiceSteps(
+    userId: string,
+    hostUid: string,
+    startDatabases: (autoStartServers: string[]) => Promise<BulkDatabaseActionResult>
+  ): Promise<{ failed: ServiceFailure[] }> {
+    const failed: ServiceFailure[] = [];
 
     try {
       await this.brokerService.startAllBrokers(userId, hostUid);
@@ -751,7 +774,7 @@ export class DatabaseLifecycleService extends BaseService {
       // (busy database, job check, HA list read) is reported, not thrown —
       // same as stopWholeService.
       try {
-        const { failed: dbFailed, skipped } = await this.startAllDatabases(userId, hostUid, autoStartServers);
+        const { failed: dbFailed, skipped } = await startDatabases(autoStartServers);
         failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
         // No `skipped` in this response shape — a skipped HA database didn't
         // start, so it's reported as not started rather than dropped silently.
@@ -781,13 +804,26 @@ export class DatabaseLifecycleService extends BaseService {
   async stopWholeService(
     userId: string,
     hostUid: string
-  ): Promise<{ failed: Array<{ name: string; error: string }> }> {
+  ): Promise<{ failed: ServiceFailure[] }> {
     // See startWholeService's matching comment — checked once, up front, so
     // a job-in-progress block can't happen only after brokers already
     // stopped.
     await this.assertNoActiveJob(userId, hostUid);
+    return this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
+      this.stopAllDatabases(userId, hostUid, dbnames)
+    );
+  }
 
-    const failed: Array<{ name: string; error: string }> = [];
+  /**
+   * stopWholeService's steps; `stopDatabases` stops the databases (holding
+   * them, or not when the caller already holds them).
+   */
+  private async stopWholeServiceSteps(
+    userId: string,
+    hostUid: string,
+    stopDatabases: (dbnames: string[]) => Promise<BulkDatabaseActionResult>
+  ): Promise<{ failed: ServiceFailure[] }> {
+    const failed: ServiceFailure[] = [];
 
     try {
       await this.brokerService.stopAllBrokers(userId, hostUid);
@@ -816,7 +852,7 @@ export class DatabaseLifecycleService extends BaseService {
     // above, so it gets the same treatment instead of losing the brokers
     // failure already collected.
     try {
-      const { failed: dbFailed, skipped } = await this.stopAllDatabases(userId, hostUid, dbnames);
+      const { failed: dbFailed, skipped } = await stopDatabases(dbnames);
       failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
       // See startWholeService's matching comment.
       failed.push(...skipped.map(({ dbname, reason }) => ({ name: dbname, error: reason })));
@@ -825,6 +861,61 @@ export class DatabaseLifecycleService extends BaseService {
     }
 
     return { failed };
+  }
+
+  /**
+   * Restart the whole service on a host in one call: stop it, start it, then
+   * start again the databases that were running before but are not now (a
+   * service start only brings up the `server=` autostart list and HA
+   * databases). Every database of the host and every HA database is held
+   * for the whole sequence, so no other start/stop or job on them runs in
+   * between. Which databases were running is read once they are held; if
+   * that read fails, nothing is stopped and this throws. The start is tried
+   * even if the stop reported failures (part of it did stop).
+   *
+   * @returns The stop and start failures (as stopWholeService and
+   *   startWholeService report them) and the databases that were running
+   *   but could not be started again
+   */
+  @HandleCmsErrors()
+  async restartWholeService(userId: string, hostUid: string): Promise<ServiceRestartResult> {
+    await this.assertNoActiveJob(userId, hostUid);
+    const [info, haDbNames] = await Promise.all([
+      this.databaseInfoService.startInfo(userId, hostUid),
+      this.databaseInfoService.getHaDbNames(userId, hostUid),
+    ]);
+    const held = [
+      ...(info?.dblist?.dbs || []).map((db) => db.dbname),
+      ...activeDbnamesOf(info),
+      ...haDbNames,
+    ];
+    return this.holdingDatabases(userId, hostUid, held, 'restartWholeService', async () => {
+      const wasRunning = await this.readActiveDbnames(userId, hostUid);
+      const { failed: stopFailed } = await this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
+        this.stopAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames)
+      );
+      const { failed: startFailed } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
+        this.startAllDatabasesUnlocked(userId, hostUid, autoStart, haDbNames)
+      );
+
+      // Until the status is read, every database that was running counts as
+      // possibly not back; after it, only the ones it shows stopped.
+      let toStart = [...wasRunning];
+      let notRestarted: Array<{ dbname: string; error: string }> = [];
+      try {
+        const running = await this.readActiveDbnames(userId, hostUid);
+        toStart = toStart.filter((dbname) => !running.has(dbname));
+        if (toStart.length > 0) {
+          const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
+          await this.runSelectedDatabasesActionUnlocked(userId, hostUid, 'start', toStart, out);
+          notRestarted = out.failed.map(({ dbname, error }) => ({ dbname, error }));
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err.message : String(err);
+        notRestarted = toStart.map((dbname) => ({ dbname, error }));
+      }
+      return { stopFailed, startFailed, notRestarted };
+    });
   }
 
   /**

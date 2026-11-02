@@ -7,6 +7,7 @@ vi.hoisted(() => {
 });
 vi.mock('../database/databaseApi', () => ({
   databaseApi: {
+    restartWholeService: vi.fn(),
     stopWholeService: vi.fn(),
     startWholeService: vi.fn(),
     getStartInfo: vi.fn(),
@@ -22,73 +23,52 @@ import databaseReducer from '../database/databaseCoreSlice';
 import brokerReducer from '../broker/brokerSlice';
 import { restartServiceKeepingDatabases } from './hostServiceRestart';
 
-const storeWithRunning = (active) => {
+const makeStore = () => {
   const reducer = combineReducers({ host: hostReducer, database: databaseReducer, broker: brokerReducer });
-  const initial = reducer(undefined, { type: '@@init' });
-  return configureStore({
-    reducer,
-    preloadedState: { ...initial, database: { ...initial.database, activeDatabasesByHost: { h1: active } } },
-  });
+  return configureStore({ reducer });
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  databaseApi.stopWholeService.mockResolvedValue({ failed: [] });
-  databaseApi.startWholeService.mockResolvedValue({ failed: [] });
-});
-
-it('starts again the databases that were running before but not after the service start', async () => {
-  const before = { dblist: { dbs: [{ dbname: 'auto' }, { dbname: 'manual' }] }, activelist: { active: [{ dbname: 'auto' }, { dbname: 'manual' }] } };
-  const info = { ...before, activelist: { active: [{ dbname: 'auto' }] } };
-  let reads = 0;
-  databaseApi.getStartInfo.mockResolvedValue(info);
-  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: true, value: reads++ === 0 ? before : info, seq: reads }));
-  databaseApi.runSelectedDatabasesAction.mockResolvedValue({ succeeded: ['manual'], failed: [], skipped: [] });
-  const store = storeWithRunning(['auto', 'manual']);
-
-  const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
-
-  expect(databaseApi.stopWholeService).toHaveBeenCalledBefore(databaseApi.startWholeService);
-  expect(databaseApi.runSelectedDatabasesAction).toHaveBeenCalledWith('h1', 'start', ['manual']);
-  expect(result).toEqual({ problems: [], notRestarted: [] });
-});
-
-it('still starts the service when the stop reported failures', async () => {
-  databaseApi.stopWholeService.mockResolvedValue({ failed: [{ name: 'brokers', error: 'x' }] });
   const info = { dblist: { dbs: [] }, activelist: { active: [] } };
   databaseApi.getStartInfo.mockResolvedValue(info);
   databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: true, value: info, seq: 1 }));
-  const store = storeWithRunning([]);
-
-  const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
-
-  expect(databaseApi.startWholeService).toHaveBeenCalled();
-  expect(result.problems).toHaveLength(1);
 });
 
-it('reads which databases were running from the host, not from lists that may be empty', async () => {
-  const before = { dblist: { dbs: [{ dbname: 'auto' }, { dbname: 'manual' }] }, activelist: { active: [{ dbname: 'auto' }, { dbname: 'manual' }] } };
-  const after = { ...before, activelist: { active: [{ dbname: 'auto' }] } };
-  let reads = 0;
-  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: true, value: reads++ === 0 ? before : after, seq: reads }));
-  databaseApi.runSelectedDatabasesAction.mockResolvedValue({ succeeded: ['manual'], failed: [], skipped: [] });
-  // The client has no list for this host (another host is selected).
-  const store = storeWithRunning(undefined);
+it('restarts the service with one request and reads the host again afterwards', async () => {
+  databaseApi.restartWholeService.mockResolvedValue({ stopFailed: [], startFailed: [], notRestarted: [] });
+  const store = makeStore();
 
   const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
 
-  expect(databaseApi.runSelectedDatabasesAction).toHaveBeenCalledWith('h1', 'start', ['manual']);
+  expect(databaseApi.restartWholeService).toHaveBeenCalledTimes(1);
+  expect(databaseApi.restartWholeService).toHaveBeenCalledWith('h1');
+  expect(databaseApi.stopWholeService).not.toHaveBeenCalled();
+  expect(databaseApi.startWholeService).not.toHaveBeenCalled();
+  expect(databaseApi.runSelectedDatabasesAction).not.toHaveBeenCalled();
+  expect(databaseApi.readStartInfo).toHaveBeenCalled();
   expect(result).toEqual({ problems: [], notRestarted: [] });
 });
 
-it('does not stop the service when it cannot read which databases are running', async () => {
-  databaseApi.readStartInfo.mockImplementation(() => Promise.resolve({ ok: false, error: new Error('No response was received from CMS'), seq: 1 }));
-  const store = storeWithRunning(['auto']);
+it('reports the stop and start failures and the databases not started again', async () => {
+  databaseApi.restartWholeService.mockResolvedValue({
+    stopFailed: [{ name: 'brokers', error: 'x' }],
+    startFailed: [],
+    notRestarted: [{ dbname: 'manual', error: 'boom' }],
+  });
+  const store = makeStore();
 
   const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
 
-  expect(databaseApi.stopWholeService).not.toHaveBeenCalled();
-  expect(databaseApi.startWholeService).not.toHaveBeenCalled();
-  expect(result.problems).toHaveLength(1);
-  expect(result.notRestarted).toEqual([]);
+  expect(result.problems).toEqual(['Failed to stop service for: brokers (x)']);
+  expect(result.notRestarted).toEqual([{ dbname: 'manual', error: 'boom' }]);
+});
+
+it('reports a refused or failed request as the problem', async () => {
+  databaseApi.restartWholeService.mockRejectedValue({ response: { data: { message: 'testdb is already being started or stopped' } } });
+  const store = makeStore();
+
+  const result = await store.dispatch(restartServiceKeepingDatabases('h1'));
+
+  expect(result).toEqual({ problems: ['testdb is already being started or stopped'], notRestarted: [] });
 });

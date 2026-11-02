@@ -12,7 +12,7 @@ import {
   StartStopAllDatabasesDto,
   SelectedDatabasesActionDto,
 } from '@type/index';
-import { BulkDatabaseActionResult, DatabaseLifecycleService } from './database-lifecycle.service';
+import { BulkDatabaseActionResult, DatabaseLifecycleService, ServiceRestartResult } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
 
@@ -273,6 +273,29 @@ export class DatabaseLifecycleController {
 
     this.logger.log(`Stopping whole service on host: ${hostUid}`);
     return await this.lifecycleService.stopWholeService(userId, hostUid);
+  }
+
+  /**
+   * Restart the whole service on a host in one call: stop, start, then start
+   * again the databases that were running before (see
+   * DatabaseLifecycleService.restartWholeService).
+   *
+   * @route POST /:hostUid/database/service/restart
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @returns Stop and start failures, and the databases not started again
+   * @example
+   * // POST /host-uid/database/service/restart
+   */
+  @Post('service/restart')
+  async restartWholeService(
+    @Request() req,
+    @Param('hostUid') hostUid: string
+  ): Promise<ServiceRestartResult> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Restarting whole service on host: ${hostUid}`);
+    return await this.lifecycleService.restartWholeService(userId, hostUid);
   }
 
   /**
