@@ -24,10 +24,10 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal, serviceSkippedTable } from '../../database/databaseBulkActions';
-import { autoStartServers, loginSkipsOf, readStartInfoDatabases } from '../../database/loginSkips';
+import { autoStartServers, loginSkipsOf, readStartInfoDatabases, restartLoginSkips, serviceStartTargets } from '../../database/loginSkips';
 import { hostApi } from '../../host/hostApi';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
-import { restartServiceKeepingDatabases } from '../../host/hostServiceRestart';
+import { restartHostService } from '../../host/hostServiceRestart';
 import {
   MULTI_DB_ACTIONS,
   MULTI_DB_ACTION_ICONS,
@@ -429,17 +429,15 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     }
   };
 
+  const readAutoStart = (hostUid) => hostApi.getHostConfig(hostUid, 'cubridconf')
+    .then((response) => new Set(autoStartServers(response?.conflist?.[0]?.confdata)))
+    .catch(() => new Set());
   // Service start brings up the autostart list and the HA databases; the
   // ones of those not running and not logged in are named before it runs.
   const requestStartService = async (hostUid) => {
     if (!hostUid) return;
-    const [databases, autoStart] = await Promise.all([
-      dispatch(readStartInfoDatabases(hostUid)),
-      hostApi.getHostConfig(hostUid, 'cubridconf')
-        .then((response) => new Set(autoStartServers(response?.conflist?.[0]?.confdata)))
-        .catch(() => new Set()),
-    ]);
-    const targets = (databases || []).filter((db) => !db.running && (db.isHa || autoStart.has(db.dbname))).map((db) => db.dbname);
+    const [databases, autoStart] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readAutoStart(hostUid)]);
+    const targets = serviceStartTargets(databases || [], autoStart);
     const skips = loginSkipsOf(databases || [], targets);
     if (skips.count === 0) {
       handleServiceAction(hostUid, 'start');
@@ -451,6 +449,44 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       confirmLabel: CM.startService,
       variant: 'primary',
       run: () => handleServiceAction(hostUid, 'start'),
+    });
+  };
+
+  // Service restart skips the databases the user isn't logged in to at each
+  // step: running ones are not stopped and keep running, stopped ones the
+  // start would bring up stay stopped. Both are named before it runs.
+  const requestRestartService = async (hostUid, serverName) => {
+    if (!hostUid) return;
+    const [databases, autoStart] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readAutoStart(hostUid)]);
+    const { keepsRunning, notStarted } = restartLoginSkips(databases || [], autoStart);
+    const description = keepsRunning.length + notStarted.length === 0 ? CM.confirmRestartServiceDesc(serverName) : (
+      <>
+        {CM.confirmRestartServiceDesc(serverName)}
+        {keepsRunning.length > 0 && <span className="block mt-2 text-amber-600 dark:text-amber-400">{CM.restartSkipKeepsRunningMsg(keepsRunning)}</span>}
+        {notStarted.length > 0 && <span className="block mt-1 text-amber-600 dark:text-amber-400">{CM.restartSkipNotStartedMsg(notStarted)}</span>}
+      </>
+    );
+    requestActionConfirm({
+      title: CM.confirmRestartServiceTitle,
+      description,
+      confirmLabel: CM.restartService,
+      variant: 'danger',
+      run: async () => {
+        setLoadingText(CM.restartingService);
+        startAction();
+        const { problems, skipped, leftStopped } = await dispatch(restartHostService(hostUid));
+        resetAction();
+        const tables = skipped.length > 0 ? [serviceSkippedTable(CM, skipped, 'restart')] : [];
+        const notes = [
+          skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : '',
+          leftStopped.length > 0 ? CM.serviceRestartLeftStoppedMsg(leftStopped) : '',
+        ].filter(Boolean);
+        dispatch(showStatusModal(problems.length > 0
+          ? { type: 'error', title: CM.restartService, message: [...problems, ...notes].join('\n'), tables }
+          : notes.length > 0
+            ? { type: 'info', title: CM.restartService, message: [CM.serviceRestartedMsg, ...notes].join('\n'), tables }
+            : { type: 'success', title: CM.restartService, message: CM.serviceRestartedMsg }));
+      },
     });
   };
 
@@ -1272,28 +1308,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               const hostUid = contextMenu.hostUid;
               const serverName = contextMenu.alias || contextMenu.server || hostUid;
               setContextMenu(null);
-              confirmWithLoginSkips(hostUid, runningDbs, {
-                title: CM.confirmRestartServiceTitle,
-                description: CM.confirmRestartServiceDesc(serverName),
-                confirmLabel: CM.restartService,
-                variant: 'danger',
-                run: async () => {
-                  setLoadingText(CM.restartingService);
-                  startAction();
-                  const { problems, notRestarted, skipped } = await dispatch(restartServiceKeepingDatabases(hostUid));
-                  resetAction();
-                  const issues = [
-                    ...problems,
-                    notRestarted.length > 0 ? CM.serviceRestartNotRestartedMsg(notRestarted.map((f) => f.dbname)) : '',
-                  ].filter(Boolean);
-                  const tables = skipped.length > 0 ? [serviceSkippedTable(CM, skipped, 'restart')] : [];
-                  dispatch(showStatusModal(issues.length > 0
-                    ? { type: 'error', title: CM.restartService, message: issues.join('\n'), tables }
-                    : skipped.length > 0
-                      ? { type: 'info', title: CM.restartService, message: `${CM.serviceRestartedMsg} ${CM.someDatabasesSkippedMsg(skipped.length)}`, tables }
-                      : { type: 'success', title: CM.restartService, message: CM.serviceRestartedMsg }));
-                },
-              }, { blockWhenAllSkipped: false });
+              requestRestartService(hostUid, serverName);
             }}
           />
           <MenuDivider />

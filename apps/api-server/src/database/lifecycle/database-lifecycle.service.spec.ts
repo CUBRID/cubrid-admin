@@ -951,16 +951,16 @@ describe('DatabaseLifecycleService', () => {
       });
     });
 
-    it('stops, starts, and starts again a database that was started by hand', async () => {
+    it('stops, then starts only the autostart list; a database started by hand stays stopped and is reported', async () => {
       const result = await service.restartWholeService(mockUserId, mockHostUid);
 
       expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual']);
-      expect(tasksOf('startdb')).toEqual(['auto', 'manual']);
-      expect([...running].sort()).toEqual(['auto', 'manual']);
-      expect(result).toEqual({ stopFailed: [], startFailed: [], notRestarted: [], skipped: [] });
+      expect(tasksOf('startdb')).toEqual(['auto']);
+      expect([...running].sort()).toEqual(['auto']);
+      expect(result).toEqual({ stopFailed: [], startFailed: [], skipped: [], leftStopped: ['manual'] });
     });
 
-    it('leaves a running database the user is not logged in to running, and reports it skipped, not as not restarted', async () => {
+    it('leaves a running database the user is not logged in to running, and reports it skipped, not as left stopped', async () => {
       databaseUserService.ensureDbLogin.mockImplementation(async (_u: string, _h: string, dbname: string) => {
         if (dbname === 'manual') throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], { reason: 'notLoggedIn' });
       });
@@ -973,20 +973,51 @@ describe('DatabaseLifecycleService', () => {
       expect(result).toEqual({
         stopFailed: [],
         startFailed: [],
-        notRestarted: [],
         skipped: [{ name: 'manual', reason: 'Not logged in', phase: 'stop' }],
+        leftStopped: [],
       });
     });
 
-    it('stops and starts again a running database that dblist leaves out', async () => {
+    it('stops a running database that dblist leaves out, and reports it left stopped when not in the autostart list', async () => {
       running.add('unlisted');
 
       const result = await service.restartWholeService(mockUserId, mockHostUid);
 
       expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual', 'unlisted']);
-      expect(tasksOf('startdb').sort()).toEqual(['auto', 'manual', 'unlisted']);
-      expect([...running].sort()).toEqual(['auto', 'manual', 'unlisted']);
-      expect(result).toEqual({ stopFailed: [], startFailed: [], notRestarted: [], skipped: [] });
+      expect(tasksOf('startdb')).toEqual(['auto']);
+      expect(result.leftStopped.sort()).toEqual(['manual', 'unlisted']);
+    });
+
+    it('does not report as left stopped a database whose start failed', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', 'service=server,broker', 'server=auto,manual'] }],
+      } as any);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        const dbname = (body as { dbname?: string }).dbname as string;
+        if (body.task === 'stopdb') running.delete(dbname);
+        if (body.task === 'startdb' && dbname === 'manual') throw new Error('start: fail');
+        if (body.task === 'startdb') running.add(dbname);
+        return { status: 'success', task: body.task } as any;
+      });
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(result.startFailed).toEqual([expect.objectContaining({ name: 'manual' })]);
+      expect(result.leftStopped).toEqual([]);
+    });
+
+    it('reports nothing left stopped when the status cannot be read after the start', async () => {
+      // Every read after the service start fails.
+      const base = (databaseInfoService.startInfo as jest.Mock).getMockImplementation()!;
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+        if (tasksOf('startdb').length > 0) throw new Error('status unavailable');
+        return base(...args);
+      });
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(result.leftStopped).toEqual([]);
+      expect(tasksOf('startdb')).toEqual(['auto']);
     });
 
     it('holds the databases for the whole sequence, so a single start in between is refused', async () => {
@@ -1025,7 +1056,7 @@ describe('DatabaseLifecycleService', () => {
 
       expect(result.stopFailed).toEqual([{ name: 'brokers', error: 'broker stop: fail' }]);
       expect(mockBrokerService.startAllBrokers).toHaveBeenCalled();
-      expect(result.notRestarted).toEqual([]);
+      expect(result.startFailed).toEqual([]);
     });
   });
 

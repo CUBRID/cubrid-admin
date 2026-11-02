@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoStartServers, loginSkipsOf, startInfoDatabases } from './loginSkips';
+import { autoStartServers, loginSkipsOf, restartLoginSkips, serviceStartTargets, startInfoDatabases } from './loginSkips';
 import { serviceSkippedTable } from './databaseBulkActions';
 import { CM } from '../../constants/cmLabels';
 
@@ -56,5 +56,33 @@ describe('serviceSkippedTable', () => {
       { name: 'x', reasons: [{ reason: `Not logged in · ${CM.skippedStillRunning}` }] },
       { name: 'y', reasons: [{ reason: `Logged out · ${CM.skippedStoppedNotStarted}` }] },
     ]);
+  });
+});
+
+describe('service restart skips', () => {
+  const db = (dbname, running, loggedIn, extra = {}) => ({ dbname, running, isHa: false, loggedIn, loggedOut: false, ...extra });
+  const databases = [
+    db('auto_on', true, true),
+    db('auto_on_nologin', true, false),
+    db('manual_nologin', true, false, { loggedOut: true }),
+    db('auto_off_nologin', false, false),
+    db('ha_off_nologin', false, false, { isHa: true }),
+    db('other_off_nologin', false, false),
+  ];
+  const autoStart = new Set(['auto_on', 'auto_on_nologin', 'auto_off_nologin']);
+
+  it('brings up the stopped autostart and HA databases on a service start', () => {
+    expect(serviceStartTargets(databases, autoStart)).toEqual(['auto_off_nologin', 'ha_off_nologin']);
+  });
+
+  it('names the running databases not logged in as kept running, and the stopped ones the start would bring up as not started', () => {
+    expect(restartLoginSkips(databases, autoStart)).toEqual({
+      keepsRunning: ['manual_nologin', 'auto_on_nologin'],
+      notStarted: ['auto_off_nologin', 'ha_off_nologin'],
+    });
+  });
+
+  it('names nothing when every database is logged in', () => {
+    expect(restartLoginSkips([db('a', true, true), db('b', false, true)], new Set(['b']))).toEqual({ keepsRunning: [], notStarted: [] });
   });
 });

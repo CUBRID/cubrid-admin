@@ -2025,9 +2025,11 @@ export const CM_KO = {
   restartService: '서비스 재시작',
   restartingService: '서비스 재시작 중',
   confirmRestartServiceTitle: '서비스 재시작',
-  confirmRestartServiceDesc: (server) => `${server}의 CUBRID 서비스를 중지했다가 시작할까요? 실행 중이던 데이터베이스는 다시 시작합니다.`,
+  confirmRestartServiceDesc: (server) => `${server}의 CUBRID 서비스를 중지했다가 시작할까요? 자동 시작 목록의 DB와 HA DB만 시작하며, 그 밖의 실행 중인 DB는 중지된 채로 남습니다.`,
   serviceRestartedMsg: '서비스를 재시작했습니다.',
-  serviceRestartNotRestartedMsg: (names) => `다시 시작하지 못함: ${names.join(', ')}`,
+  serviceRestartLeftStoppedMsg: (names) => `중지 후 다시 시작하지 않음(자동 시작 목록에 없음): ${names.join(', ')}`,
+  restartSkipKeepsRunningMsg: (names) => `로그인하지 않아 중지하지 않음(계속 실행): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`,
+  restartSkipNotStartedMsg: (names) => `로그인하지 않아 시작하지 않음: ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`,
   restartBroker: '브로커 재시작',
   multiBrokerConfirmTitle: (action) => `선택한 브로커 ${action}`,
   multiBrokerFailedMsg: (action, count) => ({

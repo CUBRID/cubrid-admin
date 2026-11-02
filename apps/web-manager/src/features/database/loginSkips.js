@@ -39,6 +39,25 @@ export function loginSkipsOf(databases, targets) {
   return { loggedOut, notLoggedIn, count: loggedOut.length + notLoggedIn.length };
 }
 
+/** What a service start brings up: the autostart list and the HA databases, those not running. */
+export function serviceStartTargets(databases, autoStart) {
+  return (databases || []).filter((db) => !db.running && (db.isHa || autoStart.has(db.dbname))).map((db) => db.dbname);
+}
+
+/**
+ * The databases a service restart skips for no login, by step: running ones
+ * are not stopped and keep running; stopped ones the start would bring up
+ * stay stopped.
+ */
+export function restartLoginSkips(databases, autoStart) {
+  const names = (skips) => [...skips.loggedOut, ...skips.notLoggedIn];
+  const running = (databases || []).filter((db) => db.running).map((db) => db.dbname);
+  return {
+    keepsRunning: names(loginSkipsOf(databases, running)),
+    notStarted: names(loginSkipsOf(databases, serviceStartTargets(databases, autoStart))),
+  };
+}
+
 /** Reads the host's start-info afresh; resolves null when it can't (the server still skips). */
 export const readStartInfoDatabases = (hostUid) => async (dispatch) => {
   try {

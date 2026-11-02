@@ -99,8 +99,9 @@ export type ServiceSkip = { name: string; reason: string; phase?: 'stop' | 'star
 export type ServiceRestartResult = {
   stopFailed: ServiceFailure[];
   startFailed: ServiceFailure[];
-  notRestarted: Array<{ dbname: string; error: string }>;
   skipped: ServiceSkip[];
+  /** Running before, stopped by the restart and not started again: not in the autostart list. */
+  leftStopped: string[];
 };
 
 export const BULK_SKIP_REASON = {
@@ -886,18 +887,20 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Restart the whole service on a host in one call: stop it, start it, then
-   * start again the databases that were running before but are not now (a
-   * service start only brings up the `server=` autostart list and HA
-   * databases). Every database of the host and every HA database is held
-   * for the whole sequence, so no other start/stop or job on them runs in
-   * between. Which databases were running is read once they are held; if
-   * that read fails, nothing is stopped and this throws. The start is tried
-   * even if the stop reported failures (part of it did stop).
+   * Restart the whole service on a host in one call: stop it, then start it
+   * as startWholeService does, which brings up only the `server=` autostart
+   * list and the HA databases. A database that was started by hand and is
+   * not in that list stays stopped. Every database of the host and every HA
+   * database is held for the whole sequence, so no other start/stop or job
+   * on them runs in between. Which databases were running is read once they
+   * are held, only to report the ones left stopped; if that read fails,
+   * nothing is stopped and this throws. The start is tried even if the stop
+   * reported failures (part of it did stop).
    *
-   * @returns The stop and start failures (as stopWholeService and
-   *   startWholeService report them) and the databases that were running
-   *   but could not be started again
+   * @returns The stop and start failures and skips (as stopWholeService and
+   *   startWholeService report them), and the databases that were running
+   *   and are stopped now without a failure or skip saying why (not in the
+   *   autostart list); empty when the status can't be read afterwards
    */
   @HandleCmsErrors()
   async restartWholeService(userId: string, hostUid: string): Promise<ServiceRestartResult> {
@@ -919,35 +922,23 @@ export class DatabaseLifecycleService extends BaseService {
       const { failed: startFailed, skipped: startSkipped } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
         this.startAllDatabasesUnlocked(userId, hostUid, autoStart, haDbNames)
       );
-      // A database skipped at the stop kept running, so it is not counted as
-      // not restarted below; one skipped at the start stayed stopped.
+      // A database skipped at the stop kept running; one skipped at the start
+      // stayed stopped.
       const skipped: ServiceSkip[] = [
         ...stopSkipped.map((s) => ({ ...s, phase: 'stop' as const })),
         ...startSkipped
           .filter((s) => !stopSkipped.some((stop) => stop.name === s.name))
           .map((s) => ({ ...s, phase: 'start' as const })),
       ];
-
-      // Until the status is read, every database that was running counts as
-      // possibly not back; after it, only the ones it shows stopped.
-      let toStart = [...wasRunning];
-      let notRestarted: Array<{ dbname: string; error: string }> = [];
+      const reported = new Set([...startFailed.map((f) => f.name), ...skipped.map((s) => s.name)]);
+      let leftStopped: string[] = [];
       try {
         const running = await this.readActiveDbnames(userId, hostUid);
-        toStart = toStart.filter((dbname) => !running.has(dbname));
-        if (toStart.length > 0) {
-          const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
-          await this.runSelectedDatabasesActionUnlocked(userId, hostUid, 'start', toStart, out);
-          notRestarted = out.failed.map(({ dbname, error }) => ({ dbname, error }));
-          for (const { dbname, reason } of out.skipped) {
-            if (!skipped.some((s) => s.name === dbname)) skipped.push({ name: dbname, reason, phase: 'start' });
-          }
-        }
-      } catch (err: unknown) {
-        const error = err instanceof Error ? err.message : String(err);
-        notRestarted = toStart.map((dbname) => ({ dbname, error }));
+        leftStopped = [...wasRunning].filter((dbname) => !running.has(dbname) && !reported.has(dbname));
+      } catch {
+        leftStopped = [];
       }
-      return { stopFailed, startFailed, notRestarted, skipped };
+      return { stopFailed, startFailed, skipped, leftStopped };
     });
   }
 
