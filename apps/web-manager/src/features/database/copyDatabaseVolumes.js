@@ -1,3 +1,5 @@
+import { copyVolumePathKey } from '@api-interfaces/copy-volume-path';
+
 const isAbsolutePath = (path) => /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path);
 
 export const joinVolumePath = (directory, name) => {
@@ -33,8 +35,8 @@ export function canCopyIndividualVolumes(volumes) {
     volume.spacename && volume.newVolumeName?.trim() &&
     !/[\\/]/.test(volume.newVolumeName) && !['.', '..'].includes(volume.newVolumeName) &&
     isAbsolutePath(volume.newLocation || '')
-  ) && new Set(volumes.map(volume => volume.fullPath)).size === volumes.length &&
-    new Set(volumes.map(volume => joinVolumePath(volume.newLocation, volume.newVolumeName))).size === volumes.length;
+  ) && new Set(volumes.map(volume => copyVolumePathKey(volume.fullPath))).size === volumes.length &&
+    new Set(volumes.map(volume => copyVolumePathKey(joinVolumePath(volume.newLocation, volume.newVolumeName)))).size === volumes.length;
 }
 
 export function buildCopyVolumeMappings(volumes) {

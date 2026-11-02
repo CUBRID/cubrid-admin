@@ -149,6 +149,35 @@ describe('DatabaseManagementService', () => {
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['/copy/clone', '/copy/./clone'],
+      ['/copy/clone', '/copy/sub/../clone'],
+      ['/copy/clone', '/copy//clone'],
+      ['C:\\copy\\clone', 'c:/copy/./clone'],
+      ['C:\\copy\\clone', 'C:\\COPY\\sub\\..\\clone'],
+      ['\\\\server\\share\\copy\\clone', '\\\\SERVER\\share\\copy\\.\\clone'],
+    ])('rejects aliased destinations before CMS: %s and %s', async (first, second) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': first }, { '/db/extra': second }],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('rejects aliased source paths before CMS', async () => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': '/copy/clone' }, { '/db/./source': '/copy/extra' }],
+      })).rejects.toThrow(DatabaseError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('preserves valid POSIX paths, including case-distinct filenames, in the CMS request', async () => {
+      const volume = [{ '/db/source': '/copy/./Clone' }, { '/db/extra': '/copy/sub/../clone' }];
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, volume });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).toEqual(expect.objectContaining({ volume }));
+    });
+
     it.each(['on', 'off'])('rejects copying onto the source before CMS is called (advanced=%s)', async advanced => {
       await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
         ...request, destdbname: ' source ', advanced, overwrite: 'y',

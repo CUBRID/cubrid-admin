@@ -1,4 +1,5 @@
 import {
+  copyVolumePathKey,
   AddVolDbRequest,
   AddVolDbResponse,
   CheckDatabaseRequest,
@@ -149,11 +150,11 @@ export class DatabaseManagementService extends BaseService {
         }
         for (const [source, destination] of Object.entries(item)) {
           if (!source.trim() || typeof destination !== 'string' || !destination.trim() ||
-              sources.has(source) || destinations.has(destination)) {
+              sources.has(copyVolumePathKey(source)) || destinations.has(copyVolumePathKey(destination))) {
             throw DatabaseError.InvalidParameter('Copy volume paths must be non-empty and unique');
           }
-          sources.add(source);
-          destinations.add(destination);
+          sources.add(copyVolumePathKey(source));
+          destinations.add(copyVolumePathKey(destination));
           // Preserve the caller's physical volume order through CMS's JSON
           // conversion, which sorts keys within an object but retains arrays.
           volume.push({ [source]: destination });

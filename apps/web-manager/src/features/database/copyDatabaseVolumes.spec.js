@@ -1,3 +1,4 @@
+import { copyVolumePathKey } from '@api-interfaces/copy-volume-path';
 import { describe, expect, it } from 'vitest';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from './copyDatabaseVolumes';
 
@@ -63,4 +64,38 @@ describe('individual database copy volumes', () => {
     expect(canCopyIndividualVolumes([{ ...volumes[0], newLocation: 'relative' }])).toBe(false);
     expect(canCopyIndividualVolumes([volumes[0], { ...volumes[0], fullPath: '/db/extra', volid: 1 }])).toBe(false);
   });
+});
+
+const aliases = [
+  ['/copy', '/copy/.'],
+  ['/copy', '/copy/sub/..'],
+  ['/copy', '//copy///'],
+  ['C:\\copy', 'c:/copy/.'],
+  ['C:\\copy', 'C:\\COPY\\sub\\..'],
+  ['\\\\server\\share\\copy', '\\\\SERVER\\share\\copy\\.'],
+];
+
+it.each(aliases)('blocks aliased destination directories: %s and %s', (first, second) => {
+  const volumes = ready([
+    { type: 'PERMANENT', volid: 0, spacename: '/db/source' },
+    { type: 'PERMANENT', volid: 1, spacename: '/db/extra' },
+  ]).map((v, i) => ({ ...v, newLocation: i === 0 ? first : second, newVolumeName: 'clone' }));
+  expect(canCopyIndividualVolumes(volumes)).toBe(false);
+});
+
+it('uses POSIX case and separator rules for POSIX paths', () => {
+  expect(copyVolumePathKey('/copy/Clone')).not.toBe(copyVolumePathKey('/copy/clone'));
+  expect(copyVolumePathKey('/copy/a\\b')).not.toBe(copyVolumePathKey('/copy/a/b'));
+});
+
+it('does not traverse above a drive or UNC share root', () => {
+  expect(copyVolumePathKey('C:\\..\\clone')).toBe(copyVolumePathKey('C:\\clone'));
+  expect(copyVolumePathKey('\\\\server\\share\\..\\clone')).toBe(copyVolumePathKey('\\\\server\\share\\clone'));
+});
+
+it('leaves the actual CMS mapping paths unchanged when comparing aliases', () => {
+  const volumes = ready([{ type: 'GENERIC', spacename: 'source', location: '/db' }]);
+  volumes[0].newLocation = '/copy/./nested/..';
+  expect(canCopyIndividualVolumes(volumes)).toBe(true);
+  expect(buildCopyVolumeMappings(volumes)).toEqual([{ '/db/source': '/copy/./nested/../target0' }]);
 });
