@@ -17,6 +17,7 @@ import {
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 
 const validateDbName = (name) => {
   if (!name) return false;
@@ -49,6 +50,7 @@ export default function RenameDatabaseModal() {
 
   const [newDbName, setNewDbName] = useState('');
   const [forcedel, setForcedel] = useState(false);
+  const [warnings, setWarnings] = useState([]);
   // Snapshot of the name being renamed, for the success screen. Redux's
   // selectedDatabase can't be used there — a successful rename dispatches
   // fetchDatabaseStartInfo, which nulls selectedDatabase out once the old
@@ -60,6 +62,7 @@ export default function RenameDatabaseModal() {
     if (isRenameDatabaseModalOpen) {
       setNewDbName('');
       setForcedel(false);
+      setWarnings([]);
       setRenamedFromDb('');
       resetAction();
     }
@@ -90,7 +93,7 @@ export default function RenameDatabaseModal() {
         advanced: 'off',
         forcedel: forcedel ? 'y' : 'n',
       };
-      await runJob(
+      const job = await runJob(
         () => databaseJobApi.submitRename(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
@@ -103,6 +106,7 @@ export default function RenameDatabaseModal() {
       // different database) by the time it settles — its outcome then
       // belongs to the global job tray, not this now-reused modal instance.
       if (!wasBackgrounded()) {
+        setWarnings(job.warnings ?? []);
         setRenamedFromDb(selectedDatabase);
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
         endSuccess(CM.databaseRenamedMsg(selectedDatabase, newDbName.trim()));
@@ -149,7 +153,9 @@ export default function RenameDatabaseModal() {
           message={CM.databaseRenamedMsg(renamedFromDb, newDbName.trim())}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <JobWarnings warnings={warnings} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }

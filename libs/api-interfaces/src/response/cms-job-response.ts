@@ -56,5 +56,7 @@ export type CmsJobStatusResponse = {
   finishedAt?: string;
   maintenanceSummary?: MaintenanceSummary;
   result?: unknown;
+  /** Follow-up work requiring attention after the main operation succeeded. */
+  warnings?: string[];
   error?: { message: string; code?: string; cmsStatus?: string };
 };

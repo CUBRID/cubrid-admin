@@ -33,6 +33,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
       renameDatabaseCmsResponse: jest.fn().mockResolvedValue({ status: 'success' }),
       getDatabaseStartInfo: jest.fn().mockResolvedValue({ dblist: { dbs: [] } }),
       clearDbAliasCachesAfterRename: jest.fn().mockResolvedValue(undefined),
+      updateAutoStartAfterRename: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
     const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
@@ -62,6 +63,19 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     );
   });
 
+  it('ends a copy as succeeded with warnings when its follow-up or the list refresh fails', async () => {
+    const job = renameJob({ type: 'copy', dbname: 'newdb', payload: { srcdbname: 'olddb', destdbname: 'newdb', move: 'y' } as any });
+    store.getJob.mockResolvedValue(job);
+    managementService.copyDbCmsResponse = jest.fn().mockResolvedValue({ status: 'success' });
+    managementService.finishCopy = jest.fn().mockResolvedValue(['autostart not updated']);
+    managementService.getDatabaseStartInfo.mockRejectedValue(new Error('CMS unreachable'));
+
+    await (service as any).runJob('ukey', 'job-1', 'op-key');
+
+    expect(job.status).toBe('succeeded');
+    expect(job.warnings).toEqual(['autostart not updated', expect.stringContaining('could not be refreshed')]);
+  });
+
   it('clears old/new name caches when an orphaned rename reconciles as succeeded after restart', async () => {
     (pollCmsAsyncJob as jest.Mock).mockResolvedValue({ response: { status: 'success' } });
     const job = renameJob();
@@ -85,6 +99,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
 
     expect(job.status).toBe('failed');
     expect(managementService.clearDbAliasCachesAfterRename).not.toHaveBeenCalled();
+    expect(managementService.updateAutoStartAfterRename).not.toHaveBeenCalled();
   });
 
   it('still finalizes a reconciled rename as succeeded if the cache cleanup throws', async () => {
@@ -97,6 +112,35 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     expect(job.status).toBe('succeeded');
     expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
   });
+  it('updates autostart for a normal rename, preserving success if list refresh fails', async () => {
+    const job = renameJob();
+    store.getJob.mockResolvedValue(job);
+    managementService.getDatabaseStartInfo.mockRejectedValue(new Error('unavailable'));
+    await (service as any).runJob('ukey', job.jobId, 'op-key');
+    expect(managementService.updateAutoStartAfterRename).toHaveBeenCalledWith('user-1', 'host-1', 'olddb', 'newdb');
+    expect(job.status).toBe('succeeded');
+    expect(job.warnings?.[0]).toContain('could not be refreshed');
+    expect(managementService.renameDatabaseCmsResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists and exposes config warnings on a completed job', async () => {
+    const job = renameJob();
+    store.getJob.mockResolvedValue(job);
+    managementService.updateAutoStartAfterRename.mockResolvedValue(['Rename succeeded; autostart needs attention.']);
+    await (service as any).runJob('ukey', job.jobId, 'op-key');
+    expect(job.status).toBe('succeeded');
+    expect(store.saveJob).toHaveBeenLastCalledWith('ukey', expect.objectContaining({ warnings: job.warnings }));
+    expect((service as any).toStatusResponse(job).warnings).toEqual(job.warnings);
+  });
+
+  it('updates autostart during reconciliation without resubmitting the physical rename', async () => {
+    (pollCmsAsyncJob as jest.Mock).mockResolvedValue({ response: { status: 'success' } });
+    const job = renameJob();
+    await (service as any).tryReconcileOrphanedJob('ukey', job);
+    expect(managementService.updateAutoStartAfterRename).toHaveBeenCalledWith('user-1', 'host-1', 'olddb', 'newdb');
+    expect(managementService.renameDatabaseCmsResponse).not.toHaveBeenCalled();
+  });
+
 });
 
 describe('CmsJobService delete job', () => {
@@ -122,7 +166,7 @@ describe('CmsJobService delete job', () => {
     };
     lifecycleService = {
       deleteDatabaseCmsResponse: jest.fn().mockResolvedValue({ status: 'success', task: 'deletedb' }),
-      forgetDeletedDatabase: jest.fn().mockResolvedValue(undefined),
+      forgetDeletedDatabase: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
     const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
@@ -151,6 +195,17 @@ describe('CmsJobService delete job', () => {
     );
     expect(job.status).toBe('succeeded');
     expect(lifecycleService.forgetDeletedDatabase).toHaveBeenCalledWith('user-1', 'host-1', 'gonedb');
+  });
+
+  it('shows what the cleanup after a delete could not do as job warnings, the job still succeeded', async () => {
+    const job = deleteJob();
+    store.getJob.mockResolvedValue(job);
+    lifecycleService.forgetDeletedDatabase.mockResolvedValue(['cubrid.conf could not be updated']);
+
+    await (service as any).runJob('ukey', 'job-2', 'op-key');
+
+    expect(job.status).toBe('succeeded');
+    expect(job.warnings).toEqual(['cubrid.conf could not be updated']);
   });
 
   it('keeps the stored login and cubrid.conf entry when deletedb fails', async () => {

@@ -80,7 +80,7 @@ it('clears login state for both the old and new name once the rename job succeed
   await typeNewName('newdb');
   await click(container.querySelector('[data-testid="rename-database-execute-btn"]'));
 
-  expect(mocks.submitRename).toHaveBeenCalledWith('host-1', 'demodb', expect.objectContaining({ rename: 'newdb' }));
+  expect(mocks.submitRename).toHaveBeenCalledWith('host-1', 'demodb', expect.objectContaining({ rename: 'newdb', exvolpath: 'none', advanced: 'off' }));
   expect(store.getState().database.loggedInDatabases).toEqual(['host-1:otherdb']);
 });
 
@@ -119,4 +119,15 @@ it('leaves login state alone when the rename job fails', async () => {
   await click(container.querySelector('[data-testid="rename-database-execute-btn"]'));
 
   expect(store.getState().database.loggedInDatabases).toEqual(['host-1:demodb', 'host-1:newdb', 'host-1:otherdb']);
+});
+
+it('shows a successful rename with its autostart warning instead of a retry action', async () => {
+  mocks.run.mockResolvedValue({ ...job, warnings: ['Rename succeeded; update autostart manually. Do not repeat the rename.'] });
+  await render();
+  await typeNewName('newdb');
+  await click(container.querySelector('[data-testid="rename-database-execute-btn"]'));
+  expect(container.querySelector('[role="alert"]').textContent).toContain('update autostart manually');
+  expect(container.textContent).toContain('Rename Successful');
+  expect(container.textContent).not.toContain('Retry Rename');
+  expect(mocks.submitRename).toHaveBeenCalledTimes(1);
 });

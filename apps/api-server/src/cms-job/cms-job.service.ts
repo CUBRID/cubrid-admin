@@ -482,7 +482,15 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
-        job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+        try {
+          job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+        } catch (error: unknown) {
+          // The rename or copy did happen: a failed list refresh is a warning,
+          // not a failed job the user might run again.
+          const done = job.type === 'rename' ? 'renamed' : 'copied';
+          addWarnings(job, [`The database was ${done}, but the database list could not be refreshed. Refresh the list manually; do not repeat the ${job.type}.`]);
+          this.logger.warn(`Could not refresh database list after ${job.type}: ${String(error)}`);
+        }
       }
     } catch (err: unknown) {
       if (job.type === 'create') {
@@ -519,39 +527,45 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * What CMS leaves behind after a successful job. A rename, and a copy with
-   * move=y (copydb then deletes the source), leave the old name behind:
-   * clears both names' stored login and renames the database in cubrid.conf,
-   * which neither CMS task touches. A delete forgets the database's stored
-   * login and removes it from cubrid.conf. Best-effort: a failure here must
-   * not flip an already-successful job to "failed".
+   * What CMS leaves behind after a successful job, put right. It never fails
+   * the job (CMS did the work); what could not be done is added to
+   * job.warnings, which the job result shows:
+   * - rename: the database's name in cubrid.conf and both names' stored
+   *   login (finishRename);
+   * - copy: with move=y the source is gone, so the same as a rename; on an
+   *   HA host the copy gets ha_mode=off (DatabaseManagementService.finishCopy);
+   * - delete: the database's stored login and cubrid.conf entries
+   *   (DatabaseLifecycleService.forgetDeletedDatabase).
    */
   private async followUpAfterSuccess(job: CmsJobRecord): Promise<void> {
-    if (job.type === 'delete') {
-      // Best-effort inside.
-      await this.lifecycleService.forgetDeletedDatabase(job.userId, job.hostUid, job.dbname);
-      return;
+    if (job.type === 'rename') {
+      await this.finishRename(job);
+    } else if (job.type === 'copy') {
+      addWarnings(job, await this.managementService.finishCopy(job.userId, job.hostUid, job.payload as CopyDbRequest));
+    } else if (job.type === 'delete') {
+      addWarnings(job, await this.lifecycleService.forgetDeletedDatabase(job.userId, job.hostUid, job.dbname));
     }
-    if (job.type === 'copy') {
-      // Move bookkeeping and the HA ha_mode=off marker; best-effort inside.
-      await this.managementService.finishCopy(job.userId, job.hostUid, job.payload as CopyDbRequest);
-      return;
-    }
-    const moved = movedDatabaseNames(job);
-    if (!moved) return;
+  }
+
+  private async finishRename(job: CmsJobRecord): Promise<void> {
+    addWarnings(job, await this.managementService.updateAutoStartAfterRename(
+      job.userId, job.hostUid, job.dbname, (job.payload as RenameDatabaseRequest).rename
+    ));
+    await this.clearRenameAliasCaches(job);
+  }
+
+  private async clearRenameAliasCaches(job: CmsJobRecord): Promise<void> {
     try {
-      await this.managementService.clearDbAliasCachesAfterRename(job.userId, job.hostUid, moved.from, moved.to);
-    } catch (err: unknown) {
-      this.logger.warn(
-        `Failed to clear stale login profile/cache after moving database ${moved.from}: ` +
-        `${err instanceof Error ? err.message : String(err)}`
+      const renameTo = (job.payload as RenameDatabaseRequest)?.rename;
+      await this.managementService.clearDbAliasCachesAfterRename(
+        job.userId,
+        job.hostUid,
+        job.dbname,
+        renameTo
       );
-    }
-    try {
-      await this.managementService.renameInCubridConfAfterRename(job.userId, job.hostUid, moved.from, moved.to);
     } catch (err: unknown) {
       this.logger.warn(
-        `Failed to rename database ${moved.from} in cubrid.conf (autostart list, [@dbname] section): ` +
+        `Failed to clear stale login profile/cache after renaming database ${job.dbname}: ` +
         `${err instanceof Error ? err.message : String(err)}`
       );
     }
@@ -613,6 +627,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       finishedAt: record.finishedAt,
       maintenanceSummary,
       result: record.result,
+      ...(record.warnings?.length ? { warnings: record.warnings } : {}),
       error: maintenanceSummary && record.error
         ? { ...record.error, message: redactMaintenanceText(record, undefined, record.error.message) }
         : record.error,
@@ -620,17 +635,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-/** Old and new name of a database a job moved: a rename, or a copy with move=y. */
-export function movedDatabaseNames(job: Pick<CmsJobRecord, 'type' | 'dbname' | 'payload'>): { from: string; to: string } | null {
-  if (job.type === 'rename') {
-    const to = (job.payload as RenameDatabaseRequest)?.rename;
-    return to && to !== job.dbname ? { from: job.dbname, to } : null;
-  }
-  if (job.type === 'copy') {
-    const payload = job.payload as CopyDbRequest;
-    return payload?.move === 'y' && payload.srcdbname && payload.destdbname
-      ? { from: payload.srcdbname, to: payload.destdbname }
-      : null;
-  }
-  return null;
+/** Appends `warnings` to the job's, keeping any it already has. */
+function addWarnings(job: CmsJobRecord, warnings: string[]): void {
+  if (warnings.length > 0) job.warnings = [...(job.warnings ?? []), ...warnings];
 }

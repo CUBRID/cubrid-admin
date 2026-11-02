@@ -5,6 +5,7 @@ import { clearDatabaseLogin } from '../databaseCoreSlice';
 import { databaseApi } from '../databaseApi';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
+import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -50,6 +51,9 @@ export default function DeleteDatabaseModal() {
   } = useActionState();
   const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
+  // What the job's follow-up could not do (cubrid.conf, stored login); the
+  // copy or delete itself succeeded.
+  const [warnings, setWarnings] = useState([]);
   // The database being deleted, for the loading and success views: a
   // successful delete refreshes start-info, which clears selectedDatabase.
   const [deletingDb, setDeletingDb] = useState('');
@@ -69,6 +73,7 @@ export default function DeleteDatabaseModal() {
       setDeleteBackup(false);
       setJobStatus(null);
       setDeletingDb('');
+      setWarnings([]);
       resetAction();
       setFetchingVolumes(true);
       databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
@@ -120,7 +125,7 @@ export default function DeleteDatabaseModal() {
         throw loginRes;
       }
       submitted = true;
-      await runJob(
+      const job = await runJob(
         () => databaseJobApi.submitDelete(hostUid, dbname, { delbackup: deleteBackup ? 'y' : 'n' }),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
@@ -131,7 +136,10 @@ export default function DeleteDatabaseModal() {
       dispatch(fetchDatabaseStartInfo(hostUid));
       // A backgrounded job's outcome belongs to the job panel, not this
       // modal, which may already be open for another database.
-      if (!wasBackgrounded()) endSuccess(CM.databaseDeletedMsg(dbname));
+      if (!wasBackgrounded()) {
+        setWarnings(job?.warnings ?? []);
+        endSuccess(CM.databaseDeletedMsg(dbname));
+      }
     } catch (err) {
       if (!submitted || !wasBackgrounded()) {
         endError(typeof err === 'string' ? err : (err?.message || err?.note || CM.authOrOperationFailedMsg));
@@ -177,7 +185,9 @@ export default function DeleteDatabaseModal() {
           message={deletingDb}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <JobWarnings warnings={warnings} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }

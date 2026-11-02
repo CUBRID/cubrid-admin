@@ -4,6 +4,7 @@ import { closeCopyDatabaseModal, fetchDatabaseStartInfo } from '../databaseSlice
 import { databaseJobApi } from '../databaseJobApi';
 import { databaseApi } from '../databaseApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
+import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -56,6 +57,9 @@ export default function CopyDatabaseModal() {
   } = useActionState();
   const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
+  // What the job's follow-up could not do (cubrid.conf, stored login); the
+  // copy or delete itself succeeded.
+  const [warnings, setWarnings] = useState([]);
 
   const [formData, setFormData] = useState({
     destName: '',
@@ -81,6 +85,7 @@ export default function CopyDatabaseModal() {
     let cancelled = false;
     if (isCopyDatabaseModalOpen) {
       resetAction();
+      setWarnings([]);
       if (selectedHostUid && !currentDb) {
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
       }
@@ -277,12 +282,13 @@ export default function CopyDatabaseModal() {
     };
 
     try {
-      await runJob(
+      const job = await runJob(
         () => databaseJobApi.submitCopy(selectedHostUid, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
       if (!wasBackgrounded()) {
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
+        setWarnings(job?.warnings ?? []);
         endSuccess(`${CM.copyCompleted}: ${formData.destName}`);
       }
     } catch (err) {
@@ -317,7 +323,9 @@ export default function CopyDatabaseModal() {
           message={`${CM.copyCompleted}: ${formData.destName}`}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <JobWarnings warnings={warnings} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }

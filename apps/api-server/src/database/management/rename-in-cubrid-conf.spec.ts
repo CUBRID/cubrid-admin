@@ -1,69 +1,27 @@
-import { forgetDbInCubridConf, renameDbInCubridConf } from './rename-in-cubrid-conf';
+import { forgetDbInCubridConf, renameDbSection } from './rename-in-cubrid-conf';
 
-describe('renameDbInCubridConf', () => {
-  it('renames the database in the [service] autostart list and its own section', () => {
-    const conf = [
-      '[service]',
-      'service=server,broker,manager',
-      'server=demodb, olddb ,testdb  # autostart',
-      '',
-      '[common]',
-      'data_buffer_size=512M',
-      '',
-      '[@olddb]',
-      'data_buffer_size=1G',
-    ];
-
-    expect(renameDbInCubridConf(conf, 'olddb', 'newdb')).toEqual([
-      '[service]',
-      'service=server,broker,manager',
-      'server=demodb,newdb,testdb # autostart',
-      '',
-      '[common]',
-      'data_buffer_size=512M',
-      '',
-      '[@newdb]',
-      'data_buffer_size=1G',
-    ]);
+describe('renameDbSection', () => {
+  it("renames the database's own [@old] section header and nothing else", () => {
+    const conf = ['[service]', 'server=old', '[@old]', 'ha_mode=off', '[@other]', 'ha_mode=off'];
+    expect(renameDbSection(conf, 'old', 'new')).toEqual({
+      lines: ['[service]', 'server=old', '[@new]', 'ha_mode=off', '[@other]', 'ha_mode=off'],
+      kept: false,
+    });
   });
 
-  it('renames inside a quoted autostart list and keeps the quotes', () => {
-    expect(renameDbInCubridConf(['[service]', 'server="demodb, olddb"  # x'], 'olddb', 'newdb')).toEqual([
-      '[service]', 'server="demodb,newdb"  # x',
-    ]);
-    expect(renameDbInCubridConf(['[service]', "server='olddb'"], 'olddb', 'newdb')).toEqual([
-      '[service]', "server='newdb'",
-    ]);
+  it('keeps [@old] and says so when a [@new] section already exists', () => {
+    const conf = ['[@old]', 'ha_mode=off', '[@new]', 'ha_mode=on'];
+    expect(renameDbSection(conf, 'old', 'new')).toEqual({ lines: conf, kept: true });
   });
 
-  it('returns null when nothing names the old database', () => {
-    expect(renameDbInCubridConf(['[service]', 'server=demodb', '[@olddbx]'], 'olddb', 'newdb')).toBeNull();
+  it('changes nothing when there is no [@old] section', () => {
+    const conf = ['[service]', 'server=old'];
+    expect(renameDbSection(conf, 'old', 'new')).toEqual({ lines: conf, kept: false });
   });
 
-  it('leaves a server= line outside [service] and a commented-out one alone', () => {
-    const conf = ['[common]', 'server=olddb', '[service]', '#server=olddb'];
-
-    expect(renameDbInCubridConf(conf, 'olddb', 'newdb')).toBeNull();
-  });
-
-  it('keeps the old section header when a section for the new name already exists', () => {
-    const conf = ['[service]', 'server=olddb', '[@olddb]', 'a=1', '[@newdb]', 'a=2'];
-
-    expect(renameDbInCubridConf(conf, 'olddb', 'newdb')).toEqual([
-      '[service]', 'server=newdb', '[@olddb]', 'a=1', '[@newdb]', 'a=2',
-    ]);
-  });
-
-  it('does not list the new name twice when it was already in the autostart list', () => {
-    expect(renameDbInCubridConf(['[service]', 'server=newdb,olddb'], 'olddb', 'newdb')).toEqual([
-      '[service]', 'server=newdb',
-    ]);
-  });
-
-  it('matches section names the way the engine does: [service] in any case, [@name] case-sensitive', () => {
-    expect(renameDbInCubridConf(['[ Service ]', 'server=olddb', '[@OLDDB]'], 'olddb', 'newdb')).toEqual([
-      '[ Service ]', 'server=newdb', '[@OLDDB]',
-    ]);
+  it('matches [@name] like the engine: spaces inside the brackets, case-sensitive name', () => {
+    expect(renameDbSection(['[ @old ]'], 'old', 'new').lines).toEqual(['[@new]']);
+    expect(renameDbSection(['[@OLD]'], 'old', 'new').lines).toEqual(['[@OLD]']);
   });
 });
 

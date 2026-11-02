@@ -1,3 +1,4 @@
+import { JobWarnings } from './JobWarnings';
 import React from 'react';
 import { Modal } from '../../components/ds/layout/Modal';
 import { ModalStatusSuccess, ModalStatusError } from '../../components/ds/feedback/ActionStatus';
@@ -28,6 +29,7 @@ export function JobResultModal({ result, onClose }) {
           onConfirm={onClose}
           confirmText={CM.ok}
         >
+          <JobWarnings warnings={result.warnings} />
           <MaintenanceDetails key={result.jobId} job={result} />
         </ModalStatusSuccess>
       </Modal>

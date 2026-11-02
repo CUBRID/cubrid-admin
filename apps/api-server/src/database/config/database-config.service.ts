@@ -1,3 +1,4 @@
+import { renameAutostart } from './rename-autostart';
 import {
   GetAutoAddVolClientResponse,
   GetDbSizeClientResponse,
@@ -55,8 +56,8 @@ import {
   GetAutoAddVolLogCmsResponse,
 } from '@type/cms-response';
 import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
-import { parseConfigParams, withHostConfigMutex } from '@util';
-import { forgetDbInCubridConf } from '@database/management/rename-in-cubrid-conf';
+import { parseConfigParams } from '@util';
+import { forgetDbInCubridConf, renameDbSection } from '@database/management/rename-in-cubrid-conf';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 
 /**
@@ -209,16 +210,17 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: SetAutoStartRequest
   ): Promise<SetAutoStartResponse> {
-    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
-    // Same per-host cubrid.conf queue as ensureDbHaModeOff and rename.
-    return withHostConfigMutex(hostUid, () => this.setAutoStartUnlocked(userId, hostUid, request));
+    return this.withHostConfigMutex(userId, hostUid, () => this.setAutoStartUnlocked(userId, hostUid, request));
   }
 
+  // In the host's cubrid.conf queue (BaseService.withHostConfigMutex), like
+  // ensureDbHaModeOff, rename and the raw editor save.
   private async setAutoStartUnlocked(
     userId: string,
     hostUid: string,
     request: SetAutoStartRequest
   ): Promise<SetAutoStartResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
 
     const confname = CMS_CONFNAME_CUBRID;
 
@@ -344,7 +346,7 @@ export class DatabaseConfigService extends BaseService {
     // other's write. Serialize the whole read-modify-write per host (not
     // per dbname, unlike withQueryPlanMutex above) so concurrent callers on
     // the same host queue instead of racing.
-    return withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
+    return this.withHostConfigMutex(userId, hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
   }
 
   private async ensureDbHaModeOffUnlocked(userId: string, hostUid: string, dbname: string): Promise<void> {
@@ -415,9 +417,7 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: RemoveAutoStartRequest
   ): Promise<RemoveAutoStartResponse> {
-    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
-    // Same per-host cubrid.conf queue as ensureDbHaModeOff and rename.
-    return withHostConfigMutex(hostUid, () => this.removeAutoStartUnlocked(userId, hostUid, request));
+    return this.withHostConfigMutex(userId, hostUid, () => this.removeAutoStartUnlocked(userId, hostUid, request));
   }
 
   /**
@@ -427,7 +427,7 @@ export class DatabaseConfigService extends BaseService {
    * went through the gate.
    */
   async forgetDatabaseAfterDelete(userId: string, hostUid: string, dbname: string): Promise<void> {
-    await withHostConfigMutex(hostUid, async () => {
+    await this.withHostConfigMutex(userId, hostUid, async () => {
       const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
       const confdata = conf.conflist?.[0]?.confdata;
       if (!confdata || confdata.length === 0) return;
@@ -443,6 +443,7 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: RemoveAutoStartRequest
   ): Promise<RemoveAutoStartResponse> {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
 
     const confname = CMS_CONFNAME_CUBRID;
 
@@ -503,6 +504,28 @@ export class DatabaseConfigService extends BaseService {
       confname,
       updatedConfdata
     );
+  }
+
+  /**
+   * After a rename (or a copy that deletes its source): renames the database
+   * in `[service] server=` (renameAutostart) and its own `[@oldName]` section
+   * header (renameDbSection). No-op when neither names the old name,
+   * including reconciliation retries. Returns a warning when `[@newName]`
+   * already exists and `[@oldName]` was left as it is.
+   */
+  async renameAutoStart(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
+    return this.withHostConfigMutex(userId, hostUid, async () => {
+      const current = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      const confdata = current.conflist?.[0]?.confdata;
+      if (!confdata?.length) throw ConfigError.NoConfdata(CMS_CONFNAME_CUBRID);
+      const { lines: updated, kept } = renameDbSection(renameAutostart(confdata, oldName, newName), oldName, newName);
+      const warnings = kept
+        ? [`cubrid.conf already has a [@${newName}] section, so the [@${oldName}] section was left as it is. Move its settings to [@${newName}] by hand if "${newName}" needs them.`]
+        : [];
+      if (updated.length === confdata.length && updated.every((line, index) => line === confdata[index])) return warnings;
+      await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
+      return warnings;
+    });
   }
 
   /**

@@ -38,39 +38,25 @@ function rewriteServerLine(line: string, mapNames: (names: string[]) => string[]
 }
 
 /**
- * cubrid.conf lines that still name a database after `renamedb`, which only
- * renames databases.txt and the volume files: the `[service]` autostart list
- * (`server=`) and the database's own `[@dbname]` section. Returns the
- * rewritten lines, or null when nothing names the old database.
+ * cubrid.conf after a rename, for the database's own `[@dbname]` section:
+ * the `[@oldName]` header becomes `[@newName]`. renamedb leaves cubrid.conf
+ * alone, and the engine reads `[@dbname]` by the database's name, so without
+ * this the renamed database loses its own settings (on an HA host,
+ * `ha_mode=off`) and a later database of the old name inherits them. The
+ * `[service] server=` list is renameAutostart's (rename-autostart.ts).
  *
- * The `[@dbname]` header is left alone if a `[@newname]` section already
- * exists, so two sections are never merged under one name.
+ * When a `[@newName]` section already exists, `[@oldName]` is kept so two
+ * sections are never merged under one name; `kept` says so.
  */
-export function renameDbInCubridConf(confdata: string[], oldName: string, newName: string): string[] | null {
-  const lines = [...confdata];
-  let changed = false;
-  let section: string | null = null;
-  const hasNewSection = lines.some((line) => sectionOf(line.trim()) === `@${newName}`);
-
-  lines.forEach((line, index) => {
-    const header = sectionOf(line.trim());
-    if (header !== null) {
-      section = header;
-      if (header === `@${oldName}` && !hasNewSection) {
-        lines[index] = `[@${newName}]`;
-        changed = true;
-      }
-      return;
-    }
-    if (section !== 'service') return;
-    const rewritten = rewriteServerLine(line, (names) => names.map((name) => (name === oldName ? newName : name)));
-    if (rewritten !== null) {
-      lines[index] = rewritten;
-      changed = true;
-    }
-  });
-
-  return changed ? lines : null;
+export function renameDbSection(confdata: string[], oldName: string, newName: string): { lines: string[]; kept: boolean } {
+  const hasOld = confdata.some((line) => sectionOf(line.trim()) === `@${oldName}`);
+  const hasNew = confdata.some((line) => sectionOf(line.trim()) === `@${newName}`);
+  if (!hasOld) return { lines: confdata, kept: false };
+  if (hasNew) return { lines: confdata, kept: true };
+  return {
+    lines: confdata.map((line) => (sectionOf(line.trim()) === `@${oldName}` ? `[@${newName}]` : line)),
+    kept: false,
+  };
 }
 
 /**

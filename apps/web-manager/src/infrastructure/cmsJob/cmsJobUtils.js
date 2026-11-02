@@ -35,6 +35,7 @@ export function normalizeTrackedJob(serverJob, fallback = {}) {
     maintenanceSummary: serverJob?.maintenanceSummary ?? fallback.maintenanceSummary,
     error: serverJob?.error ?? fallback.error,
     result: serverJob?.result,
+    warnings: serverJob?.warnings ?? fallback.warnings,
     dismissed: fallback.dismissed ?? false,
   };
 }

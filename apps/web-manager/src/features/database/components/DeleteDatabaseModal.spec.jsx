@@ -116,3 +116,11 @@ it('shows the job failure and keeps the login state', async () => {
   expect(await errorDetail()).toContain('database is running');
   expect(store.getState().database.loggedInDatabases).toContain('host-1:demodb');
 });
+
+it('shows what the cleanup after the delete could not do', async () => {
+  mocks.run.mockResolvedValue({ ...job, warnings: ['cubrid.conf could not be updated'] });
+  await render();
+  await confirmTwice();
+
+  expect(container.textContent).toContain('cubrid.conf could not be updated');
+});

@@ -1151,10 +1151,11 @@ export class DatabaseLifecycleService extends BaseService {
 
   /**
    * After a successful delete: forgets the database's stored login and
-   * removes it from cubrid.conf. Best-effort — the database is already gone,
-   * so a failure here is only logged.
+   * removes it from cubrid.conf. The database is already gone, so nothing
+   * here throws; what could not be done comes back as warnings for the user.
    */
-  async forgetDeletedDatabase(userId: string, hostUid: string, dbname: string): Promise<void> {
+  async forgetDeletedDatabase(userId: string, hostUid: string, dbname: string): Promise<string[]> {
+    const warnings: string[] = [];
     // Forget this dbname's stored login profile and ensureDbLogin cache
     // entry — both are keyed by dbname alone (see DatabaseUserService), so
     // without this a database later created or renamed to reuse this exact
@@ -1163,6 +1164,7 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       await this.databaseUserService.deleteDbProfile(userId, hostUid, dbname);
     } catch (error: unknown) {
+      warnings.push(`Database "${dbname}" was deleted, but its saved login could not be removed. Remove it from the database's login settings if "${dbname}" is created again.`);
       this.logger.warn(
         `Failed to clear stored login profile/cache for deleted database ${dbname}: ` +
         `${error instanceof Error ? error.message : String(error)}`,
@@ -1190,6 +1192,7 @@ export class DatabaseLifecycleService extends BaseService {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const errorStack = error instanceof Error ? error.stack : undefined;
         const errorCode = error instanceof ConfigError ? error.code : 'UNKNOWN';
+        warnings.push(`Database "${dbname}" was deleted, but cubrid.conf could not be updated. Remove "${dbname}" from [service] server and drop its [@${dbname}] section by hand.`);
         this.logger.warn(
           `Failed to remove dbname from server parameter during database deletion: ${errorMessage}`,
           {
@@ -1201,5 +1204,6 @@ export class DatabaseLifecycleService extends BaseService {
         );
       }
     }
+    return warnings;
   }
 }

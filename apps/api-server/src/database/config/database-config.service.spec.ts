@@ -87,6 +87,63 @@ describe('DatabaseConfigService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('renameAutoStart', () => {
+    it('writes the renamed token to cubridconf without logging into the old database', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old,other'] }] } as any);
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=new,other']);
+    });
+
+    it('does not write if autostart was not enabled for the database', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=other'] }] } as any);
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('reports unavailable config and failed writes to the rename completion handler', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [] } as any);
+      await expect(service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new')).rejects.toThrow();
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old'] }] } as any);
+      cmsConfigService.setSystemParam.mockRejectedValue(new Error('write failed'));
+      await expect(service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new')).rejects.toThrow('write failed');
+    });
+
+    it("also renames the database's own [@old] section header", async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server="old,other"', '[@old]', 'ha_mode=off'] }] } as any);
+      await expect(service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new')).resolves.toEqual([]);
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf',
+        ['[service]', 'server="new,other"', '[@new]', 'ha_mode=off']);
+    });
+
+    it('keeps [@old] and warns when a [@new] section already exists, still renaming server=', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old', '[@old]', 'a=1', '[@new]', 'b=2'] }] } as any);
+      const warnings = await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(warnings).toEqual([expect.stringContaining('[@new]')]);
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf',
+        ['[service]', 'server=new', '[@old]', 'a=1', '[@new]', 'b=2']);
+    });
+
+    it('renames a section even when the database was not in the autostart list', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=other', '[@old]', 'a=1'] }] } as any);
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=other', '[@new]', 'a=1']);
+    });
+
+    it('serializes different databases and host aliases sharing the same physical config', async () => {
+      let lines = ['[service]', 'server=old1,old2'];
+      cmsConfigService.getAllSystemParam.mockImplementation(async () => ({ conflist: [{ confdata: [...lines] }] } as any));
+      cmsConfigService.setSystemParam.mockImplementation(async (_user, _host, _conf, data) => {
+        lines = data;
+        return { success: true } as any;
+      });
+      await Promise.all([
+        service.renameAutoStart(mockUserId, mockHostUid, 'old1', 'new1'),
+        service.renameAutoStart('other-user', 'other-host-alias', 'old2', 'new2'),
+      ]);
+      expect(lines).toEqual(['[service]', 'server=new1,new2']);
+    });
+  });
+
   describe('setAutoExecQuery', () => {
     const mockRequest = {
       dbname: mockDbname,

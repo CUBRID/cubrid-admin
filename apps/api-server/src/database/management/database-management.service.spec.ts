@@ -35,6 +35,7 @@ import {
 describe('DatabaseManagementService', () => {
   let service: DatabaseManagementService;
   let hostService: jest.Mocked<HostService>;
+  let configService: { renameAutoStart: jest.Mock };
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let databaseUserService: { loginDatabase: jest.Mock; ensureDbLogin: jest.Mock; deleteDbProfile: jest.Mock };
 
@@ -54,7 +55,7 @@ describe('DatabaseManagementService', () => {
   const mockHostUid = 'host-uid-1';
   const mockDbname = 'testdb';
   let cmsConfigService: { getAllSystemParam: jest.Mock; setSystemParam: jest.Mock };
-  let databaseConfigService: { ensureDbHaModeOff: jest.Mock };
+  let databaseConfigService: { ensureDbHaModeOff: jest.Mock; renameAutoStart: jest.Mock };
   const mockStartInfoResponse = { activelist: { active: [] }, dblist: { dbs: [] } };
 
   beforeEach(async () => {
@@ -77,7 +78,7 @@ describe('DatabaseManagementService', () => {
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
-    databaseConfigService = { ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined) };
+    databaseConfigService = { ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined), renameAutoStart: jest.fn().mockResolvedValue([]) };
     cmsConfigService = {
       getAllSystemParam: jest.fn().mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] }),
       setSystemParam: jest.fn().mockResolvedValue({ success: true }),
@@ -117,6 +118,8 @@ describe('DatabaseManagementService', () => {
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
     databaseUserService = mockDatabaseUserService;
+
+    configService = module.get(DatabaseConfigService);
 
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
@@ -1009,10 +1012,19 @@ describe('DatabaseManagementService', () => {
     it('treats "delete source" as a rename of the source in cubrid.conf', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=srcdb'] }] });
 
-      await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+      const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
 
-      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=newdb']);
+      expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, 'srcdb', 'newdb');
       expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+      expect(warnings).toEqual([]);
+    });
+
+    it('reports a cubrid.conf failure after "delete source" as a warning, not a failure', async () => {
+      databaseConfigService.renameAutoStart.mockRejectedValueOnce(new Error('write failed'));
+
+      const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+
+      expect(warnings).toEqual([expect.stringContaining('could not be updated')]);
     });
   });
 
@@ -1035,6 +1047,33 @@ describe('DatabaseManagementService', () => {
         '/old/path2': '/new/path2',
       },
     ];
+
+    it('updates autostart only after a successful physical rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(configService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'newdb');
+      expect(cmsClient.postAuthenticated.mock.invocationCallOrder[0]).toBeLessThan(configService.renameAutoStart.mock.invocationCallOrder[0]);
+    });
+
+    it('returns a warning without failing or resubmitting an already committed rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      configService.renameAutoStart.mockRejectedValue(new Error('config write failed'));
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(result.warnings?.[0]).toContain('Do not repeat the rename');
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not change autostart after a failed CMS rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'failure', task: 'renamedb', note: 'rename failed' });
+      await expect(service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      })).rejects.toThrow();
+      expect(configService.renameAutoStart).not.toHaveBeenCalled();
+    });
 
     it('should successfully rename database with advanced "on" and volume', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
@@ -1072,39 +1111,16 @@ describe('DatabaseManagementService', () => {
       expect(result).toEqual(mockStartInfoResponse);
     });
 
-    it('renames the database in cubrid.conf autostart list and [@dbname] section after renamedb', async () => {
+    it('passes on the warnings of the cubrid.conf rename (e.g. a [@new] section already there)', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      cmsConfigService.getAllSystemParam.mockResolvedValue({
-        conflist: [{ confdata: ['[service]', `server=demodb,${mockDbname}`, `[@${mockDbname}]`, 'a=1'] }],
-      });
+      databaseConfigService.renameAutoStart.mockResolvedValueOnce(['kept [@old]']);
 
-      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
         rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
       });
 
-      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(
-        mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=demodb,renamed_db', '[@renamed_db]', 'a=1']
-      );
-    });
-
-    it('keeps both of two concurrent renames on one host in cubrid.conf', async () => {
-      let stored = ['[service]', 'server=a,b'];
-      cmsConfigService.getAllSystemParam.mockImplementation(async () => {
-        const snapshot = [...stored];
-        await new Promise((r) => setTimeout(r, 5));
-        return { conflist: [{ confdata: snapshot }] };
-      });
-      cmsConfigService.setSystemParam.mockImplementation(async (_u, _h, _c, confdata) => {
-        stored = confdata;
-        return { success: true };
-      });
-
-      await Promise.all([
-        service.renameInCubridConfAfterRename(mockUserId, mockHostUid, 'a', 'a2'),
-        service.renameInCubridConfAfterRename(mockUserId, mockHostUid, 'b', 'b2'),
-      ]);
-
-      expect(stored).toEqual(['[service]', 'server=a2,b2']);
+      expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'renamed_db');
+      expect(result.warnings).toEqual(['kept [@old]']);
     });
 
     it('leaves cubrid.conf alone when nothing in it names the database', async () => {

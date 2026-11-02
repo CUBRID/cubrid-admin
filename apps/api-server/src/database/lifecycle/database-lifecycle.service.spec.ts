@@ -1673,7 +1673,7 @@ describe('DatabaseLifecycleService', () => {
 
   describe('forgetDeletedDatabase', () => {
     it('clears the stored login profile + dbmt-login cache and removes the database from cubrid.conf', async () => {
-      await service.forgetDeletedDatabase(mockUserId, mockHostUid, mockDbname);
+      await expect(service.forgetDeletedDatabase(mockUserId, mockHostUid, mockDbname)).resolves.toEqual([]);
 
       expect(databaseUserService.deleteDbProfile).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
       expect(databaseConfigService.forgetDatabaseAfterDelete).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname);
@@ -1683,7 +1683,7 @@ describe('DatabaseLifecycleService', () => {
       databaseUserService.deleteDbProfile.mockRejectedValueOnce(new Error('disk write failed'));
       databaseConfigService.forgetDatabaseAfterDelete.mockRejectedValueOnce(new Error('setsysparam failed'));
 
-      await expect(service.forgetDeletedDatabase(mockUserId, mockHostUid, mockDbname)).resolves.toBeUndefined();
+      await expect(service.forgetDeletedDatabase(mockUserId, mockHostUid, mockDbname)).resolves.toHaveLength(2);
       expect(databaseConfigService.forgetDatabaseAfterDelete).toHaveBeenCalled();
     });
   });

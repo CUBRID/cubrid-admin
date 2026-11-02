@@ -34,7 +34,6 @@ import { DatabaseUserService } from '@database/user/database-user.service';
 import { CmsError } from '@error/cms/cms-error';
 import { resolveHostParamSchemas } from './param-schema.util';
 import { ConfigError } from '@error/config/config-error';
-import { withHostConfigMutex } from '@util';
 import { ConfFileKind, EngineKnownKeys, ParamSchemaEntry, formatConfTextProblem, isBlockingConfTextProblem, validateConfText } from '@api-interfaces';
 
 /**
@@ -425,7 +424,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     const warnings = confname === 'cubridconf'
       ? this.assertValidConfText(paramSchemas.database, confdata, 'cubridconf', paramSchemas.knownKeys)
       : this.assertValidConfText(paramSchemas.cm ?? [], confdata, 'cmconf', paramSchemas.knownKeys);
-    const result = await withHostConfigMutex(hostUid, async () => {
+    const result = await this.withHostConfigMutex(userId, hostUid, async () => {
       const current = await this.getAllSystemParam(userId, hostUid, confname);
       assertUnchangedSinceLoaded(confname, loaded, current.conflist?.[0]?.confdata);
       return this.setSystemParam(userId, hostUid, confname, confdata);
@@ -514,7 +513,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
   ): Promise<SetSysParamClientResponse> {
     const { broker: schema, knownKeys } = (await this.getEnv(userId, hostUid)).paramSchemas;
     const warnings = this.assertValidConfText(schema, confdata, 'brokerconf', knownKeys);
-    const result = await withHostConfigMutex(hostUid, async () => {
+    const result = await this.withHostConfigMutex(userId, hostUid, async () => {
       const current = await this.getAddBrokerInfo(userId, hostUid, 'brokerconf');
       assertUnchangedSinceLoaded('brokerconf', loaded, current.conflist?.[0]?.confdata);
       return this.setBrokerParam(userId, hostUid, confdata);

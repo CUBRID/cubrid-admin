@@ -4,7 +4,7 @@ import { checkCmsStatusError } from './decorators/handle-cms-status-errors.decor
 import { checkCmsTokenError } from './decorators/handle-cms-token-errors.decorator';
 import { Logger } from '@nestjs/common';
 import { BaseCmsRequest } from '@type/cms-request/base-cms-request';
-import { formatAuditLog } from '@util';
+import { formatAuditLog, hostConfigKey, withHostConfigQueue } from '@util';
 import { getLongJobCmsTimeoutMs } from '../cms-job/cms-job.constants';
 import { pollCmsAsyncJob } from './poll-cms-async-job';
 
@@ -23,6 +23,16 @@ export abstract class BaseService {
     protected readonly cmsClient: CmsHttpsClientService
   ) {
     this.logger = new Logger(this.constructor.name);
+  }
+
+  /**
+   * Runs `fn` in the host's conf-file queue (util/concurrency/host-config-mutex):
+   * one read-modify-write of a host's cubrid.conf, cm.conf or broker.conf at a
+   * time, across every user and service instance that reaches that host.
+   */
+  protected async withHostConfigMutex<T>(userId: string, hostUid: string, fn: () => Promise<T>): Promise<T> {
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    return withHostConfigQueue(hostConfigKey(host), fn);
   }
 
   /**
