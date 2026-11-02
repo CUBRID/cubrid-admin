@@ -1,3 +1,4 @@
+import { parseConfText } from '@api-interfaces';
 import { fetchDatabaseStartInfo } from './databaseCoreSlice';
 
 // Bulk and service actions skip the databases the user isn't logged in to
@@ -47,23 +48,16 @@ export const readStartInfoDatabases = (hostUid) => async (dispatch) => {
   }
 };
 
-/** The cubrid.conf `[service]` autostart list (`server=`), empty when `service=` leaves out server. */
+/**
+ * The cubrid.conf `[service]` autostart list (the last `server=`), empty when
+ * `service=` leaves out server. Read with the engine's own parsing rules
+ * (key case, trailing comments, continued lines); the list splits on spaces,
+ * commas and colons as util_service.c does.
+ */
 export function autoStartServers(confLines) {
-  let serviceEnabled = false;
-  let servers = [];
-  let inService = false;
-  for (const raw of confLines || []) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    if (line.startsWith('[')) {
-      inService = /^\[\s*service\s*\]/i.test(line);
-      continue;
-    }
-    if (!inService) continue;
-    const [key, ...rest] = line.split('=');
-    const value = rest.join('=').trim().replace(/^["']|["']$/g, '');
-    if (key.trim() === 'service') serviceEnabled = value.split(',').map((s) => s.trim().toLowerCase()).includes('server');
-    if (key.trim() === 'server') servers = value.split(',').map((s) => s.trim()).filter(Boolean);
-  }
-  return serviceEnabled ? servers : [];
+  const service = parseConfText(confLines || []).sections.find((section) => section.name === 'service');
+  const last = (key) => [...(service?.entries || [])].reverse().find((entry) => entry.key.toLowerCase() === key)?.value;
+  const list = (value) => (value || '').replace(/^["']|["']$/g, '').split(/[\s,:]+/).filter(Boolean);
+  if (!list(last('service')).map((s) => s.toLowerCase()).includes('server')) return [];
+  return list(last('server'));
 }

@@ -40,6 +40,10 @@ describe('autoStartServers', () => {
     expect(autoStartServers(['[service]', 'service=server,broker', 'server="a, b"', '[common]', 'server=x'])).toEqual(['a', 'b']);
     expect(autoStartServers(['[service]', 'service=broker', 'server=a'])).toEqual([]);
   });
+
+  it('reads the conf as the engine does: key case, trailing comments, continued lines, the last server=', () => {
+    expect(autoStartServers(['[Service]', 'SERVICE=server,broker', 'server=old', 'Server=a,\\', 'b c:d # comment'])).toEqual(['a', 'b', 'c', 'd']);
+  });
 });
 
 describe('serviceSkippedTable', () => {

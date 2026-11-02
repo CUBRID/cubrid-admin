@@ -833,6 +833,7 @@ describe('DatabaseUserService', () => {
       await settle();
 
       await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      expect(service.isDbLoginRestoring(mockUserId, mockHostUid, 'demodb')).toBe(false);
       cms.resolve(ok);
       await settle();
 

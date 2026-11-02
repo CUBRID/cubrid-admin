@@ -248,6 +248,9 @@ export class DatabaseUserService extends BaseService {
     // dropped here. One that starts from now on reads the mark.
     this.logoutGenerations.set(key, this.logoutGeneration(userId, hostUid, dbname) + 1);
     this.dbLoginCache.delete(key);
+    // A re-login still running can't bring it back (its generation check),
+    // so stop counting it as restoring and stop making requests wait for it.
+    this.pendingRelogins.delete(key);
   }
 
   private logoutGeneration(userId: string, hostUid: string, dbname: string): number {
