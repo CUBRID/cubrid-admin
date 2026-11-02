@@ -791,6 +791,25 @@ describe('DatabaseLifecycleService', () => {
       expect(stopdbCalls).toHaveLength(1);
     });
 
+    it('also stops a running database that dblist leaves out', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'db1' }] },
+        activelist: { active: [{ dbname: 'db1' }, { dbname: 'unlisted' }] },
+      } as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', task: 'stopdb' } as any);
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      const stopped = cmsClient.postAuthenticated.mock.calls
+        .filter(([, body]) => body.task === 'stopdb')
+        .map(([, body]) => (body as { dbname?: string }).dbname);
+      expect(stopped.sort()).toEqual(['db1', 'unlisted']);
+      expect(result).toEqual({ failed: [] });
+    });
+
     it('reports a startInfo failure as its own entry and skips database stop, instead of throwing', async () => {
       const mockBrokerService = (service as any).brokerService;
       mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
@@ -867,6 +886,17 @@ describe('DatabaseLifecycleService', () => {
       expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual']);
       expect(tasksOf('startdb')).toEqual(['auto', 'manual']);
       expect([...running].sort()).toEqual(['auto', 'manual']);
+      expect(result).toEqual({ stopFailed: [], startFailed: [], notRestarted: [] });
+    });
+
+    it('stops and starts again a running database that dblist leaves out', async () => {
+      running.add('unlisted');
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual', 'unlisted']);
+      expect(tasksOf('startdb').sort()).toEqual(['auto', 'manual', 'unlisted']);
+      expect([...running].sort()).toEqual(['auto', 'manual', 'unlisted']);
       expect(result).toEqual({ stopFailed: [], startFailed: [], notRestarted: [] });
     });
 

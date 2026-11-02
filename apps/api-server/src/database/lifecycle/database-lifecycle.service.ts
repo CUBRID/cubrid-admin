@@ -837,10 +837,19 @@ export class DatabaseLifecycleService extends BaseService {
     // leaving the host in an undocumented partial-stop state. Without a
     // dbname list there is nothing to pass to stopAllDatabases, so surface
     // this as its own failure entry instead of continuing.
+    // A running database can be missing from dblist (CMS lists only the
+    // databases.txt entries whose host field matches), so the active list is
+    // added to it; otherwise such a database would neither stop nor be
+    // reported.
     let dbnames: string[];
     try {
       const startInfo = await this.databaseInfoService.startInfo(userId, hostUid);
-      dbnames = (startInfo?.dblist?.dbs || []).map((db) => db.dbname);
+      dbnames = [
+        ...new Set([
+          ...(startInfo?.dblist?.dbs || []).map((db) => db.dbname),
+          ...(startInfo?.activelist?.active || []).map((db) => db.dbname),
+        ]),
+      ];
     } catch (err: unknown) {
       failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
       return { failed };
