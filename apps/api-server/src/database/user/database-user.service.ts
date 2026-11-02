@@ -33,6 +33,12 @@ import {
   UserVerifyCmsResponse,
 } from '@type/cms-response';
 
+/** A DB login the user made, as ensureDbLogin trusts it. No password is kept. */
+type DbLogin = { loggedInAt: number; hostToken: string; dbUser: string };
+
+/** Bounds each re-login after a host login, so one stuck database can't hold the others' requests. */
+const DBMT_RELOGIN_TIMEOUT_MS = 30_000;
+
 /** How long a dbmtuserlogin is trusted before ensureDbLogin re-checks it — see ensureDbLogin's doc comment. Not yet validated against real usage; tune freely. */
 const DBMT_LOGIN_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -50,7 +56,7 @@ export class DatabaseUserService extends BaseService {
   // valid", we can only track "we believe we last (re-)established it here".
   // Lost on api-server restart, which is safe: worst case is one redundant
   // re-login next time.
-  private readonly dbLoginCache = new Map<string, { loggedInAt: number; hostToken: string }>();
+  private readonly dbLoginCache = new Map<string, DbLogin>();
   // Bumped by every logout, same keys. A login that started before a logout
   // finished must not write the cache once its CMS answer arrives.
   private readonly logoutGenerations = new Map<string, number>();
@@ -110,26 +116,28 @@ export class DatabaseUserService extends BaseService {
   /**
    * After the host was logged in again (new CMS token), logs the user back in
    * to each database whose login was live under the old token and that has
-   * a saved profile — CMS keeps DB logins per host login, so they all ended.
-   * The login keeps its original time, so it still expires when it would
-   * have. A database without a saved profile, logged out of, or whose
-   * re-login fails is left not logged in; no database gets a login it didn't
-   * have. Runs in the background, one database at a time; ensureDbLogin for
-   * a database waits for its own re-login.
+   * a saved profile for the same database user — CMS keeps DB logins per
+   * host login, so they all ended. The login keeps its original time, so it
+   * still expires when it would have. A database without such a profile,
+   * logged out of, or whose re-login fails is left not logged in; no
+   * database gets a login it didn't have. Runs in the background; each
+   * re-login is bounded by DBMT_RELOGIN_TIMEOUT_MS, and ensureDbLogin for a
+   * database waits for its own. Must be called before anything else awaits
+   * after the token is stored, so no request sees the gap.
    */
   restoreDbLoginsAfterHostLogin(userId: string, hostUid: string, newToken: string): void {
     const prefix = `${userId}:${hostUid}:`;
-    let previous: Promise<void> = Promise.resolve();
-    for (const [key, cached] of this.dbLoginCache) {
-      if (!key.startsWith(prefix) || cached.hostToken === newToken) continue;
-      if (Date.now() - cached.loggedInAt >= DBMT_LOGIN_TTL_MS) {
+    for (const [key, login] of this.dbLoginCache) {
+      if (!key.startsWith(prefix) || login.hostToken === newToken) continue;
+      if (Date.now() - login.loggedInAt >= DBMT_LOGIN_TTL_MS) {
         this.dbLoginCache.delete(key);
         continue;
       }
       const dbname = key.slice(prefix.length);
       const generation = this.logoutGeneration(userId, hostUid, dbname);
-      const relogin = previous.then(() => this.relogin(userId, hostUid, dbname, cached.loggedInAt, newToken, generation));
-      previous = relogin;
+      // After an earlier re-login of the same database (an earlier host login).
+      const earlier = this.pendingRelogins.get(key) ?? Promise.resolve();
+      const relogin = earlier.then(() => this.relogin(userId, hostUid, dbname, login, newToken, generation));
       this.pendingRelogins.set(key, relogin);
       void relogin.then(() => {
         if (this.pendingRelogins.get(key) === relogin) this.pendingRelogins.delete(key);
@@ -137,40 +145,49 @@ export class DatabaseUserService extends BaseService {
     }
   }
 
-  /** One database of restoreDbLoginsAfterHostLogin; never rejects. */
+  /**
+   * One database of restoreDbLoginsAfterHostLogin; never rejects. `login` is
+   * the cache entry it replaces: it only drops or replaces that entry (or
+   * fills an empty slot), never a login made or restored in the meantime.
+   */
   private async relogin(
     userId: string,
     hostUid: string,
     dbname: string,
-    loggedInAt: number,
+    login: DbLogin,
     newToken: string,
     generation: number
   ): Promise<void> {
     const key = `${userId}:${hostUid}:${dbname}`;
-    // Only the old login goes: a login the user made in the meantime is kept.
-    const dropOldLogin = () => {
-      if (this.dbLoginCache.get(key)?.hostToken !== newToken) this.dbLoginCache.delete(key);
+    const stillOld = () => {
+      const current = this.dbLoginCache.get(key);
+      return current === undefined || current === login;
+    };
+    const dropOld = () => {
+      if (this.dbLoginCache.get(key) === login) this.dbLoginCache.delete(key);
     };
     try {
+      if (!stillOld()) return;
       const host = await this.hostService.findHostInternal(userId, hostUid);
       const profile = host.dbProfiles?.[dbname];
-      if (!profile || profile.loggedOut || host.token !== newToken) {
-        dropOldLogin();
+      if (!profile || profile.loggedOut || profile.id !== login.dbUser || host.token !== newToken) {
+        dropOld();
         return;
       }
-      await this.executeCmsRequest<LoginDBCmsRequest, BaseCmsResponse>(userId, hostUid, {
-        task: 'dbmtuserlogin',
-        targetid: host.id,
-        dbname,
-        dbuser: profile.id,
-        dbpasswd: profile.password,
-      });
-      // A logout meanwhile already dropped the login; a new login is kept.
+      await this.executeCmsRequest<LoginDBCmsRequest, BaseCmsResponse>(
+        userId,
+        hostUid,
+        { task: 'dbmtuserlogin', targetid: host.id, dbname, dbuser: profile.id, dbpasswd: profile.password },
+        { timeoutMs: DBMT_RELOGIN_TIMEOUT_MS }
+      );
+      // A logout meanwhile already dropped the login; a newer host login
+      // restores it itself; a login made meanwhile is kept.
       if (this.logoutGeneration(userId, hostUid, dbname) !== generation) return;
-      if (this.dbLoginCache.get(key)?.hostToken === newToken) return;
-      this.dbLoginCache.set(key, { loggedInAt, hostToken: newToken });
+      if ((await this.hostService.findHostInternal(userId, hostUid)).token !== newToken) return;
+      if (!stillOld()) return;
+      this.dbLoginCache.set(key, { loggedInAt: login.loggedInAt, hostToken: newToken, dbUser: login.dbUser });
     } catch {
-      dropOldLogin();
+      dropOld();
     }
   }
 
@@ -297,6 +314,7 @@ export class DatabaseUserService extends BaseService {
     this.dbLoginCache.set(`${userId}:${hostUid}:${dbname}`, {
       loggedInAt: Date.now(),
       hostToken: host.token,
+      dbUser: dbAuth.id,
     });
     if (host.dbProfiles?.[dbname]?.loggedOut) {
       await this.setProfileLoggedOut(userId, hostUid, dbname, false, generation);

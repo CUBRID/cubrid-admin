@@ -69,12 +69,16 @@ describe('CMSAuthService', () => {
       expect(cmsConfig.getAllSystemParam).toHaveBeenCalledWith('u1', 'h1', 'cmconf');
     });
 
-    it('starts logging back in to the databases the old token had, with the new token', async () => {
-      cmsConfig.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: [] }] });
+    it('starts logging back in to the databases the old token had, before anything else awaits', async () => {
+      let readCmConf!: () => void;
+      cmsConfig.getAllSystemParam.mockReturnValue(new Promise((resolve) => { readCmConf = () => resolve({ conflist: [{ confdata: [] }] }); }));
+      const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
 
-      await service.login('u1', 'h1');
-
-      expect(moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin).toHaveBeenCalledWith('u1', 'h1', 'new-token');
+      const login = service.login('u1', 'h1');
+      await new Promise((r) => setImmediate(r));
+      expect(restore).toHaveBeenCalledWith('u1', 'h1', 'new-token');
+      readCmConf();
+      await login;
     });
 
     it('still logs in when cm.conf cannot be read, leaving the CMS default', async () => {

@@ -33,6 +33,7 @@ export abstract class BaseService {
    * @param userId User ID from JWT
    * @param hostUid Host unique identifier
    * @param cmsRequest CMS request object (token will be added automatically)
+   * @param options timeoutMs bounds the HTTP request (no retry)
    * @returns CMS response
    * @throws Error If host not found, request fails, or CMS status is fail
    */
@@ -42,7 +43,8 @@ export abstract class BaseService {
   >(
     userId: string,
     hostUid: string,
-    cmsRequest: TRequest
+    cmsRequest: TRequest,
+    options?: { timeoutMs?: number }
   ): Promise<TResponse> {
     const host = await this.hostService.findHostInternal(userId, hostUid);
     const url = `https://${host.address}:${host.port}/cm_api`;
@@ -62,10 +64,9 @@ export abstract class BaseService {
       })
     );
 
-    const response = await this.cmsClient.postAuthenticated<TRequest, TResponse>(
-      url,
-      requestWithToken
-    );
+    const response = options
+      ? await this.cmsClient.postAuthenticated<TRequest, TResponse>(url, requestWithToken, options)
+      : await this.cmsClient.postAuthenticated<TRequest, TResponse>(url, requestWithToken);
     const cmsResponse = response as {
       status?: string;
       task?: string;

@@ -114,9 +114,10 @@ export class CmsAuthService {
       delete persisted.cmsTokenActiveTimeSec;
       return user;
     });
-    await this.rememberTokenActiveTime(userId, uid, token);
-    // The new token ended every DB login CMS held for the old one.
+    // The new token ended every DB login CMS held for the old one. Started
+    // before anything else awaits, so a DB request in between waits for it.
     this.databaseUserService.restoreDbLoginsAfterHostLogin(userId, uid, token);
+    await this.rememberTokenActiveTime(userId, uid, token);
 
     return this.getHaInfo(userId, uid);
   }

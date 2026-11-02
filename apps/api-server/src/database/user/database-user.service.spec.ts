@@ -69,10 +69,10 @@ describe('DatabaseUserService', () => {
 
     hostService.findHostInternal.mockImplementation(async () => mockHost as any);
     // Most tests act on a database the user is logged in to.
-    loginCache().set(`${mockUserId}:${mockHostUid}:demodb`, { loggedInAt: Date.now(), hostToken: mockHost.token });
+    loginCache().set(`${mockUserId}:${mockHostUid}:demodb`, { loggedInAt: Date.now(), hostToken: mockHost.token, dbUser: 'dba' });
   });
 
-  const loginCache = () => (service as any).dbLoginCache as Map<string, { loggedInAt: number; hostToken: string }>;
+  const loginCache = () => (service as any).dbLoginCache as Map<string, { loggedInAt: number; hostToken: string; dbUser: string }>;
   const notLoggedIn = () => loginCache().clear();
 
   afterEach(() => {
@@ -695,65 +695,78 @@ describe('DatabaseUserService', () => {
       const promise = new Promise<T>((r) => { resolve = r; });
       return { promise, resolve };
     };
-    const settle = () => new Promise((r) => setImmediate(r));
+    const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
     const loginAt = Date.now() - 60 * 60 * 1000;
     const key = (db: string) => `${mockUserId}:${mockHostUid}:${db}`;
-    const relogin = async () => {
-      mockHost.token = 'new-token';
-      service.restoreDbLoginsAfterHostLogin(mockUserId, mockHostUid, 'new-token');
-      for (let i = 0; i < 5; i++) await settle();
+    const hostLogin = (token: string) => {
+      mockHost.token = token;
+      service.restoreDbLoginsAfterHostLogin(mockUserId, mockHostUid, token);
     };
 
     beforeEach(() => {
       notLoggedIn();
-      (mockHost.dbProfiles as any).nosave = undefined;
-      loginCache().set(key('demodb'), { loggedInAt: loginAt, hostToken: 'test-token' });
+      loginCache().set(key('demodb'), { loggedInAt: loginAt, hostToken: 'test-token', dbUser: 'dba' });
     });
 
-    it('logs back in with the saved profile, keeping the original login time', async () => {
+    it('logs back in with the saved profile, keeping the original login time, within a time limit', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(ok);
 
-      await relogin();
+      hostLogin('new-token');
+      await settle();
 
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ task: 'dbmtuserlogin', dbname: 'demodb', dbuser: 'dba', dbpasswd: 'dba-password', token: 'new-token' })
+        expect.objectContaining({ task: 'dbmtuserlogin', dbname: 'demodb', dbuser: 'dba', dbpasswd: 'dba-password', token: 'new-token' }),
+        { timeoutMs: 30_000 }
       );
-      expect(loginCache().get(key('demodb'))).toEqual({ loggedInAt: loginAt, hostToken: 'new-token' });
-      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', 'new-token')).toBe(true);
+      expect(loginCache().get(key('demodb'))).toEqual({ loggedInAt: loginAt, hostToken: 'new-token', dbUser: 'dba' });
     });
 
     it('leaves a database without a saved profile not logged in, sending nothing', async () => {
-      loginCache().set(key('nosave'), { loggedInAt: loginAt, hostToken: 'test-token' });
+      loginCache().set(key('nosave'), { loggedInAt: loginAt, hostToken: 'test-token', dbUser: 'dba' });
       cmsClient.postAuthenticated.mockResolvedValue(ok);
 
-      await relogin();
+      hostLogin('new-token');
+      await settle();
 
-      expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ dbname: 'nosave' }));
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ dbname: 'nosave' }), expect.anything());
       expect(loginCache().has(key('nosave'))).toBe(false);
     });
 
-    it('never logs in to a database the user logged out of', async () => {
-      (mockHost.dbProfiles.demodb as any).loggedOut = true;
+    it('does not log in as the saved profile when the user had logged in as another user', async () => {
+      loginCache().set(key('demodb'), { loggedInAt: loginAt, hostToken: 'test-token', dbUser: 'someone_else' });
 
-      await relogin();
+      hostLogin('new-token');
+      await settle();
 
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
       expect(loginCache().has(key('demodb'))).toBe(false);
     });
 
-    it('leaves the database not logged in when the re-login fails', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, status: 'failure', note: 'boom' });
+    it('never logs in to a database the user logged out of', async () => {
+      (mockHost.dbProfiles.demodb as any).loggedOut = true;
 
-      await relogin();
+      hostLogin('new-token');
+      await settle();
+
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+      expect(loginCache().has(key('demodb'))).toBe(false);
+    });
+
+    it('leaves the database not logged in when the re-login fails or times out', async () => {
+      cmsClient.postAuthenticated.mockRejectedValue(new Error('timeout of 30000ms exceeded'));
+
+      hostLogin('new-token');
+      await settle();
 
       expect(loginCache().has(key('demodb'))).toBe(false);
     });
 
     it('drops a login that would already have expired, without logging in', async () => {
-      loginCache().set(key('demodb'), { loggedInAt: Date.now() - 2 * 60 * 60 * 1000 - 1, hostToken: 'test-token' });
+      loginCache().set(key('demodb'), { loggedInAt: Date.now() - 2 * 60 * 60 * 1000 - 1, hostToken: 'test-token', dbUser: 'dba' });
 
-      await relogin();
+      hostLogin('new-token');
+      await settle();
 
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
       expect(loginCache().has(key('demodb'))).toBe(false);
@@ -762,8 +775,7 @@ describe('DatabaseUserService', () => {
     it('makes ensureDbLogin wait for the database\'s re-login', async () => {
       const cms = deferred<typeof ok>();
       cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
-      mockHost.token = 'new-token';
-      service.restoreDbLoginsAfterHostLogin(mockUserId, mockHostUid, 'new-token');
+      hostLogin('new-token');
 
       const check = service.ensureDbLogin(mockUserId, mockHostUid, 'demodb');
       await settle();
@@ -772,16 +784,45 @@ describe('DatabaseUserService', () => {
       await expect(check).resolves.toBeUndefined();
     });
 
+    it('keeps the newest token when the host is logged in twice in a row', async () => {
+      const first = deferred<typeof ok>();
+      cmsClient.postAuthenticated.mockReturnValueOnce(first.promise).mockResolvedValue(ok);
+
+      hostLogin('token-b');
+      await settle();
+      // The second host login's re-login would finish first if it didn't wait.
+      hostLogin('token-c');
+      await settle();
+      first.resolve(ok);
+      await settle();
+
+      expect(loginCache().get(key('demodb'))).toEqual({ loggedInAt: loginAt, hostToken: 'token-c', dbUser: 'dba' });
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', 'token-c')).toBe(true);
+    });
+
+    it('does not replace a login the user made during the re-login', async () => {
+      const cms = deferred<typeof ok>();
+      cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
+      hostLogin('new-token');
+      await settle();
+
+      const fresh = { loggedInAt: Date.now(), hostToken: 'new-token', dbUser: 'other' };
+      loginCache().set(key('demodb'), fresh);
+      cms.resolve(ok);
+      await settle();
+
+      expect(loginCache().get(key('demodb'))).toBe(fresh);
+    });
+
     it('does not bring back a login the user logged out of during the re-login', async () => {
       const cms = deferred<typeof ok>();
       cmsClient.postAuthenticated.mockReturnValueOnce(cms.promise);
-      mockHost.token = 'new-token';
-      service.restoreDbLoginsAfterHostLogin(mockUserId, mockHostUid, 'new-token');
+      hostLogin('new-token');
       await settle();
 
       await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
       cms.resolve(ok);
-      for (let i = 0; i < 5; i++) await settle();
+      await settle();
 
       expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', 'new-token')).toBe(false);
     });
