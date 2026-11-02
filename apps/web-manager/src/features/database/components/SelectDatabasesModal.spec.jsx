@@ -64,14 +64,55 @@ it('passes the selected rows to onAction', async () => {
   ], undefined);
 });
 
-it('asks for credentials before logging in to databases without saved ones', async () => {
+const type = (input, value) => act(async () => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+});
+const credentialInputs = (dbname) => q(`select-databases-credentials-${dbname}`).querySelectorAll('input');
+
+it('asks for an account per database without a saved login before logging in', async () => {
   const onAction = vi.fn();
-  await render({ initialSelected: ['b'], onAction });
+  await render({ initialSelected: ['a', 'b', 'c'], onAction });
 
   await click(q('select-databases-action-login'));
   expect(onAction).not.toHaveBeenCalled();
-  expect(q('select-databases-credentials')).not.toBeNull();
+  // 'a' is already logged in; 'b' and 'c' have no saved login.
+  expect(q('select-databases-credentials-a')).toBeNull();
+  const [bId, bPassword] = credentialInputs('b');
+  const [cId] = credentialInputs('c');
+  await type(bId, 'dba');
+  await type(bPassword, 'pw');
+  await type(cId, 'public');
 
   await click(q('select-databases-action-login'));
-  expect(onAction).toHaveBeenCalledWith('login', [expect.objectContaining({ dbname: 'b' })], { id: '', password: '' });
+  expect(onAction).toHaveBeenCalledWith('login', expect.any(Array), {
+    b: { id: 'dba', password: 'pw' },
+    c: { id: 'public', password: '' },
+  });
+});
+
+it('copies the first row\'s account to every database', async () => {
+  const onAction = vi.fn();
+  await render({ initialSelected: ['b', 'c'], onAction });
+  await click(q('select-databases-action-login'));
+  const [bId, bPassword] = credentialInputs('b');
+  await type(bId, 'dba');
+  await type(bPassword, 'pw');
+
+  await click(q('select-databases-apply-first'));
+  await click(q('select-databases-action-login'));
+
+  expect(onAction).toHaveBeenCalledWith('login', expect.any(Array), {
+    b: { id: 'dba', password: 'pw' },
+    c: { id: 'dba', password: 'pw' },
+  });
+});
+
+it('shows each database\'s state in words', async () => {
+  await render({});
+  const rowA = [...document.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('a'));
+  expect(rowA.textContent).toContain('Running');
+  expect(rowA.textContent).toContain('Logged in');
+  expect(rowA.textContent).toContain('Login saved');
+  expect(rowA.textContent).toContain('HA');
 });

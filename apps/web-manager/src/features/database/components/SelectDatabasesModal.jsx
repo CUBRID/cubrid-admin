@@ -6,14 +6,22 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
 import { Table } from '../../../components/ds/layout/Table';
 import { Typography } from '../../../components/ds/foundation/Typography';
-import { Icon } from '../../../components/ds/foundation/Icon';
+import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
 import { MULTI_DB_ACTIONS, MULTI_DB_ACTION_ICONS, databaseSelectionRows, splitByAction } from '../databaseMultiActions';
 
 
-const yesNo = (value) => (
-  <Icon name={value ? 'check' : 'remove'} size="xs" className={value ? 'text-emerald-500' : 'text-slate-300'} />
+// What the actions go by, in words: running or not, logged in, saved login, HA.
+const RowStatus = ({ row, CM }) => (
+  <div className="flex flex-wrap gap-1">
+    <StatusBadge label={row.running ? CM.multiDbStatusRunning : CM.multiDbStatusStopped} variant={row.running ? 'emerald' : 'slate'} />
+    {row.loggedIn && <StatusBadge label={CM.multiDbStatusLoggedIn} variant="sky" />}
+    {row.hasProfile && <StatusBadge label={CM.multiDbStatusSavedLogin} variant="slate" />}
+    {row.isHa && <StatusBadge label={CM.multiDbColumnHa} variant="violet" />}
+  </div>
 );
+
+const EMPTY_CREDENTIALS = { id: '', password: '' };
 
 /**
  * Pick several databases of one host and run one action on them. Each
@@ -33,14 +41,15 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
   const [selected, setSelected] = useState(() => new Set());
   const [filter, setFilter] = useState('');
   const [loginPending, setLoginPending] = useState(false);
-  const [credentials, setCredentials] = useState({ id: '', password: '' });
+  // Per database without a saved login: { [dbname]: { id, password } }.
+  const [credentialsByDb, setCredentialsByDb] = useState({});
 
   useEffect(() => {
     if (!isOpen) return;
     setSelected(new Set(initialSelected || []));
     setFilter('');
     setLoginPending(false);
-    setCredentials({ id: '', password: '' });
+    setCredentialsByDb({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, hostUid]);
 
@@ -66,14 +75,24 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
   });
 
   const loginTargets = splitByAction('login', selectedRows).targets;
-  const needsCredentials = loginTargets.some((row) => !row.hasProfile);
+  const needingCredentials = loginTargets.filter((row) => !row.hasProfile);
+  const credentialsOf = (dbname) => credentialsByDb[dbname] || EMPTY_CREDENTIALS;
+  const setCredentialsOf = (dbname, patch) =>
+    setCredentialsByDb((prev) => ({ ...prev, [dbname]: { ...(prev[dbname] || EMPTY_CREDENTIALS), ...patch } }));
+  const applyFirstToAll = () => {
+    const first = credentialsOf(needingCredentials[0].dbname);
+    setCredentialsByDb((prev) => ({
+      ...prev,
+      ...Object.fromEntries(needingCredentials.map((row) => [row.dbname, { ...first }])),
+    }));
+  };
 
   const runAction = (action) => {
-    if (action === 'login' && needsCredentials && !loginPending) {
+    if (action === 'login' && needingCredentials.length > 0 && !loginPending) {
       setLoginPending(true);
       return;
     }
-    onAction(action, selectedRows, action === 'login' ? credentials : undefined);
+    onAction(action, selectedRows, action === 'login' ? credentialsByDb : undefined);
   };
 
   const columns = [
@@ -92,10 +111,7 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
       ),
     },
     { header: CM.database, accessor: 'dbname' },
-    { header: CM.multiDbColumnRunning, accessor: 'running', render: yesNo },
-    { header: CM.multiDbColumnLoggedIn, accessor: 'loggedIn', render: yesNo },
-    { header: CM.multiDbColumnSavedCredentials, accessor: 'hasProfile', render: yesNo },
-    { header: CM.multiDbColumnHa, accessor: 'isHa', render: yesNo },
+    { header: CM.status, accessor: 'running', render: (_, row) => <RowStatus row={row} CM={CM} /> },
   ];
 
   return (
@@ -148,21 +164,38 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
             showEmptyStateAsRow
           />
         </div>
-        {loginPending && (
-          <div className="grid grid-cols-2 gap-3" data-testid="select-databases-credentials">
-            <Input
-              label={CM.username}
-              value={credentials.id}
-              onChange={(e) => setCredentials((prev) => ({ ...prev, id: e.target.value }))}
-              autoComplete="off"
-            />
-            <Input
-              label={CM.password}
-              type="password"
-              value={credentials.password}
-              onChange={(e) => setCredentials((prev) => ({ ...prev, password: e.target.value }))}
-              autoComplete="new-password"
-            />
+        {loginPending && needingCredentials.length > 0 && (
+          <div className="space-y-2" data-testid="select-databases-credentials">
+            <div className="flex items-center justify-between gap-2">
+              <Typography variant="caption" className="text-slate-500">{CM.multiDbCredentialsTitle}</Typography>
+              {needingCredentials.length > 1 && (
+                <Button variant="ghost" size="sm" onClick={applyFirstToAll} data-testid="select-databases-apply-first">
+                  {CM.multiDbApplyFirstToAll}
+                </Button>
+              )}
+            </div>
+            <div className="max-h-[200px] overflow-y-auto space-y-2">
+              {needingCredentials.map((row) => (
+                <div key={row.dbname} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2" data-testid={`select-databases-credentials-${row.dbname}`}>
+                  <Typography variant="p" className="text-13 font-semibold truncate">{row.dbname}</Typography>
+                  <Input
+                    placeholder={CM.username}
+                    aria-label={`${row.dbname} ${CM.username}`}
+                    value={credentialsOf(row.dbname).id}
+                    onChange={(e) => setCredentialsOf(row.dbname, { id: e.target.value })}
+                    autoComplete="off"
+                  />
+                  <Input
+                    type="password"
+                    placeholder={CM.password}
+                    aria-label={`${row.dbname} ${CM.password}`}
+                    value={credentialsOf(row.dbname).password}
+                    onChange={(e) => setCredentialsOf(row.dbname, { password: e.target.value })}
+                    autoComplete="new-password"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

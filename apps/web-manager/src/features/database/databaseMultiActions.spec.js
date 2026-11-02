@@ -66,7 +66,7 @@ describe('runMultiDatabaseAction', () => {
     expect(store.getState().database.loggedInDatabases).toContain('h1:a');
   });
 
-  it('logs in with saved credentials, then the given ones, and skips the rest', async () => {
+  it('logs in with saved credentials, then each database\'s entered account, and skips the rest', async () => {
     databaseApi.loginDatabaseWithProfile.mockResolvedValue({});
     databaseApi.loginDatabase.mockRejectedValueOnce({ response: { data: { message: 'bad password' } } });
     const store = storeWith({});
@@ -76,7 +76,7 @@ describe('runMultiDatabaseAction', () => {
     ];
 
     const withCreds = await runMultiDatabaseAction(store.dispatch, CM, {
-      hostUid: 'h1', action: 'login', rows, credentials: { id: 'dba', password: 'pw' },
+      hostUid: 'h1', action: 'login', rows, credentials: { typed: { id: 'dba', password: 'pw' } },
     });
     const withoutCreds = await runMultiDatabaseAction(store.dispatch, CM, { hostUid: 'h1', action: 'login', rows });
 

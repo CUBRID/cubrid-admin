@@ -76,7 +76,8 @@ async function eachInTurn(rows, run) {
  * Runs a multi-select action on `rows` (already filtered by splitByAction).
  * Start/stop/restart go to the server in one request; login, logout and
  * forgetting credentials call the per-database endpoints in turn. A login
- * uses the database's saved credentials, or `credentials` for those without.
+ * uses the database's saved credentials, or for those without, its entry in
+ * `credentials` ({ [dbname]: { id, password } }).
  *
  * @returns {Promise<{ succeeded: string[], failed: {dbname, error, phase?}[], skipped: {dbname, reason}[] }>}
  */
@@ -96,11 +97,12 @@ export async function runMultiDatabaseAction(dispatch, CM, { hostUid, action, ro
           await dispatch(loginDatabase({ hostUid, dbname: row.dbname })).unwrap();
           return null;
         }
-        if (!credentials?.id) return { skip: CM.noSavedCredentialsReason };
+        const entered = credentials?.[row.dbname];
+        if (!entered?.id) return { skip: CM.noSavedCredentialsReason };
         await dispatch(loginDatabase({
           hostUid,
           dbname: row.dbname,
-          payload: { id: credentials.id, password: credentials.password || '' },
+          payload: { id: entered.id, password: entered.password || '' },
         })).unwrap();
         return null;
       });

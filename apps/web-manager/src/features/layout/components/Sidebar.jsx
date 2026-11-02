@@ -240,14 +240,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           resetAction();
           const report = bulkResultStatusModal(CM, {
             title: label,
-            failedMsg: CM.multiBrokerFailedMsg,
+            failedMsg: (count) => CM.multiBrokerFailedMsg(action, count),
             failed: result.failed,
             skipped: notApplicable.map((broker) => ({ dbname: broker.name, reason: CM.multiBrokerNotApplicableReason })),
             showPhase: action === 'restart',
             nameLabel: CM.broker,
             skippedMsg: CM.someBrokersSkippedMsg,
           });
-          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiBrokerDoneMsg(result.succeeded.length) }));
+          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiBrokerDoneMsg(action, result.succeeded.length) }));
         } catch (err) {
           endError(err);
         }
@@ -283,9 +283,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             ...notApplicable.map((row) => ({ dbname: row.dbname, reason: CM.multiDbNotApplicableReason })),
           ];
           const report = bulkResultStatusModal(CM, {
-            title: label, failedMsg: CM.multiDbFailedMsg, failed: result.failed, skipped, showPhase: action === 'restart',
+            title: label, failedMsg: (count) => CM.multiDbFailedMsg(action, count), failed: result.failed, skipped, showPhase: action === 'restart',
           });
-          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiDbDoneMsg(result.succeeded.length) }));
+          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiDbDoneMsg(action, result.succeeded.length) }));
         } catch (err) {
           dispatch(fetchDatabaseStartInfo(hostUid));
           endError(err);
