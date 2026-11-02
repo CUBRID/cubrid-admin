@@ -468,8 +468,10 @@ export class DatabaseLifecycleService extends BaseService {
     return this.holdingDatabases(userId, hostUid, requested, `${action}SelectedDatabases`, async () => {
       const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
       const info = await this.databaseInfoService.startInfo(userId, hostUid);
-      // An empty dblist (CMS sends `null` for an empty section) means the
-      // host has no databases; a failed read already threw as a CMS failure.
+      // An empty dblist (CMS sends `null` for an empty section) means no
+      // databases to act on: none on the host, or CMS could not resolve the
+      // host's own name, which it still reports as success with no dblist.
+      // Either way every selected database is skipped, nothing is run.
       const known = new Set((info?.dblist?.dbs || []).map((db) => db.dbname));
       const running = activeDbnamesOf(info);
       const targets: string[] = [];
