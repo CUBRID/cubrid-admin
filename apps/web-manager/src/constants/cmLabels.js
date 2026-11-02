@@ -2067,10 +2067,10 @@ export const CM = {
   restartService: 'Restart Service',
   restartingService: 'Restarting Service',
   confirmRestartServiceTitle: 'Restart Service',
-  confirmRestartServiceDesc: (server) => `Stop and start the CUBRID service on ${server}? The start does what a service start does: when [service] service= includes server, it starts the databases in the autostart list and the HA databases. Other running databases stay stopped.`,
+  confirmRestartServiceDesc: (server) => `Stop and start the CUBRID service on ${server}? Non-HA databases: when [service] service= includes server, the ones in the autostart list are started; other running ones stay stopped. HA databases are stopped and started by the engine with cubrid heartbeat (the ha_db_list databases).`,
   serviceRestartedMsg: 'Service restarted.',
   // Whole-service start/stop/restart on an HA host: the HA databases go down and up with one node-wide ha_stop/ha_start.
-  serviceHaNoteLogin: 'HA databases are stopped and started by the engine as a whole, whether or not you are logged in to them.',
+  serviceHaNoteLogin: 'HA databases are stopped and started by the engine with cubrid heartbeat (the ha_db_list databases), whether or not you are logged in to them.',
   serviceHaNoteRole: 'If this node is the master, the master role may move to another node.',
   serviceHaNoteStartFail: 'If any HA database fails to start, the engine may take all HA on this node down again.',
   haNodeStartFailedMsg: 'Starting HA failed. HA on this node may be off; check the HA status.',

@@ -185,6 +185,27 @@ describe('DatabaseInfoService', () => {
     });
   });
 
+  describe('getServiceHaDbNames', () => {
+    type SysParam = Awaited<ReturnType<CmsConfigService['getAllSystemParam']>>;
+    const confs = (haMode: string | null) => async (_u: string, _h: string, confname: string) => ({
+      conflist: [{
+        confdata: confname === 'haconf'
+          ? ['[common]', 'ha_db_list=hadb1,hadb2']
+          : ['[common]', ...(haMode === null ? [] : [`ha_mode=${haMode}`]), '[service]', 'service=server'],
+      }],
+    }) as SysParam;
+
+    it.each(['on', 'replica', 'ON'])('is the ha_db_list databases when ha_mode is %s', async (haMode) => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
+      expect([...(await service.getServiceHaDbNames(mockUserId, mockHostUid))].sort()).toEqual(['hadb1', 'hadb2']);
+    });
+
+    it.each(['off', 'no', null])('is empty when ha_mode is %s, since the engine refuses heartbeat then', async (haMode) => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
+      expect([...(await service.getServiceHaDbNames(mockUserId, mockHostUid))]).toEqual([]);
+    });
+  });
+
   describe('effectiveHaDbForDbname', () => {
     it('returns false when dbname is not in ha_db_list', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({
