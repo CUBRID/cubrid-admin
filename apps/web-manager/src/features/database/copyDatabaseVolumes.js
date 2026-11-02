@@ -30,14 +30,15 @@ export function normalizeCopyVolumes(spaceinfo = []) {
 }
 
 export function canCopyIndividualVolumes(volumes) {
-  const sourceKeys = new Set(volumes.map(volume => copyVolumePathKey(volume.fullPath)));
-  const targetKeys = new Set(volumes.map(volume => copyVolumePathKey(joinVolumePath(volume.newLocation, volume.newVolumeName))));
-  return volumes.length > 0 && volumes.every((volume, index) =>
+  if (!(volumes.length > 0 && volumes.every((volume, index) =>
     volume.volid === index && isAbsolutePath(volume.fullPath) &&
     volume.spacename && volume.newVolumeName?.trim() &&
     !/[\\/]/.test(volume.newVolumeName) && !['.', '..'].includes(volume.newVolumeName) &&
     isAbsolutePath(volume.newLocation || '')
-  ) && sourceKeys.size === volumes.length && targetKeys.size === volumes.length &&
+  ))) return false;
+  const sourceKeys = new Set(volumes.map(volume => copyVolumePathKey(volume.fullPath)));
+  const targetKeys = new Set(volumes.map(volume => copyVolumePathKey(joinVolumePath(volume.newLocation, volume.newVolumeName))));
+  return sourceKeys.size === volumes.length && targetKeys.size === volumes.length &&
     // copydb formats each target file, removing whatever is there first, so
     // no target may be a source volume (its own or another volume's).
     ![...targetKeys].some(key => sourceKeys.has(key));

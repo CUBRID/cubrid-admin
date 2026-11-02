@@ -53,6 +53,12 @@ describe('individual database copy volumes', () => {
     expect(buildCopyVolumeMappings(volumes)).toEqual([{ '/db/a\\b/source': '/copy/target' }]);
   });
 
+  it('answers false, not throws, for a volume without a target directory yet', () => {
+    const volumes = normalizeCopyVolumes([{ type: 'PERMANENT', volid: 0, spacename: '/db/source' }])
+      .map((v) => ({ ...v, newVolumeName: 'target' }));
+    expect(canCopyIndividualVolumes(volumes)).toBe(false);
+  });
+
   it('refuses a target that is a source volume, its own or another volume\'s', () => {
     const base = normalizeCopyVolumes([
       { type: 'PERMANENT', volid: 0, spacename: '/db/source' },
