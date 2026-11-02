@@ -741,6 +741,27 @@ describe('DatabaseUserService', () => {
       expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
     });
 
+    it('keeps the mark when a logout lands between a login\'s CMS answer and its clearing of the mark', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(successResponse);
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      const clearing = deferred<void>();
+      const atomic = repository.atomicUpdateUser.getMockImplementation()!;
+      repository.atomicUpdateUser.mockImplementationOnce(async (id: string, cb: any) => {
+        await clearing.promise;
+        return atomic(id, cb);
+      });
+
+      const login = service.loginDatabase(mockUserId, mockHostUid, 'demodb');
+      await flush();
+      await service.logoutDatabase(mockUserId, mockHostUid, 'demodb');
+      clearing.resolve();
+      await login;
+
+      expect(mockHost.dbProfiles.demodb).toHaveProperty('loggedOut', true);
+      expect(service.isDbLoginActive(mockUserId, mockHostUid, 'demodb', mockHost.token)).toBe(false);
+      await expect(service.ensureDbLogin(mockUserId, mockHostUid, 'demodb')).rejects.toThrow(ValidationError);
+    });
+
     it('creates no profile for a database without one', async () => {
       await service.logoutDatabase(mockUserId, mockHostUid, 'otherdb');
 

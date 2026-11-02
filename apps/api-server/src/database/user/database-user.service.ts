@@ -200,8 +200,20 @@ export class DatabaseUserService extends BaseService {
     return this.logoutGenerations.get(`${userId}:${hostUid}:${dbname}`) ?? 0;
   }
 
-  private async setProfileLoggedOut(userId: string, hostUid: string, dbname: string, loggedOut: boolean): Promise<void> {
+  /**
+   * With `generation`, only if no logout happened since it was recorded —
+   * checked under the user lock, so a logout that lands between a login's
+   * CMS answer and this write keeps its mark.
+   */
+  private async setProfileLoggedOut(
+    userId: string,
+    hostUid: string,
+    dbname: string,
+    loggedOut: boolean,
+    generation?: number
+  ): Promise<void> {
     await this.repository.atomicUpdateUser(userId, async (user) => {
+      if (generation !== undefined && this.logoutGeneration(userId, hostUid, dbname) !== generation) return user;
       const profile = getHost(user, hostUid)?.dbProfiles?.[dbname];
       if (!profile) return user;
       if (loggedOut) profile.loggedOut = true;
@@ -260,7 +272,7 @@ export class DatabaseUserService extends BaseService {
       hostToken: host.token,
     });
     if (host.dbProfiles?.[dbname]?.loggedOut) {
-      await this.setProfileLoggedOut(userId, hostUid, dbname, false);
+      await this.setProfileLoggedOut(userId, hostUid, dbname, false, generation);
     }
 
     return true;
