@@ -32,8 +32,8 @@ const EMPTY_CREDENTIALS = { id: '', password: '' };
 export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected, onClose, onAction }) {
   const CM = useCM();
   const database = useSelector((state) => ({
-    databasesByHost: state.database.databasesByHost,
-    activeDatabasesByHost: state.database.activeDatabasesByHost,
+    navigatorDatabasesByHost: state.database.navigatorDatabasesByHost,
+    navigatorActiveDatabasesByHost: state.database.navigatorActiveDatabasesByHost,
     haDbNamesByHost: state.database.haDbNamesByHost,
     loggedInDatabases: state.database.loggedInDatabases,
   }), shallowEqual);

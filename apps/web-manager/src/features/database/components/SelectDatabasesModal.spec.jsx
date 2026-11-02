@@ -20,8 +20,8 @@ beforeEach(() => {
     preloadedState: {
       database: {
         ...databaseReducer(undefined, { type: '@@init' }),
-        databasesByHost: { h1: [{ dbname: 'a', isProfileExists: true }, { dbname: 'b' }, { dbname: 'c' }] },
-        activeDatabasesByHost: { h1: ['a'] },
+        navigatorDatabasesByHost: { h1: [{ dbname: 'a', isProfileExists: true }, { dbname: 'b' }, { dbname: 'c' }] },
+        navigatorActiveDatabasesByHost: { h1: ['a'] },
         haDbNamesByHost: { h1: ['a'] },
         loggedInDatabases: ['h1:a'],
       },

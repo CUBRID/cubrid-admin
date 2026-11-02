@@ -24,8 +24,8 @@ const storeWith = (database) => configureStore({
 describe('databaseSelectionRows', () => {
   it('reads each database of the host with what the actions need, keyed by host', () => {
     const store = storeWith({
-      databasesByHost: { h1: [{ dbname: 'a', isProfileExists: true }, { dbname: 'b' }] },
-      activeDatabasesByHost: { h1: ['a'] },
+      navigatorDatabasesByHost: { h1: [{ dbname: 'a', isProfileExists: true }, { dbname: 'b' }] },
+      navigatorActiveDatabasesByHost: { h1: ['a'] },
       haDbNamesByHost: { h1: ['a'] },
       loggedInDatabases: ['h1:a', 'h2:b'],
     });
@@ -33,6 +33,20 @@ describe('databaseSelectionRows', () => {
     expect(databaseSelectionRows(store.getState(), 'h1')).toEqual([
       { dbname: 'a', running: true, loggedIn: true, hasProfile: true, isHa: true },
       { dbname: 'b', running: false, loggedIn: false, hasProfile: false, isHa: false },
+    ]);
+  });
+
+  it('follows the lists the tree shows, not a newer background read', () => {
+    const store = storeWith({
+      navigatorDatabasesByHost: { h1: [{ dbname: 'a' }, { dbname: 'b' }] },
+      navigatorActiveDatabasesByHost: { h1: ['a'] },
+      databasesByHost: { h1: [{ dbname: 'a' }] },
+      activeDatabasesByHost: { h1: [] },
+    });
+
+    expect(databaseSelectionRows(store.getState(), 'h1').map((r) => [r.dbname, r.running])).toEqual([
+      ['a', true],
+      ['b', false],
     ]);
   });
 });
@@ -96,5 +110,13 @@ describe('runMultiDatabaseAction', () => {
     });
 
     expect(result).toEqual({ succeeded: ['b'], failed: [{ dbname: 'a', error: 'boom' }], skipped: [] });
+  });
+});
+
+describe('multiDbConfirmDesc', () => {
+  it('names the first five targets and counts the rest', () => {
+    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    expect(CM.multiDbConfirmDesc('Start', names)).toBe('Start (7): a, b, c, d, e and 2 more');
+    expect(CM.multiDbConfirmDesc('Start', ['a', 'b'])).toBe('Start (2): a, b');
   });
 });

@@ -2095,7 +2095,7 @@ export const CM = {
     forgetCredentials: 'Forget Saved Login',
   },
   multiDbConfirmTitle: (action) => `${action} Selected Databases`,
-  multiDbConfirmDesc: (action, names) => `${action}: ${names.join(', ')}`,
+  multiDbConfirmDesc: (action, names) => `${action} (${names.length}): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}`,
   multiDbHaWarning: (count) => `${count} HA database(s) included. They are handled one at a time and may change the HA state of this node.`,
   multiDbFailedMsg: (action, count) => ({
     start: `Could not start ${count} database(s).`,

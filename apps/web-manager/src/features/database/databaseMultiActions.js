@@ -18,12 +18,15 @@ export const MULTI_DB_ACTION_ICONS = {
 };
 
 // One row per database of a host, with what the multi-select actions need.
+// Reads the navigator lists the database tree shows, so a selection made in
+// the tree is counted and judged running or stopped as the tree shows it.
+// The server decides start/stop/restart again under its lock.
 export function databaseSelectionRows(state, hostUid) {
   const db = state.database;
-  const active = new Set(db.activeDatabasesByHost?.[hostUid] || []);
+  const active = new Set(db.navigatorActiveDatabasesByHost?.[hostUid] || []);
   const ha = new Set(db.haDbNamesByHost?.[hostUid] || []);
   const loggedIn = new Set(db.loggedInDatabases || []);
-  return (db.databasesByHost?.[hostUid] || []).map((entry) => ({
+  return (db.navigatorDatabasesByHost?.[hostUid] || []).map((entry) => ({
     dbname: entry.dbname,
     running: active.has(entry.dbname),
     loggedIn: loggedIn.has(dbKey(hostUid, entry.dbname)),

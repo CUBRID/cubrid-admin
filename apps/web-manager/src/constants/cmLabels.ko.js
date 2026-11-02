@@ -2053,7 +2053,7 @@ export const CM_KO = {
     forgetCredentials: '저장된 로그인 정보 삭제',
   },
   multiDbConfirmTitle: (action) => `선택한 데이터베이스 ${action}`,
-  multiDbConfirmDesc: (action, names) => `${action}: ${names.join(', ')}`,
+  multiDbConfirmDesc: (action, names) => `${action} (${names.length}개): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`,
   multiDbHaWarning: (count) => `HA 데이터베이스 ${count}개가 포함되어 있습니다. 하나씩 처리하며, 이 노드의 HA 상태가 바뀔 수 있습니다.`,
   multiDbFailedMsg: (action, count) => ({
     start: `데이터베이스 ${count}개를 시작하지 못했습니다.`,
