@@ -83,15 +83,20 @@ it('does not render a description field in edit mode, even when the user has a c
   expectNoDescriptionField();
 });
 
-it('saves an empty password in edit mode as no password, as the engine allows', async () => {
+it('keeps the current password when it is left blank in edit mode, and says so', async () => {
   await render('alice');
+  expect(container.textContent).toContain('Leave blank to keep the current password.');
   const saveBtn = el('create-user-save-btn');
   expect(saveBtn.disabled).toBe(false);
   await act(async () => saveBtn.click());
 
+  // The server leaves an empty password out of CMS updateuser.
   expect(userApi.updateDatabaseUser).toHaveBeenCalledTimes(1);
   const [, , , payload] = userApi.updateDatabaseUser.mock.calls[0];
   expect(payload.userpass).toBe('');
+  expect(container.textContent).toContain('Password Unchanged');
+  expect(container.textContent).toContain('Password for user @alice was left unchanged.');
+  expect(container.textContent).not.toContain('Password Changed');
 });
 
 it('sends only the password in edit mode and shows the password-changed message', async () => {
@@ -135,6 +140,7 @@ it('creates a user without a memo/comment in the payload', async () => {
 
 it('creates a user with no password, as the engine allows', async () => {
   await render(undefined);
+  expect(container.textContent).toContain('Leave blank for no password.');
   await act(async () => setValue(el('create-user-username-input'), 'nopass'));
   await act(async () => el('create-user-save-btn').click());
 

@@ -101,14 +101,16 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
 
   // CMS createuser/updateuser only accept a username and password, so editing
   // an existing user can only change the password. An empty one means no
-  // password, as the engine allows, in both modes.
+  // password for a new user, as the engine allows; for an existing user it
+  // keeps the current password, since CMS updateuser can't clear one.
   const isSaveDisabled = !formData.name;
+  const keepsPassword = isEditMode && !formData.password;
 
   const validate = () => {
     const errs = {};
     if (!formData.name.trim()) errs.name = CM.usernameRequired;
     if (checkDbPassword(formData.password) === 'tooLong') errs.password = CM.dbPasswordTooLongMsg(DB_PASSWORD_MAX_BYTES);
-    // Compared even when empty: an empty password removes it, so it must be confirmed too.
+    // Compared even when empty, so a password typed in only one field is caught.
     if (formData.password !== formData.confirmPassword) {
       errs.confirmPassword = CM.passwordsDoNotMatch;
     }
@@ -128,7 +130,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     try {
       if (isEditMode) {
         await dispatch(updateDatabaseUser({ hostUid: selectedHostUid, dbname, userName: editingUser, payload: { userpass: formData.password, groups: { group: [] }, authorization: [] } })).unwrap();
-        endSuccess(CM.dbUserPasswordChangedMsg(editingUser));
+        endSuccess(keepsPassword ? CM.dbUserPasswordKeptMsg(editingUser) : CM.dbUserPasswordChangedMsg(editingUser));
       } else {
         await dispatch(createDatabaseUser({ hostUid: selectedHostUid, dbname, payload: { username: formData.name, userpass: formData.password, groups: { group: [] }, authorization: [] } })).unwrap();
         endSuccess(CM.userCreatedSuccessMsg(formData.name));
@@ -152,8 +154,8 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     return (
       <Modal isOpen title={CM.success} icon="check_circle" iconVariant="success" onClose={onClose} maxWidth="max-w-[520px]" testId="create-user">
         <ModalStatusSuccess
-          title={isEditMode ? CM.dbUserPasswordChanged : CM.userCreated}
-          message={isEditMode ? CM.dbUserPasswordChangedMsg(editingUser) : `@${formData.name}`}
+          title={isEditMode ? (keepsPassword ? CM.dbUserPasswordKept : CM.dbUserPasswordChanged) : CM.userCreated}
+          message={isEditMode ? (keepsPassword ? CM.dbUserPasswordKeptMsg(editingUser) : CM.dbUserPasswordChangedMsg(editingUser)) : `@${formData.name}`}
           onConfirm={onClose}
           confirmText={CM.ok}
         />
@@ -246,7 +248,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             </Typography>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" description={CM.dbPasswordRuleHint(DB_PASSWORD_MAX_BYTES, true)} />
+            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" description={isEditMode ? CM.dbPasswordKeepHint(DB_PASSWORD_MAX_BYTES) : CM.dbPasswordRuleHint(DB_PASSWORD_MAX_BYTES, true)} />
             <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" />
           </div>
           {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (

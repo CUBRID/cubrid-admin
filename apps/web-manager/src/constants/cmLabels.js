@@ -299,6 +299,7 @@ export const CM = {
   leaveBlankToKeep: 'Leave blank to keep current password',
   passwordsDoNotMatch: 'Passwords do not match',
   dbPasswordRuleHint: (max, allowBlank) => `Up to ${max} bytes (${max} characters in English).${allowBlank ? ' Leave blank for no password.' : ''}`,
+  dbPasswordKeepHint: (max) => `Up to ${max} bytes (${max} characters in English). Leave blank to keep the current password.`,
   dbPasswordTooLongMsg: (max) => `The password must be at most ${max} bytes (${max} characters in English).`,
   cmsPasswordRuleHint: (max) => `1 to ${max} bytes (${max} characters in English).`,
   cmsPasswordTooLongMsg: (max) => `The password must be at most ${max} bytes (${max} characters in English).`,
@@ -1521,6 +1522,7 @@ export const CM = {
   // CreateUserModal
   createUser: 'Create User',
   dbUserPasswordChanged: 'Password Changed',
+  dbUserPasswordKept: 'Password Unchanged',
   userCreated: 'User Created',
 
   // UserProfileModal
@@ -1982,6 +1984,7 @@ export const CM = {
   passcodeUpdateNote: 'This changes the CMS account password for the currently logged-in user. It also updates the manager access password stored locally for this connection.',
   userUpdatedSuccessMsg: (username) => `User @${username} successfully updated.`,
   dbUserPasswordChangedMsg: (username) => `Password for user @${username} was changed.`,
+  dbUserPasswordKeptMsg: (username) => `Password for user @${username} was left unchanged.`,
   userCreatedSuccessMsg: (username) => `User @${username} successfully created.`,
   synchronizationFailed: 'Failed to save changes.',
   savingChanges: 'Saving Changes',
