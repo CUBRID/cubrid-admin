@@ -214,14 +214,6 @@ export default function EditCMSUserModal() {
               icon="badge"
               required
             />
-            {isEditMode && (
-              <Toggle
-                testId="edit-cms-user-change-password-toggle"
-                label={CM.changePassword}
-                checked={changePassword}
-                onChange={setChangePassword}
-              />
-            )}
             <div className="grid grid-cols-2 gap-4">
               <Input
                 data-testid="edit-cms-user-password-input"
@@ -249,6 +241,16 @@ export default function EditCMSUserModal() {
                 error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
               />
             </div>
+            {isEditMode && (
+              <div>
+                <Toggle
+                  testId="edit-cms-user-change-password-toggle"
+                  label={CM.changePassword}
+                  checked={changePassword}
+                  onChange={setChangePassword}
+                />
+              </div>
+            )}
           </div>
         </section>
 

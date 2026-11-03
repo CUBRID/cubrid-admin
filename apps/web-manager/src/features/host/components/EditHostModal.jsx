@@ -284,7 +284,7 @@ export default function EditHostModal() {
 
         {/* Section 3: Credentials */}
         <SectionHeader title={CM.credentials} icon="lock" className="mt-8" />
-        <div className="px-1">
+        <div className="px-1 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={CM.username}
@@ -297,25 +297,25 @@ export default function EditHostModal() {
               disabled={loading}
               required
             />
-            <div className="space-y-2">
-              <Toggle
-                testId="edit-host-change-password-toggle"
-                label={CM.changePassword}
-                checked={changePassword}
-                onChange={setChangePassword}
-                disabled={loading}
-              />
-              <Input
-                label={CM.password}
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                error={errors.password || (isCredentialError ? apiError : undefined)}
-                icon="key"
-                disabled={loading || !changePassword}
-              />
-            </div>
+            <Input
+              label={CM.password}
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              error={errors.password || (isCredentialError ? apiError : undefined)}
+              icon="key"
+              disabled={loading || !changePassword}
+            />
+          </div>
+          <div>
+            <Toggle
+              testId="edit-host-change-password-toggle"
+              label={CM.changePassword}
+              checked={changePassword}
+              onChange={setChangePassword}
+              disabled={loading}
+            />
           </div>
         </div>
 
