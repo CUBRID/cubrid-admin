@@ -162,6 +162,7 @@ export const CM = {
     backup: 'Backup Database',
     delete: 'Delete Database',
   },
+  manageDatabaseHaDisabledHint: 'Not available for a database in HA mode.',
 
   // Create Database (createdb wizard)
   createDatabaseMsg: 'Create a new database.',

@@ -1123,9 +1123,12 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
         <ContextMenuWrapper x={groupContextMenu.mouseX} y={groupContextMenu.mouseY} onClose={() => setGroupContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between gap-2 min-w-0">
             <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11 block min-w-0">
-              <span title={groupContextMenu.groupName} className="block truncate">{CM.groupColonLabel(groupContextMenu.groupName)}</span>
+              {/* The host-list root reuses this menu but is not a group, so no "Group:" prefix. */}
+              <span title={groupContextMenu.groupName} className="block truncate">
+                {groupContextMenu.groupId ? CM.groupColonLabel(groupContextMenu.groupName) : groupContextMenu.groupName}
+              </span>
             </Typography>
-            <Icon name="folder" size="xs" className="opacity-30" weight={300} />
+            <Icon name={groupContextMenu.groupId ? 'folder' : 'dns'} size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem
             icon="refresh"
@@ -1403,6 +1406,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="download"
               label={CM.manageDatabaseMenu.load}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openLoadDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1440,12 +1444,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="drive_file_rename_outline"
               label={CM.manageDatabaseMenu.rename}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRenameDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="restore"
               label={CM.manageDatabaseMenu.restore}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRestoreDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1459,6 +1465,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="delete"
               label={CM.manageDatabaseMenu.delete}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
+              title={isSelectedDbInHa ? CM.manageDatabaseHaDisabledHint : undefined}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDeleteDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
           </SubMenu>
