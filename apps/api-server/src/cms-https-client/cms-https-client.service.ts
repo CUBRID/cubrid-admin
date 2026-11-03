@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { CmsError } from '@error/cms/cms-error';
 import { firstValueFrom } from 'rxjs';
 import { HandleCmsErrors } from '@common';
 import { CmsForwardClientRequest } from '@api-interfaces';
@@ -135,7 +136,7 @@ export class CmsHttpsClientService {
   public async postAuthenticated<T extends BaseCmsRequest, P>(
     url: string,
     data: T,
-    options?: { timeoutMs?: number }
+    options?: { timeoutMs?: number; maxResponseBytes?: number }
   ): Promise<P> {
     // Before the host queue: a request waiting there when the user disconnects
     // must not count as use after the disconnect.
@@ -148,11 +149,19 @@ export class CmsHttpsClientService {
         // impose a short deadline on mutations or long-running database jobs.
         ...(data.task === 'dbspaceinfo' ? { timeout: 30_000 } : {}),
         ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.maxResponseBytes !== undefined ? { maxContentLength: options.maxResponseBytes } : {}),
       };
       for (let attempt = 0; ; attempt++) {
         const startedAt = Date.now();
         this.logCmsRequest('authenticated', url, data);
-        const response = await firstValueFrom(this.httpService.post<P>(url, data, config));
+        const response = await firstValueFrom(this.httpService.post<P>(url, data, config)).catch(error => {
+          if (options?.maxResponseBytes !== undefined && /maxContentLength/i.test(error?.message ?? '')) {
+            throw CmsError.RequestFailed({
+              message: `CMS response exceeds the analysis size limit (${options.maxResponseBytes} bytes). Select a smaller archived log.`,
+            }, error);
+          }
+          throw error;
+        });
         this.logCmsResponse('authenticated', url, data, response.data, Date.now() - startedAt);
         // Any answer but "invalid token" means CMS accepted and renewed the token.
         noteCmsTokenUse(data.token, isInvalidTokenError(response.data), issuedAt);

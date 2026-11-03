@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseStartInfo, fetchDatabaseVolumes } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
@@ -6,12 +6,9 @@ import { dbKey } from '../../database/dbKey';
 import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 // Stable fallback reference — `activeDatabasesByHost[selectedHostUid] || []`
-// would otherwise hand the effect below a brand-new array every render for
-// as long as this host has no cached entry yet (e.g. just-selected, before
-// its first fetch resolves). That effect depends on this value and
-// dispatches a fetch, which changes Redux state and re-renders this
-// component — seeing a "new" array each time, it never settles and keeps
-// re-dispatching instead of waiting for the configured interval.
+// would otherwise be a brand-new array every render for as long as this host
+// has no cached entry yet (e.g. just-selected, before its first fetch
+// resolves), and so would the useMemo below.
 const EMPTY_LIST = [];
 
 export default function MonitoringProvider({ children }) {
@@ -33,6 +30,24 @@ export default function MonitoringProvider({ children }) {
     [activeDatabases, loggedInDatabases, selectedHostUid]
   );
   
+  // Read by the timer instead of restarting it: a failed poll replaces the
+  // database lists, and a restart polls again at once, so an unreachable host
+  // was polled back to back with no interval.
+  const loggedInActiveRef = useRef(loggedInActiveDatabases);
+  loggedInActiveRef.current = loggedInActiveDatabases;
+  const isAuthorized = Boolean(selectedHostUid && authorizedHosts.includes(selectedHostUid));
+
+  // One poll of each kind per host at a time. A host's CMS requests run one
+  // after another, so while a slow one holds it (e.g. lockdb on a database
+  // with many locks) a tick every interval would pile up requests that then
+  // all run back to back once it frees up.
+  const inFlightRef = useRef(new Set());
+  const pollOnce = useCallback((key, request) => {
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    Promise.resolve(dispatch(request)).finally(() => inFlightRef.current.delete(key));
+  }, [dispatch]);
+
   const dashboardTimer = useRef(null);
   const brokerTimer = useRef(null);
   const lastActivityRef = useRef(Date.now());
@@ -73,12 +88,13 @@ export default function MonitoringProvider({ children }) {
     const hostUid = selectedHostUid;
     const interval = preferences.dashboardInterval;
 
-    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
+    if (isMonitoringTab && interval > 0 && isAuthorized && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
-          dispatch(fetchDatabaseStartInfo({ hostUid, isBackground: true }));
-          if (loggedInActiveDatabases.length > 0) {
-            dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActiveDatabases, isBackground: true }));
+          pollOnce(`start-info:${hostUid}`, fetchDatabaseStartInfo({ hostUid, isBackground: true }));
+          const loggedInActive = loggedInActiveRef.current;
+          if (loggedInActive.length > 0) {
+            pollOnce(`volumes:${hostUid}`, fetchDatabaseVolumes({ hostUid, activeDatabases: loggedInActive, isBackground: true }));
           }
         }
       };
@@ -90,7 +106,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (dashboardTimer.current) clearInterval(dashboardTimer.current);
     };
-  }, [dispatch, preferences.dashboardInterval, selectedHostUid, authorizedHosts, isPendingReconnect, activeDatabases, loggedInActiveDatabases, activeMainTab, isMonitoringTab]);
+  }, [dispatch, pollOnce, preferences.dashboardInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   // Broker Interval Refresh
   useEffect(() => {
@@ -102,10 +118,10 @@ export default function MonitoringProvider({ children }) {
     const hostUid = selectedHostUid;
     const interval = preferences.brokerStatusInterval;
 
-    if (isMonitoringTab && interval > 0 && hostUid && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
+    if (isMonitoringTab && interval > 0 && isAuthorized && !isPendingReconnect) {
       const refresh = () => {
         if (Date.now() - lastActivityRef.current < MAX_IDLE_TIME) {
-          dispatch(fetchBrokerList({ hostUid, isBackground: true }));
+          pollOnce(`brokers:${hostUid}`, fetchBrokerList({ hostUid, isBackground: true }));
         }
       };
 
@@ -116,7 +132,7 @@ export default function MonitoringProvider({ children }) {
     return () => {
       if (brokerTimer.current) clearInterval(brokerTimer.current);
     };
-  }, [dispatch, preferences.brokerStatusInterval, selectedHostUid, authorizedHosts, isPendingReconnect, activeMainTab, isMonitoringTab]);
+  }, [dispatch, pollOnce, preferences.brokerStatusInterval, selectedHostUid, isAuthorized, isPendingReconnect, activeMainTab, isMonitoringTab]);
 
   return children;
 }

@@ -6,6 +6,7 @@ import {
   CopyDbRequest,
   CreateDatabaseWithConfigRequest,
   CmsJobStatus,
+  DeleteDatabaseRequest,
   CmsJobType,
   LoadDatabaseRequest,
   OptimizeDatabaseRequest,
@@ -24,6 +25,7 @@ export type CmsJobPayload =
   | CopyDbRequest
   | AddVolDbRequest
   | RenameDatabaseRequest
+  | DeleteDatabaseRequest
   | BackupDbClientRequest
   | RestoreDbClientRequest;
 
@@ -39,6 +41,8 @@ export type CmsJobRecord = {
   finishedAt?: string;
   payload: CmsJobPayload;
   result?: unknown;
+  /** Follow-up work requiring attention after the main operation succeeded. */
+  warnings?: string[];
   error?: { message: string; code?: string; cmsStatus?: string };
   // CMS's own uuid for this async job, persisted as soon as CMS returns it —
   // previously only held in a poll-loop local variable, so a mid-job failure

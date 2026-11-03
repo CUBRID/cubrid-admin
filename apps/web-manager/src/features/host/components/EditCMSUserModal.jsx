@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
+import { checkCmsPassword, CMS_PASSWORD_MAX_BYTES } from '@api-interfaces';
 import {
   addCmsUser,
   updateCmsUser,
@@ -11,6 +12,7 @@ import {
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { Toggle } from '../../../components/ds/forms/Toggle';
 import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
@@ -65,10 +67,13 @@ export default function EditCMSUserModal() {
     dbcreate: 'none',
     statusmonitorauth: 'none',
   });
+  // Editing keeps the password unless the user asks to change it.
+  const [changePassword, setChangePassword] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       resetAction();
+      setChangePassword(false);
       if (isEditMode && editUser) {
         const id = editUser.id || editUser.name || editUser['@id'] || editUser.targetid || '';
         const cas = editUser.casauth || editUser['@casauth'] || 'none';
@@ -96,15 +101,18 @@ export default function EditCMSUserModal() {
     }
   }, [isOpen, isEditMode, editUser, resetAction]);
 
-  const passwordMismatch = formData.password !== formData.confirmPassword;
-  const canSave = formData.targetid && (!isEditMode ? !!formData.password : true) && !passwordMismatch;
+  const settingPassword = !isEditMode || changePassword;
+  const passwordProblem = settingPassword ? checkCmsPassword(formData.password) : null;
+  const passwordTooLong = passwordProblem === 'tooLong';
+  const passwordMismatch = settingPassword && formData.password !== formData.confirmPassword;
+  const canSave = formData.targetid && !passwordProblem && !passwordMismatch;
 
   const handleSave = async () => {
     if (!canSave) return;
     startAction();
     try {
       if (isEditMode) {
-        if (formData.password) {
+        if (changePassword) {
           await dispatch(setHostPassword({
             hostUid: selectedHostUid,
             payload: { targetid: formData.targetid, newpassword: formData.password }
@@ -206,6 +214,14 @@ export default function EditCMSUserModal() {
               icon="badge"
               required
             />
+            {isEditMode && (
+              <Toggle
+                testId="edit-cms-user-change-password-toggle"
+                label={CM.changePassword}
+                checked={changePassword}
+                onChange={setChangePassword}
+              />
+            )}
             <div className="grid grid-cols-2 gap-4">
               <Input
                 data-testid="edit-cms-user-password-input"
@@ -215,8 +231,10 @@ export default function EditCMSUserModal() {
                 onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
                 placeholder={isEditMode ? CM.passwordConfirm : CM.password}
                 icon="lock"
-                required={!isEditMode}
-                error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
+                required={settingPassword}
+                disabled={!settingPassword}
+                description={settingPassword ? CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES) : null}
+                error={passwordTooLong ? CM.cmsPasswordTooLongMsg(CMS_PASSWORD_MAX_BYTES) : (passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null)}
               />
               <Input
                 data-testid="edit-cms-user-confirm-password-input"
@@ -226,7 +244,8 @@ export default function EditCMSUserModal() {
                 onChange={(e) => setFormData(p => ({ ...p, confirmPassword: e.target.value }))}
                 placeholder={CM.repeatPassword}
                 icon="lock_clock"
-                required={!!formData.password}
+                required={settingPassword}
+                disabled={!settingPassword}
                 error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
               />
             </div>

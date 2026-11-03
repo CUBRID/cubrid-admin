@@ -83,16 +83,20 @@ it('does not render a description field in edit mode, even when the user has a c
   expectNoDescriptionField();
 });
 
-it('keeps Save disabled in edit mode until a new password is entered', async () => {
+it('keeps the current password when it is left blank in edit mode, and says so', async () => {
   await render('alice');
+  expect(container.textContent).toContain('Leave blank to keep the current password.');
   const saveBtn = el('create-user-save-btn');
-  expect(saveBtn.disabled).toBe(true);
-
-  await act(async () => setValue(el('create-user-password-input'), 'newpass1'));
   expect(saveBtn.disabled).toBe(false);
+  await act(async () => saveBtn.click());
 
-  await act(async () => setValue(el('create-user-password-input'), ''));
-  expect(saveBtn.disabled).toBe(true);
+  // The server leaves an empty password out of CMS updateuser.
+  expect(userApi.updateDatabaseUser).toHaveBeenCalledTimes(1);
+  const [, , , payload] = userApi.updateDatabaseUser.mock.calls[0];
+  expect(payload.userpass).toBe('');
+  expect(container.textContent).toContain('Password Unchanged');
+  expect(container.textContent).toContain('Password for user @alice was left unchanged.');
+  expect(container.textContent).not.toContain('Password Changed');
 });
 
 it('sends only the password in edit mode and shows the password-changed message', async () => {
@@ -132,4 +136,38 @@ it('creates a user without a memo/comment in the payload', async () => {
   expect(payload).not.toHaveProperty('memo');
   expect(payload).not.toHaveProperty('comment');
   expect(container.textContent).toContain('User Created');
+});
+
+it('creates a user with no password, as the engine allows', async () => {
+  await render(undefined);
+  expect(container.textContent).toContain('Leave blank for no password.');
+  await act(async () => setValue(el('create-user-username-input'), 'nopass'));
+  await act(async () => el('create-user-save-btn').click());
+
+  expect(userApi.createDatabaseUser).toHaveBeenCalledTimes(1);
+  const [, , payload] = userApi.createDatabaseUser.mock.calls[0];
+  expect(payload).toMatchObject({ username: 'nopass', userpass: '' });
+});
+
+it('rejects a password longer than the engine accepts (31 bytes)', async () => {
+  await render(undefined);
+  const tooLong = 'a'.repeat(32);
+  await act(async () => {
+    setValue(el('create-user-username-input'), 'bob');
+    setValue(el('create-user-password-input'), tooLong);
+    setValue(el('create-user-confirm-password-input'), tooLong);
+  });
+  await act(async () => el('create-user-save-btn').click());
+
+  expect(userApi.createDatabaseUser).not.toHaveBeenCalled();
+  expect(container.textContent).toContain('at most 31 bytes');
+});
+
+it('does not remove a password when only the confirmation is left filled in', async () => {
+  await render('alice');
+  await act(async () => setValue(el('create-user-confirm-password-input'), 'oldpass1'));
+  await act(async () => el('create-user-save-btn').click());
+
+  expect(userApi.updateDatabaseUser).not.toHaveBeenCalled();
+  expect(container.textContent).toContain('Passwords do not match');
 });

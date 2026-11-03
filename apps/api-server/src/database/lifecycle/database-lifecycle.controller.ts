@@ -361,30 +361,31 @@ export class DatabaseLifecycleController {
   }
 
   /**
-   * Delete a database on a host.
-   * Also removes the database name from the server parameter in cubridconf if it exists.
-   * Returns start-info (db list) on success.
+   * Delete a database. Starts a CMS job (deletedb) and returns its id; the
+   * job then forgets the database's stored login and removes it from
+   * cubrid.conf.
    *
    * @route DELETE /:hostUid/database/:dbname
    * @param req Express request (contains authenticated user)
    * @param hostUid Host unique identifier from path parameter
    * @param dbname Database name from path parameter
    * @param body Request body containing delbackup option
-   * @returns StartInfoClientResponse Latest database list (start-info) on success
+   * @returns CreateCmsJobResponse The job id (HTTP 202)
    * @example
    * // DELETE /host-uid/database/testdb
    * // Body: { "delbackup": "y" }
    */
   @Delete(':dbname')
+  @HttpCode(HttpStatus.ACCEPTED)
   async deleteDatabase(
     @Request() req,
     @Param('hostUid') hostUid: string,
     @Param('dbname') dbname: string,
     @Body() body: DeleteDatabaseDto
-  ): Promise<StartInfoClientResponse> {
+  ): Promise<CreateCmsJobResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(`Deleting database: ${dbname} on host: ${hostUid}`);
-    return await this.lifecycleService.deleteDatabase(userId, hostUid, dbname, body);
+    this.logger.log(`Enqueue delete job: ${dbname} on host: ${hostUid}`);
+    return await this.cmsJobService.createJob(userId, hostUid, 'delete', dbname, body);
   }
 }

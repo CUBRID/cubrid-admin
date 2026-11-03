@@ -4,10 +4,13 @@ import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
+import { CmsConfigService } from '@cms-config/cms-config.service';
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import { DatabaseError } from '@error/database/database-error';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import {
+  CopyDbRequest,
   UnloadDatabaseRequest,
   LoadDatabaseRequest,
   CheckDatabaseRequest,
@@ -32,6 +35,7 @@ import {
 describe('DatabaseManagementService', () => {
   let service: DatabaseManagementService;
   let hostService: jest.Mocked<HostService>;
+  let configService: { renameAutoStart: jest.Mock };
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let databaseUserService: { loginDatabase: jest.Mock; ensureDbLogin: jest.Mock; deleteDbProfile: jest.Mock };
 
@@ -50,6 +54,8 @@ describe('DatabaseManagementService', () => {
   const mockUserId = 'user-123';
   const mockHostUid = 'host-uid-1';
   const mockDbname = 'testdb';
+  let cmsConfigService: { getAllSystemParam: jest.Mock; setSystemParam: jest.Mock };
+  let databaseConfigService: { ensureDbHaModeOff: jest.Mock; renameAutoStart: jest.Mock };
   const mockStartInfoResponse = { activelist: { active: [] }, dblist: { dbs: [] } };
 
   beforeEach(async () => {
@@ -72,9 +78,23 @@ describe('DatabaseManagementService', () => {
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
+    databaseConfigService = { ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined), renameAutoStart: jest.fn().mockResolvedValue([]) };
+    cmsConfigService = {
+      getAllSystemParam: jest.fn().mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] }),
+      setSystemParam: jest.fn().mockResolvedValue({ success: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseManagementService,
+        {
+          provide: CmsConfigService,
+          useValue: cmsConfigService,
+        },
+        {
+          provide: DatabaseConfigService,
+          useValue: databaseConfigService,
+        },
         {
           provide: HostService,
           useValue: mockHostService,
@@ -99,6 +119,8 @@ describe('DatabaseManagementService', () => {
     cmsClient = module.get(CmsHttpsClientService);
     databaseUserService = mockDatabaseUserService;
 
+    configService = module.get(DatabaseConfigService);
+
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
   });
@@ -109,6 +131,87 @@ describe('DatabaseManagementService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('copyDb', () => {
+    const request: CopyDbRequest = {
+      srcdbname: 'source', destdbname: 'clone', destdbpath: '/copy',
+      exvolpath: '/copy', logpath: '/copy', overwrite: 'n', move: 'n', advanced: 'on',
+      volume: [{ '/z/source': '/copy/clone' }, { '/a/extra': '/copy/clone_x001' }],
+    };
+
+    it('preserves physical mapping order and sends one key per CMS volume object', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/z/source': '/copy/clone', '/a/extra': '/copy/clone_x001' }],
+      });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ advanced: 'on', volume: request.volume }), expect.any(Object)
+      );
+    });
+
+    it('normalizes the supported advanced=y alias to CMS advanced=on', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, advanced: 'y' });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ advanced: 'on', volume: request.volume }), expect.any(Object)
+      );
+    });
+
+    it.each([
+      undefined, [], [{}], [null], [{ '/db/source': '' }], [{ '/db/source': 123 }],
+      [{ '/db/source': '/copy/clone' }, { '/db/source': '/copy/other' }],
+      [{ '/db/source': '/copy/clone' }, { '/db/extra': '/copy/clone' }],
+    ].map(volume => [volume]))('rejects invalid advanced mappings before CMS is called: %j', async volume => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: volume as CopyDbRequest['volume'],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['/copy/clone', '/copy/./clone'],
+      ['/copy/clone', '/copy/sub/../clone'],
+      ['/copy/clone', '/copy//clone'],
+      ['C:\\copy\\clone', 'c:/copy/./clone'],
+      ['C:\\copy\\clone', 'C:\\COPY\\sub\\..\\clone'],
+      ['\\\\server\\share\\copy\\clone', '\\\\SERVER\\share\\copy\\.\\clone'],
+    ])('rejects aliased destinations before CMS: %s and %s', async (first, second) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': first }, { '/db/extra': second }],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('rejects aliased source paths before CMS', async () => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': '/copy/clone' }, { '/db/./source': '/copy/extra' }],
+      })).rejects.toThrow(DatabaseError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('preserves valid POSIX paths, including case-distinct filenames, in the CMS request', async () => {
+      const volume = [{ '/db/source': '/copy/./Clone' }, { '/db/extra': '/copy/sub/../clone' }];
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, volume });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).toEqual(expect.objectContaining({ volume }));
+    });
+
+    it.each(['on', 'off'])('rejects copying onto the source before CMS is called (advanced=%s)', async advanced => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, destdbname: ' source ', advanced, overwrite: 'y',
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('omits mappings for normal copy', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, advanced: 'off' });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).not.toHaveProperty('volume');
+    });
   });
 
   describe('unloadDatabase', () => {
@@ -874,6 +977,57 @@ describe('DatabaseManagementService', () => {
     });
   });
 
+  describe('copyDb guards and bookkeeping', () => {
+    const copyReq = {
+      srcdbname: 'srcdb', destdbname: 'newdb', destdbpath: '/db/newdb', exvolpath: '/db/newdb', logpath: '/db/newdb',
+      overwrite: 'n', move: 'n', advanced: 'off',
+    };
+
+    it.each([
+      ['its own source', [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb' }]],
+      ['another volume\'s source', [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb_x001' }, { '/db/srcdb/srcdb_x001': '/copy/newdb_x001' }]],
+      ['a source written another way', [{ '/db/srcdb/srcdb': '/copy/newdb' }, { '/db/srcdb/srcdb_x001': '/db/srcdb/./srcdb' }]],
+    ])('refuses a target that is %s, before calling CMS', async (_label, volume) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, { ...copyReq, advanced: 'on', volume }))
+        .rejects.toMatchObject({ code: 'INVALID_PARAMETER', additionalData: { reason: 'COPY_VOLUME_ONTO_SOURCE' } });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('refuses "delete source" for an HA database', async () => {
+      const info = (service as any).databaseInfoService;
+      info.effectiveHaDbForDbname.mockResolvedValueOnce(true);
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, { ...copyReq, move: 'y' }))
+        .rejects.toMatchObject({ code: 'RENAME_NOT_SUPPORTED_FOR_HA_DATABASE' });
+    });
+
+    it('marks the copy ha_mode=off on an HA-configured host, and nothing else for a plain copy', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[common]', 'ha_mode=on'] }] });
+
+      await service.finishCopy(mockUserId, mockHostUid, copyReq as any);
+
+      expect(databaseConfigService.ensureDbHaModeOff).toHaveBeenCalledWith(mockUserId, mockHostUid, 'newdb');
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('treats "delete source" as a rename of the source in cubrid.conf', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=srcdb'] }] });
+
+      const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+
+      expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, 'srcdb', 'newdb');
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+      expect(warnings).toEqual([]);
+    });
+
+    it('reports a cubrid.conf failure after "delete source" as a warning, not a failure', async () => {
+      databaseConfigService.renameAutoStart.mockRejectedValueOnce(new Error('write failed'));
+
+      const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+
+      expect(warnings).toEqual([expect.stringContaining('could not be updated')]);
+    });
+  });
+
   describe('renameDatabase', () => {
     const mockSuccessResponse: RenameDatabaseCmsResponse = {
       __EXEC_TIME: '482 ms',
@@ -893,6 +1047,33 @@ describe('DatabaseManagementService', () => {
         '/old/path2': '/new/path2',
       },
     ];
+
+    it('updates autostart only after a successful physical rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(configService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'newdb');
+      expect(cmsClient.postAuthenticated.mock.invocationCallOrder[0]).toBeLessThan(configService.renameAutoStart.mock.invocationCallOrder[0]);
+    });
+
+    it('returns a warning without failing or resubmitting an already committed rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      configService.renameAutoStart.mockRejectedValue(new Error('config write failed'));
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(result.warnings?.[0]).toContain('Do not repeat the rename');
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not change autostart after a failed CMS rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'failure', task: 'renamedb', note: 'rename failed' });
+      await expect(service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      })).rejects.toThrow();
+      expect(configService.renameAutoStart).not.toHaveBeenCalled();
+    });
 
     it('should successfully rename database with advanced "on" and volume', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
@@ -928,6 +1109,28 @@ describe('DatabaseManagementService', () => {
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
+    });
+
+    it('passes on the warnings of the cubrid.conf rename (e.g. a [@new] section already there)', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      databaseConfigService.renameAutoStart.mockResolvedValueOnce(['kept [@old]']);
+
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+
+      expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'renamed_db');
+      expect(result.warnings).toEqual(['kept [@old]']);
+    });
+
+    it('leaves cubrid.conf alone when nothing in it names the database', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
     });
 
     it('should successfully rename database with advanced "off" without volume', async () => {
@@ -1385,10 +1588,40 @@ describe('DatabaseManagementService', () => {
       const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true });
 
       expect(result).not.toHaveProperty('lockinfo');
+      expect(result.overview).toMatchObject({ esc: '100000', dinterval: '1.00' });
       expect(result.summary?.totalLocks).toBeGreaterThan(0);
       expect(result.summary?.rows).toEqual(
         expect.arrayContaining([expect.objectContaining({ index: '1', obj: 'Class = code', mode: 'IS_LOCK', count: 1 })])
       );
+    });
+
+    it('returns one row per locked object when asked for objects', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { objects: true });
+
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.objects?.[0]).toEqual({
+        oid: '0|201|-32763',
+        obj: 'Class = code',
+        holders: [{ index: '1', mode: 'IS_LOCK', count: '1' }],
+        numHolders: '1',
+        numBlockedHolders: '0',
+        numWaiters: '0',
+      });
+      expect(result.objects?.[1]).toMatchObject({ oid: '0|833|2', holders: [], numHolders: '-' });
+    });
+
+    it('returns the summary and the per-object rows from a single lockdb', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      const result = await service.lockDatabase(mockUserId, mockHostUid, mockDbname, { summary: true, objects: true });
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+      expect(result).not.toHaveProperty('lockinfo');
+      expect(result.summary?.totalLocks).toBeGreaterThan(0);
+      expect(result.overview).toMatchObject({ esc: '100000' });
+      expect(result.objects?.[0]).toMatchObject({ oid: '0|201|-32763' });
     });
 
     it('should successfully get lock information (legacy format without lock_holders)', async () => {

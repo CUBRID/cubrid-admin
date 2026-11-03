@@ -140,23 +140,6 @@ describe('loggedInDatabases is scoped per host, not by bare dbname', () => {
   });
 });
 
-describe('deleting a database clears its cached login state here too', () => {
-  // The backend forgets the stored login profile + dbmt-login cache for a
-  // deleted/renamed dbname (see DatabaseLifecycleService.deleteDatabase and
-  // DatabaseManagementService.clearDbAliasCachesAfterRename) so a different,
-  // later database that ends up with that same name can't silently inherit
-  // it — mirror that belief here too, or the client would keep showing the
-  // old, now-gone database's name as still "logged in". (Rename goes through
-  // a CMS job, not a thunk; RenameDatabaseModal clears both names itself.)
-  it("clears the deleted dbname's login state for that host", () => {
-    const store = configureStore({ reducer, preloadedState: { loggedInDatabases: ['hostA:demodb'], loggingInDatabases: {} } });
-
-    store.dispatch({ type: 'database/deleteDatabase/fulfilled', meta: { arg: { hostUid: 'hostA', dbname: 'demodb' } } });
-
-    expect(store.getState().loggedInDatabases).not.toContain('hostA:demodb');
-  });
-});
-
 describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () => {
   // The guard discards a response whose requestId no longer matches the
   // latest one dispatched — but scoped per hostUid. A single shared id
@@ -221,6 +204,25 @@ describe('fetchDatabaseStartInfo stale-response guard is scoped per host', () =>
     await dispatchManual;
 
     expect(store.getState().haDbNamesByHost.hostA).toEqual(['newHa']);
+  });
+
+  // Each failed poll of an unreachable host used to store a new empty array,
+  // and the polling that depends on the list then polled again at once.
+  it('keeps the same empty lists when polls of an unreachable host keep failing', async () => {
+    databaseApi.getStartInfo.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const store = configureStore({ reducer });
+
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    const first = store.getState();
+    await store.dispatch(fetchDatabaseStartInfo('hostA'));
+    await store.dispatch(fetchDatabaseStartInfo({ hostUid: 'hostA', isBackground: true }));
+    const after = store.getState();
+
+    expect(after.activeDatabasesByHost.hostA).toEqual([]);
+    expect(after.activeDatabasesByHost.hostA).toBe(first.activeDatabasesByHost.hostA);
+    expect(after.databasesByHost.hostA).toBe(first.databasesByHost.hostA);
+    expect(after.navigatorActiveDatabasesByHost.hostA).toBe(first.navigatorActiveDatabasesByHost.hostA);
+    expect(after.navigatorDatabasesByHost.hostA).toBe(first.navigatorDatabasesByHost.hostA);
   });
 });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { checkDbPassword, DB_PASSWORD_MAX_BYTES } from '@api-interfaces';
 import { closeCreateDatabaseModal,
   fetchCreateDatabaseInfo,
   fetchDatabaseStartInfo 
@@ -271,7 +272,7 @@ export default function CreateDatabaseModal() {
   const isFormValid = () => {
     if (!isValidGeneralVolumeSize(formData.genericVolSize)) return false;
     if (step === 1) return formData.dbName && formData.genericVolPath && formData.logVolPath;
-    if (step === 4) return formData.dbaPassword === formData.confirmPassword && (formData.dbaPassword === '' || formData.dbaPassword.length >= 8);
+    if (step === 4) return formData.dbaPassword === formData.confirmPassword && !checkDbPassword(formData.dbaPassword);
     return true;
   };
 
@@ -880,6 +881,8 @@ export default function CreateDatabaseModal() {
                 onChange={(e) => handleInputChange('dbaPassword', e.target.value)}
                 placeholder={CM.leaveBlankNoPassword}
                 icon="key"
+                description={CM.dbPasswordRuleHint(DB_PASSWORD_MAX_BYTES, true)}
+                error={checkDbPassword(formData.dbaPassword) === 'tooLong' ? CM.dbPasswordTooLongMsg(DB_PASSWORD_MAX_BYTES) : ''}
               />
               <Input
                 data-testid="create-database-confirm-password-input"

@@ -8,4 +8,6 @@
 export type BrokerSetParamClientRequest = {
   /** Configuration data as array of lines (broker config file content) */
   confdata: string[];
+  /** broker.conf as the editor loaded it; the save fails if it changed since */
+  loaded: string[];
 };

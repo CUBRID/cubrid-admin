@@ -4,7 +4,7 @@ import { checkCmsStatusError } from './decorators/handle-cms-status-errors.decor
 import { checkCmsTokenError } from './decorators/handle-cms-token-errors.decorator';
 import { Logger } from '@nestjs/common';
 import { BaseCmsRequest } from '@type/cms-request/base-cms-request';
-import { formatAuditLog } from '@util';
+import { formatAuditLog, hostConfigKey, withHostConfigQueue } from '@util';
 import { getLongJobCmsTimeoutMs } from '../cms-job/cms-job.constants';
 import { pollCmsAsyncJob } from './poll-cms-async-job';
 
@@ -26,6 +26,16 @@ export abstract class BaseService {
   }
 
   /**
+   * Runs `fn` in the host's conf-file queue (util/concurrency/host-config-mutex):
+   * one read-modify-write of a host's cubrid.conf, cm.conf or broker.conf at a
+   * time, across every user and service instance that reaches that host.
+   */
+  protected async withHostConfigMutex<T>(userId: string, hostUid: string, fn: () => Promise<T>): Promise<T> {
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    return withHostConfigQueue(hostConfigKey(host), fn);
+  }
+
+  /**
    * Executes a CMS API request with common error handling.
    * Handles host lookup, URL construction, authentication, and error checking.
    * Automatically adds token to the request.
@@ -42,7 +52,8 @@ export abstract class BaseService {
   >(
     userId: string,
     hostUid: string,
-    cmsRequest: TRequest
+    cmsRequest: TRequest,
+    options?: { timeoutMs?: number; maxResponseBytes?: number }
   ): Promise<TResponse> {
     const host = await this.hostService.findHostInternal(userId, hostUid);
     const url = `https://${host.address}:${host.port}/cm_api`;
@@ -62,10 +73,9 @@ export abstract class BaseService {
       })
     );
 
-    const response = await this.cmsClient.postAuthenticated<TRequest, TResponse>(
-      url,
-      requestWithToken
-    );
+    const response = await (options
+      ? this.cmsClient.postAuthenticated<TRequest, TResponse>(url, requestWithToken, options)
+      : this.cmsClient.postAuthenticated<TRequest, TResponse>(url, requestWithToken));
     const cmsResponse = response as {
       status?: string;
       task?: string;
@@ -157,7 +167,7 @@ export abstract class BaseService {
 
   /**
    * CMS calls that CMS itself may run asynchronously (unload/load/create/optimize/
-   * check/compact/copy/addvol/rename/backupdb/restoredb). Sends `async:"yes"`; if CMS
+   * check/compact/copy/addvol/rename/deletedb/backupdb/restoredb). Sends `async:"yes"`; if CMS
    * replies with `job-status:"running"` (either because we asked, or because CMS's own
    * internal http timeout elapsed and it fell back to async on its own), polls
    * `gettaskstatus` until the job reaches a terminal state, then returns that final

@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Logger, Param, Post, Request } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post, Query, Request } from '@nestjs/common';
 import { CmsConfigService } from './cms-config.service';
-import { BrokerSetParamDto } from '@type/index';
+import { BrokerSetParamDto, SetSysParamDto } from '@type/index';
 import {
   GetAddBrokerInfoClientResponse,
   GetEnvClientResponse,
@@ -73,21 +73,24 @@ export class CmsConfigController {
 
   /**
    * Get database parameters dump from a CMS host.
-   * Returns database server parameters without CMS envelope fields.
+   * Returns database server parameters, and client parameters too when
+   * `both=y`, without CMS envelope fields.
    *
    * @route GET /:hostUid/cms-config/param-dump
    * @param req - Express request (contains authenticated user)
    * @param hostUid - Host unique identifier from path parameter
-   * @param dbname - Database name from query parameter
+   * @param dbname - Database name from path parameter
+   * @param both - 'y' to also dump client parameters
    * @returns ParamdumpClientResponse Database parameters without CMS envelope fields
    * @example
-   * // GET /host-uid/cms-config/param-dump?dbname=demodb
+   * // GET /host-uid/cms-config/param-dump/demodb?both=y
    */
   @Get('param-dump/:dbname')
   async paramdump(
     @Request() req,
     @Param('hostUid') hostUid: string,
-    @Param('dbname') dbname: string
+    @Param('dbname') dbname: string,
+    @Query('both') both?: string
   ): Promise<ParamdumpClientResponse> {
     const userId = req.user.sub;
 
@@ -95,7 +98,7 @@ export class CmsConfigController {
       `Getting paramdump info for host: ${hostUid}, dbname: ${dbname}`,
       'CmsConfigController'
     );
-    const response = await this.cmsConfigService.getParamDump(userId, hostUid, dbname);
+    const response = await this.cmsConfigService.getParamDump(userId, hostUid, dbname, both === 'y');
     return response;
   }
 
@@ -218,13 +221,13 @@ export class CmsConfigController {
    * @returns SetSysParamClientResponse Empty object on success (CMS envelope fields removed)
    * @example
    * // POST /host-uid/cms-config/set-sys-param
-   * // Body: { "confname": "cubridconf", "confdata": ["# comment", "[section]", "key=value"] }
+   * // Body: { "confname": "cubridconf", "confdata": ["# comment", "[section]", "key=value"], "loaded": [...] }
    */
   @Post('set-sys-param')
   async setSystemParam(
     @Request() req,
     @Param('hostUid') hostUid: string,
-    @Body() body: { confname: string; confdata: string[] }
+    @Body() body: SetSysParamDto
   ): Promise<SetSysParamClientResponse> {
     const userId = req.user.sub;
 
@@ -236,7 +239,8 @@ export class CmsConfigController {
       userId,
       hostUid,
       body.confname,
-      body.confdata
+      body.confdata,
+      body.loaded
     );
     return response;
   }
@@ -261,7 +265,7 @@ export class CmsConfigController {
       `Setting broker param for host: ${hostUid}`,
       'CmsConfigController'
     );
-    return await this.cmsConfigService.setBrokerParamFromRawEdit(userId, hostUid, body.confdata);
+    return await this.cmsConfigService.setBrokerParamFromRawEdit(userId, hostUid, body.confdata, body.loaded);
   }
 
 }

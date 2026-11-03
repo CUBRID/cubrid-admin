@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsArray, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import { DB_PASSWORD_MAX_BYTES } from '@api-interfaces';
+import { MaxUtf8Bytes } from './max-utf8-bytes.decorator';
 
 /**
  * Validated request bodies for DatabaseUserController. Kept as backend-only
@@ -44,6 +46,7 @@ export class CreateDbUserDto {
   // (value == null), never emptiness. @IsString() alone preserves that:
   // rejects missing/undefined, still allows ''.
   @IsString()
+  @MaxUtf8Bytes(DB_PASSWORD_MAX_BYTES)
   userpass: string;
 
   @ValidateNested()
@@ -56,6 +59,7 @@ export class CreateDbUserDto {
 
 export class UpdateDbUserBodyDto {
   @IsString()
+  @MaxUtf8Bytes(DB_PASSWORD_MAX_BYTES)
   userpass: string;
 
   @ValidateNested()

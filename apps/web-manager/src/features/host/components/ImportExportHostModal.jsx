@@ -4,6 +4,7 @@ import { closeImportExportModal,
   addHost,
   createHostGroup,
   deleteHostGroup,
+  deleteHost,
   editHost,
   loginHostsBatch,
   setSkipAutoHostLogin,
@@ -15,6 +16,7 @@ import { exportHostsToXml,
   parseHostsImportFile,
   buildImportPreviewList,
   validateSelectedImportRows,
+  partitionImportRows,
 } from '../hostImportExport';
 import { flattenHostsFromGroups, findNewGroupId } from '../hostGroupUtils';
 import { importLoginAllStatusModal } from '../hostLoginReport';
@@ -117,11 +119,14 @@ export default function ImportExportHostModal() {
     reader.readAsText(file);
   };
 
+  // Returns how many of the groups could not be deleted.
   const rollbackImportGroups = async (groupIds) => {
+    let failed = 0;
     for (const groupId of [...groupIds].reverse()) {
       if (!groupId) continue;
-      await dispatch(deleteHostGroup(groupId)).unwrap().catch(() => {});
+      await dispatch(deleteHostGroup(groupId)).unwrap().catch(() => { failed += 1; });
     }
+    return failed;
   };
 
   const createImportGroup = async (name) => {
@@ -196,17 +201,12 @@ export default function ImportExportHostModal() {
         const createdGroupIds = [];
         const importedGroupNames = [];
 
-        const hostsByGroup = new Map();
-        const unassignedHosts = [];
-        for (const hostData of hostsToAdd) {
-          const groupName = hostData.importGroupName?.trim();
-          if (groupName) {
-            if (!hostsByGroup.has(groupName)) hostsByGroup.set(groupName, []);
-            hostsByGroup.get(groupName).push(hostData);
-          } else {
-            unassignedHosts.push(hostData);
-          }
-        }
+        const {
+          ungrouped: ungroupedHosts,
+          byGroup: hostsByGroup,
+          unassigned: unassignedHosts,
+        } = partitionImportRows(hostsToAdd);
+        const addedUngroupedHosts = [];
 
         try {
           dispatch(setSkipAutoHostLogin(true));
@@ -234,6 +234,18 @@ export default function ImportExportHostModal() {
             }
           }
 
+          // No groupId: the server adds the host to its no-group bucket.
+          // Deleting the created groups doesn't remove these, so they're
+          // rolled back one by one.
+          for (const hostData of ungroupedHosts) {
+            const addedHost = await addImportedHost(hostData, undefined);
+            if (addedHost) {
+              addedUngroupedHosts.push(addedHost);
+              importedWithoutPassword.push(addedHost);
+            }
+          }
+          if (ungroupedHosts.length > 0) importedGroupNames.push(CM.ungroupedHosts);
+
           const addedCount = hostsToAdd.length;
           const groupSummary = importedGroupNames.length > 0
             ? importedGroupNames.map((name) => `"${name}"`).join(', ')
@@ -254,11 +266,22 @@ export default function ImportExportHostModal() {
             dispatch(closeImportExportModal());
           }
         } catch (err) {
-          await rollbackImportGroups(createdGroupIds);
+          const groupsLeft = await rollbackImportGroups(createdGroupIds);
+          const hostsLeft = [];
+          for (const host of addedUngroupedHosts) {
+            await dispatch(deleteHost(host.uid)).unwrap().catch(() => {
+              hostsLeft.push(host.alias || host.address);
+            });
+          }
+          // Whatever could not be removed is still in the host list, and a
+          // later import would see those hosts as duplicates.
+          const leftover = groupsLeft > 0 || hostsLeft.length > 0
+            ? CM.importRollbackIncompleteMsg(groupsLeft, hostsLeft)
+            : null;
           dispatch(showStatusModal({
             type: 'error',
             title: CM.importFailedTitle,
-            message: err?.message || CM.importRolledBackMsg,
+            message: [err?.message || CM.importRolledBackMsg, leftover].filter(Boolean).join(' '),
           }));
         } finally {
           dispatch(setSkipAutoHostLogin(false));
@@ -728,9 +751,9 @@ export default function ImportExportHostModal() {
                     ...(fileHasPrefsGroups ? [{
                       accessor: 'importGroupName',
                       header: CM.groupLabel,
-                      render: (groupName) => (
+                      render: (groupName, row) => (
                         <Typography variant="caption" className="text-slate-600 dark:text-slate-300">
-                          {groupName || '—'}
+                          {row.ungrouped ? CM.ungroupedHosts : (groupName || '—')}
                         </Typography>
                       ),
                     }] : []),

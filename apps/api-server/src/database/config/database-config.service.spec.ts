@@ -87,6 +87,63 @@ describe('DatabaseConfigService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('renameAutoStart', () => {
+    it('writes the renamed token to cubridconf without logging into the old database', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old,other'] }] } as any);
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=new,other']);
+    });
+
+    it('does not write if autostart was not enabled for the database', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=other'] }] } as any);
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('reports unavailable config and failed writes to the rename completion handler', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [] } as any);
+      await expect(service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new')).rejects.toThrow();
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old'] }] } as any);
+      cmsConfigService.setSystemParam.mockRejectedValue(new Error('write failed'));
+      await expect(service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new')).rejects.toThrow('write failed');
+    });
+
+    it("also renames the database's own [@old] section header", async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server="old,other"', '[@old]', 'ha_mode=off'] }] } as any);
+      await expect(service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new')).resolves.toEqual([]);
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf',
+        ['[service]', 'server="new,other"', '[@new]', 'ha_mode=off']);
+    });
+
+    it('keeps [@old] and warns when a [@new] section already exists, still renaming server=', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old', '[@old]', 'a=1', '[@new]', 'b=2'] }] } as any);
+      const warnings = await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(warnings).toEqual([expect.stringContaining('[@new]')]);
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf',
+        ['[service]', 'server=new', '[@old]', 'a=1', '[@new]', 'b=2']);
+    });
+
+    it('renames a section even when the database was not in the autostart list', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=other', '[@old]', 'a=1'] }] } as any);
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf', ['[service]', 'server=other', '[@new]', 'a=1']);
+    });
+
+    it('serializes different databases and host aliases sharing the same physical config', async () => {
+      let lines = ['[service]', 'server=old1,old2'];
+      cmsConfigService.getAllSystemParam.mockImplementation(async () => ({ conflist: [{ confdata: [...lines] }] } as any));
+      cmsConfigService.setSystemParam.mockImplementation(async (_user, _host, _conf, data) => {
+        lines = data;
+        return { success: true } as any;
+      });
+      await Promise.all([
+        service.renameAutoStart(mockUserId, mockHostUid, 'old1', 'new1'),
+        service.renameAutoStart('other-user', 'other-host-alias', 'old2', 'new2'),
+      ]);
+      expect(lines).toEqual(['[service]', 'server=new1,new2']);
+    });
+  });
+
   describe('setAutoExecQuery', () => {
     const mockRequest = {
       dbname: mockDbname,
@@ -720,4 +777,99 @@ describe('DatabaseConfigService', () => {
       expect(cmsConfigService.setSystemParam).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('cubrid.conf formatting kept by every write path', () => {
+    // Indentation, key case, spacing, quotes, comments and a continued
+    // server= key, as a hand-edited cubrid.conf may have them.
+    const conf = [
+      '# CUBRID configuration',
+      '[service]',
+      '  # databases started with the service',
+      '  Server = "demodb, old,\\',
+      '            other"   # autostart',
+      '',
+      '  [ @old ]',
+      '  # settings of old',
+      '  ha_mode=off',
+      '',
+      '# settings of demodb',
+      '[@demodb]',
+      '  data_buffer_size=512M',
+    ];
+    const written = () => cmsConfigService.setSystemParam.mock.calls[0][3];
+    beforeEach(() => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: [...conf] }] } as any);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as any);
+    });
+
+    it('setAutoStart adds the name inside the existing value', async () => {
+      await service.setAutoStart(mockUserId, mockHostUid, { dbname: 'newdb' } as any);
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, old, other, newdb"   # autostart',
+        ...conf.slice(5),
+      ]);
+    });
+
+    it('setAutoStart adds to the last server= key, the one the engine uses, even if an earlier key lists the name', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=newdb', 'server=demodb'] }] } as any);
+      await service.setAutoStart(mockUserId, mockHostUid, { dbname: 'newdb' } as any);
+      expect(written()).toEqual(['[service]', 'server=newdb', 'server=demodb,newdb']);
+    });
+
+    it('removeAutoStart takes the name out of the value only', async () => {
+      await service.removeAutoStart(mockUserId, mockHostUid, { dbname: 'old' } as any);
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, other"   # autostart',
+        ...conf.slice(5),
+      ]);
+    });
+
+    it('a rename changes the name in the value and inside the section brackets only', async () => {
+      await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'renamed');
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, renamed, other"   # autostart',
+        '',
+        '  [ @renamed ]',
+        ...conf.slice(7),
+      ]);
+    });
+
+    it("a delete drops the database's section up to its last key and keeps the next section's comment", async () => {
+      await service.forgetDatabaseAfterDelete(mockUserId, mockHostUid, 'old');
+      expect(written()).toEqual([
+        ...conf.slice(0, 3),
+        '  Server = "demodb, other"   # autostart',
+        '',
+        '',
+        ...conf.slice(10),
+      ]);
+    });
+  });
+
+  describe('forgetDatabaseAfterDelete', () => {
+    it('removes a deleted database from the autostart list and drops its section, without its login gate', async () => {
+      const ensureDbLogin = (service as any).databaseUserService.ensureDbLogin as jest.Mock;
+      ensureDbLogin.mockRejectedValue(new Error('no stored login'));
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', 'server=demodb,gone', '[@gone]', 'ha_mode=off', '[@demodb]', 'a=1'] }],
+      } as any);
+      cmsConfigService.setSystemParam.mockResolvedValue({ success: true } as any);
+
+      await service.forgetDatabaseAfterDelete('u', 'h', 'gone');
+
+      expect(ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith('u', 'h', 'cubridconf', ['[service]', 'server=demodb', '[@demodb]', 'a=1']);
+    });
+
+    it('is quiet when the database was not in the autostart list', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] } as any);
+
+      await expect(service.forgetDatabaseAfterDelete('u', 'h', 'gone')).resolves.toBeUndefined();
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+  });
 });
+

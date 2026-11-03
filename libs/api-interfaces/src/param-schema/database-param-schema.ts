@@ -127,12 +127,11 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // Replaces checkpoint_every_npages (PARAM_VALUE_SHARE). PRM_INTEGER +
   // SIZE_UNIT + DIFFER_UNIT: bytes are rounded UP to log pages
   // (prm_size_to_log_pages) and the page count must be >= 10 and fit an
-  // int. Log page size is fixed per database (4K..16K), so — same
-  // convention as data_buffer_size — only bytes the engine rejects on EVERY
-  // log page size are rejected: min = 9 * 4K + 1, max = INT_MAX * 16K.
+  // int. Same 16K page rule as data_buffer_size: min = 9 * 16K + 1,
+  // max = INT_MAX * 16K.
   // Default is 100000 log pages; shown in bytes at the default 16K log page
   // size (100000 * 16K = 1600000K).
-  { key: 'checkpoint_every_size', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 36865, max: 35184372072448 }, default: '1600000K' },
+  { key: 'checkpoint_every_size', category: 'advanced', scope: 'SERVER', guard: { kind: 'size', min: 147457, max: 35184372072448 }, default: '1600000K' },
   // PRM_FOR_HA keys (ha_db_list, ha_copy_sync_mode, ha_apply_max_mem_size,
   // ha_copy_log_max_archives): accepted in cubrid.conf, but whenever
   // ha_mode is on the engine re-reads cubrid_ha.conf with no database name
@@ -167,7 +166,8 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // PRM_ID_LOG_CHECKPOINT_INTERVAL_SECS) = 6 minutes via prm_sec_to_min.
   // '1000' had no traceable source. Live-confirmed: a real 11.4.5 host with
   // no conf override for this key reported exactly 6.
-  { key: 'checkpoint_interval_in_mins', category: 'general', guard: { kind: 'int', min: 1 }, default: '6', deprecated: { replacedBy: 'checkpoint_interval' } },
+  // prm_min_to_sec: minutes * 60 past INT_MAX seconds fails the load.
+  { key: 'checkpoint_interval_in_mins', category: 'general', guard: { kind: 'int', min: 1, max: 35791394 }, default: '6', deprecated: { replacedBy: 'checkpoint_interval' } },
   // TRAN_REP_CLASS_COMMIT_INSTANCE == TRAN_READ_COMMITTED, the engine's own
   // literal default (system_parameter.c, isolation_level's prm_Def entry).
   // isolation_level_words, plus any integer in [TRAN_READ_COMMITTED,
@@ -232,18 +232,20 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // PRM_INTEGER + SIZE_UNIT + DIFFER_UNIT: the engine rounds the bytes UP
   // to whole pages (prm_size_to_io_pages / prm_size_to_log_pages) and
   // range-checks the page count, and a page count past INT_MAX fails too.
-  // Page size is fixed per database at createdb (4K..16K, IO_MIN/MAX_PAGE_SIZE
-  // — log pages likewise), which this schema can't know, so the byte
-  // bounds below are the conservative ones the engine rejects on EVERY
-  // page size: min = (lowerPages - 1) * 4K + 1, max = INT_MAX * 16K.
-  { key: 'data_buffer_size', category: 'buffer', guard: { kind: 'size', min: 4190209, max: 35184372072448 }, default: '512M', bufferGroup: { pairKey: 'data', role: 'size' } },
+  // Every process reads cubrid.conf before it knows the database's page
+  // size, so with the default 16K pages (log pages too), and a value out of
+  // range there stops cub_server from starting (ER_BO_CANT_LOAD_SYSPRM) even
+  // for a database created with smaller pages: on a 4K-page 11.4.5 database
+  // data_buffer_size=16760832 (1023 pages at 16K) is refused and 16760833
+  // starts. So: min = (lowerPages - 1) * 16K + 1, max = INT_MAX * 16K.
+  { key: 'data_buffer_size', category: 'buffer', guard: { kind: 'size', min: 16760833, max: 35184372072448 }, default: '512M', bufferGroup: { pairKey: 'data', role: 'size' } },
   // Real engine default is 128 pages (system_parameter.c:1178,
   // PRM_ID_SR_NBUFFERS) — '16' had no traceable source. At the default
   // 16KB IO page size this is exactly 2M, matching sort_buffer_size's
   // default below (already correct) — live-confirmed the same way as
   // data_buffer_pages above.
   { key: 'sort_buffer_pages', category: 'buffer', guard: { kind: 'int', min: 1 }, default: '128', bufferGroup: { pairKey: 'sort', role: 'pages' }, deprecated: { replacedBy: 'sort_buffer_size' } },
-  // Same conservative page bounds as data_buffer_size (lower limit 1 page).
+  // Same 16K page bounds as data_buffer_size (lower limit 1 page).
   { key: 'sort_buffer_size', category: 'buffer', guard: { kind: 'size', min: 1, max: 35184372072448 }, default: '2M', bufferGroup: { pairKey: 'sort', role: 'size' } },
   // Real engine default is `16 * ONE_K` = 16384 pages (system_parameter.c:1378,
   // comment: "16k pages => 64M / 128M / 256M based on log page size") — the
@@ -258,16 +260,16 @@ export const DATABASE_PARAM_SCHEMA: VersionedParamSchemaEntry[] = [
   // the way data/sort_buffer_size's defaults are. '256' (M) is not a
   // guess though — live-confirmed on a real 11.4.5 host (its log page
   // size resolves 16384 pages to exactly 256M). Guard
-  // bounds: same conservative page bounds as data_buffer_size, with
+  // bounds: same 16K page bounds as data_buffer_size, with
   // LOGPB_BUFFER_NPAGES_LOWER (128) log pages as the lower limit.
-  { key: 'log_buffer_size', category: 'buffer', guard: { kind: 'size', min: 520193, max: 35184372072448 }, default: '256M', bufferGroup: { pairKey: 'log', role: 'size' } },
+  { key: 'log_buffer_size', category: 'buffer', guard: { kind: 'size', min: 2080769, max: 35184372072448 }, default: '256M', bufferGroup: { pairKey: 'log', role: 'size' } },
   // index_scan_oid_buffer_{pages,size} share one underlying PRM (same
   // dynamic_flag in system_parameter.c) exactly like the other three
   // pairs — unlike those, the "pages" side is a float ratio (engine range
   // [0.05, 16.0]), not a page count.
   { key: 'index_scan_oid_buffer_pages', category: 'buffer', guard: { kind: 'float', min: 0.05, max: 16.0 }, default: '4', bufferGroup: { pairKey: 'indexScanOid', role: 'pages' }, deprecated: { replacedBy: 'index_scan_oid_buffer_size' } },
   // PRM_FLOAT pages, [0.05, 16.0] after the engine's ceil-to-0.01 rounding
-  // of bytes / IO page size. Rejected on every page size (4K..16K) only
-  // when bytes <= 0.04 * 4K (163) or bytes > 16 * 16K.
-  { key: 'index_scan_oid_buffer_size', category: 'buffer', guard: { kind: 'size', min: 164, max: 262144 }, default: '65536', bufferGroup: { pairKey: 'indexScanOid', role: 'size' } },
+  // of bytes / IO page size, at 16K pages like data_buffer_size: rejected
+  // when bytes <= 0.04 * 16K (655) or bytes > 16 * 16K.
+  { key: 'index_scan_oid_buffer_size', category: 'buffer', guard: { kind: 'size', min: 656, max: 262144 }, default: '65536', bufferGroup: { pairKey: 'indexScanOid', role: 'size' } },
 ];

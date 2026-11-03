@@ -6,7 +6,8 @@ import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
-import { confSaveProblems } from '../confSaveProblems';
+import { confSaveProblems, isConfChangedSinceLoaded } from '../confSaveProblems';
+import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 import ConfigEditorToolbar from './broker/ConfigEditorToolbar';
 import ConfigSourceEditor from './broker/ConfigSourceEditor';
@@ -15,6 +16,7 @@ export default function BrokerConfigEditor({ hostUid }) {
   const CM = useCM();
   const tabId = `broker_config:${hostUid}`;
   const dispatch = useDispatch();
+  const confirm = useConfirm();
   const { hosts } = useSelector((state) => state.host, shallowEqual);
   const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
   const currentHost = hosts.find(h => h.uid === hostUid);
@@ -84,7 +86,7 @@ export default function BrokerConfigEditor({ hostUid }) {
     try {
       const confdata = rawContent.split('\n');
 
-      const result = await brokerApi.updateBrokerConfig(hostUid, confdata);
+      const result = await brokerApi.updateBrokerConfig(hostUid, confdata, originalRawContentRef.current.split('\n'));
       const warnings = result?.warnings ?? [];
 
       originalRawContentRef.current = rawContent;
@@ -100,6 +102,18 @@ export default function BrokerConfigEditor({ hostUid }) {
         guidance: [CM.brokerConfigRestartRequiredNotice, ...warnings],
       }));
     } catch (err) {
+      if (isConfChangedSinceLoaded(err)) {
+        setSaving(false);
+        if (await confirm({
+          title: CM.confChangedOnHostTitle,
+          description: CM.confChangedOnHostDesc,
+          confirmLabel: CM.reloadFileBtn,
+          variant: 'warning',
+        })) {
+          fetchConfig();
+        }
+        return;
+      }
       const problems = confSaveProblems(err);
       if (!problems && isAmbiguousFailure(err)) fetchConfig();
       dispatch(showStatusModal(problems ? {

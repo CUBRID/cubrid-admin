@@ -11,6 +11,7 @@ import {
   CmsJobStatusResponse,
   CmsJobType,
   CreateCmsJobResponse,
+  DeleteDatabaseRequest,
   LoadDatabaseRequest,
   OptimizeDatabaseRequest,
   RenameDatabaseRequest,
@@ -164,8 +165,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       );
 
       const succeeded = this.applyCmsOutcome(job, response);
-      if (succeeded && job.type === 'rename') {
-        await this.clearRenameAliasCaches(job);
+      if (succeeded) {
+        await this.followUpAfterSuccess(job);
       }
       job.finishedAt = job.finishedAt ?? new Date().toISOString();
       await this.store.finalizeOrphanedJob(userKey, job);
@@ -433,6 +434,14 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           payload as RenameDatabaseRequest,
           onUuid
         );
+      case 'delete':
+        return this.lifecycleService.deleteDatabaseCmsResponse(
+          userId,
+          hostUid,
+          job.dbname,
+          payload as DeleteDatabaseRequest,
+          onUuid
+        );
       case 'backupdb':
         return this.backupService.backupDb(
           userId,
@@ -466,14 +475,22 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       const cmsResponse = await this.executeCmsForJob(uKey, job);
       const succeeded = this.applyCmsOutcome(job, cmsResponse);
 
-      // Before the startinfo lookup below: the rename already happened on
-      // CMS, so a failure of that separate lookup must not skip this.
-      if (succeeded && job.type === 'rename') {
-        await this.clearRenameAliasCaches(job);
+      // Before the startinfo lookup below: the rename/copy/delete already
+      // happened on CMS, so a failure of that separate lookup must not skip this.
+      if (succeeded) {
+        await this.followUpAfterSuccess(job);
       }
 
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
-        job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+        try {
+          job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+        } catch (error: unknown) {
+          // The rename or copy did happen: a failed list refresh is a warning,
+          // not a failed job the user might run again.
+          const done = job.type === 'rename' ? 'renamed' : 'copied';
+          addWarnings(job, [`The database was ${done}, but the database list could not be refreshed. Refresh the list manually; do not repeat the ${job.type}.`]);
+          this.logger.warn(`Could not refresh database list after ${job.type}: ${String(error)}`);
+        }
       }
     } catch (err: unknown) {
       if (job.type === 'create') {
@@ -510,9 +527,33 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Best-effort: a failure here must not flip an already-successful rename
-   * job to "failed" (the rename itself did happen on CMS).
+   * What CMS leaves behind after a successful job, put right. It never fails
+   * the job (CMS did the work); what could not be done is added to
+   * job.warnings, which the job result shows:
+   * - rename: the database's name in cubrid.conf and both names' stored
+   *   login (finishRename);
+   * - copy: with move=y the source is gone, so the same as a rename; on an
+   *   HA host the copy gets ha_mode=off (DatabaseManagementService.finishCopy);
+   * - delete: the database's stored login and cubrid.conf entries
+   *   (DatabaseLifecycleService.forgetDeletedDatabase).
    */
+  private async followUpAfterSuccess(job: CmsJobRecord): Promise<void> {
+    if (job.type === 'rename') {
+      await this.finishRename(job);
+    } else if (job.type === 'copy') {
+      addWarnings(job, await this.managementService.finishCopy(job.userId, job.hostUid, job.payload as CopyDbRequest));
+    } else if (job.type === 'delete') {
+      addWarnings(job, await this.lifecycleService.forgetDeletedDatabase(job.userId, job.hostUid, job.dbname));
+    }
+  }
+
+  private async finishRename(job: CmsJobRecord): Promise<void> {
+    addWarnings(job, await this.managementService.updateAutoStartAfterRename(
+      job.userId, job.hostUid, job.dbname, (job.payload as RenameDatabaseRequest).rename
+    ));
+    await this.clearRenameAliasCaches(job);
+  }
+
   private async clearRenameAliasCaches(job: CmsJobRecord): Promise<void> {
     try {
       const renameTo = (job.payload as RenameDatabaseRequest)?.rename;
@@ -586,9 +627,15 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       finishedAt: record.finishedAt,
       maintenanceSummary,
       result: record.result,
+      ...(record.warnings?.length ? { warnings: record.warnings } : {}),
       error: maintenanceSummary && record.error
         ? { ...record.error, message: redactMaintenanceText(record, undefined, record.error.message) }
         : record.error,
     };
   }
+}
+
+/** Appends `warnings` to the job's, keeping any it already has. */
+function addWarnings(job: CmsJobRecord, warnings: string[]): void {
+  if (warnings.length > 0) job.warnings = [...(job.warnings ?? []), ...warnings];
 }

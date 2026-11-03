@@ -221,6 +221,12 @@ const syncLoggedInFromStartInfo = (state, payload, hostUid, requestId) => {
 // general per-host staleness slot. Every OTHER caller (start/stop database,
 // login, etc. - never background-tagged) omits the options object entirely
 // and gets the old all-or-nothing behavior unchanged.
+// Keeps an already-empty list as it is: every failed poll of an unreachable
+// host would otherwise hand subscribers a new empty array and re-render them.
+const clearList = (byHost, hostUid) => {
+  if (byHost[hostUid]?.length !== 0) byHost[hostUid] = [];
+};
+
 const parseDbResponse = (state, payload, hostUid, isBackground = false, { updateLive = !isBackground, updateNavigator = !isBackground, requestId } = {}) => {
   if (!payload) return;
   const dbsFound = payload.dblist?.dbs;
@@ -462,12 +468,12 @@ const databaseCoreSlice = createSlice({
         if (isLatestNavigator) {
           state.loadingByHost[hostUid] = false;
           state.error = action.payload;
-          state.navigatorDatabasesByHost[hostUid] = [];
-          state.navigatorActiveDatabasesByHost[hostUid] = [];
+          clearList(state.navigatorDatabasesByHost, hostUid);
+          clearList(state.navigatorActiveDatabasesByHost, hostUid);
         }
         if (isLatestLive) {
-          state.databasesByHost[hostUid] = [];
-          state.activeDatabasesByHost[hostUid] = [];
+          clearList(state.databasesByHost, hostUid);
+          clearList(state.activeDatabasesByHost, hostUid);
         }
       })
       .addCase(startDatabase.pending, (state) => {
@@ -621,21 +627,6 @@ const databaseCoreSlice = createSlice({
         (action) => action.type === 'host/setSelectedHost',
         (state, action) => {
           state.activeHostUid = action.payload;
-        }
-      )
-      // The backend forgets this dbname's stored login profile + dbmt-login
-      // cache on delete (see DatabaseLifecycleService.deleteDatabase) so a
-      // later database created with this same name never inherits it — mirror
-      // that here, or this client would keep believing the old, now-deleted
-      // database is still "logged in" under that name.
-      .addMatcher(
-        (action) => action.type === 'database/deleteDatabase/fulfilled',
-        (state, action) => {
-          const { hostUid, dbname } = action.meta.arg || {};
-          if (!hostUid || !dbname) return;
-          const key = dbKey(hostUid, dbname);
-          state.loggedInDatabases = state.loggedInDatabases.filter((k) => k !== key);
-          delete state.loggingInDatabases[key];
         }
       )
       // Dispatched unconditionally on delete/disconnect, regardless of

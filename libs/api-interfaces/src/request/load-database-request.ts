@@ -15,7 +15,7 @@ export type LoadDatabaseRequest = {
 
   /**
    * Period
-   * Values: "none" | other values
+   * Values: "none" (option disabled) | decimal integer string from 1 to 2147483647
    */
   period: string;
 
@@ -35,7 +35,7 @@ export type LoadDatabaseRequest = {
 
   /**
    * Estimated
-   * Values: "none" | other values
+   * Values: "none" (option disabled) | decimal integer string from 1 to 2147483647
    */
   estimated: string;
 
