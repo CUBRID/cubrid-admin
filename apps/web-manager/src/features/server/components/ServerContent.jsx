@@ -49,7 +49,6 @@ const Component = function ServerContent({ hostUid }) {
   const databases = sharedDatabases ?? lastReadDatabases;
   const activeDatabases = sharedActiveDatabases ?? lastReadActiveDatabases;
   const { hosts, authorizedHosts, haInfo, reconnectQueue = EMPTY_RECONNECT_QUEUE } = useSelector((state) => state.host, shallowEqual);
-  const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
 
   const [autoStartDBs, setAutoStartDBs] = useState([]);
@@ -72,7 +71,7 @@ const Component = function ServerContent({ hostUid }) {
     hostUid,
     tabId: `host:${hostUid}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => async (dispatch) => {
+    onFetch: (silent) => async (dispatch, getState) => {
       // 1. First fetch database status to get the current active list
       let dbInfo;
       try {
@@ -89,8 +88,11 @@ const Component = function ServerContent({ hostUid }) {
       // A database stays active (running) after logout — logout only drops
       // the session — so volumes must only be polled for ones still logged
       // in, or this re-fetches (and DatabaseVolumes keeps showing) storage
-      // info for a database the user already logged out of.
-      const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
+      // info for a database the user already logged out of. Read the login
+      // state now, not from this render: a logout during this refresh must
+      // count.
+      const { loggedInDatabases: loggedInNow } = getState().database;
+      const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInNow.includes(dbKey(hostUid, db)));
 
       // 2. Then fetch other data, using the just-fetched active databases list.
       // fetchBrokerList goes first: the system status (fetchMonitoringData,

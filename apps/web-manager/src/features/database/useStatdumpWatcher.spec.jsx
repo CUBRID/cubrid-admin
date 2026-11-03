@@ -30,7 +30,13 @@ afterEach(() => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const store = (authorizedHosts) => configureStore({ reducer: { host: (s = { authorizedHosts }) => s } });
+// `database` takes a `setLoggedIn` action so a test can log the db out.
+const store = (authorizedHosts, loggedInDatabases = ['h1:demodb']) => configureStore({
+  reducer: {
+    host: (s = { authorizedHosts }) => s,
+    database: (s = { loggedInDatabases }, action) => (action.type === 'setLoggedIn' ? { loggedInDatabases: action.payload } : s),
+  },
+});
 const render = (s, props) => act(async () => {
   root.render(<Provider store={s}><Probe hostUid="h1" dbname="demodb" {...props} /></Provider>);
 });
@@ -49,6 +55,23 @@ describe('useStatdumpWatcher', () => {
     await render(store([]));
     expect(acquireStatdumpWatcher).not.toHaveBeenCalled();
     await act(async () => root.unmount());
+  });
+
+  it('does not start a watcher for a database that is not logged in', async () => {
+    await render(store(['h1'], []));
+    expect(acquireStatdumpWatcher).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it('releases the watcher when the database login goes away', async () => {
+    const s = store(['h1']);
+    await render(s);
+    expect(acquireStatdumpWatcher).toHaveBeenCalledTimes(1);
+
+    await act(async () => s.dispatch({ type: 'setLoggedIn', payload: [] }));
+    expect(release).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+    expect(release).toHaveBeenCalledTimes(1);
   });
 
   it('checks for frozen counters on every new sample', async () => {

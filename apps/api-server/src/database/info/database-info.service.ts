@@ -7,8 +7,9 @@ import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
 import { BaseCmsRequest, BaseCmsResponse } from '@type';
 import { StartInfoCmsResponse } from '@type/cms-response';
-import { CMS_CONFNAME_HACONF } from '@database/database.constants';
-import { parseHaDbListDbNamesFromHaConf } from '@util';
+import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_HACONF } from '@database/database.constants';
+import { getConfigParam, parseConfigParamsBySection, parseHaDbListDbNamesFromHaConf } from '@util';
+import { GetAllSysParamCmsResponse } from '@type/cms-response';
 import { mapStartInfoToClientResponse } from './start-info.mapper';
 import { DatabaseUserService } from '../user/database-user.service';
 
@@ -19,6 +20,9 @@ import { DatabaseUserService } from '../user/database-user.service';
  * @category Business Services
  * @since 1.0.0
  */
+// ha_mode values the engine reads as off; absent means off too.
+const HA_MODE_OFF = new Set(['', 'off', 'no', 'n', 'false', '0']);
+
 @Injectable()
 export class DatabaseInfoService extends BaseService {
   constructor(
@@ -67,8 +71,12 @@ export class DatabaseInfoService extends BaseService {
       this.startInfoInternal(userId, hostUid),
       this.getHaDbNames(userId, hostUid),
     ]);
+    // A login being restored after a host login counts as logged in, so the
+    // client keeps its views open meanwhile; if the restore fails, the next
+    // start-info says so.
     return mapStartInfoToClientResponse(cmsStart, host.dbProfiles, haDbNames, (dbname) =>
       this.databaseUserService.isDbLoginActive(userId, hostUid, dbname, host.token)
+        || this.databaseUserService.isDbLoginRestoring(userId, hostUid, dbname)
     );
   }
 
@@ -80,6 +88,25 @@ export class DatabaseInfoService extends BaseService {
   async getHaDbNames(userId: string, hostUid: string): Promise<Set<string>> {
     const haConf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_HACONF);
     return parseHaDbListDbNamesFromHaConf(haConf);
+  }
+
+  /**
+   * The HA databases a whole-service start or stop acts on with the
+   * node-wide `ha_start`/`ha_stop`: the `ha_db_list` ones when the host is an
+   * HA node — cubrid.conf `[common]` `ha_mode` is not off (on, replica) —
+   * and none otherwise. The engine refuses `cubrid heartbeat` when ha_mode
+   * is off, so there the listed databases are plain databases.
+   */
+  @HandleCmsErrors()
+  async getServiceHaDbNames(userId: string, hostUid: string): Promise<Set<string>> {
+    const [haDbNames, cubridConf] = await Promise.all([
+      this.getHaDbNames(userId, hostUid),
+      this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID),
+    ]);
+    const haMode = (getConfigParam(parseConfigParamsBySection(cubridConf as GetAllSysParamCmsResponse), 'common', 'ha_mode') ?? '')
+      .trim()
+      .toLowerCase();
+    return HA_MODE_OFF.has(haMode) ? new Set<string>() : haDbNames;
   }
 
   /**

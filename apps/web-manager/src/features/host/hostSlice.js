@@ -4,6 +4,7 @@ import { databaseApi } from '../database/databaseApi';
 import { fetchDatabaseStartInfo } from '../database/databaseSlice';
 import { fetchBrokerList } from '../broker/brokerSlice';
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
+import { HA_NODE_STEP } from './haNodeStep';
 import { hostLoginErrorMessage } from './hostLoginError';
 import { getCM, getStoredLocale } from '../../constants/useCM';
 import { findHaPeersNeedingMerge,
@@ -217,52 +218,54 @@ export const setHostPassword = createAsyncThunk(
   }
 );
 
-const formatServiceFailures = (actionLabel, failures) => (
+export const formatServiceFailures = (actionLabel, failures) => (
   `Failed to ${actionLabel} for: ${failures.map(({ name, error }) => `${name} (${error})`).join(', ')}`
 );
 
-// Async thunk to start CUBRID service (Brokers + Auto-start Databases,
-// including a bulk ha_start for every HA-configured database) — the backend
-// does brokers → cubridconf-driven database start in one call.
+// Async thunk to start CUBRID service (Brokers + Auto-start Databases, and
+// one node-wide ha_start on an HA host) — the backend does brokers →
+// cubridconf-driven database start in one call.
 export const startService = createAsyncThunk(
   'host/startService',
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
       dispatch(hostSlice.actions.setServiceProgressMessage('Starting service...'));
-      const { failed } = await databaseApi.startWholeService(hostUid);
+      const { failed = [], skipped = [] } = await databaseApi.startWholeService(hostUid);
 
       dispatch(hostSlice.actions.setServiceProgressMessage('Refreshing status...'));
       dispatch(fetchDatabaseStartInfo(hostUid));
       dispatch(fetchBrokerList(hostUid));
       dispatch(refreshHaInfo(hostUid));
-      if (failed.length > 0) {
-        return rejectWithValue(formatServiceFailures('start service', failed));
-      }
-      return true;
+      // Partial results come back as they are, so the caller can show the
+      // failed and the skipped (not logged in) databases together.
+      return {
+        problem: failed.length > 0 ? formatServiceFailures('start service', failed) : '',
+        skipped,
+        haNodeFailed: failed.some((f) => f.name === HA_NODE_STEP),
+      };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to start service');
     }
   }
 );
 
-// Async thunk to stop CUBRID service (All Databases, including a bulk
-// ha_stop for every HA-configured database, then All Brokers) — the backend
-// does database stop → brokers in one call.
+// Async thunk to stop CUBRID service (All Databases, with one node-wide
+// ha_stop on an HA host, then All Brokers) — the backend does database
+// stop → brokers in one call.
 export const stopService = createAsyncThunk(
   'host/stopService',
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
       dispatch(hostSlice.actions.setServiceProgressMessage('Stopping service...'));
-      const { failed } = await databaseApi.stopWholeService(hostUid);
+      const { failed = [], skipped = [] } = await databaseApi.stopWholeService(hostUid);
 
       dispatch(hostSlice.actions.setServiceProgressMessage('Refreshing status...'));
       dispatch(fetchDatabaseStartInfo(hostUid));
       dispatch(fetchBrokerList(hostUid));
       dispatch(refreshHaInfo(hostUid));
-      if (failed.length > 0) {
-        return rejectWithValue(formatServiceFailures('stop service', failed));
-      }
-      return true;
+      // Partial results come back as they are, so the caller can show the
+      // failed and the skipped (not logged in) databases together.
+      return { problem: failed.length > 0 ? formatServiceFailures('stop service', failed) : '', skipped };
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Failed to stop service');
     }

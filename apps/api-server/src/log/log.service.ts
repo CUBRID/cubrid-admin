@@ -17,12 +17,14 @@ import {
   BaseCmsRequest,
 } from '@type';
 import { BaseService, HandleCmsErrors } from '@common';
+import { DatabaseUserService } from '@database/user/database-user.service';
 
 @Injectable()
 export class LogService extends BaseService {
   constructor(
     protected readonly client: CmsHttpsClientService,
-    protected readonly hostService: HostService
+    protected readonly hostService: HostService,
+    private readonly databaseUserService: DatabaseUserService
   ) {
     super(hostService, client);
   }
@@ -48,6 +50,7 @@ export class LogService extends BaseService {
   }
 
   async getDatabaseLogList(userId: string, hostUid: string, dbname: string) {
+    await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
     const cmsRequest: BaseCmsRequest & { dbname: string } = {
       task: 'getloginfo',
       dbname: dbname,

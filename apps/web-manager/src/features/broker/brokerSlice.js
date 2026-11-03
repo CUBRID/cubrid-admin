@@ -5,6 +5,8 @@ import { createRateTracker } from './rateTracker';
 import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
+import { dbKey } from '../database/dbKey';
+import { isDbLoginGone, dbOfLoginGone } from '../database/dbLoginGone';
 
 // Module-level so the previous-sample baseline survives across polls and
 // across every host/broker tab, keyed by hostUid+brokerName below.
@@ -311,8 +313,9 @@ const initialState = {
   adminLogsLoading: false,
   cmsLogsByHost: {}, // { hostUid: { accesslog: [], errorlog: [] } }
   cmsLogsLoading: false,
-  dbLogsByDbName: {}, // { dbname: [logs] }
-  dbLogsLoading: false,
+  dbLogsByDb: {}, // { [dbKey(hostUid, dbname)]: [logs] } — two hosts can share a dbname
+  dbLogsLoadingByDb: {}, // { [dbKey]: true } while that database's list is read
+  dbLogsFailedByDb: {}, // { [dbKey]: true } when the last read failed; nothing retries it on its own
   brokerConfig: {}, // { hostUid: { data: {}, loading: false, error: null } }
   // { hostUid: { requestId: foreground } } — reads started on the host's current connection; see startRead.
   pendingReadsByHost: {},
@@ -368,7 +371,9 @@ const brokerSlice = createSlice({
       state.selectedBrokerSubItem = null;
       state.detailedStatus = {};
       state.logsByBroker = {};
-      state.dbLogsByDbName = {};
+      state.dbLogsByDb = {};
+      state.dbLogsLoadingByDb = {};
+      state.dbLogsFailedByDb = {};
       state.viewingLogs = {};
       state.adminLogsByHost = {};
       state.cmsLogsByHost = {};
@@ -552,15 +557,20 @@ const brokerSlice = createSlice({
         // yet); a failed refresh keeps the last logs.
         if (state.cmsLogsByHost[action.meta.arg] === undefined) state.cmsLogsByHost[action.meta.arg] = null;
       })
-      .addCase(fetchDatabaseLogs.pending, (state) => {
-        state.dbLogsLoading = true;
+      .addCase(fetchDatabaseLogs.pending, (state, action) => {
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        state.dbLogsLoadingByDb[key] = true;
+        delete state.dbLogsFailedByDb[key];
       })
       .addCase(fetchDatabaseLogs.fulfilled, (state, action) => {
-        state.dbLogsLoading = false;
-        state.dbLogsByDbName[action.payload.dbname] = action.payload.logs;
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        delete state.dbLogsLoadingByDb[key];
+        state.dbLogsByDb[key] = action.payload.logs;
       })
-      .addCase(fetchDatabaseLogs.rejected, (state) => {
-        state.dbLogsLoading = false;
+      .addCase(fetchDatabaseLogs.rejected, (state, action) => {
+        const key = dbKey(action.meta.arg.hostUid, action.meta.arg.dbname);
+        delete state.dbLogsLoadingByDb[key];
+        state.dbLogsFailedByDb[key] = true;
       })
       .addCase(fetchBrokerConfig.pending, (state, action) => {
         const { hostUid } = action.meta.arg;
@@ -598,7 +608,7 @@ const brokerSlice = createSlice({
           const statusMatch = tabId.match(/^broker_status:[^:]+:([^:]+)/);
           const logMatch = tabId.match(/^log:[^:]+:(.+)/);
           const allLogsMatch = tabId.match(/^all_logs:[^:]+:([^:]+)/);
-          const allDbLogsMatch = tabId.match(/^all_db_logs:[^:]+:([^:]+)/);
+          const allDbLogsMatch = tabId.match(/^all_db_logs:([^:]+):([^:]+)/);
           
           if (statusMatch) {
             delete state.detailedStatus[statusMatch[1]];
@@ -611,14 +621,21 @@ const brokerSlice = createSlice({
               delete state.viewingLogs[log.path];
             });
           } else if (allDbLogsMatch) {
-            const dbname = allDbLogsMatch[1];
-            const logs = state.dbLogsByDbName[dbname] || [];
+            const logs = state.dbLogsByDb[dbKey(allDbLogsMatch[1], allDbLogsMatch[2])] || [];
             logs.forEach(log => {
               delete state.viewingLogs[log.path];
             });
           }
         }
       )
+      // A database's log list was read under its login; drop it with the login.
+      .addMatcher(isDbLoginGone, (state, action) => {
+        const { hostUid, dbname } = dbOfLoginGone(action);
+        if (!hostUid || !dbname) return;
+        const key = dbKey(hostUid, dbname);
+        delete state.dbLogsByDb[key];
+        delete state.dbLogsFailedByDb[key];
+      })
       .addMatcher(
         (action) => action.type === 'layout/closeHostTabs',
         (state, action) => {

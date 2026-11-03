@@ -65,3 +65,24 @@ describe('fetchHostSummary broker rates', () => {
     expect(summary(store)).toMatchObject({ tps: 10, qps: 0 });
   });
 });
+
+describe('fetchHostSummary volumes', () => {
+  it('requests volume info only for running databases that are logged in', async () => {
+    databaseApi.getStartInfo.mockResolvedValue({
+      dblist: { dbs: [{ dbname: 'a' }, { dbname: 'b' }, { dbname: 'c' }] },
+      activelist: { active: [{ dbname: 'a', isLoggedIn: true }, { dbname: 'b', isLoggedIn: false }] },
+    });
+    databaseApi.getVolumeInfo.mockResolvedValue({
+      freespace: '1',
+      spaceinfo: [{ type: 'PERMANENT', purpose: 'PERMANENT', totalpage: '100', freepage: '25' }],
+    });
+    brokerApi.getBrokerList.mockResolvedValue(null);
+    now.mockReturnValue(100_000);
+
+    const store = makeStore();
+    await store.dispatch(fetchHostSummary('h1')).unwrap();
+
+    expect(databaseApi.getVolumeInfo.mock.calls).toEqual([['h1', 'a']]);
+    expect(summary(store)).toMatchObject({ permUsed: 75, dbOn: 2, dbOff: 1 });
+  });
+});

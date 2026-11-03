@@ -3,6 +3,7 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { UserRepositoryService } from '@repository';
 import { HaService } from '@ha';
+import { DatabaseUserService } from '@database/user/database-user.service';
 import { CmsAuthService } from './cms-auth.service';
 import { HostInfo, User } from '@type/index';
 import { getHost } from '@host/host-group.util';
@@ -22,6 +23,7 @@ describe('CMSAuthService', () => {
         },
         { provide: CmsConfigService, useValue: { getAllSystemParam: jest.fn() } },
         { provide: HaService, useValue: { heartbeatlistInternal: jest.fn() } },
+        { provide: DatabaseUserService, useValue: { restoreDbLoginsAfterHostLogin: jest.fn() } },
       ],
     }).compile();
 
@@ -65,6 +67,18 @@ describe('CMSAuthService', () => {
       expect(saved().cmsTokenIssuedAt).toBeGreaterThanOrEqual(before);
       expect(saved().cmsTokenActiveTimeSec).toBe(600);
       expect(cmsConfig.getAllSystemParam).toHaveBeenCalledWith('u1', 'h1', 'cmconf');
+    });
+
+    it('starts logging back in to the databases the old token had, before anything else awaits', async () => {
+      let readCmConf!: () => void;
+      cmsConfig.getAllSystemParam.mockReturnValue(new Promise((resolve) => { readCmConf = () => resolve({ conflist: [{ confdata: [] }] }); }));
+      const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
+
+      const login = service.login('u1', 'h1');
+      await new Promise((r) => setImmediate(r));
+      expect(restore).toHaveBeenCalledWith('u1', 'h1', 'new-token');
+      readCmConf();
+      await login;
     });
 
     it('still logs in when cm.conf cannot be read, leaving the CMS default', async () => {

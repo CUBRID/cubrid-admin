@@ -35,11 +35,18 @@ export const databaseApi = {
   stopAllDatabases: (hostUid, dbnames) => {
     return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
+  // Start/stop/restart exactly these databases (multi-select).
+  runSelectedDatabasesAction: (hostUid, action, dbnames) => {
+    return apiClient.post(`/${hostUid}/database/bulk`, { action, dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
+  },
   startWholeService: (hostUid) => {
     return apiClient.post(`/${hostUid}/database/service/start`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   stopWholeService: (hostUid) => {
     return apiClient.post(`/${hostUid}/database/service/stop`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
+  },
+  restartWholeService: (hostUid) => {
+    return apiClient.post(`/${hostUid}/database/service/restart`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   getVolumeInfo: (hostUid, dbname) => {
     const url = `/${hostUid}/database/volume-info/${encodeURIComponent(dbname)}`;

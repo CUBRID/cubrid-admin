@@ -59,6 +59,7 @@ import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import { useDesktopMenuLanguage } from '../features/desktop/hooks/useDesktopMenuLanguage';
 import { useDesktopMenuActions } from '../features/desktop/hooks/useDesktopMenuActions';
+import { useLoggedOutDbCleanup } from '../features/layout/useLoggedOutDbCleanup';
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
 import AboutModal from '../features/layout/components/AboutModal';
@@ -101,6 +102,7 @@ function DashboardLayout() {
   const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, dirtyTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
   const [isFlashing, setIsFlashing] = useState(false);
   const { isAddHostModalOpen, hosts, isServiceOperating, serviceOperationType, serviceProgressMessage } = useSelector((state) => state.host, shallowEqual);
+  useLoggedOutDbCleanup();
   // isAddDatabaseModalOpen removed
   const { isCreateUserModalOpen, createUserDbName, isEditUserModalOpen, editUserData } = useSelector((state) => state.user, shallowEqual);
   const { 

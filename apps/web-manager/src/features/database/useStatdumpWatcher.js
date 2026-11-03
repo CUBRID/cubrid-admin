@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { acquireStatdumpWatcher, restartFrozenStatdumpWatcher } from './statdumpWatcher';
+import { dbKey } from './dbKey';
 
 /**
  * Keeps a statdump watcher attached to host+db while the calling dashboard
@@ -8,20 +9,26 @@ import { acquireStatdumpWatcher, restartFrozenStatdumpWatcher } from './statdump
  * tab's lifetime), and restarts it when the performance counters stopped
  * moving. See statdumpWatcher.js.
  *
+ * Only while the database is logged in: the watcher is a per-db request the
+ * server refuses without a DB login, so a logout (or an expired login)
+ * releases it.
+ *
  * @param {object|undefined} perfSample the dashboard entry's statdump sample
  */
 export function useStatdumpWatcher(hostUid, dbname, perfSample) {
   const isAuthorized = useSelector((state) => Boolean(hostUid) && state.host.authorizedHosts.includes(hostUid));
+  const isLoggedIn = useSelector((state) => Boolean(hostUid && dbname) && state.database.loggedInDatabases.includes(dbKey(hostUid, dbname)));
+  const canWatch = isAuthorized && isLoggedIn;
 
   useEffect(() => {
-    if (!isAuthorized || !dbname) return undefined;
+    if (!canWatch) return undefined;
     return acquireStatdumpWatcher(hostUid, dbname);
-  }, [isAuthorized, hostUid, dbname]);
+  }, [canWatch, hostUid, dbname]);
 
   const sampleTime = perfSample?.time;
   const unchangedSince = perfSample?.unchangedSince;
   useEffect(() => {
-    if (!isAuthorized || !dbname || !sampleTime) return;
+    if (!canWatch || !sampleTime) return;
     restartFrozenStatdumpWatcher(hostUid, dbname, unchangedSince, sampleTime);
-  }, [isAuthorized, hostUid, dbname, sampleTime, unchangedSince]);
+  }, [canWatch, hostUid, dbname, sampleTime, unchangedSince]);
 }

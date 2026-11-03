@@ -74,7 +74,7 @@ describe('DatabaseManagementService', () => {
 
     const mockDatabaseUserService = {
       loginDatabase: jest.fn().mockResolvedValue(true),
-      ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      ensureDbLogin: jest.fn().mockResolvedValue(undefined),
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 

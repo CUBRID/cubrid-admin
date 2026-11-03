@@ -13,14 +13,19 @@ vi.mock('../../databaseSlice', () => ({
   openTransactionInfoModal: vi.fn(() => ({ type: 'test/openTransactionInfoModal' })),
 }));
 
+import { fetchDashboardLocks } from '../../databaseSlice';
 import DBLockTransactionSection from './DBLockTransactionSection';
 import { CM } from '../../../../constants/cmLabels';
 
 const pollingProps = { hostUid: 'host1', dbname: 'demodb', isTabActive: false, refreshInterval: 0 };
 
-const makeStore = () => configureStore({
+// `test/kill` stands in for a transaction ending.
+const makeStore = (loggedInDatabases = ['host1:demodb']) => configureStore({
   reducer: {
-    databaseUI: (state = { transactionKillSignal: 0 }) => state,
+    databaseUI: (state = { transactionKillSignal: 0 }, action) => (
+      action.type === 'test/kill' ? { transactionKillSignal: state.transactionKillSignal + 1 } : state
+    ),
+    database: (state = { loggedInDatabases }) => state,
     user: (state = { preferences: { uiLocale: 'en' } }) => state,
   },
 });
@@ -41,9 +46,9 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = (props) => act(async () => {
+const render = (props, store = makeStore()) => act(async () => {
   root.render(
-    <Provider store={makeStore()}>
+    <Provider store={store}>
       <DBLockTransactionSection locks={[]} pollingProps={pollingProps} {...props} />
     </Provider>
   );
@@ -79,5 +84,23 @@ describe('DBLockTransactionSection grouped rows', () => {
     expect(container.textContent).toContain('broker2_cub_cas_1');
     expect(container.textContent).toContain('Instance of class = dba.nca_bulk_lock_t');
     expect(container.textContent).toContain((20000).toLocaleString());
+  });
+});
+
+describe('DBLockTransactionSection transaction-ended signal', () => {
+  it('re-reads the locks of a logged-in database only', async () => {
+    const loggedIn = makeStore();
+    await render({ locksStatus: 'loaded' }, loggedIn);
+    fetchDashboardLocks.mockClear();
+    await act(async () => loggedIn.dispatch({ type: 'test/kill' }));
+    expect(fetchDashboardLocks).toHaveBeenCalledWith({ hostUid: 'host1', dbname: 'demodb' });
+    await act(async () => root.unmount());
+    root = createRoot(container);
+
+    const loggedOut = makeStore([]);
+    await render({ locksStatus: 'loaded' }, loggedOut);
+    fetchDashboardLocks.mockClear();
+    await act(async () => loggedOut.dispatch({ type: 'test/kill' }));
+    expect(fetchDashboardLocks).not.toHaveBeenCalled();
   });
 });

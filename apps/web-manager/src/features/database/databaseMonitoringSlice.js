@@ -4,6 +4,7 @@ import { brokerApi } from '../broker/brokerApi';
 import { fetchBrokerStatusMap } from '../broker/fetchBrokerStatusMap';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
+import { isDbLoginGone, dbOfLoginGone } from './dbLoginGone';
 import { computeStatdumpRates } from './statdumpRates';
 
 // Module-level so the previous-sample baseline survives across polls.
@@ -319,13 +320,13 @@ const databaseMonitoringSlice = createSlice({
         }
       )
       // Drop cached space/dashboard data once a database's dbmt login is
-      // gone (explicit logout or forgetting its saved credentials) — it was
-      // fetched under a login that no longer exists, so leaving it around
-      // would show stale data as if it were still current.
+      // gone (see dbLoginGone.js) — it was fetched under a login that no
+      // longer exists, so leaving it around would show stale data as if it
+      // were still current.
       .addMatcher(
-        (action) => action.type === 'database/logoutDatabase/fulfilled' || action.type === 'database/deleteDatabaseProfile/fulfilled',
+        isDbLoginGone,
         (state, action) => {
-          const { hostUid, dbname } = action.meta.arg;
+          const { hostUid, dbname } = dbOfLoginGone(action);
           const key = dashboardKey(hostUid, dbname);
           delete state.dashboardData[key];
           delete state.dashboardLoading[key];

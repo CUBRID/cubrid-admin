@@ -19,8 +19,8 @@ describe('mapStartInfoToClientResponse', () => {
     );
 
     expect(result).toEqual({
-      activelist: { active: [{ dbname: 'demodb', isLoggedIn: false }] },
-      dblist: { dbs: [{ dbname: 'demodb', dbdir: '/db/demodb', isProfileExists: true, isLoggedIn: false }] },
+      activelist: { active: [{ dbname: 'demodb', isProfileExists: true, isLoggedIn: false, isLoggedOut: false }] },
+      dblist: { dbs: [{ dbname: 'demodb', dbdir: '/db/demodb', isProfileExists: true, isLoggedIn: false, isLoggedOut: false }] },
       haDbNames: ['demodb'],
     });
   });
@@ -40,8 +40,8 @@ describe('mapStartInfoToClientResponse', () => {
 
     expect(result.dblist.dbs.map((d) => [d.dbname, d.isLoggedIn])).toEqual([['demodb', true], ['otherdb', false]]);
     expect(result.activelist.active).toEqual([
-      { dbname: 'demodb', isLoggedIn: true },
-      { dbname: 'hadb', isLoggedIn: true },
+      { dbname: 'demodb', isProfileExists: false, isLoggedIn: true, isLoggedOut: false },
+      { dbname: 'hadb', isProfileExists: false, isLoggedIn: true, isLoggedOut: false },
     ]);
   });
 
@@ -62,5 +62,27 @@ describe('mapStartInfoToClientResponse', () => {
       dblist: { dbs: [] },
       haDbNames: [],
     });
+  });
+
+  it('flags a logged-out database on both lists, including one missing from dblist', () => {
+    const cmsStart = {
+      __EXEC_TIME: '10 ms',
+      note: 'none',
+      status: 'success',
+      task: 'startinfo',
+      dblist: [{ dbs: [{ dbname: 'demodb', dbdir: '/db/demodb' }] }],
+      activelist: [{ active: [{ dbname: 'demodb' }, { dbname: 'hadb' }] }],
+    } as StartInfoCmsResponse;
+
+    const result = mapStartInfoToClientResponse(cmsStart, {
+      demodb: { loggedOut: true },
+      hadb: { loggedOut: true },
+    });
+
+    expect(result.dblist.dbs[0]).toMatchObject({ isProfileExists: true, isLoggedIn: false, isLoggedOut: true });
+    expect(result.activelist.active).toEqual([
+      { dbname: 'demodb', isProfileExists: true, isLoggedIn: false, isLoggedOut: true },
+      { dbname: 'hadb', isProfileExists: true, isLoggedIn: false, isLoggedOut: true },
+    ]);
   });
 });

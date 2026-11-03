@@ -34,7 +34,7 @@ describe('DatabaseInfoService', () => {
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let cmsConfigService: jest.Mocked<CmsConfigService>;
-  let databaseUserService: { isDbLoginActive: jest.Mock };
+  let databaseUserService: { isDbLoginActive: jest.Mock; isDbLoginRestoring: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -66,7 +66,7 @@ describe('DatabaseInfoService', () => {
         { provide: HostService, useValue: mockHostService },
         { provide: CmsHttpsClientService, useValue: mockCmsClient },
         { provide: CmsConfigService, useValue: mockCmsConfigService },
-        { provide: DatabaseUserService, useValue: { isDbLoginActive: jest.fn().mockReturnValue(false) } },
+        { provide: DatabaseUserService, useValue: { isDbLoginActive: jest.fn().mockReturnValue(false), isDbLoginRestoring: jest.fn().mockReturnValue(false) } },
       ],
     }).compile();
 
@@ -142,9 +142,9 @@ describe('DatabaseInfoService', () => {
         CMS_CONFNAME_HACONF
       );
       expect(result).toEqual({
-        activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
+        activelist: { active: [{ dbname: 'testdb', isProfileExists: false, isLoggedIn: false, isLoggedOut: false }] },
         dblist: {
-          dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false, isLoggedIn: false }],
+          dbs: [{ dbname: 'testdb', dbdir: '/path', isProfileExists: false, isLoggedIn: false, isLoggedOut: false }],
         },
         haDbNames: [],
       });
@@ -165,7 +165,44 @@ describe('DatabaseInfoService', () => {
 
       expect(databaseUserService.isDbLoginActive).toHaveBeenCalledWith(mockUserId, mockHostUid, 'testdb', 'test-token');
       expect(result.dblist.dbs.map((d) => [d.dbname, d.isLoggedIn])).toEqual([['testdb', true], ['otherdb', false]]);
-      expect(result.activelist.active).toEqual([{ dbname: 'testdb', isLoggedIn: true }]);
+      expect(result.activelist.active).toEqual([{ dbname: 'testdb', isProfileExists: false, isLoggedIn: true, isLoggedOut: false }]);
+    });
+
+    it('reports a database whose login is being restored after a host login as logged in', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        __EXEC_TIME: '10 ms',
+        note: 'none',
+        status: 'success',
+        task: 'startinfo',
+        dblist: [{ dbs: [{ dbname: 'testdb', dbdir: '/path' }] }],
+        activelist: [{ active: [{ dbname: 'testdb' }] }],
+      });
+      databaseUserService.isDbLoginRestoring.mockImplementation((_u, _h, dbname) => dbname === 'testdb');
+
+      const result = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(result.dblist.dbs[0].isLoggedIn).toBe(true);
+    });
+  });
+
+  describe('getServiceHaDbNames', () => {
+    type SysParam = Awaited<ReturnType<CmsConfigService['getAllSystemParam']>>;
+    const confs = (haMode: string | null) => async (_u: string, _h: string, confname: string) => ({
+      conflist: [{
+        confdata: confname === 'haconf'
+          ? ['[common]', 'ha_db_list=hadb1,hadb2']
+          : ['[common]', ...(haMode === null ? [] : [`ha_mode=${haMode}`]), '[service]', 'service=server'],
+      }],
+    }) as SysParam;
+
+    it.each(['on', 'replica', 'ON'])('is the ha_db_list databases when ha_mode is %s', async (haMode) => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
+      expect([...(await service.getServiceHaDbNames(mockUserId, mockHostUid))].sort()).toEqual(['hadb1', 'hadb2']);
+    });
+
+    it.each(['off', 'no', null])('is empty when ha_mode is %s, since the engine refuses heartbeat then', async (haMode) => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
+      expect([...(await service.getServiceHaDbNames(mockUserId, mockHostUid))]).toEqual([]);
     });
   });
 

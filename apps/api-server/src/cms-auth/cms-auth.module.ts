@@ -5,6 +5,7 @@ import { CmsHttpsClientModule } from '@cms-https-client/cms-https-client.module'
 import { CmsConfigModule } from '@cms-config/cms-config.module';
 import { HaModule } from '@ha';
 import { UserRepositoryModule } from '@repository';
+import { DatabaseUserModule } from '@database/user/database-user.module';
 
 /**
  * Module for handling CMS authentication functionalities.
@@ -13,7 +14,7 @@ import { UserRepositoryModule } from '@repository';
  * @since 1.0.0
  */
 @Module({
-  imports: [CmsHttpsClientModule, UserRepositoryModule, CmsConfigModule, HaModule],
+  imports: [CmsHttpsClientModule, UserRepositoryModule, CmsConfigModule, HaModule, DatabaseUserModule],
   providers: [CmsAuthService],
   controllers: [CmsAuthController],
   exports: [CmsAuthService],

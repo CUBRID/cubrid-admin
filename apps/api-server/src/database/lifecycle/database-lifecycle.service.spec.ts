@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DatabaseLifecycleService } from './database-lifecycle.service';
+import { DatabaseLifecycleService, HA_NODE_STEP } from './database-lifecycle.service';
+import { busyDatabase } from './database-action-lock';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { UserRepositoryService } from '@repository';
@@ -85,8 +86,9 @@ describe('DatabaseLifecycleService', () => {
       updateUser: jest.fn(),
       loginDatabase: jest.fn().mockResolvedValue({}),
       getUserInfo: jest.fn().mockResolvedValue({ user: [] }),
-      ensureDbLogin: jest.fn().mockResolvedValue({ reauthenticated: false }),
+      ensureDbLogin: jest.fn().mockResolvedValue(undefined),
       isDbLoginActive: jest.fn().mockReturnValue(false),
+      isDbLoginRestoring: jest.fn().mockReturnValue(false),
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -198,7 +200,7 @@ describe('DatabaseLifecycleService', () => {
     };
 
     const mockStartInfoClientResponse = {
-      activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
+      activelist: { active: [{ dbname: 'testdb', isProfileExists: false, isLoggedIn: false, isLoggedOut: false }] },
       dblist: {
         dbs: [
           {
@@ -206,6 +208,7 @@ describe('DatabaseLifecycleService', () => {
             dbdir: '/path/to/testdb',
             isProfileExists: false,
             isLoggedIn: false,
+            isLoggedOut: false,
           },
         ],
       },
@@ -223,7 +226,7 @@ describe('DatabaseLifecycleService', () => {
       const result = await service.startInfo(mockUserId, mockHostUid);
 
       expect(result).toEqual({
-        activelist: { active: [{ dbname: 'testdb', isLoggedIn: false }] },
+        activelist: { active: [{ dbname: 'testdb', isProfileExists: true, isLoggedIn: false, isLoggedOut: false }] },
         dblist: {
           dbs: [
             {
@@ -231,6 +234,7 @@ describe('DatabaseLifecycleService', () => {
               dbdir: '/path/to/testdb',
               isProfileExists: true,
               isLoggedIn: false,
+              isLoggedOut: false,
             },
           ],
         },
@@ -571,7 +575,7 @@ describe('DatabaseLifecycleService', () => {
       jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({ activelist: { active: [] } });
       databaseUserService.ensureDbLogin.mockImplementation(async (_u, _h, dbname) => {
         if (dbname === 'hadb1') throw new Error('no login');
-        return { reauthenticated: false };
+        return;
       });
       cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...successResponse, task: body.task }));
 
@@ -642,6 +646,31 @@ describe('DatabaseLifecycleService', () => {
       expect(databaseUserService.ensureDbLogin).toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb1');
     });
 
+    it('skips the databases the user is not logged in to, sending them nothing', async () => {
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({
+        activelist: { active: [{ dbname: 'hadb1' }, { dbname: 'db1' }, { dbname: 'db2' }] },
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...successResponse, task: body.task }));
+      databaseUserService.ensureDbLogin.mockImplementation(async (_u: string, _h: string, dbname: string) => {
+        if (dbname !== 'db1') {
+          throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], { reason: dbname === 'hadb1' ? 'loggedOut' : 'notLoggedIn' });
+        }
+      });
+
+      const result = await service.stopAllDatabases(mockUserId, mockHostUid, ['db1', 'db2']);
+
+      expect(cmsClient.postAuthenticated.mock.calls.map(([, body]) => [body.task, (body as { dbname?: string }).dbname])).toEqual([['stopdb', 'db1']]);
+      expect(result).toEqual({
+        succeeded: ['db1'],
+        failed: [],
+        skipped: [
+          { dbname: 'hadb1', reason: 'Logged out' },
+          { dbname: 'db2', reason: 'Not logged in' },
+        ],
+      });
+    });
+
     it('sends no ha_stop when the host has no HA databases', async () => {
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
       cmsClient.postAuthenticated.mockResolvedValue({ ...successResponse, task: 'stopdb' });
@@ -652,6 +681,164 @@ describe('DatabaseLifecycleService', () => {
         ([, body]) => body.task === 'ha_stop'
       );
       expect(haStopCalls).toHaveLength(0);
+    });
+  });
+
+  describe('runSelectedDatabasesAction', () => {
+    const ok = { __EXEC_TIME: '10 ms', note: 'none', status: 'success' };
+    const tasks = () => cmsClient.postAuthenticated.mock.calls.map(([, body]) => [body.task, (body as { dbname?: string }).dbname]);
+    // start-info follows what the CMS calls did, like a real host.
+    let running: Set<string>;
+    const hostState = (active: string[]) => {
+      running = new Set(active);
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockImplementation(async () => ({
+        dblist: { dbs: ['hadb1', 'hadb2', 'db1', 'db2'].map((dbname) => ({ dbname })) },
+        activelist: { active: [...running].map((dbname) => ({ dbname })) },
+      }));
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
+    };
+    const cmsApplies = (body: { task: string; dbname?: string }) => {
+      if (body.task === 'startdb' || body.task === 'ha_start') running.add(body.dbname as string);
+      if (body.task === 'stopdb' || body.task === 'ha_stop') running.delete(body.dbname as string);
+      return { ...ok, task: body.task };
+    };
+
+    it('starts only the selected databases and skips the ones that do not apply', async () => {
+      hostState(['db2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'start', ['hadb1', 'db1', 'db2', 'nodb']);
+
+      expect(tasks()).toEqual([['ha_start', 'hadb1'], ['startdb', 'db1']]);
+      expect(result.succeeded).toEqual(['hadb1', 'db1']);
+      expect(result.skipped).toEqual([
+        { dbname: 'db2', reason: 'Already running' },
+        { dbname: 'nodb', reason: 'Not a database on this host' },
+      ]);
+      expect(result.failed).toEqual([]);
+    });
+
+    const noLogin = (reasons: Record<string, 'loggedOut' | 'notLoggedIn'>) =>
+      databaseUserService.ensureDbLogin.mockImplementation(async (_u: string, _h: string, dbname: string) => {
+        if (reasons[dbname]) throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], { reason: reasons[dbname] });
+      });
+
+    it('skips the selected databases the user is not logged in to, sending them nothing', async () => {
+      hostState(['hadb1', 'db1', 'db2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => cmsApplies(body));
+      noLogin({ hadb1: 'loggedOut', db2: 'notLoggedIn' });
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['hadb1', 'db1', 'db2']);
+
+      expect(tasks()).toEqual([['stopdb', 'db1']]);
+      expect(result.succeeded).toEqual(['db1']);
+      expect(result.skipped).toEqual([
+        { dbname: 'hadb1', reason: 'Logged out' },
+        { dbname: 'db2', reason: 'Not logged in' },
+      ]);
+      expect(result.failed).toEqual([]);
+    });
+
+    it('restarts nothing of a database it skipped at the stop for no login', async () => {
+      hostState(['db1', 'db2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => cmsApplies(body));
+      noLogin({ db2: 'notLoggedIn' });
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'restart', ['db1', 'db2']);
+
+      expect(tasks()).toEqual([['stopdb', 'db1'], ['startdb', 'db1']]);
+      expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not logged in' }]);
+      expect([...running].sort()).toEqual(['db1', 'db2']);
+    });
+
+    it('acts on a running database that dblist leaves out', async () => {
+      hostState(['db1', 'unlisted']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => cmsApplies(body));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['unlisted']);
+
+      expect(tasks()).toEqual([['stopdb', 'unlisted']]);
+      expect(result.skipped).toEqual([]);
+    });
+
+    it('stops only running selected databases, never an unselected HA database', async () => {
+      hostState(['hadb1', 'hadb2', 'db1']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['hadb1', 'db2']);
+
+      expect(tasks()).toEqual([['ha_stop', 'hadb1']]);
+      expect(result.succeeded).toEqual(['hadb1']);
+      expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not running' }]);
+    });
+
+    it('decides which databases apply only while holding them', async () => {
+      hostState(['db1']);
+      const heldWhenRead: Array<{ dbname: string; action: string } | null> = [];
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async () => {
+        heldWhenRead.push(busyDatabase(`${mockHost.address}:${mockHost.port}`, ['db1', 'db2']));
+        return {
+          dblist: { dbs: ['db1', 'db2'].map((dbname) => ({ dbname })) },
+          activelist: { active: [...running].map((dbname) => ({ dbname })) },
+        };
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => cmsApplies(body));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['db1', 'db2']);
+
+      expect(heldWhenRead[0]).toEqual({ dbname: 'db1', action: 'stopSelectedDatabases' });
+      expect(result.succeeded).toEqual(['db1']);
+      expect(result.skipped).toEqual([{ dbname: 'db2', reason: 'Not running' }]);
+    });
+
+    it('restarts by stopping then starting, and does not start one whose stop failed', async () => {
+      hostState(['hadb1', 'db1', 'db2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        if (body.task === 'stopdb' && (body as { dbname?: string }).dbname === 'db2') throw new Error('stop failed');
+        return cmsApplies(body as { task: string; dbname?: string });
+      });
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'restart', ['hadb1', 'db1', 'db2']);
+
+      expect(tasks().map(([task, db]) => `${task}:${db}`)).toEqual(
+        expect.arrayContaining(['ha_stop:hadb1', 'stopdb:db1', 'stopdb:db2', 'ha_start:hadb1', 'startdb:db1'])
+      );
+      expect(tasks()).not.toContainEqual(['startdb', 'db2']);
+      expect(result.succeeded).toEqual(['hadb1', 'db1']);
+      expect(result.failed).toEqual([{ dbname: 'db2', error: expect.any(String), phase: 'stop' }]);
+    });
+
+    it('is turned away while a single action on one of the selected databases is still running', async () => {
+      hostState(['hadb1']);
+      jest.spyOn(databaseInfoService as any, 'effectiveHaDbForDbname').mockResolvedValue(true);
+      let finishStop!: () => void;
+      cmsClient.postAuthenticated.mockImplementation((_url, body) => {
+        if (body.task === 'ha_stop') return new Promise((r) => { finishStop = () => r(cmsApplies(body as { task: string; dbname?: string })); });
+        return Promise.resolve(cmsApplies(body as { task: string; dbname?: string }));
+      });
+
+      const single = service.stopDatabase(mockUserId, mockHostUid, 'hadb1');
+      await new Promise((r) => setTimeout(r, 0));
+      await expect(service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['hadb1'])).rejects.toMatchObject({
+        code: 'DATABASE_ACTION_IN_PROGRESS',
+      });
+
+      finishStop();
+      await single;
+    });
+
+    it('fails a database that is not logged in, without touching it', async () => {
+      hostState([]);
+      databaseUserService.ensureDbLogin.mockImplementation(async (_u, _h, dbname) => {
+        if (dbname === 'hadb2') throw new Error('no login');
+        return;
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...ok, task: body.task }));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'start', ['hadb1', 'hadb2']);
+
+      expect(tasks()).toEqual([['ha_start', 'hadb1']]);
+      expect(result.failed).toEqual([{ dbname: 'hadb2', error: 'no login' }]);
     });
   });
 
@@ -676,6 +863,25 @@ describe('DatabaseLifecycleService', () => {
       expect(stopdbCalls).toHaveLength(1);
     });
 
+    it('also stops a running database that dblist leaves out', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
+      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
+        dblist: { dbs: [{ dbname: 'db1' }] },
+        activelist: { active: [{ dbname: 'db1' }, { dbname: 'unlisted' }] },
+      } as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', task: 'stopdb' } as any);
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      const stopped = cmsClient.postAuthenticated.mock.calls
+        .filter(([, body]) => body.task === 'stopdb')
+        .map(([, body]) => (body as { dbname?: string }).dbname);
+      expect(stopped.sort()).toEqual(['db1', 'unlisted']);
+      expect(result).toEqual({ failed: [], skipped: [] });
+    });
+
     it('reports a startInfo failure as its own entry and skips database stop, instead of throwing', async () => {
       const mockBrokerService = (service as any).brokerService;
       mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
@@ -683,27 +889,12 @@ describe('DatabaseLifecycleService', () => {
 
       const result = await service.stopWholeService(mockUserId, mockHostUid);
 
-      expect(result).toEqual({ failed: [{ name: 'databases', error: 'status unavailable' }] });
+      expect(result).toEqual({ failed: [{ name: 'databases', error: 'status unavailable' }], skipped: [] });
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ task: 'stopdb' }),
         expect.anything()
       );
-    });
-
-    it('reports an HA database that is not logged in as not stopped, instead of dropping it', async () => {
-      const mockBrokerService = (service as any).brokerService;
-      mockBrokerService.stopAllBrokers.mockResolvedValue({ success: true });
-      jest.spyOn(databaseInfoService, 'startInfo').mockResolvedValue({
-        dblist: { dbs: [{ dbname: 'hadb1' }] },
-        activelist: { active: [{ dbname: 'hadb1' }] },
-      } as any);
-      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
-      databaseUserService.ensureDbLogin.mockRejectedValue(new Error('no login'));
-
-      const result = await service.stopWholeService(mockUserId, mockHostUid);
-
-      expect(result.failed).toEqual([{ name: 'hadb1', error: 'no login' }]);
     });
 
     it('reports a stopAllDatabases failure as its own entry instead of throwing, keeping any broker failure', async () => {
@@ -720,6 +911,312 @@ describe('DatabaseLifecycleService', () => {
         { name: 'brokers', error: 'broker stop: fail' },
         { name: 'databases', error: 'ha db list unavailable' },
       ]));
+    });
+  });
+
+  describe('whole-service start, stop and restart on an HA node', () => {
+    let running: Set<string>;
+    let conf: string[];
+    // What the node-wide ha_start brings up (the engine decides).
+    let haStartBringsUp: string[];
+    const calls = () => cmsClient.postAuthenticated.mock.calls.map(([, body]) => body as { task: string; dbname?: string });
+    const haTasks = () => calls().filter((c) => c.task.startsWith('ha_'));
+    beforeEach(() => {
+      running = new Set(['db1']);
+      conf = ['[common]', 'ha_mode=on', '[service]', 'service=server,broker', 'server=db1'];
+      haStartBringsUp = ['hadb1', 'hadb2'];
+      jest.spyOn(databaseInfoService, 'startInfo').mockImplementation(async () => ({
+        dblist: { dbs: ['hadb1', 'hadb2', 'db1'].map((dbname) => ({ dbname })) },
+        activelist: { active: [...running].map((dbname) => ({ dbname })) },
+      }) as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
+      cmsConfigService.getAllSystemParam.mockImplementation(async () => ({ conflist: [{ confdata: conf }] }) as any);
+      databaseUserService.ensureDbLogin.mockImplementation(async (_u: string, _h: string, dbname: string) => {
+        if (dbname.startsWith('hadb')) throw new Error('no login');
+      });
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        const { task, dbname } = body as { task: string; dbname?: string };
+        if (task === 'ha_stop') ['hadb1', 'hadb2'].forEach((d) => running.delete(d));
+        if (task === 'ha_start') haStartBringsUp.forEach((d) => running.add(d));
+        if (task === 'stopdb') running.delete(dbname as string);
+        if (task === 'startdb') running.add(dbname as string);
+        return { status: 'success', task } as any;
+      });
+    });
+
+    it('starts the HA databases with one ha_start without a dbname, logged in or not', async () => {
+      const result = await service.startWholeService(mockUserId, mockHostUid);
+
+      expect(haTasks()).toHaveLength(1);
+      expect(haTasks()[0]).toEqual(expect.objectContaining({ task: 'ha_start' }));
+      expect(haTasks()[0]).not.toHaveProperty('dbname');
+      expect([...running].sort()).toEqual(['db1', 'hadb1', 'hadb2']);
+      expect(result).toEqual({ failed: [], skipped: [] });
+    });
+
+    it('stops the HA databases with one ha_stop without a dbname, logged in or not', async () => {
+      running = new Set(['db1', 'hadb1', 'hadb2']);
+      databaseUserService.ensureDbLogin.mockResolvedValue(undefined as any);
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(haTasks().map((c) => c.task)).toEqual(['ha_stop']);
+      expect(haTasks()[0]).not.toHaveProperty('dbname');
+      expect(calls().filter((c) => c.task === 'stopdb').map((c) => c.dbname)).toEqual(['db1']);
+      expect(result).toEqual({ failed: [], skipped: [] });
+    });
+
+    it('sends the node-wide ha_start even when service= has no server, but starts no non-HA database', async () => {
+      conf = ['[common]', 'ha_mode=on', '[service]', 'service=broker', 'server=db1'];
+      running = new Set();
+
+      const result = await service.startWholeService(mockUserId, mockHostUid);
+
+      expect(haTasks().map((c) => c.task)).toEqual(['ha_start']);
+      expect(calls().filter((c) => c.task === 'startdb')).toEqual([]);
+      expect(result.failed).toEqual([]);
+    });
+
+    it('restarts with one ha_stop and one ha_start when service= has no server, leaving the non-HA database stopped', async () => {
+      conf = ['[common]', 'ha_mode=on', '[service]', 'service=broker', 'server=db1'];
+      running = new Set(['db1', 'hadb1', 'hadb2']);
+      databaseUserService.ensureDbLogin.mockResolvedValue(undefined as any);
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(haTasks().map((c) => c.task)).toEqual(['ha_stop', 'ha_start']);
+      haTasks().forEach((c) => expect(c).not.toHaveProperty('dbname'));
+      expect(result.startFailed).toEqual([]);
+      expect(result.leftStopped).toEqual(['db1']);
+    });
+
+    it('sends no node-wide ha_* when ha_mode is off, and treats the listed databases as plain ones', async () => {
+      conf = ['[common]', 'ha_mode=off', '[service]', 'service=server,broker', 'server=db1,hadb1'];
+      databaseUserService.ensureDbLogin.mockResolvedValue(undefined as any);
+
+      await service.startWholeService(mockUserId, mockHostUid);
+
+      expect(haTasks()).toEqual([]);
+      expect(calls().filter((c) => c.task === 'startdb').map((c) => c.dbname)).toEqual(['hadb1']);
+    });
+
+    it('reports a start as failed, naming the HA databases still off, even when CMS answered success', async () => {
+      haStartBringsUp = ['hadb1'];
+
+      const result = await service.startWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual([{ name: HA_NODE_STEP, error: 'Not running after the HA start: hadb2' }]);
+    });
+
+    it('reports a stop as done when no HA database is running afterwards, even if CMS failed (no cub_master left)', async () => {
+      running = new Set(['db1']);
+      databaseUserService.ensureDbLogin.mockResolvedValue(undefined as any);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        const { task, dbname } = body as { task: string; dbname?: string };
+        if (task === 'ha_stop') throw new Error('master not running');
+        if (task === 'stopdb') running.delete(dbname as string);
+        return { status: 'success', task } as any;
+      });
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual([]);
+    });
+
+    it('reports a stop as failed when an HA database is still running afterwards', async () => {
+      running = new Set(['hadb1', 'hadb2']);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        if ((body as { task: string }).task === 'ha_stop') running.delete('hadb1');
+        return { status: 'success', task: (body as { task: string }).task } as any;
+      });
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual([{ name: HA_NODE_STEP, error: 'Still running after the HA stop: hadb2' }]);
+    });
+
+    it('reports a start as not confirmed when the running list cannot be read afterwards', async () => {
+      const base = (databaseInfoService.startInfo as jest.Mock).getMockImplementation()!;
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+        if (haTasks().length > 0) throw new Error('status unavailable');
+        return base(...args);
+      });
+
+      const result = await service.startWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual([{ name: HA_NODE_STEP, error: 'Could not check whether the HA databases started: status unavailable' }]);
+    });
+
+    it('does not fail a stop that CMS accepted when the running list cannot be read afterwards', async () => {
+      running = new Set(['hadb1', 'hadb2']);
+      const base = (databaseInfoService.startInfo as jest.Mock).getMockImplementation()!;
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+        if (haTasks().length > 0) throw new Error('status unavailable');
+        return base(...args);
+      });
+
+      const result = await service.stopWholeService(mockUserId, mockHostUid);
+
+      expect(result.failed).toEqual([]);
+    });
+
+    it('holds the HA databases during the restart, so a single HA start in between is refused', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      let midway: unknown;
+      mockBrokerService.startAllBrokers.mockImplementation(async () => {
+        midway = await service.startDatabase(mockUserId, mockHostUid, 'hadb2').catch((e) => e);
+        return { success: true };
+      });
+
+      await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect((midway as DatabaseError).code).toBe(DatabaseErrorCode.DATABASE_ACTION_IN_PROGRESS);
+    });
+
+    it('still sends ha_start and ha_stop with a dbname from Start All and Stop All', async () => {
+      databaseUserService.ensureDbLogin.mockResolvedValue(undefined as any);
+      running = new Set(['hadb1']);
+
+      await service.stopAllDatabases(mockUserId, mockHostUid, []);
+      await service.startAllDatabases(mockUserId, mockHostUid, []);
+
+      expect(haTasks()).toEqual([
+        expect.objectContaining({ task: 'ha_stop', dbname: 'hadb1' }),
+        expect.objectContaining({ task: 'ha_start', dbname: 'hadb1' }),
+        expect.objectContaining({ task: 'ha_start', dbname: 'hadb2' }),
+      ]);
+    });
+  });
+
+  describe('restartWholeService', () => {
+    // 'auto' is in the autostart list, 'manual' was started by hand, 'off' is stopped.
+    let running: Set<string>;
+    const tasksOf = (task: string) =>
+      cmsClient.postAuthenticated.mock.calls.filter(([, body]) => body.task === task).map(([, body]) => (body as { dbname?: string }).dbname);
+    beforeEach(() => {
+      running = new Set(['auto', 'manual']);
+      jest.spyOn(databaseInfoService, 'startInfo').mockImplementation(async () => ({
+        dblist: { dbs: ['auto', 'manual', 'off'].map((dbname) => ({ dbname })) },
+        activelist: { active: [...running].map((dbname) => ({ dbname })) },
+      }) as any);
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set());
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', 'service=server,broker', 'server=auto'] }],
+      } as any);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        const dbname = (body as { dbname?: string }).dbname as string;
+        if (body.task === 'stopdb') running.delete(dbname);
+        if (body.task === 'startdb') running.add(dbname);
+        return { status: 'success', task: body.task } as any;
+      });
+    });
+
+    it('stops, then starts only the autostart list; a database started by hand stays stopped and is reported', async () => {
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual']);
+      expect(tasksOf('startdb')).toEqual(['auto']);
+      expect([...running].sort()).toEqual(['auto']);
+      expect(result).toEqual({ stopFailed: [], startFailed: [], skipped: [], leftStopped: ['manual'] });
+    });
+
+    it('leaves a running database the user is not logged in to running, and reports it skipped, not as left stopped', async () => {
+      databaseUserService.ensureDbLogin.mockImplementation(async (_u: string, _h: string, dbname: string) => {
+        if (dbname === 'manual') throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], { reason: 'notLoggedIn' });
+      });
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(tasksOf('stopdb')).toEqual(['auto']);
+      expect(tasksOf('startdb')).toEqual(['auto']);
+      expect([...running].sort()).toEqual(['auto', 'manual']);
+      expect(result).toEqual({
+        stopFailed: [],
+        startFailed: [],
+        skipped: [{ name: 'manual', reason: 'Not logged in', phase: 'stop' }],
+        leftStopped: [],
+      });
+    });
+
+    it('stops a running database that dblist leaves out, and reports it left stopped when not in the autostart list', async () => {
+      running.add('unlisted');
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(tasksOf('stopdb').sort()).toEqual(['auto', 'manual', 'unlisted']);
+      expect(tasksOf('startdb')).toEqual(['auto']);
+      expect(result.leftStopped.sort()).toEqual(['manual', 'unlisted']);
+    });
+
+    it('does not report as left stopped a database whose start failed', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({
+        conflist: [{ confdata: ['[service]', 'service=server,broker', 'server=auto,manual'] }],
+      } as any);
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => {
+        const dbname = (body as { dbname?: string }).dbname as string;
+        if (body.task === 'stopdb') running.delete(dbname);
+        if (body.task === 'startdb' && dbname === 'manual') throw new Error('start: fail');
+        if (body.task === 'startdb') running.add(dbname);
+        return { status: 'success', task: body.task } as any;
+      });
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(result.startFailed).toEqual([expect.objectContaining({ name: 'manual' })]);
+      expect(result.leftStopped).toEqual([]);
+    });
+
+    it('reports nothing left stopped when the status cannot be read after the start', async () => {
+      // Every read after the service start fails.
+      const base = (databaseInfoService.startInfo as jest.Mock).getMockImplementation()!;
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+        if (tasksOf('startdb').length > 0) throw new Error('status unavailable');
+        return base(...args);
+      });
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(result.leftStopped).toEqual([]);
+      expect(tasksOf('startdb')).toEqual(['auto']);
+    });
+
+    it('holds the databases for the whole sequence, so a single start in between is refused', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      let midway: unknown;
+      mockBrokerService.startAllBrokers.mockImplementation(async () => {
+        midway = await service.startDatabase(mockUserId, mockHostUid, 'off').catch((e) => e);
+        return { success: true };
+      });
+
+      await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(midway).toBeInstanceOf(DatabaseError);
+      expect((midway as DatabaseError).code).toBe(DatabaseErrorCode.DATABASE_ACTION_IN_PROGRESS);
+      expect(tasksOf('startdb')).not.toContain('off');
+    });
+
+    it('stops nothing when it cannot read which databases are running', async () => {
+      let reads = 0;
+      (databaseInfoService.startInfo as jest.Mock).mockImplementation(async () => {
+        if (++reads > 1) throw new Error('status unavailable');
+        return { dblist: { dbs: [{ dbname: 'auto' }] }, activelist: { active: [{ dbname: 'auto' }] } };
+      });
+      const mockBrokerService = (service as any).brokerService;
+
+      await expect(service.restartWholeService(mockUserId, mockHostUid)).rejects.toThrow();
+      expect(mockBrokerService.stopAllBrokers).not.toHaveBeenCalled();
+      expect(tasksOf('stopdb')).toEqual([]);
+    });
+
+    it('still starts the service when the stop reported failures, and reports both', async () => {
+      const mockBrokerService = (service as any).brokerService;
+      mockBrokerService.stopAllBrokers.mockRejectedValueOnce(new Error('broker stop: fail'));
+
+      const result = await service.restartWholeService(mockUserId, mockHostUid);
+
+      expect(result.stopFailed).toEqual([{ name: 'brokers', error: 'broker stop: fail' }]);
+      expect(mockBrokerService.startAllBrokers).toHaveBeenCalled();
+      expect(result.startFailed).toEqual([]);
     });
   });
 
@@ -967,6 +1464,43 @@ describe('DatabaseLifecycleService', () => {
         logpagesize: '16384',
         freespace: '1048576',
       });
+    });
+
+    // CMS lists in dblist only the databases.txt entries whose host field
+    // matches; a running database missing from it still has volumes to read.
+    it('reads a running database that is missing from dblist', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '10 ms',
+          note: 'none',
+          status: 'success',
+          task: 'startinfo',
+          dblist: [{ dbs: [{ dbname: 'otherdb' }] }],
+          activelist: [{ active: [{ dbname: mockDbname }] }],
+        })
+        .mockResolvedValueOnce(mockDbSpaceInfoResponse);
+
+      const result = await service.getDBSpaceInfo(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'dbspaceinfo', dbname: mockDbname })
+      );
+      expect(result).toEqual(expect.objectContaining({ dbname: 'testdb', freespace: '1048576' }));
+    });
+
+    it('still rejects a database that is neither listed nor running', async () => {
+      cmsClient.postAuthenticated.mockResolvedValueOnce({
+        __EXEC_TIME: '10 ms',
+        note: 'none',
+        status: 'success',
+        task: 'startinfo',
+        dblist: [{ dbs: [{ dbname: 'otherdb' }] }],
+        activelist: [{ active: [{ dbname: 'otherdb' }] }],
+      });
+
+      await expect(service.getDBSpaceInfo(mockUserId, mockHostUid, mockDbname)).rejects.toMatchObject({ code: 'NO_SUCH_DATABASE' });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
     });
   });
 

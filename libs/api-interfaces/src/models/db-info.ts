@@ -11,4 +11,9 @@ export interface DBInfo {
   dbname: string;
   id: string;
   password: string;
+  /**
+   * Set when the user logs out of this database. The profile is kept, but
+   * ensureDbLogin won't log in with it again until the user logs in.
+   */
+  loggedOut?: boolean;
 }

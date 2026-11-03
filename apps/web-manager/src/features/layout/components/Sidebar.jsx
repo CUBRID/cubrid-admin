@@ -19,11 +19,23 @@ import {
   refreshServerList
 } from '../../host/hostSlice';
 import {
-  fetchDatabaseStartInfo, startDatabase, stopDatabase, startAllDatabases, stopAllDatabases,
+  fetchDatabaseStartInfo, startDatabase, stopDatabase,
   loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
-import { restartDatabasesInBulk, bulkResultStatusModal } from '../../database/databaseBulkActions';
+import { bulkResultStatusModal, runAllDatabasesAction, serviceSkippedTable } from '../../database/databaseBulkActions';
+import { autoStartServers, haModeOn, loginSkipsOf, planLoginCheckedAction, readStartInfoDatabases, restartLoginSkips, runningDbNames, serviceDatabases, serviceStartTargets, serviceStopTargets, stoppedDbNames } from '../../database/loginSkips';
+import { hostApi } from '../../host/hostApi';
+import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
+import { restartHostService } from '../../host/hostServiceRestart';
+import {
+  MULTI_DB_ACTIONS,
+  MULTI_DB_ACTION_ICONS,
+  databaseSelectionRows,
+  runMultiDatabaseAction,
+  splitByAction,
+} from '../../database/databaseMultiActions';
+import SelectDatabasesModal from '../../database/components/SelectDatabasesModal';
 import { hostLoginResultStatusModal } from '../../host/hostLoginReport';
 import { dbKey } from '../../database/dbKey';
 
@@ -99,6 +111,13 @@ import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME, orderedGro
 import { useHostActivation } from '../../host/useHostActivation';
 import { useRefillNavigatorLists } from '../sidebar/useRefillNavigatorLists';
 
+// A selection updater keeping only the names in `namesText` (newline-joined).
+const keepOnly = (namesText) => (prev) => {
+  const names = new Set(namesText.split('\n'));
+  const next = new Set([...prev].filter((name) => names.has(name)));
+  return next.size === prev.size ? prev : next;
+};
+
 export default function Sidebar({ isCollapsed, onAddHost }) {
   const CM = useCM();
   const {
@@ -122,6 +141,11 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [groupContextMenu, setGroupContextMenu] = useState(null);
   const [dbContextMenu, setDbContextMenu] = useState(null);
+  // Ctrl/Shift multi-selection in the database tree, and its context menu.
+  const [selectedDbNames, setSelectedDbNames] = useState(() => new Set());
+  const [dbMultiContextMenu, setDbMultiContextMenu] = useState(null);
+  const [selectedBrokerNames, setSelectedBrokerNames] = useState(() => new Set());
+  const [brokerMultiContextMenu, setBrokerMultiContextMenu] = useState(null);
   const [brokerContextMenu, setBrokerContextMenu] = useState(null);
   const [usersContextMenu, setUsersContextMenu] = useState(null);
   const [userContextMenu, setUserContextMenu] = useState(null);
@@ -164,17 +188,157 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // dialog; onConfirm calls run() and clears this, onCancel just clears it.
   const [pendingActionConfirm, setPendingActionConfirm] = useState(null);
   const requestActionConfirm = (config) => setPendingActionConfirm(config);
+  const withLoginSkipWarning = (description, skips) => (skips.count > 0 ? (
+    <>
+      {description}
+      <span className="block mt-2 text-amber-600 dark:text-amber-400">{CM.loginSkipWarning(skips.loggedOut, skips.notLoggedIn)}</span>
+    </>
+  ) : description);
+  // A service action on an HA host takes the HA databases down and up with
+  // one node-wide ha_stop/ha_start, whatever the logins; its confirm dialog
+  // says so, and what that can do to the node.
+  const withHaServiceNotes = (description, hasHa, { starts }) => (hasHa ? (
+    <>
+      {description}
+      {[CM.serviceHaNoteLogin, CM.serviceHaNoteRole, ...(starts ? [CM.serviceHaNoteStartFail] : [])].map((note) => (
+        <span key={note} className="block mt-1 text-slate-500 dark:text-slate-400">{note}</span>
+      ))}
+    </>
+  ) : description);
+  // Confirms a bulk or service action after naming the databases it will
+  // skip because the user isn't logged in to them, from a start-info read
+  // made as the dialog opens (the server skips them too). `config.run` gets
+  // the targets picked from that read. Without a read, or with nothing to
+  // run, no dialog opens; a notice says why instead.
+  const confirmWithLoginSkips = async (hostUid, pickTargets, config, options) => {
+    const plan = await dispatch(planLoginCheckedAction(hostUid, pickTargets, options));
+    const notice = {
+      readFailed: { type: 'error', message: CM.databaseListReadFailedMsg },
+      noTargets: { type: 'info', message: CM.noTargetDatabasesMsg },
+      allSkipped: { type: 'info', message: CM.noDatabasesToRunMsg },
+    }[plan.outcome];
+    if (notice) {
+      dispatch(showStatusModal({ ...notice, title: config.confirmLabel }));
+      return;
+    }
+    requestActionConfirm({
+      ...config,
+      description: withLoginSkipWarning(config.description, plan.skips),
+      run: () => config.run(plan.targets),
+    });
+  };
+  // { initialSelected: dbname[] } while the database selection modal is open.
+  const [selectDatabasesModal, setSelectDatabasesModal] = useState(null);
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
-  const { databasesByHost, activeDatabasesByHost, loggedInDatabases, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
-  const { brokersByHost } = useSelector((state) => state.broker, shallowEqual);
+  const { databasesByHost, loggedInDatabases, haDbNamesByHost, navigatorDatabasesByHost, navigatorActiveDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { brokersByHost, navigatorBrokersByHost } = useSelector((state) => state.broker, shallowEqual);
+  // The lists the trees show; a multi-selection is kept within them.
+  const navigatorDbNames = useSelector(
+    (state) => (state.database.navigatorDatabasesByHost?.[state.host.selectedHostUid] || []).map((db) => db.dbname).join('\n')
+  );
+  const navigatorBrokerNames = useSelector(
+    (state) => (state.broker.navigatorBrokersByHost?.[state.host.selectedHostUid] || []).map((b) => b.name).join('\n')
+  );
   // Sidebar's BrokerTree/DatabaseTree are keyed by selectedHostUid (fully
   // remounted on host switch) and every list here is scoped to whichever
   // host is currently selected — read straight out of the per-host maps so
   // a still in-flight response for a host the user has since switched away
   // from can never be mistaken for this host's own data.
   const databases = databasesByHost[selectedHostUid] || [];
-  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
+  // A deleted (or renamed) database or broker leaves the selection, so it
+  // can't be acted on unseen, or come back selected under a reused name.
+  useEffect(() => {
+    setSelectedDbNames(keepOnly(navigatorDbNames));
+  }, [navigatorDbNames]);
+  useEffect(() => {
+    setSelectedBrokerNames(keepOnly(navigatorBrokerNames));
+  }, [navigatorBrokerNames]);
+
+  // The database tree remounts per host; its multi-selection starts empty too.
+  useEffect(() => {
+    setSelectedDbNames(new Set());
+    setDbMultiContextMenu(null);
+    setSelectedBrokerNames(new Set());
+    setBrokerMultiContextMenu(null);
+  }, [selectedHostUid]);
+
+  // One action on several selected brokers, one broker at a time.
+  const handleMultiBrokerAction = (action, brokers) => {
+    const hostUid = selectedHostUid;
+    const { targets, skipped: notApplicable } = splitBrokersByAction(action, brokers);
+    if (targets.length === 0) return;
+    const label = CM.multiDbActions[action];
+    requestActionConfirm({
+      title: CM.multiBrokerConfirmTitle(label),
+      description: CM.multiDbConfirmDesc(label, targets.map((broker) => broker.name)),
+      confirmLabel: label,
+      variant: action === 'start' ? 'primary' : 'danger',
+      run: async () => {
+        setLoadingText(CM.processing);
+        startAction();
+        try {
+          const result = await runMultiBrokerAction(dispatch, { hostUid, action, names: targets.map((broker) => broker.name) });
+          resetAction();
+          const report = bulkResultStatusModal(CM, {
+            title: label,
+            failedMsg: (count) => CM.multiBrokerFailedMsg(action, count),
+            failed: result.failed,
+            skipped: notApplicable.map((broker) => ({ dbname: broker.name, reason: CM.multiBrokerNotApplicableReason })),
+            showPhase: action === 'restart',
+            nameLabel: CM.broker,
+            skippedMsg: CM.someBrokersSkippedMsg,
+          });
+          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiBrokerDoneMsg(action, result.succeeded.length) }));
+        } catch (err) {
+          endError(err);
+        }
+      },
+    });
+  };
+
+  // One action on several selected databases (selection modal or a tree
+  // selection): confirm with the HA warning, run, then refresh and report.
+  const handleMultiDatabaseAction = (action, rows, credentials) => {
+    const hostUid = selectedHostUid;
+    const { targets, skipped: notApplicable } = splitByAction(action, rows);
+    if (targets.length === 0) return;
+    const label = CM.multiDbActions[action];
+    const haCount = ['start', 'stop', 'restart'].includes(action) ? targets.filter((row) => row.isHa).length : 0;
+    // Start/stop/restart skip the selected databases the user isn't logged in to.
+    const confirm = ['start', 'stop', 'restart'].includes(action)
+      ? (config) => confirmWithLoginSkips(hostUid, () => targets.map((row) => row.dbname), config)
+      : requestActionConfirm;
+    confirm({
+      title: CM.multiDbConfirmTitle(label),
+      description: [
+        CM.multiDbConfirmDesc(label, targets.map((row) => row.dbname)),
+        haCount > 0 ? CM.multiDbHaWarning(haCount) : '',
+      ].filter(Boolean).join(' '),
+      confirmLabel: label,
+      variant: ['stop', 'restart', 'forgetCredentials'].includes(action) ? 'danger' : 'primary',
+      run: async () => {
+        setLoadingText(CM.processing);
+        startAction();
+        try {
+          const result = await runMultiDatabaseAction(dispatch, CM, { hostUid, action, rows: targets, credentials });
+          dispatch(fetchDatabaseStartInfo(hostUid));
+          resetAction();
+          const skipped = [
+            ...result.skipped,
+            ...notApplicable.map((row) => ({ dbname: row.dbname, reason: CM.multiDbNotApplicableReason })),
+          ];
+          const report = bulkResultStatusModal(CM, {
+            title: label, failedMsg: (count) => CM.multiDbFailedMsg(action, count), failed: result.failed, skipped, showPhase: action === 'restart',
+          });
+          dispatch(showStatusModal(report || { type: 'success', title: label, message: CM.multiDbDoneMsg(action, result.succeeded.length) }));
+        } catch (err) {
+          dispatch(fetchDatabaseStartInfo(hostUid));
+          endError(err);
+        }
+      },
+    });
+  };
   const haDbNames = haDbNamesByHost[selectedHostUid] || [];
   const brokers = brokersByHost[selectedHostUid] || [];
 
@@ -215,6 +379,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setBulkHostContextMenu(null);
     setGroupContextMenu(null);
     setDbContextMenu(null);
+    setDbMultiContextMenu(null);
+    setBrokerMultiContextMenu(null);
     setBrokerContextMenu(null);
     setUsersContextMenu(null);
     setUserContextMenu(null);
@@ -267,27 +433,116 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setLoadingText(action === 'start' ? CM.startingService : CM.stoppingService);
     startAction();
     try {
-      if (action === 'start') {
-        await dispatch(startService(hostUid)).unwrap();
-      } else {
-        await dispatch(stopService(hostUid)).unwrap();
-      }
+      const { problem, skipped, haNodeFailed } = await dispatch(action === 'start' ? startService(hostUid) : stopService(hostUid)).unwrap();
       resetAction();
+      if (problem || skipped.length > 0) {
+        dispatch(showStatusModal({
+          type: problem ? 'error' : 'info',
+          title: action === 'start' ? CM.startService : CM.stopService,
+          message: [
+            problem,
+            action === 'start' && haNodeFailed ? CM.haNodeStartFailedMsg : '',
+            skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : '',
+          ].filter(Boolean).join('\n'),
+          tables: skipped.length > 0 ? [serviceSkippedTable(CM, skipped, action)] : [],
+        }));
+      }
     } catch (err) {
       endError(err);
     }
+  };
+
+  // The cubrid.conf parts a service action follows: the autostart list, and
+  // whether the host is an HA node (ha_mode). Unreadable: no autostart list,
+  // and HA node, so the HA notes still show.
+  const readServiceConf = (hostUid) => hostApi.getHostConfig(hostUid, 'cubridconf')
+    .then((response) => {
+      const lines = response?.conflist?.[0]?.confdata;
+      return { autoStart: new Set(autoStartServers(lines)), haNode: haModeOn(lines) };
+    })
+    .catch(() => ({ autoStart: new Set(), haNode: true }));
+  // start-info databases and the service conf, read as a service dialog opens.
+  const readServiceState = async (hostUid) => {
+    const [databases, { autoStart, haNode }] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readServiceConf(hostUid)]);
+    return { databases: serviceDatabases(databases, haNode), autoStart };
+  };
+  // Service start brings up the autostart list and, on an HA host, the HA
+  // databases with one node-wide ha_start. The autostart ones not running
+  // and not logged in are named before it runs, with the HA notes.
+  const requestStartService = async (hostUid) => {
+    if (!hostUid) return;
+    const { databases, autoStart } = await readServiceState(hostUid);
+    const targets = serviceStartTargets(databases, autoStart);
+    const skips = loginSkipsOf(databases, targets);
+    const hasHa = databases.some((db) => db.isHa);
+    if (skips.count === 0 && !hasHa) {
+      handleServiceAction(hostUid, 'start');
+      return;
+    }
+    requestActionConfirm({
+      title: CM.startService,
+      description: withHaServiceNotes(withLoginSkipWarning(null, skips), hasHa, { starts: true }),
+      confirmLabel: CM.startService,
+      variant: 'primary',
+      run: () => handleServiceAction(hostUid, 'start'),
+    });
+  };
+
+  // Service restart skips the databases the user isn't logged in to at each
+  // step: running ones are not stopped and keep running, stopped ones the
+  // start would bring up stay stopped. Both are named before it runs.
+  const requestRestartService = async (hostUid, serverName) => {
+    if (!hostUid) return;
+    const { databases, autoStart } = await readServiceState(hostUid);
+    const { keepsRunning, notStarted } = restartLoginSkips(databases, autoStart);
+    const hasHa = databases.some((db) => db.isHa);
+    const description = withHaServiceNotes(keepsRunning.length + notStarted.length === 0 ? CM.confirmRestartServiceDesc(serverName) : (
+      <>
+        {CM.confirmRestartServiceDesc(serverName)}
+        {keepsRunning.length > 0 && <span className="block mt-2 text-amber-600 dark:text-amber-400">{CM.restartSkipKeepsRunningMsg(keepsRunning)}</span>}
+        {notStarted.length > 0 && <span className="block mt-1 text-amber-600 dark:text-amber-400">{CM.restartSkipNotStartedMsg(notStarted)}</span>}
+      </>
+    ), hasHa, { starts: true });
+    requestActionConfirm({
+      title: CM.confirmRestartServiceTitle,
+      description,
+      confirmLabel: CM.restartService,
+      variant: 'danger',
+      run: async () => {
+        setLoadingText(CM.restartingService);
+        startAction();
+        const { problems, skipped, leftStopped, haNodeFailed } = await dispatch(restartHostService(hostUid));
+        resetAction();
+        const tables = skipped.length > 0 ? [serviceSkippedTable(CM, skipped, 'restart')] : [];
+        const notes = [
+          haNodeFailed ? CM.haNodeStartFailedMsg : '',
+          skipped.length > 0 ? CM.someDatabasesSkippedMsg(skipped.length) : '',
+          leftStopped.length > 0 ? CM.serviceRestartLeftStoppedMsg(leftStopped) : '',
+        ].filter(Boolean);
+        dispatch(showStatusModal(problems.length > 0
+          ? { type: 'error', title: CM.restartService, message: [...problems, ...notes].join('\n'), tables }
+          : notes.length > 0
+            ? { type: 'info', title: CM.restartService, message: [CM.serviceRestartedMsg, ...notes].join('\n'), tables }
+            : { type: 'success', title: CM.restartService, message: CM.serviceRestartedMsg }));
+      },
+    });
   };
 
   const closeStopServiceConfirm = () => {
     setStopServiceConfirm(prev => ({ ...prev, isOpen: false }));
   };
 
-  const requestStopService = (hostUid, serverName) => {
+  const requestStopService = async (hostUid, serverName) => {
     if (!hostUid) return;
+    const { databases } = await readServiceState(hostUid);
     setStopServiceConfirm({
       isOpen: true,
       hostUid,
       serverName: serverName || hostUid,
+      // Running non-HA databases not logged in are skipped and keep running;
+      // HA ones go down with the node-wide ha_stop.
+      skips: loginSkipsOf(databases, serviceStopTargets(databases)),
+      hasHa: databases.some((db) => db.isHa),
     });
   };
 
@@ -387,6 +642,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     e.preventDefault();
     e.stopPropagation();
     closeAllContextMenus();
+    if (selectedDbNames.size > 1 && selectedDbNames.has(dbName)) {
+      setDbMultiContextMenu({ mouseX: e.clientX, mouseY: e.clientY });
+      return;
+    }
     setDbContextMenu({ mouseX: e.clientX, mouseY: e.clientY, db: dbName, isActive, isLoggedIn });
   };
 
@@ -401,6 +660,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     e.preventDefault();
     e.stopPropagation();
     closeAllContextMenus();
+    if (selectedBrokerNames.size > 1 && selectedBrokerNames.has(brokerName)) {
+      setBrokerMultiContextMenu({ mouseX: e.clientX, mouseY: e.clientY });
+      return;
+    }
     setBrokerContextMenu({ mouseX: e.clientX, mouseY: e.clientY, broker: brokerName, state });
   };
 
@@ -441,13 +704,15 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       });
       dispatch(fetchCMSLogs(selectedHostUid));
       dispatch(fetchAdminLogs(selectedHostUid));
+      // A database's log list is a per-db request: logged-in ones only.
       (databases || []).forEach(db => {
+        if (!loggedInDatabases.includes(dbKey(selectedHostUid, db.dbname))) return;
         dispatch(fetchDatabaseLogs({ hostUid: selectedHostUid, dbname: db.dbname }));
       });
     } catch (error) {
       console.error('Failed to refresh logs:', error);
     }
-  }, [dispatch, selectedHostUid, brokers, databases]);
+  }, [dispatch, selectedHostUid, brokers, databases, loggedInDatabases]);
 
   const handleBrokerErrorLogContextMenu = (e) => {
     e.preventDefault();
@@ -923,6 +1188,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                         onBackupItemContextMenu={handleBackupItemContextMenu}
                         onQueryPlanContextMenu={handleQueryPlanContextMenu}
                         onQueryItemContextMenu={handleQueryItemContextMenu}
+                        selectedDbNames={selectedDbNames}
+                        onSelectedDbNamesChange={setSelectedDbNames}
                       />
                     </div>
                     <div id="broker-tree-container" className={activeTab !== 'broker' ? 'hidden' : ''}>
@@ -931,6 +1198,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                         hostUid={selectedHostUid}
                         onContextMenu={handleBrokerContextMenu}
                         onSqlLogContextMenu={handleSqlLogContextMenu}
+                        selectedBrokerNames={selectedBrokerNames}
+                        onSelectedBrokerNamesChange={setSelectedBrokerNames}
                       />
                     </div>
                     <div className={activeTab !== 'log' ? 'hidden' : ''}>
@@ -1057,7 +1326,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             onClick={() => {
               const hostUid = contextMenu.hostUid;
               setContextMenu(null);
-              handleServiceAction(hostUid, 'start');
+              requestStartService(hostUid);
             }}
           />
           <MenuItem
@@ -1069,6 +1338,17 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               const serverName = contextMenu.alias || contextMenu.server || hostUid;
               setContextMenu(null);
               requestStopService(hostUid, serverName);
+            }}
+          />
+          <MenuItem
+            icon="restart_alt"
+            label={CM.restartService}
+            disabled={!authorizedHosts.includes(contextMenu.hostUid) || sidebarActionLoading}
+            onClick={() => {
+              const hostUid = contextMenu.hostUid;
+              const serverName = contextMenu.alias || contextMenu.server || hostUid;
+              setContextMenu(null);
+              requestRestartService(hostUid, serverName);
             }}
           />
           <MenuDivider />
@@ -1292,6 +1572,22 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                     }
                   },
                 });
+              }}
+            />
+          )}
+          {dbContextMenu.isActive && (
+            <MenuItem
+              icon="restart_alt"
+              label={CM.restartDatabase}
+              disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
+              onClick={() => {
+                const dbname = dbContextMenu.db;
+                setDbContextMenu(null);
+                const row = databaseSelectionRows(
+                  { database: { navigatorDatabasesByHost, navigatorActiveDatabasesByHost, haDbNamesByHost, loggedInDatabases } },
+                  selectedHostUid
+                ).find((r) => r.dbname === dbname);
+                if (row) handleMultiDatabaseAction('restart', [row]);
               }}
             />
           )}
@@ -1527,6 +1823,86 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
         </ContextMenuWrapper>
       )}
 
+      {dbMultiContextMenu && (() => {
+        const rows = databaseSelectionRows(
+          { database: { navigatorDatabasesByHost, navigatorActiveDatabasesByHost, haDbNamesByHost, loggedInDatabases } },
+          selectedHostUid
+        ).filter((row) => selectedDbNames.has(row.dbname));
+        const close = () => setDbMultiContextMenu(null);
+        return (
+          <ContextMenuWrapper x={dbMultiContextMenu.mouseX} y={dbMultiContextMenu.mouseY} onClose={close}>
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between gap-2 min-w-0">
+              <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">
+                {CM.multiDbSelectedCount(rows.length)}
+              </Typography>
+              <Icon name="checklist" size="xs" className="opacity-30" weight={300} />
+            </div>
+            {MULTI_DB_ACTIONS.map((action) => {
+              const { targets } = splitByAction(action, rows);
+              return (
+                <MenuItem
+                  key={action}
+                  icon={MULTI_DB_ACTION_ICONS[action]}
+                  label={`${CM.multiDbActions[action]} (${targets.length})`}
+                  disabled={targets.length === 0}
+                  onClick={() => {
+                    close();
+                    // Databases without saved credentials need a user and
+                    // password, which the selection window asks for.
+                    if (action === 'login' && targets.some((row) => !row.hasProfile)) {
+                      setSelectDatabasesModal({ initialSelected: rows.map((row) => row.dbname) });
+                      return;
+                    }
+                    handleMultiDatabaseAction(action, rows);
+                  }}
+                />
+              );
+            })}
+            <MenuDivider />
+            <MenuItem
+              icon="checklist"
+              label={CM.selectDatabasesMenu}
+              onClick={() => {
+                close();
+                setSelectDatabasesModal({ initialSelected: rows.map((row) => row.dbname) });
+              }}
+            />
+          </ContextMenuWrapper>
+        );
+      })()}
+
+      {brokerMultiContextMenu && (() => {
+        const selectedBrokers = (navigatorBrokersByHost?.[selectedHostUid] || [])
+          .filter((broker) => selectedBrokerNames.has(broker.name))
+          .map((broker) => ({ name: broker.name, state: broker.state }));
+        const close = () => setBrokerMultiContextMenu(null);
+        return (
+          <ContextMenuWrapper x={brokerMultiContextMenu.mouseX} y={brokerMultiContextMenu.mouseY} onClose={close}>
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between gap-2 min-w-0">
+              <Typography variant="caption" className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11">
+                {CM.multiDbSelectedCount(selectedBrokers.length)}
+              </Typography>
+              <Icon name="hub" size="xs" className="opacity-30" weight={300} />
+            </div>
+            {MULTI_BROKER_ACTIONS.map((action) => {
+              const { targets } = splitBrokersByAction(action, selectedBrokers);
+              return (
+                <MenuItem
+                  key={action}
+                  icon={MULTI_DB_ACTION_ICONS[action]}
+                  label={`${CM.multiDbActions[action]} (${targets.length})`}
+                  disabled={targets.length === 0}
+                  onClick={() => {
+                    close();
+                    handleMultiBrokerAction(action, selectedBrokers);
+                  }}
+                />
+              );
+            })}
+          </ContextMenuWrapper>
+        );
+      })()}
+
       {dbRootContextMenu && (
         <ContextMenuWrapper x={dbRootContextMenu.mouseX} y={dbRootContextMenu.mouseY} onClose={() => setDbRootContextMenu(null)}>
           <div className="px-3 py-2 border-b border-slate-100 dark:border-white/5 mb-1 flex items-center justify-between gap-2 min-w-0">
@@ -1538,21 +1914,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.startAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(selectedHostUid, stoppedDbNames, {
                 title: CM.confirmStartAllDatabasesTitle,
                 description: CM.confirmStartAllDatabasesDesc,
                 confirmLabel: CM.startAllDatabases,
                 variant: 'primary',
-                run: async () => {
+                run: async (dbnames) => {
                   setLoadingText(CM.startingAllDatabasesMsg);
                   startAction();
                   try {
-                    const dbnames = databases
-                      .filter((db) => !activeDatabases.includes(db.dbname))
-                      .map((db) => db.dbname);
-                    const result = dbnames.length > 0
-                      ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
-                      : { succeeded: [], failed: [] };
+                    const result = await runAllDatabasesAction(dispatch, selectedHostUid, 'start', dbnames);
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
                     const report = bulkResultStatusModal(CM, {
@@ -1571,19 +1942,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.stopAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(selectedHostUid, runningDbNames, {
                 title: CM.confirmStopAllDatabasesTitle,
                 description: CM.confirmStopAllDatabasesDesc,
                 confirmLabel: CM.stopAllDatabases,
                 variant: 'danger',
-                run: async () => {
+                run: async (dbnames) => {
                   setLoadingText(CM.stoppingAllDatabasesMsg);
                   startAction();
                   try {
-                    const dbnames = [...activeDatabases];
-                    const result = dbnames.length > 0
-                      ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
-                      : { succeeded: [], failed: [] };
+                    const result = await runAllDatabasesAction(dispatch, selectedHostUid, 'stop', dbnames);
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
                     const report = bulkResultStatusModal(CM, {
@@ -1602,18 +1970,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.restartAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              requestActionConfirm({
+              confirmWithLoginSkips(selectedHostUid, runningDbNames, {
                 title: CM.confirmRestartAllDatabasesTitle,
                 description: CM.confirmRestartAllDatabasesDesc,
                 confirmLabel: CM.restartAllDatabases,
                 variant: 'danger',
-                run: async () => {
+                run: async (dbnames) => {
                   setLoadingText(CM.restartingAllDatabasesMsg);
                   startAction();
                   try {
-                    const { failed, skipped } = await restartDatabasesInBulk(
-                      dispatch, selectedHostUid, [...activeDatabases]
-                    );
+                    const { failed, skipped } = await runAllDatabasesAction(dispatch, selectedHostUid, 'restart', dbnames);
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
                     const report = bulkResultStatusModal(CM, {
@@ -1627,6 +1993,49 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   }
                 },
               });
+            }}
+          />
+          {(() => {
+            const allRows = databaseSelectionRows(
+              { database: { navigatorDatabasesByHost, navigatorActiveDatabasesByHost, haDbNamesByHost, loggedInDatabases } },
+              selectedHostUid
+            );
+            const loginTargets = splitByAction('login', allRows).targets;
+            const logoutTargets = splitByAction('logout', allRows).targets;
+            return (
+              <>
+                <MenuItem
+                  icon="login"
+                  label={CM.loginAllDatabases}
+                  disabled={loginTargets.length === 0}
+                  onClick={() => {
+                    setDbRootContextMenu(null);
+                    // Databases without saved credentials need a user and password.
+                    if (loginTargets.some((row) => !row.hasProfile)) {
+                      setSelectDatabasesModal({ initialSelected: loginTargets.map((row) => row.dbname) });
+                      return;
+                    }
+                    handleMultiDatabaseAction('login', loginTargets);
+                  }}
+                />
+                <MenuItem
+                  icon="logout"
+                  label={CM.logoutAllDatabases}
+                  disabled={logoutTargets.length === 0}
+                  onClick={() => {
+                    setDbRootContextMenu(null);
+                    handleMultiDatabaseAction('logout', logoutTargets);
+                  }}
+                />
+              </>
+            );
+          })()}
+          <MenuItem
+            icon="checklist"
+            label={CM.selectDatabasesMenu}
+            onClick={() => {
+              setDbRootContextMenu(null);
+              setSelectDatabasesModal({ initialSelected: [] });
             }}
           />
           <MenuDivider />
@@ -1801,7 +2210,19 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 });
               }}
             />
-          ) : (
+          ) : null}
+          {brokerContextMenu.state === 'ON' && (
+            <MenuItem
+              icon="restart_alt"
+              label={CM.restartBroker}
+              onClick={() => {
+                const bName = brokerContextMenu.broker;
+                setBrokerContextMenu(null);
+                handleMultiBrokerAction('restart', [{ name: bName, state: 'ON' }]);
+              }}
+            />
+          )}
+          {brokerContextMenu.state !== 'ON' && (
             <MenuItem
               icon="play_arrow"
               label={CM.startBroker}
@@ -1888,6 +2309,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="visibility"
             label={CM.viewAllLogs}
+            disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbLogContextMenu.db))}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(openTab(`all_db_logs:${selectedHostUid}:${dbLogContextMenu.db}`));
@@ -1899,6 +2321,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="refresh"
             label={CM.refresh}
+            disabled={!loggedInDatabases.includes(dbKey(selectedHostUid, dbLogContextMenu.db))}
             onClick={() => {
               if (selectedHostUid) {
                 dispatch(fetchDatabaseLogs({ hostUid: selectedHostUid, dbname: dbLogContextMenu.db }));
@@ -1993,6 +2416,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.refresh}
             onClick={() => {
               (databases || []).forEach(db => {
+                if (!loggedInDatabases.includes(dbKey(selectedHostUid, db.dbname))) return;
                 dispatch(fetchDatabaseLogs({ hostUid: selectedHostUid, dbname: db.dbname }));
               });
               setServerLogRootContextMenu(null);
@@ -2160,6 +2584,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem
             icon="visibility"
             label={CM.viewDatabase}
+            disabled={!spaceContextMenu.isLoggedIn}
             onClick={() => {
               dispatch(setActiveMainTab(`db_space:${selectedHostUid}:${spaceContextMenu.db}`));
               setSpaceContextMenu(null);
@@ -2303,10 +2728,24 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
       <CMSUserManagementModal />
       <EditCMSUserModal />
+      <SelectDatabasesModal
+        isOpen={!!selectDatabasesModal}
+        hostUid={selectedHostUid}
+        initialSelected={selectDatabasesModal?.initialSelected}
+        onClose={() => setSelectDatabasesModal(null)}
+        onAction={(action, rows, credentials) => {
+          setSelectDatabasesModal(null);
+          handleMultiDatabaseAction(action, rows, credentials);
+        }}
+      />
       <ConfirmDialog
         isOpen={stopServiceConfirm.isOpen}
         title={CM.stopServicesConfirmTitle}
-        description={CM.stopServicesConfirmDesc(stopServiceConfirm.serverName)}
+        description={withHaServiceNotes(
+          withLoginSkipWarning(CM.stopServicesConfirmDesc(stopServiceConfirm.serverName), stopServiceConfirm.skips || { count: 0 }),
+          stopServiceConfirm.hasHa,
+          { starts: false }
+        )}
         confirmLabel={CM.stopAllServices}
         variant="danger"
         onConfirm={() => {

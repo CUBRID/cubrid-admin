@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createAction } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { dbKey } from './dbKey';
@@ -94,6 +94,18 @@ export const stopAllDatabases = createAsyncThunk(
   }
 );
 
+export const runSelectedDatabasesAction = createAsyncThunk(
+  'database/runSelectedDatabasesAction',
+  async ({ hostUid, action, dbnames }, { rejectWithValue, fulfillWithValue }) => {
+    try {
+      const response = await databaseApi.runSelectedDatabasesAction(hostUid, action, dbnames);
+      return fulfillWithValue(response, { seq: nextSeq() });
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to ${action} databases`);
+    }
+  }
+);
+
 export const loginDatabase = createAsyncThunk(
   'database/loginDatabase',
   async ({ hostUid, dbname, payload }, { rejectWithValue, fulfillWithValue }) => {
@@ -143,6 +155,12 @@ export const deleteDatabaseProfile = createAsyncThunk(
     }
   }
 );
+
+// Raised once per database that leaves loggedInDatabases, whatever removed
+// it (logout, an expired login, a start-info sync, ...) — see
+// useLoggedOutDbCleanup. Slices holding per-db data fetched under that login
+// drop it on this. Payload: { hostUid, dbname }.
+export const databaseLoginLost = createAction('database/loginLost');
 
 // The client just changed its own belief about this db's login (login,
 // logout, a gated start/stop, ...). Remember when (`seq`, taken as the
@@ -240,8 +258,14 @@ const parseDbResponse = (state, payload, hostUid, { updateLive, updateNavigator,
       ? [...rawList, ...missingActiveNames.map((dbname) => {
         const activeEntry = (Array.isArray(activeFound) ? activeFound : [activeFound])
           .find((a) => a && typeof a === 'object' && a.dbname === dbname);
+        // The server sets the login fields on active-list entries too.
         return activeEntry && 'isLoggedIn' in activeEntry
-          ? { dbname, isProfileExists: false, isLoggedIn: activeEntry.isLoggedIn }
+          ? {
+            dbname,
+            isProfileExists: activeEntry.isProfileExists === true,
+            isLoggedIn: activeEntry.isLoggedIn,
+            isLoggedOut: activeEntry.isLoggedOut === true,
+          }
           : { dbname, isProfileExists: false };
       })]
       : rawList;
@@ -526,6 +550,18 @@ const databaseCoreSlice = createSlice({
       .addCase(stopAllDatabases.pending, (state) => {
         state.actionLoading = true;
         state.error = null;
+      })
+      .addCase(runSelectedDatabasesAction.pending, (state) => {
+        state.actionLoading = true;
+        state.error = null;
+      })
+      .addCase(runSelectedDatabasesAction.fulfilled, (state, action) => {
+        state.actionLoading = false;
+        markBulkSucceededLoggedIn(state, action.meta.arg?.hostUid, action.payload?.succeeded, action.meta.seq);
+      })
+      .addCase(runSelectedDatabasesAction.rejected, (state, action) => {
+        state.actionLoading = false;
+        state.error = action.payload;
       })
       .addCase(stopAllDatabases.fulfilled, (state, action) => {
         state.actionLoading = false;

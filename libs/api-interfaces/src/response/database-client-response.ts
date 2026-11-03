@@ -6,8 +6,10 @@ export type StartInfoClientResponse = {
   activelist: {
     active: {
       dbname: string;
-      /** See dblist's isLoggedIn. */
+      /** See dblist's fields of the same names. */
+      isProfileExists: boolean;
       isLoggedIn: boolean;
+      isLoggedOut: boolean;
     }[];
   };
   dblist: {
@@ -20,6 +22,8 @@ export type StartInfoClientResponse = {
        * for this database — same test as ensureDbLogin's cache hit.
        */
       isLoggedIn: boolean;
+      /** The user logged out of it (its saved login is kept but not used). */
+      isLoggedOut: boolean;
     }[];
   };
   /**

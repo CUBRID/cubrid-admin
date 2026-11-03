@@ -18,7 +18,8 @@ import { databaseApi } from './databaseApi';
 import reducer, {
   startDatabase, stopDatabase, startAllDatabases, stopAllDatabases, fetchDatabaseStartInfo,
 } from './databaseCoreSlice';
-import { restartDatabasesInBulk, groupBulkFailures, bulkResultStatusModal } from './databaseBulkActions';
+import { restartDatabasesInBulk, groupBulkFailures, bulkResultStatusModal, runAllDatabasesAction } from './databaseBulkActions';
+import { planLoginCheckedAction, runningDbNames, stoppedDbNames } from './loginSkips';
 import { CM } from '../../constants/cmLabels';
 import { CM_KO } from '../../constants/cmLabels.ko';
 
@@ -262,5 +263,61 @@ describe('Start All / Stop All: skipped databases and HA login state', () => {
     const { loggedInDatabases } = store.getState();
     expect(loggedInDatabases).toContain('hostA:demodb');
     expect(loggedInDatabases).toContain('hostA:hadb1');
+  });
+});
+
+describe('Start/Stop/Restart All run on the start-info read made when the confirm opens', () => {
+  // Bug: the menu actions took their targets from the lists rendered before
+  // the confirm. After a failed poll or a host reset those were empty, and
+  // confirming sent no request at all.
+  const startInfo = {
+    dblist: { dbs: [{ dbname: 'demodb', isLoggedIn: true }, { dbname: 'testdb', isLoggedIn: true }] },
+    activelist: { active: [{ dbname: 'demodb', isLoggedIn: true }] },
+  };
+  // Nothing rendered for the host: no lists at all.
+  const emptyStore = () => configureStore({ reducer });
+
+  it('stops the databases the read shows running, with nothing rendered', async () => {
+    databaseApi.getStartInfo.mockResolvedValue(startInfo);
+    databaseApi.stopAllDatabases.mockResolvedValue({ succeeded: ['demodb'], failed: [], skipped: [] });
+    const store = emptyStore();
+
+    const plan = await store.dispatch(planLoginCheckedAction('h1', runningDbNames));
+    expect(plan).toMatchObject({ outcome: 'confirm', targets: ['demodb'] });
+    await runAllDatabasesAction(store.dispatch, 'h1', 'stop', plan.targets);
+
+    expect(databaseApi.stopAllDatabases).toHaveBeenCalledWith('h1', ['demodb']);
+  });
+
+  it('starts the databases the read shows stopped', async () => {
+    databaseApi.getStartInfo.mockResolvedValue(startInfo);
+    databaseApi.startAllDatabases.mockResolvedValue({ succeeded: ['testdb'], failed: [], skipped: [] });
+    const store = emptyStore();
+
+    const plan = await store.dispatch(planLoginCheckedAction('h1', stoppedDbNames));
+    await runAllDatabasesAction(store.dispatch, 'h1', 'start', plan.targets);
+
+    expect(databaseApi.startAllDatabases).toHaveBeenCalledWith('h1', ['testdb']);
+  });
+
+  it('plans nothing to confirm when the read fails', async () => {
+    databaseApi.getStartInfo.mockRejectedValue(new Error('Network Error'));
+
+    expect(await emptyStore().dispatch(planLoginCheckedAction('h1', runningDbNames))).toEqual({ outcome: 'readFailed' });
+  });
+
+  it('plans nothing to confirm when nothing applies', async () => {
+    databaseApi.getStartInfo.mockResolvedValue({ ...startInfo, activelist: { active: [] } });
+
+    expect(await emptyStore().dispatch(planLoginCheckedAction('h1', runningDbNames))).toEqual({ outcome: 'noTargets' });
+  });
+
+  it('plans nothing to confirm when every target would be skipped for no login', async () => {
+    databaseApi.getStartInfo.mockResolvedValue({
+      dblist: { dbs: [{ dbname: 'demodb', isLoggedIn: false }] },
+      activelist: { active: [{ dbname: 'demodb', isLoggedIn: false }] },
+    });
+
+    expect(await emptyStore().dispatch(planLoginCheckedAction('h1', runningDbNames))).toEqual({ outcome: 'allSkipped' });
   });
 });

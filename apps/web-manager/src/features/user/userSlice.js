@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { getStoredLocale, setStoredLocale } from '../../constants/useCM';
 import { userApi } from './userApi';
 import { dbKey } from '../database/dbKey';
+import { isDbLoginGone, dbOfLoginGone } from '../database/dbLoginGone';
 
 export const DEFAULT_PREFERENCES = {
   dashboardInterval: 3,
@@ -290,12 +291,12 @@ const userSlice = createSlice({
         state.error = action.payload;
       })
       // Drop cached database users once a database's dbmt login is gone
-      // (explicit logout or forgetting its saved credentials) — otherwise
-      // the stale list from the old login stays visible after logout.
+      // (see dbLoginGone.js) — otherwise the stale list from the old login
+      // stays visible after logout.
       .addMatcher(
-        (action) => action.type === 'database/logoutDatabase/fulfilled' || action.type === 'database/deleteDatabaseProfile/fulfilled',
+        isDbLoginGone,
         (state, action) => {
-          const { hostUid, dbname } = action.meta.arg;
+          const { hostUid, dbname } = dbOfLoginGone(action);
           const key = dbKey(hostUid, dbname);
           delete state.databaseUsers[key];
           delete state.databaseUsersLoading[key];

@@ -5,8 +5,14 @@ import {
   GetCreatedbInfoClientResponse,
   StartInfoClientResponse,
 } from '@api-interfaces';
-import { SaveDatabaseProfileDto, DeleteDatabaseDto, CreateDatabaseWithConfigDto, StartStopAllDatabasesDto } from '@type/index';
-import { BulkDatabaseActionResult, DatabaseLifecycleService } from './database-lifecycle.service';
+import {
+  SaveDatabaseProfileDto,
+  DeleteDatabaseDto,
+  CreateDatabaseWithConfigDto,
+  StartStopAllDatabasesDto,
+  SelectedDatabasesActionDto,
+} from '@type/index';
+import { BulkDatabaseActionResult, DatabaseLifecycleService, ServiceRestartResult } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
 
@@ -150,6 +156,31 @@ export class DatabaseLifecycleController {
   }
 
   /**
+   * Start, stop or restart exactly the databases in the body (multi-select).
+   * Unlike start-all/stop-all, HA databases outside the list are untouched.
+   *
+   * @route POST /:hostUid/database/bulk
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @param body Action and database names
+   * @returns Per-database succeeded/failed/skipped outcome
+   * @example
+   * // POST /host-uid/database/bulk
+   * // Body: { "action": "restart", "dbnames": ["demodb", "testdb"] }
+   */
+  @Post('bulk')
+  async runSelectedDatabasesAction(
+    @Request() req,
+    @Param('hostUid') hostUid: string,
+    @Body() body: SelectedDatabasesActionDto
+  ): Promise<BulkDatabaseActionResult> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Bulk ${body.action} of databases (${body.dbnames.join(', ')}) on host: ${hostUid}`);
+    return await this.lifecycleService.runSelectedDatabasesAction(userId, hostUid, body.action, body.dbnames);
+  }
+
+  /**
    * Start every database in the request body on a host, as one whole-service
    * operation rather than N independent per-database calls — HA-configured
    * databases are started one by one with `ha_start <db>`.
@@ -242,6 +273,29 @@ export class DatabaseLifecycleController {
 
     this.logger.log(`Stopping whole service on host: ${hostUid}`);
     return await this.lifecycleService.stopWholeService(userId, hostUid);
+  }
+
+  /**
+   * Restart the whole service on a host in one call: stop, start, then start
+   * again the databases that were running before (see
+   * DatabaseLifecycleService.restartWholeService).
+   *
+   * @route POST /:hostUid/database/service/restart
+   * @param req Express request (contains authenticated user)
+   * @param hostUid Host unique identifier from path parameter
+   * @returns Stop and start failures, and the databases not started again
+   * @example
+   * // POST /host-uid/database/service/restart
+   */
+  @Post('service/restart')
+  async restartWholeService(
+    @Request() req,
+    @Param('hostUid') hostUid: string
+  ): Promise<ServiceRestartResult> {
+    const userId = req.user.sub;
+
+    this.logger.log(`Restarting whole service on host: ${hostUid}`);
+    return await this.lifecycleService.restartWholeService(userId, hostUid);
   }
 
   /**

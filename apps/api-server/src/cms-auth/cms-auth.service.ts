@@ -6,6 +6,7 @@ import { checkCmsStatusError } from '@common';
 import { HostInfo, LoginCmsRequest, LoginCmsResponse, User } from '@type/index';
 import { getHost } from '@host/host-group.util';
 import { UserRepositoryService } from '@repository';
+import { DatabaseUserService } from '@database/user/database-user.service';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import type { CmsHostLoginClientResponse } from '@api-interfaces';
@@ -34,7 +35,8 @@ export class CmsAuthService {
     private readonly client: CmsHttpsClientService,
     private readonly repository: UserRepositoryService,
     private readonly cmsConfigService: CmsConfigService,
-    private readonly haService: HaService
+    private readonly haService: HaService,
+    private readonly databaseUserService: DatabaseUserService
   ) {}
 
   /**
@@ -112,6 +114,9 @@ export class CmsAuthService {
       delete persisted.cmsTokenActiveTimeSec;
       return user;
     });
+    // The new token ended every DB login CMS held for the old one. Started
+    // before anything else awaits, so a DB request in between waits for it.
+    this.databaseUserService.restoreDbLoginsAfterHostLogin(userId, uid, token);
     await this.rememberTokenActiveTime(userId, uid, token);
 
     const haInfo = await this.getHaInfo(userId, uid);

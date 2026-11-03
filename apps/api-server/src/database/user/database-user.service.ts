@@ -33,6 +33,12 @@ import {
   UserVerifyCmsResponse,
 } from '@type/cms-response';
 
+/** A DB login the user made, as ensureDbLogin trusts it. No password is kept. */
+type DbLogin = { loggedInAt: number; hostToken: string; dbUser: string };
+
+/** Bounds each re-login after a host login, so one stuck database can't hold the others' requests. */
+const DBMT_RELOGIN_TIMEOUT_MS = 30_000;
+
 /** How long a dbmtuserlogin is trusted before ensureDbLogin re-checks it — see ensureDbLogin's doc comment. Not yet validated against real usage; tune freely. */
 const DBMT_LOGIN_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -50,7 +56,13 @@ export class DatabaseUserService extends BaseService {
   // valid", we can only track "we believe we last (re-)established it here".
   // Lost on api-server restart, which is safe: worst case is one redundant
   // re-login next time.
-  private readonly dbLoginCache = new Map<string, { loggedInAt: number; hostToken: string }>();
+  private readonly dbLoginCache = new Map<string, DbLogin>();
+  // Bumped by every logout, same keys. A login that started before a logout
+  // finished must not write the cache once its CMS answer arrives.
+  private readonly logoutGenerations = new Map<string, number>();
+  // Re-logins started by a host login, same keys; ensureDbLogin waits for
+  // its own database's.
+  private readonly pendingRelogins = new Map<string, Promise<void>>();
 
   constructor(
     private readonly repository: UserRepositoryService,
@@ -77,49 +89,111 @@ export class DatabaseUserService extends BaseService {
    * relies on the server-side conlist cache instead of sending its own
    * dbuser/dbpasswd (userinfo/updateuser/createuser/deleteuser, lockdb,
    * gettransactioninfo on CUBRID 11+, killtransaction when no password is
-   * supplied). The cache here only tracks "we believe we recently
-   * (re-)logged in" — it goes stale whenever the host itself is re-logged
-   * into (token changed, so the conlist entry keyed to our old outbound
-   * connection is orphaned) or after DBMT_LOGIN_TTL_MS, since CMS never
-   * tells us the conlist entry went stale on its own.
+   * supplied). The cache here only tracks "we believe we recently logged
+   * in" — it goes stale whenever the host itself is re-logged into (token
+   * changed, so the conlist entry keyed to our old outbound connection is
+   * orphaned) or after DBMT_LOGIN_TTL_MS, since CMS never tells us the
+   * conlist entry went stale on its own.
    *
-   * If the stored profile's password turns out to be wrong (CUBRID's own
-   * "Incorrect or missing password." error), the profile is deleted so the
-   * next attempt falls through to the manual Login Database flow instead of
-   * repeatedly failing silently against a dead password.
-   *
-   * No-ops (and never touches the cache) when no profile is stored for this
-   * db — the resulting ValidationError.MissingDBCredentials is meant to
-   * propagate and prompt for manual login, same as today.
+   * Only a login the user made counts: a saved profile is never used to log
+   * in here. Without a live login this throws MissingDBCredentials with
+   * `reason` 'loggedOut' (the user logged out) or 'notLoggedIn', so nothing
+   * is read from or done to a database the user isn't logged in to.
    */
-  async ensureDbLogin(
+  async ensureDbLogin(userId: string, hostUid: string, dbname: string): Promise<void> {
+    await this.pendingRelogins.get(`${userId}:${hostUid}:${dbname}`);
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    if (this.isDbLoginActive(userId, hostUid, dbname, host.token)) return;
+    const reason = host.dbProfiles?.[dbname]?.loggedOut ? 'loggedOut' : 'notLoggedIn';
+    throw ValidationError.MissingDBCredentials(dbname, ['id', 'password'], {
+      reason,
+      message: reason === 'loggedOut'
+        ? `Logged out of database ${dbname}. Log in to it first.`
+        : `Not logged in to database ${dbname}. Log in to it first.`,
+    });
+  }
+
+  /**
+   * After the host was logged in again (new CMS token), logs the user back in
+   * to each database whose login was live under the old token and that has
+   * a saved profile for the same database user — CMS keeps DB logins per
+   * host login, so they all ended. The login keeps its original time, so it
+   * still expires when it would have. A database without such a profile,
+   * logged out of, or whose re-login fails is left not logged in; no
+   * database gets a login it didn't have. Runs in the background; each
+   * re-login is bounded by DBMT_RELOGIN_TIMEOUT_MS, and ensureDbLogin for a
+   * database waits for its own. Must be called before anything else awaits
+   * after the token is stored, so no request sees the gap.
+   */
+  restoreDbLoginsAfterHostLogin(userId: string, hostUid: string, newToken: string): void {
+    const prefix = `${userId}:${hostUid}:`;
+    for (const [key, login] of this.dbLoginCache) {
+      if (!key.startsWith(prefix) || login.hostToken === newToken) continue;
+      if (Date.now() - login.loggedInAt >= DBMT_LOGIN_TTL_MS) {
+        this.dbLoginCache.delete(key);
+        continue;
+      }
+      const dbname = key.slice(prefix.length);
+      const generation = this.logoutGeneration(userId, hostUid, dbname);
+      // After an earlier re-login of the same database (an earlier host login).
+      const earlier = this.pendingRelogins.get(key) ?? Promise.resolve();
+      const relogin = earlier.then(() => this.relogin(userId, hostUid, dbname, login, newToken, generation));
+      this.pendingRelogins.set(key, relogin);
+      void relogin.then(() => {
+        if (this.pendingRelogins.get(key) === relogin) this.pendingRelogins.delete(key);
+      });
+    }
+  }
+
+  /** Whether a re-login of this database after a host login is still running. */
+  isDbLoginRestoring(userId: string, hostUid: string, dbname: string): boolean {
+    return this.pendingRelogins.has(`${userId}:${hostUid}:${dbname}`);
+  }
+
+  /**
+   * One database of restoreDbLoginsAfterHostLogin; never rejects. `login` is
+   * the cache entry it replaces: it only drops or replaces that entry (or
+   * fills an empty slot), never a login made or restored in the meantime.
+   */
+  private async relogin(
     userId: string,
     hostUid: string,
-    dbname: string
-  ): Promise<{ reauthenticated: boolean }> {
-    const host = await this.hostService.findHostInternal(userId, hostUid);
-
-    if (this.isDbLoginActive(userId, hostUid, dbname, host.token)) {
-      return { reauthenticated: false };
-    }
-
-    if (!host.dbProfiles?.[dbname]) {
-      throw ValidationError.MissingDBCredentials(dbname, ['id', 'password']);
-    }
-
+    dbname: string,
+    login: DbLogin,
+    newToken: string,
+    generation: number
+  ): Promise<void> {
+    const key = `${userId}:${hostUid}:${dbname}`;
+    const stillOld = () => {
+      const current = this.dbLoginCache.get(key);
+      return current === undefined || current === login;
+    };
+    const dropOld = () => {
+      if (this.dbLoginCache.get(key) === login) this.dbLoginCache.delete(key);
+    };
     try {
-      // No clientId/clientPassword — DBAuthResolver falls through to the
-      // stored profile, and loginDatabase itself freshens the cache on
-      // success.
-      await this.loginDatabase(userId, hostUid, dbname);
-    } catch (err) {
-      if (this.isBadDbPasswordError(err)) {
-        await this.deleteDbProfile(userId, hostUid, dbname);
+      if (!stillOld()) return;
+      const host = await this.hostService.findHostInternal(userId, hostUid);
+      const profile = host.dbProfiles?.[dbname];
+      if (!profile || profile.loggedOut || profile.id !== login.dbUser || host.token !== newToken) {
+        dropOld();
+        return;
       }
-      throw err;
+      await this.executeCmsRequest<LoginDBCmsRequest, BaseCmsResponse>(
+        userId,
+        hostUid,
+        { task: 'dbmtuserlogin', targetid: host.id, dbname, dbuser: profile.id, dbpasswd: profile.password },
+        { timeoutMs: DBMT_RELOGIN_TIMEOUT_MS }
+      );
+      // A logout meanwhile already dropped the login; a newer host login
+      // restores it itself; a login made meanwhile is kept.
+      if (this.logoutGeneration(userId, hostUid, dbname) !== generation) return;
+      if ((await this.hostService.findHostInternal(userId, hostUid)).token !== newToken) return;
+      if (!stillOld()) return;
+      this.dbLoginCache.set(key, { loggedInAt: login.loggedInAt, hostToken: newToken, dbUser: login.dbUser });
+    } catch {
+      dropOld();
     }
-
-    return { reauthenticated: true };
   }
 
   /**
@@ -134,23 +208,9 @@ export class DatabaseUserService extends BaseService {
   }
 
   /**
-   * Detects CUBRID's own "Incorrect or missing password." message
-   * (ER_AU_INVALID_PASSWORD, engine error -171) — the one reliable signal
-   * that a dbmtuserlogin failure was genuinely a bad password rather than a
-   * transient/unrelated one (host unreachable, database not found, etc).
-   * Fragile by nature: depends on the engine's English message catalog
-   * wording, so a locale or wording change silently stops matching — that
-   * just means we stop pruning bad profiles, not a hard failure.
-   */
-  private isBadDbPasswordError(err: unknown): boolean {
-    const message = (err as { additionalData?: { message?: unknown } })?.additionalData?.message;
-    return typeof message === 'string' && message.includes('Incorrect or missing password');
-  }
-
-  /**
-   * Forgets a database's stored login profile — used both automatically
-   * (ensureDbLogin, after a confirmed bad-password failure) and directly for
-   * a user-initiated "forget saved credentials" action. Also drops the
+   * Forgets a database's stored login profile — for a user-initiated
+   * "forget saved credentials" action, and when a database is deleted or
+   * renamed. Also drops the
    * ensureDbLogin cache entry, so the next action re-checks for a profile
    * instead of assuming the login it just forgot is still good.
    */
@@ -175,15 +235,56 @@ export class DatabaseUserService extends BaseService {
    * There's no CMS-side counterpart to actually invalidate the server's own
    * conlist entry (no such API exists — see ensureDbLogin's doc comment on
    * conlist having no expiry/removal mechanism at all), so this is purely
-   * our own bookkeeping. The next action will re-authenticate using the
-   * profile if one is still stored, or prompt for manual login otherwise.
+   * our own bookkeeping. A stored profile is marked loggedOut, so a refused
+   * or skipped action can tell "logged out" from "not logged in yet"; the
+   * mark is stored with the profile so it outlives an api-server restart.
+   * Logging in clears it.
    */
   async logoutDatabase(userId: string, hostUid: string, dbname: string): Promise<void> {
-    this.dbLoginCache.delete(`${userId}:${hostUid}:${dbname}`);
+    const key = `${userId}:${hostUid}:${dbname}`;
+    await this.setProfileLoggedOut(userId, hostUid, dbname, true);
+    // In one synchronous step after the mark is stored: a login that started
+    // earlier fails its generation check, and one that already finished is
+    // dropped here. One that starts from now on reads the mark.
+    this.logoutGenerations.set(key, this.logoutGeneration(userId, hostUid, dbname) + 1);
+    this.dbLoginCache.delete(key);
+    // A re-login still running can't bring it back (its generation check),
+    // so stop counting it as restoring and stop making requests wait for it.
+    this.pendingRelogins.delete(key);
+  }
+
+  private logoutGeneration(userId: string, hostUid: string, dbname: string): number {
+    return this.logoutGenerations.get(`${userId}:${hostUid}:${dbname}`) ?? 0;
+  }
+
+  /**
+   * With `generation`, only if no logout happened since it was recorded —
+   * checked under the user lock, so a logout that lands between a login's
+   * CMS answer and this write keeps its mark.
+   */
+  private async setProfileLoggedOut(
+    userId: string,
+    hostUid: string,
+    dbname: string,
+    loggedOut: boolean,
+    generation?: number
+  ): Promise<void> {
+    await this.repository.atomicUpdateUser(userId, async (user) => {
+      if (generation !== undefined && this.logoutGeneration(userId, hostUid, dbname) !== generation) return user;
+      const profile = getHost(user, hostUid)?.dbProfiles?.[dbname];
+      if (!profile) return user;
+      if (loggedOut) profile.loggedOut = true;
+      else delete profile.loggedOut;
+      return user;
+    });
   }
 
   /**
    * Login to a database using profile or client-provided credentials.
+   *
+   * The logout generation is read before the host lookup. If the user
+   * logged out while this login waited for CMS, it fails instead of logging
+   * the database back in, since the logout came last.
    */
   @HandleCmsErrors()
   async loginDatabase(
@@ -193,6 +294,7 @@ export class DatabaseUserService extends BaseService {
     clientId?: string,
     clientPassword?: string
   ): Promise<boolean> {
+    const generation = this.logoutGeneration(userId, hostUid, dbname);
     const host = await this.hostService.findHostInternal(userId, hostUid);
     const dbAuth = DBAuthResolver.resolve(host, dbname, clientId, clientPassword);
 
@@ -210,13 +312,21 @@ export class DatabaseUserService extends BaseService {
       cmsRequest
     );
 
+    if (this.logoutGeneration(userId, hostUid, dbname) !== generation) {
+      throw DatabaseError.LoginDatabaseFailed({ dbname, message: 'Logged out while logging in.' });
+    }
+
     // Freshen ensureDbLogin's cache regardless of which credentials were
     // used (profile or client-provided) — any successful dbmtuserlogin
     // establishes the same server-side conlist state it checks for.
     this.dbLoginCache.set(`${userId}:${hostUid}:${dbname}`, {
       loggedInAt: Date.now(),
       hostToken: host.token,
+      dbUser: dbAuth.id,
     });
+    if (host.dbProfiles?.[dbname]?.loggedOut) {
+      await this.setProfileLoggedOut(userId, hostUid, dbname, false, generation);
+    }
 
     return true;
   }

@@ -43,6 +43,7 @@ export abstract class BaseService {
    * @param userId User ID from JWT
    * @param hostUid Host unique identifier
    * @param cmsRequest CMS request object (token will be added automatically)
+   * @param options timeoutMs bounds the HTTP request (no retry)
    * @returns CMS response
    * @throws Error If host not found, request fails, or CMS status is fail
    */

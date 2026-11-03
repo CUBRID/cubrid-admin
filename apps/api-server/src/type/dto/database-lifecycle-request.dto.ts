@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
   IsArray,
   IsBoolean,
   IsDefined,
@@ -36,6 +37,16 @@ export class SaveDatabaseProfileDto {
 
 export class StartStopAllDatabasesDto {
   @IsArray()
+  @IsString({ each: true })
+  dbnames: string[];
+}
+
+export class SelectedDatabasesActionDto {
+  @IsIn(['start', 'stop', 'restart'])
+  action: 'start' | 'stop' | 'restart';
+
+  @IsArray()
+  @ArrayNotEmpty()
   @IsString({ each: true })
   dbnames: string[];
 }

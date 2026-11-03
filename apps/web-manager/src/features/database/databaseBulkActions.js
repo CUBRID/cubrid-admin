@@ -43,6 +43,14 @@ export async function restartDatabasesInBulk(dispatch, hostUid, dbnames) {
   };
 }
 
+// Start/Stop/Restart All Databases on `dbnames`, the targets planned from the
+// start-info read made when the confirm opened (planLoginCheckedAction).
+export async function runAllDatabasesAction(dispatch, hostUid, action, dbnames) {
+  if (action === 'restart') return restartDatabasesInBulk(dispatch, hostUid, dbnames);
+  const thunk = action === 'start' ? startAllDatabases : stopAllDatabases;
+  return dispatch(thunk({ hostUid, dbnames })).unwrap();
+}
+
 // Active dbnames per a fresh start-info read, or null if it can't be read
 // (or comes back malformed) — unknown, not "nothing is running".
 async function readActiveDbnames(dispatch, hostUid) {
@@ -73,7 +81,10 @@ export function groupBulkFailures(failed) {
 // short headline plus tables — failures (grouped per database, with the
 // stop/start phase for a restart) and skipped HA databases kept apart.
 // null when every database succeeded.
-export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipped = [], showPhase = false }) {
+export function bulkResultStatusModal(CM, {
+  title, failedMsg, failed = [], skipped = [], showPhase = false,
+  nameLabel = CM.database, skippedMsg = CM.someDatabasesSkippedMsg,
+}) {
   const grouped = groupBulkFailures(failed || []);
   const skippedList = skipped || [];
   if (grouped.length === 0 && skippedList.length === 0) return null;
@@ -82,7 +93,7 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
   if (grouped.length > 0) {
     tables.push({
       title: CM.failureTableFailedTitle,
-      nameLabel: CM.database,
+      nameLabel,
       showPhase,
       variant: 'failed',
       testId: 'bulk-failed-table',
@@ -95,10 +106,10 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
   if (skippedList.length > 0) {
     tables.push({
       title: CM.failureTableSkippedTitle,
-      nameLabel: CM.database,
+      nameLabel,
       variant: 'skipped',
       testId: 'bulk-skipped-table',
-      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: sk.reason }] })),
+      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: CM.bulkSkipReasonLabel?.(sk.reason) ?? sk.reason }] })),
     });
   }
   return {
@@ -106,8 +117,30 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
     title,
     message: [
       grouped.length > 0 ? failedMsg(grouped.length) : '',
-      skippedList.length > 0 ? CM.someDatabasesSkippedMsg(skippedList.length) : '',
+      skippedList.length > 0 ? skippedMsg(skippedList.length) : '',
     ].filter(Boolean).join(' '),
     tables,
+  };
+}
+
+// Skipped-databases table for a service start/stop/restart result. The
+// server sent these nothing, so each is still as it was: `action` 'stop'
+// leaves them running, 'start' leaves them stopped; a restart's `phase` says
+// which step skipped it.
+export function serviceSkippedTable(CM, skipped, action) {
+  const state = (phase) => {
+    if (phase === 'stop' || action === 'stop') return CM.skippedStillRunning;
+    if (action === 'restart') return CM.skippedStoppedNotStarted;
+    return CM.skippedNotStarted;
+  };
+  return {
+    title: CM.failureTableSkippedTitle,
+    nameLabel: CM.database,
+    variant: 'skipped',
+    testId: 'service-skipped-table',
+    rows: (skipped || []).map(({ name, reason, phase }) => ({
+      name,
+      reasons: [{ reason: `${CM.bulkSkipReasonLabel?.(reason) ?? reason} · ${state(phase)}` }],
+    })),
   };
 }
