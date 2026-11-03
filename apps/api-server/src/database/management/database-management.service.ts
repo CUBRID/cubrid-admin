@@ -1,3 +1,4 @@
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import {
   copyVolumePathKey,
   AddVolDbRequest,
@@ -80,7 +81,8 @@ export class DatabaseManagementService extends BaseService {
     hostService: HostService,
     cmsClient: CmsHttpsClientService,
     private readonly databaseInfoService: DatabaseInfoService,
-    private readonly databaseUserService: DatabaseUserService
+    private readonly databaseUserService: DatabaseUserService,
+    private readonly databaseConfigService: DatabaseConfigService
   ) {
     super(hostService, cmsClient);
   }
@@ -534,11 +536,23 @@ export class DatabaseManagementService extends BaseService {
     hostUid: string,
     dbname: string,
     request: RenameDatabaseRequest
-  ): Promise<StartInfoClientResponse> {
+  ): Promise<StartInfoClientResponse & { warnings?: string[] }> {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
+    const warnings = await this.updateAutoStartAfterRename(userId, hostUid, dbname, request.rename);
     await this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename);
-    return await this.getDatabaseStartInfo(userId, hostUid);
+    return { ...await this.getDatabaseStartInfo(userId, hostUid), ...(warnings.length ? { warnings } : {}) };
+  }
+
+  /** The physical rename is already committed: report config failure without retrying it. */
+  async updateAutoStartAfterRename(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
+    try {
+      await this.databaseConfigService.renameAutoStart(userId, hostUid, oldName, newName);
+      return [];
+    } catch (error: unknown) {
+      this.logger.warn(`Failed to update autostart after renaming ${oldName} to ${newName}: ${String(error)}`);
+      return [`Database renamed from "${oldName}" to "${newName}", but the autostart list in cubrid.conf could not be updated. Replace the old name in [service] server with the new name before relying on autostart. Do not repeat the rename.`];
+    }
   }
 
   /**
