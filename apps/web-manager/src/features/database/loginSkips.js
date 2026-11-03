@@ -101,6 +101,28 @@ export const readStartInfoDatabases = (hostUid) => async (dispatch) => {
   }
 };
 
+export const runningDbNames = (databases) => databases.filter((db) => db.running).map((db) => db.dbname);
+export const stoppedDbNames = (databases) => databases.filter((db) => !db.running).map((db) => db.dbname);
+
+/**
+ * Plans a bulk or service action from a fresh start-info read, made as its
+ * confirm opens. The targets come from that read, so the action runs on what
+ * the host has now, never on lists rendered earlier (they can be empty by
+ * then, after a failed poll or a host reset). Resolves `{ outcome }` of
+ * 'readFailed', 'noTargets' or 'allSkipped' (with blockWhenAllSkipped, every
+ * target would be skipped for no login) when there is nothing to confirm,
+ * else `{ outcome: 'confirm', targets, skips }`.
+ */
+export const planLoginCheckedAction = (hostUid, pickTargets, { blockWhenAllSkipped = true } = {}) => async (dispatch) => {
+  const databases = await dispatch(readStartInfoDatabases(hostUid));
+  if (!databases) return { outcome: 'readFailed' };
+  const targets = pickTargets(databases);
+  if (targets.length === 0) return { outcome: 'noTargets' };
+  const skips = loginSkipsOf(databases, targets);
+  if (blockWhenAllSkipped && skips.count === targets.length) return { outcome: 'allSkipped' };
+  return { outcome: 'confirm', targets, skips };
+};
+
 /**
  * The cubrid.conf `[service]` autostart list (the last `server=`), empty when
  * `service=` leaves out server. Read with the engine's own parsing rules

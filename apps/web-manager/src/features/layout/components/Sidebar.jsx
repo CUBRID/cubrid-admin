@@ -19,12 +19,12 @@ import {
   refreshServerList
 } from '../../host/hostSlice';
 import {
-  fetchDatabaseStartInfo, startDatabase, stopDatabase, startAllDatabases, stopAllDatabases,
+  fetchDatabaseStartInfo, startDatabase, stopDatabase,
   loginDatabase, logoutDatabase, deleteDatabaseProfile,
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
-import { restartDatabasesInBulk, bulkResultStatusModal, serviceSkippedTable } from '../../database/databaseBulkActions';
-import { autoStartServers, haModeOn, loginSkipsOf, readStartInfoDatabases, restartLoginSkips, serviceDatabases, serviceStartTargets, serviceStopTargets } from '../../database/loginSkips';
+import { bulkResultStatusModal, runAllDatabasesAction, serviceSkippedTable } from '../../database/databaseBulkActions';
+import { autoStartServers, haModeOn, loginSkipsOf, planLoginCheckedAction, readStartInfoDatabases, restartLoginSkips, runningDbNames, serviceDatabases, serviceStartTargets, serviceStopTargets, stoppedDbNames } from '../../database/loginSkips';
 import { hostApi } from '../../host/hostApi';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
 import { restartHostService } from '../../host/hostServiceRestart';
@@ -206,25 +206,31 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   ) : description);
   // Confirms a bulk or service action after naming the databases it will
   // skip because the user isn't logged in to them, from a start-info read
-  // made as the dialog opens (the server skips them too). With
-  // blockWhenAllSkipped, nothing runs when every target would be skipped.
-  const confirmWithLoginSkips = async (hostUid, pickTargets, config, { blockWhenAllSkipped = true } = {}) => {
-    const databases = await dispatch(readStartInfoDatabases(hostUid));
-    const targets = databases ? pickTargets(databases) : [];
-    const skips = loginSkipsOf(databases || [], targets);
-    if (blockWhenAllSkipped && targets.length > 0 && skips.count === targets.length) {
-      dispatch(showStatusModal({ type: 'info', title: config.confirmLabel, message: CM.noDatabasesToRunMsg }));
+  // made as the dialog opens (the server skips them too). `config.run` gets
+  // the targets picked from that read. Without a read, or with nothing to
+  // run, no dialog opens; a notice says why instead.
+  const confirmWithLoginSkips = async (hostUid, pickTargets, config, options) => {
+    const plan = await dispatch(planLoginCheckedAction(hostUid, pickTargets, options));
+    const notice = {
+      readFailed: { type: 'error', message: CM.databaseListReadFailedMsg },
+      noTargets: { type: 'info', message: CM.noTargetDatabasesMsg },
+      allSkipped: { type: 'info', message: CM.noDatabasesToRunMsg },
+    }[plan.outcome];
+    if (notice) {
+      dispatch(showStatusModal({ ...notice, title: config.confirmLabel }));
       return;
     }
-    requestActionConfirm({ ...config, description: withLoginSkipWarning(config.description, skips) });
+    requestActionConfirm({
+      ...config,
+      description: withLoginSkipWarning(config.description, plan.skips),
+      run: () => config.run(plan.targets),
+    });
   };
-  const runningDbs = (databases) => databases.filter((db) => db.running).map((db) => db.dbname);
-  const stoppedDbs = (databases) => databases.filter((db) => !db.running).map((db) => db.dbname);
   // { initialSelected: dbname[] } while the database selection modal is open.
   const [selectDatabasesModal, setSelectDatabasesModal] = useState(null);
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
-  const { databasesByHost, activeDatabasesByHost, loggedInDatabases, haDbNamesByHost, navigatorDatabasesByHost, navigatorActiveDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { databasesByHost, loggedInDatabases, haDbNamesByHost, navigatorDatabasesByHost, navigatorActiveDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { brokersByHost, navigatorBrokersByHost } = useSelector((state) => state.broker, shallowEqual);
   // The lists the trees show; a multi-selection is kept within them.
   const navigatorDbNames = useSelector(
@@ -332,7 +338,6 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       },
     });
   };
-  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
   const haDbNames = haDbNamesByHost[selectedHostUid] || [];
   const brokers = brokersByHost[selectedHostUid] || [];
 
@@ -1906,21 +1911,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.startAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              confirmWithLoginSkips(selectedHostUid, stoppedDbs, {
+              confirmWithLoginSkips(selectedHostUid, stoppedDbNames, {
                 title: CM.confirmStartAllDatabasesTitle,
                 description: CM.confirmStartAllDatabasesDesc,
                 confirmLabel: CM.startAllDatabases,
                 variant: 'primary',
-                run: async () => {
+                run: async (dbnames) => {
                   setLoadingText(CM.startingAllDatabasesMsg);
                   startAction();
                   try {
-                    const dbnames = databases
-                      .filter((db) => !activeDatabases.includes(db.dbname))
-                      .map((db) => db.dbname);
-                    const result = dbnames.length > 0
-                      ? await dispatch(startAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
-                      : { succeeded: [], failed: [] };
+                    const result = await runAllDatabasesAction(dispatch, selectedHostUid, 'start', dbnames);
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
                     const report = bulkResultStatusModal(CM, {
@@ -1939,19 +1939,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.stopAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              confirmWithLoginSkips(selectedHostUid, runningDbs, {
+              confirmWithLoginSkips(selectedHostUid, runningDbNames, {
                 title: CM.confirmStopAllDatabasesTitle,
                 description: CM.confirmStopAllDatabasesDesc,
                 confirmLabel: CM.stopAllDatabases,
                 variant: 'danger',
-                run: async () => {
+                run: async (dbnames) => {
                   setLoadingText(CM.stoppingAllDatabasesMsg);
                   startAction();
                   try {
-                    const dbnames = [...activeDatabases];
-                    const result = dbnames.length > 0
-                      ? await dispatch(stopAllDatabases({ hostUid: selectedHostUid, dbnames })).unwrap()
-                      : { succeeded: [], failed: [] };
+                    const result = await runAllDatabasesAction(dispatch, selectedHostUid, 'stop', dbnames);
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
                     const report = bulkResultStatusModal(CM, {
@@ -1970,18 +1967,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.restartAllDatabases}
             onClick={() => {
               setDbRootContextMenu(null);
-              confirmWithLoginSkips(selectedHostUid, runningDbs, {
+              confirmWithLoginSkips(selectedHostUid, runningDbNames, {
                 title: CM.confirmRestartAllDatabasesTitle,
                 description: CM.confirmRestartAllDatabasesDesc,
                 confirmLabel: CM.restartAllDatabases,
                 variant: 'danger',
-                run: async () => {
+                run: async (dbnames) => {
                   setLoadingText(CM.restartingAllDatabasesMsg);
                   startAction();
                   try {
-                    const { failed, skipped } = await restartDatabasesInBulk(
-                      dispatch, selectedHostUid, [...activeDatabases]
-                    );
+                    const { failed, skipped } = await runAllDatabasesAction(dispatch, selectedHostUid, 'restart', dbnames);
                     dispatch(fetchDatabaseStartInfo(selectedHostUid));
                     resetAction();
                     const report = bulkResultStatusModal(CM, {

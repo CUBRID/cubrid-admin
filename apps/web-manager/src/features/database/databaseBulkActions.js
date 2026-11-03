@@ -43,6 +43,14 @@ export async function restartDatabasesInBulk(dispatch, hostUid, dbnames) {
   };
 }
 
+// Start/Stop/Restart All Databases on `dbnames`, the targets planned from the
+// start-info read made when the confirm opened (planLoginCheckedAction).
+export async function runAllDatabasesAction(dispatch, hostUid, action, dbnames) {
+  if (action === 'restart') return restartDatabasesInBulk(dispatch, hostUid, dbnames);
+  const thunk = action === 'start' ? startAllDatabases : stopAllDatabases;
+  return dispatch(thunk({ hostUid, dbnames })).unwrap();
+}
+
 // Active dbnames per a fresh start-info read, or null if it can't be read
 // (or comes back malformed) — unknown, not "nothing is running".
 async function readActiveDbnames(dispatch, hostUid) {

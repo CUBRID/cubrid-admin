@@ -2123,6 +2123,8 @@ export const CM = {
     ].filter(Boolean).join('; ')}.`;
   },
   noDatabasesToRunMsg: 'Nothing to run: you are not logged in to any of these databases.',
+  databaseListReadFailedMsg: 'Could not read the database list, so nothing was run. Try again.',
+  noTargetDatabasesMsg: 'There are no databases for this action.',
   // Server skip reasons (English from the api-server) shown in result tables.
   bulkSkipReasonLabel: (reason) => reason,
   skippedStillRunning: 'still running',

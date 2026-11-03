@@ -2078,6 +2078,8 @@ export const CM_KO = {
     ].filter(Boolean).join(' / ')}`;
   },
   noDatabasesToRunMsg: '실행할 DB가 없습니다. 대상 DB에 모두 로그인되어 있지 않습니다.',
+  databaseListReadFailedMsg: '데이터베이스 목록을 읽지 못해 실행하지 않았습니다. 다시 시도하세요.',
+  noTargetDatabasesMsg: '이 작업을 할 데이터베이스가 없습니다.',
   bulkSkipReasonLabel: (reason) => ({
     'Logged out': '로그아웃함',
     'Not logged in': '로그인 안 함',
