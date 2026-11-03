@@ -12,6 +12,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
+import { isLogVolume, pageCount } from '../volumePages';
 
 // ── Helpers ──
 const TYPE_BADGE = (val = '') => {
@@ -148,10 +149,6 @@ const getPurposeDisplay = (row) => {
   return '-';
 };
 
-const isLogVolume = (row) => {
-  const t = (row?.type || '').toString().toUpperCase();
-  return t.includes('LOG') || t.includes('ACTIVE') || t.includes('ARCHIVE');
-};
 
 const VolumeCategorization = memo(({ hostUid, dbname, dbinfo, pagesize, logpagesize }) => {
   const CM = useCM();
@@ -247,7 +244,7 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo, pagesize, logpages
   );
 });
 
-const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
+export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
   const CM = useCM();
   const dispatch = useDispatch();
 
@@ -302,7 +299,17 @@ const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
             header: CM.allocationLabel,
             accessor: 'usedpage',
             render: (val, row) => {
-              const usedPages = cleanInt(val);
+              // A log volume has no used/free page count (usedpage is left
+              // out), so its share is unknown: "-", not "0 / N, 100% free".
+              const usedCount = isLogVolume(row) ? null : pageCount(val);
+              if (usedCount === null) {
+                return (
+                  <span className="text-13 font-mono text-slate-500 dark:text-slate-400">
+                    - / {formatPages(row.totalpage)}
+                  </span>
+                );
+              }
+              const usedPages = usedCount;
               const totalPages = cleanInt(row.totalpage);
               const freePages = Math.max(0, totalPages - usedPages);
               const freePct = totalPages > 0 ? (freePages / totalPages) * 100 : 0;

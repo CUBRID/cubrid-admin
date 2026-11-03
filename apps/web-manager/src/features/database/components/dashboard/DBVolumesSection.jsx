@@ -9,6 +9,7 @@ import { ProgressBar } from '../../../../components/ds/foundation/ProgressBar';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
+import { pageCount } from '../../volumePages';
 
 export default function DBVolumesSection({ volumes, volumesStatus, pollingProps }) {
   const CM = useCM();
@@ -39,14 +40,6 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
 
 
 
-  // A page count ("1,234 pages"), or null when there is none ("-": CMS gives
-  // no free page count for log volumes).
-  const pagesOf = (v) => {
-    if (typeof v === 'number') return v;
-    if (!v) return null;
-    const n = parseInt(v.toString().replace(/,/g, '').split(' ')[0], 10);
-    return Number.isNaN(n) ? null : n;
-  };
 
   const columns = useMemo(() => [
     {
@@ -81,8 +74,8 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
       header: CM.spaceUsage,
       accessor: 'free',
       render: (val, row) => {
-        const rawFree = pagesOf(val);
-        const total = pagesOf(row.total);
+        const rawFree = pageCount(val);
+        const total = pageCount(row.total);
         // Without a free count the used share is unknown: shown as "-", as
         // the CSV export writes it, not as fully used.
         if (rawFree === null || total === null) {
