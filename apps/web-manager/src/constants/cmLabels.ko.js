@@ -272,6 +272,11 @@ export const CM_KO = {
   newPassword: '새 비밀번호',
   leaveBlankToKeep: '비워 두면 기존 비밀번호 유지',
   passwordsDoNotMatch: '비밀번호가 일치하지 않습니다.',
+  dbPasswordRuleHint: (max, allowBlank) => `${max}바이트(영문 ${max}자)까지 입력할 수 있습니다.${allowBlank ? ' 비워 두면 비밀번호가 없습니다.' : ''}`,
+  dbPasswordKeepHint: (max) => `${max}바이트(영문 ${max}자)까지 입력할 수 있습니다. 비워 두면 지금 비밀번호를 그대로 둡니다.`,
+  dbPasswordTooLongMsg: (max) => `비밀번호는 ${max}바이트(영문 ${max}자) 이하여야 합니다.`,
+  cmsPasswordRuleHint: (max) => `1~${max}바이트(영문 ${max}자)까지 입력할 수 있습니다.`,
+  cmsPasswordTooLongMsg: (max) => `비밀번호는 ${max}바이트(영문 ${max}자) 이하여야 합니다.`,
   hostNameRequired: '호스트 이름을 입력하세요.',
   hostNameDuplicate: '이미 다른 호스트가 사용 중인 이름입니다. 다른 이름을 입력하세요.',
   hostNameTooLong: (max) => `호스트 이름은 ${max}자 이하로 입력하세요.`,
@@ -383,6 +388,8 @@ export const CM_KO = {
   editHost: '호스트 편집',
   deleteHost: '호스트 삭제',
   changePassword: '비밀번호 변경',
+  defaultCmsPasswordTitle: 'CMS 기본 비밀번호 사용 중',
+  defaultCmsPasswordMsg: '아래 호스트는 CMS 계정 admin을 설치 기본 비밀번호(admin)로 쓰고 있습니다. 비밀번호를 바꾸는 것을 권장합니다.',
   userManagement: '사용자 관리',
   cmsAccountManagement: 'CMS 계정 관리',
   serverVersion: '호스트 엔진 버전',
@@ -1482,6 +1489,7 @@ export const CM_KO = {
   // CreateUserModal
   createUser: '사용자 생성',
   dbUserPasswordChanged: '비밀번호 변경됨',
+  dbUserPasswordKept: '비밀번호 유지됨',
   userCreated: '사용자 생성됨',
 
   // UserProfileModal
@@ -1954,6 +1962,7 @@ export const CM_KO = {
   passcodeUpdateNote: '현재 로그인 중인 사용자의 CMS 계정 비밀번호를 변경합니다. 이 작업은 이 연결에 대해 로컬에 저장된 관리자 접속 비밀번호도 함께 업데이트합니다.',
   userUpdatedSuccessMsg: (username) => `사용자 @${username}이(가) 성공적으로 수정되었습니다.`,
   dbUserPasswordChangedMsg: (username) => `사용자 @${username}의 비밀번호가 변경되었습니다.`,
+  dbUserPasswordKeptMsg: (username) => `사용자 @${username}의 비밀번호를 그대로 두었습니다.`,
   userCreatedSuccessMsg: (username) => `사용자 @${username}이(가) 성공적으로 생성되었습니다.`,
   synchronizationFailed: '변경사항 저장에 실패했습니다.',
   savingChanges: '변경 사항 저장 중',

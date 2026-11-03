@@ -8,6 +8,7 @@ export const Toggle = ({
   disabled = false,
   variant = 'primary',
   className = '',
+  testId,
 }) => {
   const activeColors = {
     primary: 'bg-amber-500',
@@ -22,6 +23,7 @@ export const Toggle = ({
         <input
           type="checkbox"
           className="sr-only"
+          data-testid={testId}
           checked={checked}
           onChange={(e) => onChange && onChange(e.target.checked)}
           disabled={disabled}
