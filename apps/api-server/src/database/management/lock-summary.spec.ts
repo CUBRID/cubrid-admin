@@ -1,4 +1,4 @@
-import { lockObjectLabel, summarizeLocks } from './lock-summary';
+import { compactOid, listLockObjects, lockObjectLabel, lockOverview, summarizeLocks } from './lock-summary';
 
 // CMS lockdb JSON: each lock object comes as a metadata entry followed by an
 // entry with only its lock_holders.
@@ -68,5 +68,57 @@ describe('summarizeLocks', () => {
     expect(totalLocks).toBe(30000);
     expect(rows).toEqual([expect.objectContaining({ obj: 'Instance of class = dba.big', mode: 'X_LOCK', count: 30000 })]);
     expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe('listLockObjects', () => {
+  it('gives one row per object with its holders, from split entries', () => {
+    const rows = listLockObjects(lockinfo([
+      ...lockObject('Class = dba.t1', [['1', 'IX_LOCK'], ['2', 'IX_LOCK']]),
+      ...lockObject('Instance of class ( 0|   553|   1) = dba.t1', [['1', 'X_LOCK']]),
+    ]));
+    expect(rows).toEqual([
+      {
+        oid: '0|553|1',
+        obj: 'Class = dba.t1',
+        holders: [{ index: '1', mode: 'IX_LOCK', count: '1' }, { index: '2', mode: 'IX_LOCK', count: '1' }],
+        numHolders: '2',
+        numBlockedHolders: '0',
+        numWaiters: '0',
+      },
+      expect.objectContaining({ obj: 'Instance of class ( 0|   553|   1) = dba.t1', numHolders: '1' }),
+    ]);
+  });
+
+  it('shows "-" for counts CMS read from the MVCC info line', () => {
+    const [row] = listLockObjects(lockinfo([
+      { ob_type: 'Instance of class ( 0| 193| 3) = db_user', oid: '0|833|2', num_holders: 'inser', num_b_holders: 'missing', num_waiters: '=' },
+    ]));
+    expect(row).toMatchObject({ oid: '0|833|2', holders: [], numHolders: '-', numBlockedHolders: '-', numWaiters: '-' });
+  });
+});
+
+describe('compactOid', () => {
+  it('drops the padding and keeps negative parts', () => {
+    expect(compactOid(' 0|   201|-32763')).toBe('0|201|-32763');
+    expect(compactOid(undefined)).toBe('-');
+  });
+});
+
+describe('lockOverview', () => {
+  it('keeps settings, counters and transactions without the lock table', () => {
+    const overview = lockOverview(lockinfo(lockObject('Class = dba.t1', [['1', 'IX_LOCK']])));
+    expect(overview).toEqual({
+      esc: '100000',
+      dinterval: '0',
+      numlocked: '1',
+      numallocated: '',
+      sizelock: '',
+      maxnumlock: '10000',
+      transactions: [
+        { index: '1', user: 'DBA', host: 'app1', pid: '111', program: 'loader', isolation: 'READ COMMITTED', timeout: '-1' },
+        { index: '2', user: 'PUBLIC', host: 'app2', pid: '222', program: 'csql', isolation: 'READ COMMITTED', timeout: '-1' },
+      ],
+    });
   });
 });

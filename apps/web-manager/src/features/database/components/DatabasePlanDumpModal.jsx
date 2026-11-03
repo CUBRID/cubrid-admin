@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closePlanDumpModal, fetchDatabasePlanDump, resetPlanDumpState } from '../databaseSlice';
 import { dbKey } from '../dbKey';
+import { parseXaslCacheStats, xaslCacheHitRatio } from '../planDumpStats';
 import LoadingOverlay from '../../../components/common/LoadingOverlay';
 import ErrorOverlay from '../../../components/common/ErrorOverlay';
 import { useCM } from '../../../constants/useCM';
@@ -63,17 +64,8 @@ export default function DatabasePlanDumpModal() {
     lines = results;
   }
 
-  // Parse stats from lines
-  const stats = {};
-  lines.forEach(l => {
-    if (l && l.includes(':') && !l.includes('sql info')) {
-      const [k, ...vParts] = l.split(':');
-      if (k && vParts.length) stats[k.trim()] = vParts.join(':').trim();
-    }
-  });
-  const hitRatio = stats['Hits'] && stats['Lookups']
-    ? ((parseInt(stats['Hits']) / (parseInt(stats['Lookups']) || 1)) * 100).toFixed(1)
-    : null;
+  const stats = parseXaslCacheStats(lines);
+  const hitRatio = xaslCacheHitRatio(stats);
 
   const statCards = [
     { label: CM.hitRatioLabel, value: hitRatio ? `${hitRatio}%` : '—', color: 'text-amber-500' },
