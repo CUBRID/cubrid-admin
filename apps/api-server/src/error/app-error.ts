@@ -230,6 +230,7 @@ export class AppError extends Error {
             return 404;
           case DatabaseErrorCode.DUPLICATED_DATABASE_PROFILE:
           case DatabaseErrorCode.OPERATION_IN_PROGRESS:
+          case DatabaseErrorCode.DATABASE_ACTION_IN_PROGRESS:
             return 409;
           case DatabaseErrorCode.INVALID_PARAMETER:
             return 400;
