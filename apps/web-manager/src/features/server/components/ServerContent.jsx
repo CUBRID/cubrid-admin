@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
 import { fetchHostEnv } from '../../host/hostSlice';
@@ -34,15 +34,20 @@ const Component = function ServerContent({ hostUid }) {
   const CM = useCM();
   const dispatch = useDispatch();
 
-  // Database list/active list are fetched into this component's own state
-  // (not the shared `state.database.databases/activeDatabases` slice) so that
-  // multiple simultaneously-open dashboard tabs for different hosts, and the
-  // navigator, don't clobber each other's displayed data.
-  const [databases, setDatabases] = useState([]);
+  // The host's shared lists hold the newest read or action result for it
+  // (applied in the order they were read), so a database started or stopped
+  // anywhere shows here at once instead of on the next tick. Focusing another
+  // host clears them (resetDatabaseState), so this tab's own last read stands
+  // in until they are filled again.
+  const sharedDatabases = useSelector((state) => state.database.databasesByHost[hostUid]);
+  const sharedActiveDatabases = useSelector((state) => state.database.activeDatabasesByHost[hostUid]);
+  const [lastReadDatabases, setDatabases] = useState([]);
   // 'loading' until the first database-list fetch settles, then 'loaded' or
   // 'error', so sections built on it don't read an empty list as "no databases".
   const [dbListStatus, setDbListStatus] = useState('loading');
-  const [activeDatabases, setActiveDatabases] = useState([]);
+  const [lastReadActiveDatabases, setActiveDatabases] = useState([]);
+  const databases = sharedDatabases ?? lastReadDatabases;
+  const activeDatabases = sharedActiveDatabases ?? lastReadActiveDatabases;
   const { hosts, authorizedHosts, haInfo, reconnectQueue = EMPTY_RECONNECT_QUEUE } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
@@ -57,6 +62,11 @@ const Component = function ServerContent({ hostUid }) {
   const isHA = hostHaInfo.isHA;
   const hostLabel = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
+
+  // The system status section is read by this refresh while it is expanded,
+  // so its broker list is the one fetchBrokerList below is reading.
+  const systemStatusExpanded = useRef(true);
+  const handleSystemStatusExpanded = useCallback((expanded) => { systemStatusExpanded.current = expanded; }, []);
 
   const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -82,13 +92,15 @@ const Component = function ServerContent({ hostUid }) {
       // info for a database the user already logged out of.
       const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
 
-      // 2. Then fetch other data, using the just-fetched active databases list
+      // 2. Then fetch other data, using the just-fetched active databases list.
+      // fetchBrokerList goes first: the system status (fetchMonitoringData,
+      // also the HA heartbeat) takes that broker list read instead of its own.
       await Promise.all([
         dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)),
         dispatch(fetchHostEnv(hostUid)),
         dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newLoggedInActiveDatabases })),
         fetchAutoStartInfo(),
-        isHA ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
+        isHA || systemStatusExpanded.current ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
       ]);
     }
   });
@@ -269,7 +281,7 @@ const Component = function ServerContent({ hostUid }) {
         <HaClusterStatusSection hostUid={hostUid} />
         <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
         <Brokers hostUid={hostUid} isSection={true} />
-        <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} />
+        <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} onExpandedChange={handleSystemStatusExpanded} />
         <DatabaseListSection dbListDisplay={dbListDisplay} dbListStatus={dbListStatus} />
         <SystemInfo hostUid={hostUid} />
       </div>

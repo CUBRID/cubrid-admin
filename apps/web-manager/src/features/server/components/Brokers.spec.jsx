@@ -113,13 +113,13 @@ describe('Brokers embedded in the host dashboard', () => {
     await act(async () => {
       await store.dispatch(stopBrokerAndRefresh({ hostUid: 'h1', brokerName: 'broker1' }));
     });
-    // A host dashboard poll starts while the post-action fetch is in flight.
+    // A host dashboard poll starts while the post-action fetch is in flight
+    // and shares it instead of sending its own.
     await act(async () => { store.dispatch(fetchBrokerList({ hostUid: 'h1', isBackground: true })); });
 
     await act(async () => { held[0](brokerList('', 'OFF')); });
     expect(container.textContent).toContain('OFF');
-
-    await act(async () => { held[1](brokerList('', 'OFF')); });
+    expect(held).toHaveLength(1);
   });
 
   it('keeps the last list when focus leaves the host and its shared entry is evicted', async () => {

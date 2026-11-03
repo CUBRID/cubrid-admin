@@ -10,12 +10,14 @@ vi.mock('../../monitoringSlice', () => ({
 }));
 
 import SystemStatusSection from './SystemStatusSection';
+import { fetchMonitoringData } from '../../monitoringSlice';
 import { CM } from '../../../../constants/cmLabels';
 
 let container;
 let root;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -28,16 +30,19 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = (hostData) => act(async () => {
+const render = (hostData, { isTabActive = false, dashboardInterval = 3, onExpandedChange } = {}) => act(async () => {
   const store = configureStore({
     reducer: {
-      user: (s = { preferences: { uiLocale: 'en' } }) => s,
+      user: (s = { preferences: { uiLocale: 'en', dashboardInterval } }) => s,
       host: (s = { authorizedHosts: ['h1'], haInfo: {} }) => s,
       monitoring: (s = { hostsData: { h1: hostData } }) => s,
     },
   });
-  // isTabActive=false: no polling in this test.
-  root.render(<Provider store={store}><SystemStatusSection hostUid="h1" isTabActive={false} /></Provider>);
+  root.render(
+    <Provider store={store}>
+      <SystemStatusSection hostUid="h1" isTabActive={isTabActive} onExpandedChange={onExpandedChange} />
+    </Provider>
+  );
 });
 
 const nowRow = () => container.querySelectorAll('tbody tr')[0];
@@ -65,5 +70,41 @@ describe('SystemStatusSection', () => {
     expect(text).toContain('12.5%');
     expect(text).toContain('3.50');
     expect(text).toContain('20.00');
+  });
+
+  describe('refresh', () => {
+    const empty = { currentStatus: {}, averages: {}, disk: null };
+    const toggle = () => act(async () => container.querySelector('[class*="cursor-pointer"]')?.click());
+
+    it('does not poll on its own; the host dashboard\'s refresh reads it', async () => {
+      vi.useFakeTimers();
+      try {
+        await render(empty, { isTabActive: true });
+        await act(async () => vi.advanceTimersByTime(60_000));
+        expect(fetchMonitoringData).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('tells the dashboard whether it is expanded, and reads once when expanded again', async () => {
+      const onExpandedChange = vi.fn();
+      await render(empty, { isTabActive: true, onExpandedChange });
+      expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+
+      await toggle();
+      expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+      expect(fetchMonitoringData).not.toHaveBeenCalled();
+
+      await toggle();
+      expect(onExpandedChange).toHaveBeenLastCalledWith(true);
+      expect(fetchMonitoringData).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows Paused when the dashboard interval is 0', async () => {
+      await render(empty, { isTabActive: true, dashboardInterval: 0 });
+      expect(container.textContent).toContain(CM.paused);
+      expect(container.textContent).not.toContain(CM.live);
+    });
   });
 });

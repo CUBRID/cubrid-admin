@@ -2,7 +2,13 @@ import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../host/hostApi', () => ({ hostApi: { getHostEnv: vi.fn() } }));
-vi.mock('../database/databaseApi', () => ({ databaseApi: { getStartInfo: vi.fn(), getVolumeInfo: vi.fn() } }));
+vi.mock('../database/databaseApi', () => {
+  const databaseApi = { getStartInfo: vi.fn(), getVolumeInfo: vi.fn() };
+  databaseApi.readStartInfo = (hostUid) => Promise.resolve()
+    .then(() => databaseApi.getStartInfo(hostUid))
+    .then((value) => ({ ok: true, value, seq: 0 }), (error) => ({ ok: false, error, seq: 0 }));
+  return { databaseApi };
+});
 vi.mock('../broker/brokerApi', () => ({ brokerApi: { getBrokerList: vi.fn() } }));
 vi.mock('./monitoringApi', () => ({ default: { getHostStat: vi.fn() } }));
 

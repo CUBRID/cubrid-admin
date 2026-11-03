@@ -18,7 +18,16 @@ vi.mock('../../../infrastructure/services/cmsJobRunner', () => ({
   runCmsJobInBackground: mocks.run, isCmsJobPolling: () => false,
   cancelAllCmsJobPolls: vi.fn(), cancelCmsJobPoll: vi.fn(),
 }));
-vi.mock('../databaseApi', () => ({ databaseApi: { getStartInfo: mocks.getStartInfo } }));
+vi.mock('../databaseApi', async () => {
+  const { createSharedReads } = await import('../../../infrastructure/utils/singleFlight');
+  const reads = createSharedReads();
+  return {
+    databaseApi: {
+      getStartInfo: mocks.getStartInfo,
+      readStartInfo: (hostUid, options) => reads(hostUid, () => mocks.getStartInfo(hostUid), options),
+    },
+  };
+});
 // The tray's shared result popup isn't under test here.
 vi.mock('../../../infrastructure/cmsJob/JobResultModal', () => ({ JobResultModal: () => null }));
 

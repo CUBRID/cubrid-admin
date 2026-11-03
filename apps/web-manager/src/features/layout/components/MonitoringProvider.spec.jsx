@@ -28,13 +28,16 @@ const initialState = {
   user: { preferences: { dashboardInterval: 10, brokerStatusInterval: 10 } },
   host: { selectedHostUid: 'host1', authorizedHosts: ['host1', 'host2'], reconnectQueue: [] },
   database: { activeDatabasesByHost: {}, loggedInDatabases: [] },
-  layout: { activeMainTab: 'host:host1' },
+  layout: { activeMainTab: 'db:host1:demodb' },
 };
 
 const reducer = (state = initialState, action) => {
   // What a failed start-info does to the live list: a fresh empty array.
   if (action.type === 'test/startInfoFailed') {
     return { ...state, database: { ...state.database, activeDatabasesByHost: { host1: [] } } };
+  }
+  if (action.type === 'test/setTab') {
+    return { ...state, layout: { activeMainTab: action.payload } };
   }
   if (action.type === 'test/setReconnectQueue') {
     return { ...state, host: { ...state.host, reconnectQueue: action.payload } };
@@ -131,27 +134,16 @@ it('waits for the interval after a failed poll instead of retrying at once', asy
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
 });
 
-it('skips a tick while the previous poll is still waiting on the host', async () => {
+it('keeps dispatching each tick while a read is still waiting on the host', async () => {
+  // A read still in flight is shared by the next tick's thunk (see
+  // createSharedReads), so dispatching again sends nothing new.
   releaseStartInfo = () => {};
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(10000);
-  });
-  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-
-  // The host is busy with something slow: later ticks do not pile up.
   await act(async () => {
     await vi.advanceTimersByTimeAsync(30000);
   });
-  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-  expect(countOf('test/fetchBrokerList')).toBe(5);
-
-  const release = releaseStartInfo;
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(4);
+  expect(countOf('test/fetchBrokerList')).toBe(4);
   releaseStartInfo = null;
-  await act(async () => { release(); });
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(10000);
-  });
-  expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
 });
 
 it('stops polling the host while a modal is open and refreshes once when it closes', async () => {
@@ -166,4 +158,13 @@ it('stops polling the host while a modal is open and refreshes once when it clos
   await act(async () => { closeModal(); });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
   expect(countOf('test/fetchBrokerList')).toBe(2);
+});
+
+it('leaves a host dashboard to its own refresh, so nothing is read twice per interval', async () => {
+  await act(async () => store.dispatch({ type: 'test/setTab', payload: 'host:host1' }));
+  const before = dispatched.length;
+
+  await act(async () => vi.advanceTimersByTime(30_000));
+
+  expect(dispatched.length).toBe(before);
 });

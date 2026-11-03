@@ -23,9 +23,10 @@ export function isBrokerTabOfHost(tabId, hostUid) {
  * - This host's broker list tab (Brokers.jsx) keeps its own local list via
  *   usePollingRefresh, so just refresh it; its own fetch also updates the
  *   shared brokersByHost / sidebar tree.
- * - Anywhere else, fetch the list with `afterAction` (shown even if a host
- *   dashboard poll starts while it is in flight, see brokerSlice), and also
- *   refresh this host's broker status tab if that is the active one.
+ * - Anywhere else, fetch the list (a foreground read, so it is sent after
+ *   any read already in flight and shows the result of the action, see
+ *   createSharedReads), and also refresh this host's broker status tab if
+ *   that is the active one.
  *
  * Only this host's broker tabs are ever refreshed: a blanket active-tab
  * refresh would also reload an unrelated config editor tab and silently
@@ -37,7 +38,7 @@ export const refreshAfterBrokerAction = (hostUid) => (dispatch, getState) => {
     dispatch(triggerRefreshActiveTab(tabId));
     return;
   }
-  dispatch(fetchBrokerList({ hostUid, afterAction: true }));
+  dispatch(fetchBrokerList({ hostUid }));
   if (isBrokerTabOfHost(tabId, hostUid)) {
     dispatch(triggerRefreshActiveTab(tabId));
   }
