@@ -1465,6 +1465,43 @@ describe('DatabaseLifecycleService', () => {
         freespace: '1048576',
       });
     });
+
+    // CMS lists in dblist only the databases.txt entries whose host field
+    // matches; a running database missing from it still has volumes to read.
+    it('reads a running database that is missing from dblist', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '10 ms',
+          note: 'none',
+          status: 'success',
+          task: 'startinfo',
+          dblist: [{ dbs: [{ dbname: 'otherdb' }] }],
+          activelist: [{ active: [{ dbname: mockDbname }] }],
+        })
+        .mockResolvedValueOnce(mockDbSpaceInfoResponse);
+
+      const result = await service.getDBSpaceInfo(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'dbspaceinfo', dbname: mockDbname })
+      );
+      expect(result).toEqual(expect.objectContaining({ dbname: 'testdb', freespace: '1048576' }));
+    });
+
+    it('still rejects a database that is neither listed nor running', async () => {
+      cmsClient.postAuthenticated.mockResolvedValueOnce({
+        __EXEC_TIME: '10 ms',
+        note: 'none',
+        status: 'success',
+        task: 'startinfo',
+        dblist: [{ dbs: [{ dbname: 'otherdb' }] }],
+        activelist: [{ active: [{ dbname: 'otherdb' }] }],
+      });
+
+      await expect(service.getDBSpaceInfo(mockUserId, mockHostUid, mockDbname)).rejects.toMatchObject({ code: 'NO_SUCH_DATABASE' });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('createDatabase', () => {

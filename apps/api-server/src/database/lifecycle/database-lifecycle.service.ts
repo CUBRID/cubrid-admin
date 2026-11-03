@@ -1140,8 +1140,12 @@ export class DatabaseLifecycleService extends BaseService {
     if ('dblist' in startInfo && 'activelist' in startInfo) {
       // CMS can return `dblist: null` itself (not just individual entries'
       // `dbs: null`) — `'dblist' in startInfo` only checks key presence, not
-      // that the value is a non-null array.
-      const dbExists = (startInfo.dblist ?? []).some((el) => (el.dbs ?? []).some((db) => db.dbname === dbname));
+      // that the value is a non-null array. A running database can be
+      // missing from dblist (CMS lists only the databases.txt entries whose
+      // host field matches), so a running one exists too.
+      const dbExists =
+        (startInfo.dblist ?? []).some((el) => (el.dbs ?? []).some((db) => db.dbname === dbname)) ||
+        (startInfo.activelist ?? []).some((el) => (el.active ?? []).some((db) => db.dbname === dbname));
 
       if (!dbExists) {
         throw DatabaseError.NoSuchDatabase({ dbname, hostUid });
