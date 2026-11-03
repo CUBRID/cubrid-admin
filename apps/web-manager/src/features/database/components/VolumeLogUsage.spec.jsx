@@ -14,6 +14,7 @@ vi.mock('../databaseApi', () => ({ databaseApi: { getVolumeInfo: vi.fn() } }));
 
 import VolumeInfoMonitor from './VolumeInfoMonitor';
 import { VolumeTopology } from './DatabaseSpaceMonitor';
+import { CM } from '../../../constants/cmLabels';
 
 let container;
 let root;
@@ -68,6 +69,11 @@ describe('DatabaseSpaceMonitor allocation column', () => {
     const logRow = rows.find((t) => t.includes('demodb_lgat'));
     expect(logRow).toContain('- / ');
     expect(logRow).not.toMatch(/100%/);
+    const headers = [...container.querySelectorAll('th')].map((th) => th.textContent.trim());
+    const freeIndex = headers.indexOf(CM.freeLabel);
+    const logCells = [...[...container.querySelectorAll('tr')].find((tr) => tr.textContent.includes('demodb_lgat')).querySelectorAll('td')].map((td) => td.textContent.trim());
+    expect(freeIndex).toBeGreaterThanOrEqual(0);
+    expect(logCells[freeIndex]).toBe('-'); // not a blank cell
     const dataRow = rows.find((t) => t.includes('demodb') && !t.includes('demodb_lgat'));
     expect(dataRow).toMatch(/48%/);
   });

@@ -338,7 +338,7 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
             accessor: 'freepage',
             render: (val, row) => {
               if (val != null && typeof val === 'string' && val.trim() === '') {
-                return <span className="font-mono text-13 text-slate-400">{val}</span>;
+                return <span className="font-mono text-13 text-slate-400">-</span>;
               }
               if (isLogVolume(row)) {
                 return <span className="font-mono text-13 text-slate-400">-</span>;
