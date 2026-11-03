@@ -236,4 +236,10 @@ export type ParamdumpCmsResponse = BaseCmsResponse & {
    * but defined as array for compatibility with CMS API response format.
    */
   server: ServerParameter[];
+
+  /**
+   * Client parameters, present only when the request had `both: 'y'`.
+   * Client-side names differ from the server set, so values are keyed loosely.
+   */
+  client?: Record<string, string>[];
 };

@@ -23,9 +23,10 @@ export type UpdateUserCmsRequest = BaseCmsRequest & {
   username: string;
 
   /**
-   * User password
+   * New password. Left out to keep the current one: CMS updateuser can't
+   * clear a password.
    */
-  userpass: string;
+  userpass?: string;
 
   /**
    * Groups section, sent as an array so CMS sees an open/close "groups" block

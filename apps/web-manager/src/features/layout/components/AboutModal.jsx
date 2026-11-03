@@ -6,6 +6,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Button } from '../../../components/ds/foundation/Button';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
+import { APP_VERSION } from '../../../constants/appVersion';
 
 export default function AboutModal() {
   const CM = useCM();
@@ -18,7 +19,7 @@ export default function AboutModal() {
     <Modal
       isOpen={isAboutCubridOpen}
       onClose={() => dispatch(setAboutCubrid(false))}
-      title={CM.aboutCubrid}
+      title={CM.aboutCubridAdmin}
       icon="info"
       maxWidth="420px"
       subtitle={CM.cubridWebManager}
@@ -49,8 +50,8 @@ export default function AboutModal() {
 
           {/* Version */}
           <div className="flex flex-col items-center pt-2 pb-2">
-            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-18">
-              0.0.1 Alpha
+            <Typography variant="p" className="font-mono font-black text-slate-800 dark:text-white tracking-tight text-18" data-testid="about-app-version">
+              v{APP_VERSION}
             </Typography>
           </div>
 

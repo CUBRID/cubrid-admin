@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeBrokerRates, extractBrokerList, mapDiskInfo } from './hostMetrics';
+import { computeBrokerRates, extractBrokerList, mapDiskInfo, volumeGroup } from './hostMetrics';
 
 // /broker/list (getbrokersinfo) resolves to [{ broker: [...] }].
 const brokers = (...list) => [{ broker: list }];
@@ -74,5 +74,17 @@ describe('mapDiskInfo', () => {
     expect(mapDiskInfo({ disk_info: [] })).toBeNull();
     expect(mapDiskInfo({ disk_info: [{ name: '/', total_size: '0', free_size: '0' }] })).toBeNull();
     expect(mapDiskInfo({ disk_info: [{ name: '/', total_size: 'x', free_size: '1' }] })).toBeNull();
+  });
+});
+
+describe('volumeGroup', () => {
+  it('groups volumes the way the volume monitor does', () => {
+    expect(volumeGroup({ type: 'PERMANENT', purpose: 'PERMANENT' })).toBe('permPerm');
+    expect(volumeGroup({ type: 'PERMANENT' })).toBe('permPerm');
+    expect(volumeGroup({ type: 'PERMANENT', purpose: 'TEMPORARY' })).toBe('permTemp');
+    expect(volumeGroup({ type: 'TEMPORARY', purpose: 'TEMPORARY' })).toBe('tempTemp');
+    expect(volumeGroup({ type: 'GENERIC' })).toBe('permPerm');
+    expect(volumeGroup({ type: 'TEMP' })).toBe('permTemp');
+    expect(volumeGroup({ type: 'Active_log' })).toBeNull();
   });
 });

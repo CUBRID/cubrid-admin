@@ -423,11 +423,14 @@ export class DatabaseUserService extends BaseService {
     }
     const preservedAuthorization = fetchedAuthorization;
 
+    // An empty password keeps the current one. CMS updateuser can't clear a
+    // password and leaves it alone when the field is absent, so the field is
+    // left out here rather than sent empty.
     const cmsRequest: UpdateUserCmsRequest = {
       task: 'updateuser',
       dbname,
       username,
-      userpass,
+      ...(userpass === '' ? {} : { userpass }),
       groups: preservedGroups,
       authorization: preservedAuthorization,
     };

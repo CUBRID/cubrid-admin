@@ -131,3 +131,18 @@ it('shows a live pass/fail hint that flips from red to green as the new password
   await act(async () => setValue(newInput, 'valid1234'));
   expect(container.querySelector('.text-emerald-500')).toBeTruthy();
 });
+
+it('says why the submit button stays disabled when the confirmation differs', async () => {
+  await openChangePasswordMode();
+  const confirmInput = container.querySelectorAll('input[type="password"]')[2];
+  await act(async () => {
+    setValue(el('change-password-old-input'), 'CurrentPass1');
+    setValue(el('change-password-new-input'), 'valid1234');
+    setValue(confirmInput, 'valid12345');
+  });
+  expect(el('change-password-submit-btn').disabled).toBe(true);
+  expect(container.textContent).toContain('Passwords do not match');
+
+  await act(async () => setValue(confirmInput, 'valid1234'));
+  expect(container.textContent).not.toContain('Passwords do not match');
+});

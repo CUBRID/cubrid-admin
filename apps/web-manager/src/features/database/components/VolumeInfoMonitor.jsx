@@ -9,6 +9,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { PageLoader } from '../../../components/ds/feedback/PageLoader';
 import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { useCM } from '../../../constants/useCM';
+import { isLogVolume, pageCount } from '../volumePages';
 
 const parseNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -18,7 +19,7 @@ const parseNumber = (value) => {
 
 const formatNumber = (value) => parseNumber(value).toLocaleString();
 
-const formatMegabytes = (value) => `${value.toFixed(2)} MB`;
+const formatMegabytes = (value) => `${value.toFixed(2)} MiB`;
 
 const clampPercent = (value) => Math.min(100, Math.max(0, value));
 
@@ -52,8 +53,8 @@ export default function VolumeInfoMonitor({ tabId }) {
   // dbSpace.summary rows (dbinfo) never carry a pagesize field at all — the
   // real value is top-level on the space-info response. Log volumes use the
   // database's (potentially different) log page size.
-  const isLogVolume = /LOG|ACTIVE|ARCHIVE/i.test(volume?.type || '');
-  const pageSize = parseNumber(isLogVolume ? dbSpace?.logpagesize : dbSpace?.pagesize) || parseNumber(dbSpace?.pagesize) || 4096;
+  const logVolume = isLogVolume(volume);
+  const pageSize = parseNumber(logVolume ? dbSpace?.logpagesize : dbSpace?.pagesize) || parseNumber(dbSpace?.pagesize) || 4096;
 
   if (!dbSpace && !spaceInfoFailed) {
     return (
@@ -92,14 +93,20 @@ export default function VolumeInfoMonitor({ tabId }) {
     );
   }
 
-  const freePages  = parseNumber(volume.freepage);
+  // A log volume has no free page count (pageCount: null), so its used and
+  // free shares are unknown and shown as "-" rather than as fully used.
+  const freeCount  = logVolume ? null : pageCount(volume.freepage);
+  const usageKnown = freeCount !== null;
+  const freePages  = freeCount ?? 0;
   const totalPages = parseNumber(volume.totalpage);
-  const usedPages  = Math.max(0, totalPages - freePages);
+  const usedPages  = usageKnown ? Math.max(0, totalPages - freePages) : 0;
   const freeM      = (freePages  * pageSize) / (1024 * 1024);
   const totalM     = (totalPages * pageSize) / (1024 * 1024);
   const usedM      = (usedPages  * pageSize) / (1024 * 1024);
-  const usedPct    = totalPages > 0 ? clampPercent((usedPages / totalPages) * 100) : 0;
-  const freePct    = totalPages > 0 ? clampPercent((freePages / totalPages) * 100) : 0;
+  const usedPct    = usageKnown && totalPages > 0 ? clampPercent((usedPages / totalPages) * 100) : 0;
+  const freePct    = usageKnown && totalPages > 0 ? clampPercent((freePages / totalPages) * 100) : 0;
+  const showMegabytes = (value) => (usageKnown ? formatMegabytes(value) : '-');
+  const showPages = (value) => (usageKnown ? formatNumber(value) : '-');
 
   const severity = usedPct > 85 ? 'text-rose-500' : usedPct > 60 ? 'text-amber-500' : 'text-emerald-500';
   const barColor = usedPct > 85 ? 'bg-rose-500' : usedPct > 60 ? 'bg-amber-500' : 'bg-emerald-500';
@@ -111,8 +118,8 @@ export default function VolumeInfoMonitor({ tabId }) {
     { label: CM.purposeRow,     value: volume.purpose || '-', icon: 'flag' },
     { label: CM.pageSizeRow,   value: `${formatNumber(pageSize)} B`, icon: 'data_array' },
     { label: CM.totalPagesRow, value: formatNumber(totalPages), icon: 'article' },
-    { label: CM.usedPagesRow,  value: formatNumber(usedPages), icon: 'inventory' },
-    { label: CM.freePagesRow,  value: formatNumber(freePages), icon: 'inventory_2' },
+    { label: CM.usedPagesRow,  value: showPages(usedPages), icon: 'inventory' },
+    { label: CM.freePagesRow,  value: showPages(freePages), icon: 'inventory_2' },
     { label: CM.totalSizeRow,  value: formatMegabytes(totalM), icon: 'straighten' },
   ];
 
@@ -189,11 +196,11 @@ export default function VolumeInfoMonitor({ tabId }) {
             <div className="grid grid-cols-3 gap-2 ml-auto shrink-0 min-w-[360px]">
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
                 <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.usedLabel}</Typography>
-                <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{formatMegabytes(usedM)}</Typography>
+                <Typography variant="p" className="text-15 font-black text-slate-700 dark:text-slate-100 font-mono leading-tight">{showMegabytes(usedM)}</Typography>
               </div>
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
                 <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.freeLabel}</Typography>
-                <Typography variant="p" className="text-15 font-black text-emerald-500 font-mono leading-tight">{formatMegabytes(freeM)}</Typography>
+                <Typography variant="p" className="text-15 font-black text-emerald-500 font-mono leading-tight">{showMegabytes(freeM)}</Typography>
               </div>
               <div className="border border-slate-100 dark:border-white/6 bg-slate-50 dark:bg-white/[0.03] rounded-sm p-2">
                 <Typography variant="label" className="text-11 text-slate-400 font-bold uppercase tracking-widest">{CM.totalLabel}</Typography>
@@ -208,7 +215,7 @@ export default function VolumeInfoMonitor({ tabId }) {
                 {CM.allocationLabel}
               </Typography>
               <Typography variant="label" className={`text-12 font-black font-mono ${severity}`}>
-                {CM.percentUsed.replace('{0}', usedPct.toFixed(2))}
+                {usageKnown ? CM.percentUsed.replace('{0}', usedPct.toFixed(2)) : '-'}
               </Typography>
             </div>
             <div className="h-8 w-full bg-slate-100 dark:bg-white/6 border border-slate-200 dark:border-white/6 overflow-hidden rounded-sm flex">
@@ -227,15 +234,15 @@ export default function VolumeInfoMonitor({ tabId }) {
               <div className="flex items-center gap-4 shrink-0 whitespace-nowrap">
                 <span className="flex items-center gap-1.5 text-12 text-slate-500 dark:text-slate-400">
                   <span className={`w-2 h-2 rounded-full ${barColor}`} />
-                  {CM.usedLabel} {formatMegabytes(usedM)}
+                  {CM.usedLabel} {showMegabytes(usedM)}
                 </span>
                 <span className="flex items-center gap-1.5 text-12 text-slate-500 dark:text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-white/20" />
-                  {CM.freeLabel} {formatMegabytes(freeM)}
+                  {CM.freeLabel} {showMegabytes(freeM)}
                 </span>
               </div>
               <Typography variant="label" className="text-12 text-slate-400 font-mono ml-auto shrink-0 whitespace-nowrap">
-                {formatNumber(usedPages)} / {formatNumber(totalPages)} {CM.pagesLabel}
+                {showPages(usedPages)} / {formatNumber(totalPages)} {CM.pagesLabel}
               </Typography>
             </div>
           </div>
