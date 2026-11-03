@@ -56,9 +56,8 @@ export class CopyDbDto {
   @IsNotEmpty()
   advanced: string;
 
-  // Unlike RenameDatabaseDto, copyDb never enforced "volume required when
-  // advanced is on" — matching that as-is rather than introducing a new
-  // rule that wasn't there before.
+  // Contents and conditional requirement are checked by the management
+  // service, including calls through the asynchronous job executor.
   @IsOptional()
   @IsArray()
   volume?: Record<string, string>[];

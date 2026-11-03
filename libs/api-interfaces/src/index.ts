@@ -4,6 +4,8 @@ export * from './request';
 // Export all response types
 export * from './response';
 
+export * from './copy-volume-path';
+
 // Param schema types + pure validation logic shared by both apps (the
 // master, version-aware rule data itself stays backend-only — see
 // param-schema/index.ts).
