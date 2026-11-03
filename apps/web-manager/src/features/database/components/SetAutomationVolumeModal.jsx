@@ -109,7 +109,7 @@ const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshol
               onChange={(e) => onSizeChange(parseInt(e.target.value) || 0)}
               placeholder="0"
               size="sm"
-              suffix={<span className="text-11 font-bold text-slate-400">MB</span>}
+              suffix={<span className="text-11 font-bold text-slate-400">MiB</span>}
             />
           </div>
             <Input

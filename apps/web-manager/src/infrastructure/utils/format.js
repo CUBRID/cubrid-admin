@@ -21,7 +21,8 @@ export const formatSize = (bytes, decimals = 2) => {
   if (!num || isNaN(num) || num <= 0) return '0 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  // Powers of 1024, so binary unit names: CUBRID itself sizes in KiB/MiB/GiB.
+  const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
   const i = Math.floor(Math.log(num) / Math.log(k));
   return `${parseFloat((num / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
@@ -38,7 +39,7 @@ export const formatPagesToSize = (pages, pageSize) => {
 };
 
 /**
- * Format storage free space (KB to human readable)
+ * Format storage free space (KiB to human readable)
  * @param {number|string} kb 
  * @returns {string}
  */
@@ -49,11 +50,11 @@ export const formatKBToSize = (kb) => {
 };
 
 /**
- * Simple MB to GB/MB formatter
+ * Simple MiB to GiB/MiB formatter
  * @param {number} mb 
  * @returns {string}
  */
 export const formatMBToSize = (mb) => {
-  if (!mb) return '0 MB';
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
+  if (!mb) return '0 MiB';
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GiB` : `${mb} MiB`;
 };

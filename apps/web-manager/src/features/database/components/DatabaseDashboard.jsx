@@ -112,7 +112,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     cpu: casCpuNotCollected ? '-' : casStats.cpu.toFixed(1) + '%',
     cpuPct: casCpuNotCollected ? 0 : Math.min(casStats.cpu, 100),
     cpuNote: casCpuNotCollected ? CM.casCpuNotCollectedLinux : undefined,
-    memory: totalMemMB + 'MB', 
+    memory: totalMemMB + 'MiB', 
     memPct: Math.min((casStats.memKB / 1024) / 4, 100),
     tps: formatRate(rates.tps),
     qps: totalQps.toLocaleString(), 
@@ -137,9 +137,21 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
       [CM.performance, CM.dirtyPerSec, dbStats[0].dirty],
       [CM.performance, CM.ioReadsPerSec, dbStats[0].ioReads],
       [CM.performance, CM.ioWritesPerSec, dbStats[0].ioWrites],
-      ...mappedVolumes.map(v => [CM.volumeLabel, v.name, `${v.free} / ${v.total}`])
+      // Used / total, as the Space Usage column shows it.
+      ...(data.volumes || []).map(v => {
+        const total = parseInt(v.totalpage, 10);
+        const free = parseInt(v.freepage, 10);
+        const value = Number.isNaN(total) || Number.isNaN(free)
+          ? '-'
+          : CM.pagesCountLabel(`${Math.max(0, total - free)} / ${total}`);
+        return [CM.volumeLabel, v.spacename, value];
+      })
     ];
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const csvField = (value) => {
+      const text = String(value ?? '');
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const csv = [headers, ...rows].map(r => r.map(csvField).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
