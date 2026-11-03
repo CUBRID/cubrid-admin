@@ -83,6 +83,6 @@ describe('fetchHostSummary volumes', () => {
     await store.dispatch(fetchHostSummary('h1')).unwrap();
 
     expect(databaseApi.getVolumeInfo.mock.calls).toEqual([['h1', 'a']]);
-    expect(summary(store)).toMatchObject({ permFree: 25, dbOn: 2, dbOff: 1 });
+    expect(summary(store)).toMatchObject({ permUsed: 75, dbOn: 2, dbOff: 1 });
   });
 });
