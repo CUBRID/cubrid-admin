@@ -18,6 +18,10 @@ let container;
 let root;
 let store;
 let dispatched;
+// While set, every start-info poll fails right away, as with an unreachable host.
+let failStartInfo;
+// While set, start-info polls stay pending until it is called.
+let releaseStartInfo;
 
 const initialState = {
   user: { preferences: { dashboardInterval: 10, brokerStatusInterval: 10 } },
@@ -27,6 +31,10 @@ const initialState = {
 };
 
 const reducer = (state = initialState, action) => {
+  // What a failed start-info does to the live list: a fresh empty array.
+  if (action.type === 'test/startInfoFailed') {
+    return { ...state, database: { ...state.database, activeDatabasesByHost: { host1: [] } } };
+  }
   if (action.type === 'test/setReconnectQueue') {
     return { ...state, host: { ...state.host, reconnectQueue: action.payload } };
   }
@@ -39,9 +47,19 @@ beforeEach(async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.useFakeTimers();
   dispatched = [];
-  const recorder = () => (next) => (action) => {
+  failStartInfo = false;
+  releaseStartInfo = null;
+  const recorder = (api) => (next) => (action) => {
     if (action.type.startsWith('test/fetch')) dispatched.push(action);
-    return next(action);
+    const result = next(action);
+    if (releaseStartInfo !== null && action.type === 'test/fetchDatabaseStartInfo') {
+      return new Promise((resolve) => { releaseStartInfo = resolve; });
+    }
+    // Capped so a regression fails the count below instead of hanging the run.
+    if (failStartInfo && action.type === 'test/fetchDatabaseStartInfo' && dispatched.length < 50) {
+      Promise.resolve().then(() => api.dispatch({ type: 'test/startInfoFailed' }));
+    }
+    return result;
   };
   store = configureStore({ reducer, middleware: (gDM) => gDM().concat(recorder) });
   container = document.createElement('div');
@@ -97,4 +115,40 @@ it('pauses polling while the selected host is pending reconnect and resumes when
   await setReconnectQueue([]);
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
   expect(countOf('test/fetchBrokerList')).toBe(2);
+});
+
+it('waits for the interval after a failed poll instead of retrying at once', async () => {
+  failStartInfo = true;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  // The first poll ran before failures were switched on; then one per interval.
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
+});
+
+it('skips a tick while the previous poll is still waiting on the host', async () => {
+  releaseStartInfo = () => {};
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+
+  // The host is busy with something slow: later ticks do not pile up.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
+  expect(countOf('test/fetchBrokerList')).toBe(5);
+
+  const release = releaseStartInfo;
+  releaseStartInfo = null;
+  await act(async () => { release(); });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
 });
