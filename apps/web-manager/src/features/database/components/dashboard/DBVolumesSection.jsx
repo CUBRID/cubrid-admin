@@ -39,11 +39,13 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
 
 
 
-  const cleanInt = (v) => {
+  // A page count ("1,234 pages"), or null when there is none ("-": CMS gives
+  // no free page count for log volumes).
+  const pagesOf = (v) => {
     if (typeof v === 'number') return v;
-    if (!v) return 0;
-    const cleaned = v.toString().replace(/,/g, '').split(' ')[0];
-    return parseInt(cleaned) || 0;
+    if (!v) return null;
+    const n = parseInt(v.toString().replace(/,/g, '').split(' ')[0], 10);
+    return Number.isNaN(n) ? null : n;
   };
 
   const columns = useMemo(() => [
@@ -79,8 +81,13 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
       header: CM.spaceUsage,
       accessor: 'free',
       render: (val, row) => {
-        const rawFree = cleanInt(val);
-        const total = cleanInt(row.total);
+        const rawFree = pagesOf(val);
+        const total = pagesOf(row.total);
+        // Without a free count the used share is unknown: shown as "-", as
+        // the CSV export writes it, not as fully used.
+        if (rawFree === null || total === null) {
+          return <span className="font-mono text-14 text-slate-400">-</span>;
+        }
         const used = Math.max(0, total - rawFree);
         const usedPct = total > 0 ? (used / total) * 100 : 0;
         const isNaNData = total === 0;
