@@ -166,7 +166,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
 
       const succeeded = this.applyCmsOutcome(job, response);
       if (succeeded && job.type === 'rename') {
-        await this.clearRenameAliasCaches(job);
+        await this.finishRename(job);
       }
       job.finishedAt = job.finishedAt ?? new Date().toISOString();
       await this.store.finalizeOrphanedJob(userKey, job);
@@ -477,11 +477,17 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       // Before the startinfo lookup below: the rename already happened on
       // CMS, so a failure of that separate lookup must not skip this.
       if (succeeded && job.type === 'rename') {
-        await this.clearRenameAliasCaches(job);
+        await this.finishRename(job);
       }
 
       if (succeeded && (job.type === 'rename' || job.type === 'copy')) {
-        job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+        try {
+          job.result = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+        } catch (error: unknown) {
+          if (job.type !== 'rename') throw error;
+          job.warnings = [...(job.warnings ?? []), 'The database was renamed, but the database list could not be refreshed. Refresh the list manually; do not repeat the rename.'];
+          this.logger.warn(`Could not refresh database list after rename: ${String(error)}`);
+        }
       }
     } catch (err: unknown) {
       if (job.type === 'create') {
@@ -521,6 +527,13 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
    * Best-effort: a failure here must not flip an already-successful rename
    * job to "failed" (the rename itself did happen on CMS).
    */
+  private async finishRename(job: CmsJobRecord): Promise<void> {
+    job.warnings = await this.managementService.updateAutoStartAfterRename(
+      job.userId, job.hostUid, job.dbname, (job.payload as RenameDatabaseRequest).rename
+    );
+    await this.clearRenameAliasCaches(job);
+  }
+
   private async clearRenameAliasCaches(job: CmsJobRecord): Promise<void> {
     try {
       const renameTo = (job.payload as RenameDatabaseRequest)?.rename;
@@ -594,6 +607,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       finishedAt: record.finishedAt,
       maintenanceSummary,
       result: record.result,
+      ...(record.warnings?.length ? { warnings: record.warnings } : {}),
       error: maintenanceSummary && record.error
         ? { ...record.error, message: redactMaintenanceText(record, undefined, record.error.message) }
         : record.error,
