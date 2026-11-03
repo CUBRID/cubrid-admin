@@ -4,6 +4,7 @@ import { closeCopyDatabaseModal, fetchDatabaseStartInfo } from '../databaseSlice
 import { databaseJobApi } from '../databaseJobApi';
 import { databaseApi } from '../databaseApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
+import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -36,8 +37,11 @@ export default function CopyDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isCopyDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  // copydb's "delete source" removes an HA member locally while ha_db_list
+  // and the peers still name it, like a rename or delete (both blocked for HA).
+  const isSourceHa = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
@@ -53,6 +57,9 @@ export default function CopyDatabaseModal() {
   } = useActionState();
   const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
+  // What the job's follow-up could not do (cubrid.conf, stored login); the
+  // copy or delete itself succeeded.
+  const [warnings, setWarnings] = useState([]);
 
   const [formData, setFormData] = useState({
     destName: '',
@@ -78,6 +85,7 @@ export default function CopyDatabaseModal() {
     let cancelled = false;
     if (isCopyDatabaseModalOpen) {
       resetAction();
+      setWarnings([]);
       if (selectedHostUid && !currentDb) {
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
       }
@@ -268,18 +276,19 @@ export default function CopyDatabaseModal() {
       exvolpath: formData.extPath,
       logpath: formData.logPath,
       overwrite: formData.replaceExisting ? 'y' : 'n',
-      move: formData.deleteSource ? 'y' : 'n',
+      move: formData.deleteSource && !isSourceHa ? 'y' : 'n',
       advanced,
       ...(volumeList && { volume: volumeList }),
     };
 
     try {
-      await runJob(
+      const job = await runJob(
         () => databaseJobApi.submitCopy(selectedHostUid, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
       if (!wasBackgrounded()) {
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
+        setWarnings(job?.warnings ?? []);
         endSuccess(`${CM.copyCompleted}: ${formData.destName}`);
       }
     } catch (err) {
@@ -314,7 +323,9 @@ export default function CopyDatabaseModal() {
           message={`${CM.copyCompleted}: ${formData.destName}`}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <JobWarnings warnings={warnings} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
@@ -530,7 +541,8 @@ export default function CopyDatabaseModal() {
           />
           <Checkbox
             label={CM.btnDeleteSrcDb || 'Delete a source database'}
-            checked={formData.deleteSource}
+            checked={formData.deleteSource && !isSourceHa}
+            disabled={isSourceHa}
             onChange={e => handleInputChange('deleteSource', e.target.checked)}
           />
         </div>

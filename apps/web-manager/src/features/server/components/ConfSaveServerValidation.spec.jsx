@@ -8,6 +8,8 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 // rejected save comes back as 400 with per-line `problems`, shown through
 // the status modal. These cover that path for cubrid.conf/cm.conf
 // (CubridConfigEditor) and broker.conf (BrokerConfigEditor).
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock('../../../infrastructure/hooks/useConfirm', () => ({ useConfirm: () => confirmMock }));
 vi.mock('../../host/hostApi', () => ({ hostApi: { getHostConfig: vi.fn(), setHostConfig: vi.fn() } }));
 vi.mock('../../broker/brokerApi', () => ({ brokerApi: { getBrokerConfig: vi.fn(), updateBrokerConfig: vi.fn() } }));
 vi.mock('../../layout/layoutSlice', () => ({
@@ -21,6 +23,7 @@ import CubridConfigEditor from './CubridConfigEditor';
 import BrokerConfigEditor from './BrokerConfigEditor';
 
 const config = text => ({ conflist: [{ confdata: text.split('\n') }] });
+const changedOnHost = { response: { status: 409, data: { status: 409, data: { code: 'CHANGED_SINCE_LOADED' } } } };
 const rejected400 = problems => ({ response: { status: 400, data: { status: 400, note: 'Invalid configuration', data: { problems } } } });
 
 let container;
@@ -63,7 +66,7 @@ async function saveCmConf(next) {
 it('sends cm.conf to the server without a client-side check, even when it is invalid', async () => {
   hostApi.setHostConfig.mockResolvedValue({ success: true });
   await saveCmConf('[cm]\ncm_port=70000');
-  expect(hostApi.setHostConfig).toHaveBeenCalledWith('host', { confname: 'cmconf', confdata: ['[cm]', 'cm_port=70000'] });
+  expect(hostApi.setHostConfig).toHaveBeenCalledWith('host', { confname: 'cmconf', confdata: ['[cm]', 'cm_port=70000'], loaded: ['[cm]', 'cm_port=8001'] });
 });
 
 it('shows the server\'s per-line reasons when it rejects the save', async () => {
@@ -103,4 +106,39 @@ it('broker.conf: a server rejection shows its reasons and no restart notice', as
   const status = store.getState().lastStatus;
   expect(status.type).toBe('error');
   expect(status.guidance).toEqual(['Line 4: [%query_editor] MAX_NUM_APPL_SERVER — Must be >= MIN_NUM_APPL_SERVER (currently 8)']);
+});
+
+it('offers to reload when the file changed on the host since it was opened, and reloads on confirm', async () => {
+  hostApi.setHostConfig.mockRejectedValue(changedOnHost);
+  confirmMock.mockResolvedValue(true);
+  await saveCmConf('[cm]\ncm_port=8002');
+  hostApi.getHostConfig.mockResolvedValue(config('[cm]\ncm_port=9000'));
+  await act(async () => {});
+
+  expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ title: CM.confChangedOnHostTitle, confirmLabel: CM.reloadFileBtn }));
+  expect(hostApi.getHostConfig).toHaveBeenCalledTimes(2);
+  expect(store.getState().lastStatus).toBeNull();
+});
+
+it('keeps the edits when the reload is declined', async () => {
+  hostApi.setHostConfig.mockRejectedValue(changedOnHost);
+  confirmMock.mockResolvedValue(false);
+  await saveCmConf('[cm]\ncm_port=8002');
+
+  expect(hostApi.getHostConfig).toHaveBeenCalledTimes(1);
+  expect(q('cubrid-config-textarea').value).toBe('[cm]\ncm_port=8002');
+  expect(store.getState().lastStatus).toBeNull();
+});
+
+it('broker.conf: sends the loaded file and offers a reload when it changed on the host', async () => {
+  brokerApi.getBrokerConfig.mockResolvedValue(config('[broker]\nMASTER_SHM_ID=30001'));
+  brokerApi.updateBrokerConfig.mockRejectedValue(changedOnHost);
+  confirmMock.mockResolvedValue(true);
+  await act(async () => root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>));
+  await edit(q('broker-config-textarea'), '[broker]\nMASTER_SHM_ID=30002');
+  await act(async () => q('broker-config-save-btn').click());
+
+  expect(brokerApi.updateBrokerConfig).toHaveBeenCalledWith('host', ['[broker]', 'MASTER_SHM_ID=30002'], ['[broker]', 'MASTER_SHM_ID=30001']);
+  expect(brokerApi.getBrokerConfig).toHaveBeenCalledTimes(2);
+  expect(store.getState().lastStatus).toBeNull();
 });

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Logger, Param, Post, Request } from '@nestjs/common';
 import { CmsConfigService } from './cms-config.service';
-import { BrokerSetParamDto } from '@type/index';
+import { BrokerSetParamDto, SetSysParamDto } from '@type/index';
 import {
   GetAddBrokerInfoClientResponse,
   GetEnvClientResponse,
@@ -218,13 +218,13 @@ export class CmsConfigController {
    * @returns SetSysParamClientResponse Empty object on success (CMS envelope fields removed)
    * @example
    * // POST /host-uid/cms-config/set-sys-param
-   * // Body: { "confname": "cubridconf", "confdata": ["# comment", "[section]", "key=value"] }
+   * // Body: { "confname": "cubridconf", "confdata": ["# comment", "[section]", "key=value"], "loaded": [...] }
    */
   @Post('set-sys-param')
   async setSystemParam(
     @Request() req,
     @Param('hostUid') hostUid: string,
-    @Body() body: { confname: string; confdata: string[] }
+    @Body() body: SetSysParamDto
   ): Promise<SetSysParamClientResponse> {
     const userId = req.user.sub;
 
@@ -236,7 +236,8 @@ export class CmsConfigController {
       userId,
       hostUid,
       body.confname,
-      body.confdata
+      body.confdata,
+      body.loaded
     );
     return response;
   }
@@ -261,7 +262,7 @@ export class CmsConfigController {
       `Setting broker param for host: ${hostUid}`,
       'CmsConfigController'
     );
-    return await this.cmsConfigService.setBrokerParamFromRawEdit(userId, hostUid, body.confdata);
+    return await this.cmsConfigService.setBrokerParamFromRawEdit(userId, hostUid, body.confdata, body.loaded);
   }
 
 }

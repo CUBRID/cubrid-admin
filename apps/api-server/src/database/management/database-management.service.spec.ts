@@ -1,10 +1,11 @@
-import { DatabaseConfigService } from '@database/config/database-config.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseManagementService } from './database-management.service';
 import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
+import { CmsConfigService } from '@cms-config/cms-config.service';
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import { DatabaseError } from '@error/database/database-error';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
@@ -53,6 +54,8 @@ describe('DatabaseManagementService', () => {
   const mockUserId = 'user-123';
   const mockHostUid = 'host-uid-1';
   const mockDbname = 'testdb';
+  let cmsConfigService: { getAllSystemParam: jest.Mock; setSystemParam: jest.Mock };
+  let databaseConfigService: { ensureDbHaModeOff: jest.Mock; renameAutoStart: jest.Mock };
   const mockStartInfoResponse = { activelist: { active: [] }, dblist: { dbs: [] } };
 
   beforeEach(async () => {
@@ -75,10 +78,23 @@ describe('DatabaseManagementService', () => {
       deleteDbProfile: jest.fn().mockResolvedValue(undefined),
     };
 
+    databaseConfigService = { ensureDbHaModeOff: jest.fn().mockResolvedValue(undefined), renameAutoStart: jest.fn().mockResolvedValue([]) };
+    cmsConfigService = {
+      getAllSystemParam: jest.fn().mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=demodb'] }] }),
+      setSystemParam: jest.fn().mockResolvedValue({ success: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseManagementService,
-        { provide: DatabaseConfigService, useValue: { renameAutoStart: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: CmsConfigService,
+          useValue: cmsConfigService,
+        },
+        {
+          provide: DatabaseConfigService,
+          useValue: databaseConfigService,
+        },
         {
           provide: HostService,
           useValue: mockHostService,
@@ -961,6 +977,57 @@ describe('DatabaseManagementService', () => {
     });
   });
 
+  describe('copyDb guards and bookkeeping', () => {
+    const copyReq = {
+      srcdbname: 'srcdb', destdbname: 'newdb', destdbpath: '/db/newdb', exvolpath: '/db/newdb', logpath: '/db/newdb',
+      overwrite: 'n', move: 'n', advanced: 'off',
+    };
+
+    it.each([
+      ['its own source', [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb' }]],
+      ['another volume\'s source', [{ '/db/srcdb/srcdb': '/db/srcdb/srcdb_x001' }, { '/db/srcdb/srcdb_x001': '/copy/newdb_x001' }]],
+      ['a source written another way', [{ '/db/srcdb/srcdb': '/copy/newdb' }, { '/db/srcdb/srcdb_x001': '/db/srcdb/./srcdb' }]],
+    ])('refuses a target that is %s, before calling CMS', async (_label, volume) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, { ...copyReq, advanced: 'on', volume }))
+        .rejects.toMatchObject({ code: 'INVALID_PARAMETER', additionalData: { reason: 'COPY_VOLUME_ONTO_SOURCE' } });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('refuses "delete source" for an HA database', async () => {
+      const info = (service as any).databaseInfoService;
+      info.effectiveHaDbForDbname.mockResolvedValueOnce(true);
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, { ...copyReq, move: 'y' }))
+        .rejects.toMatchObject({ code: 'RENAME_NOT_SUPPORTED_FOR_HA_DATABASE' });
+    });
+
+    it('marks the copy ha_mode=off on an HA-configured host, and nothing else for a plain copy', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[common]', 'ha_mode=on'] }] });
+
+      await service.finishCopy(mockUserId, mockHostUid, copyReq as any);
+
+      expect(databaseConfigService.ensureDbHaModeOff).toHaveBeenCalledWith(mockUserId, mockHostUid, 'newdb');
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
+    });
+
+    it('treats "delete source" as a rename of the source in cubrid.conf', async () => {
+      cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=srcdb'] }] });
+
+      const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+
+      expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, 'srcdb', 'newdb');
+      expect(databaseConfigService.ensureDbHaModeOff).not.toHaveBeenCalled();
+      expect(warnings).toEqual([]);
+    });
+
+    it('reports a cubrid.conf failure after "delete source" as a warning, not a failure', async () => {
+      databaseConfigService.renameAutoStart.mockRejectedValueOnce(new Error('write failed'));
+
+      const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
+
+      expect(warnings).toEqual([expect.stringContaining('could not be updated')]);
+    });
+  });
+
   describe('renameDatabase', () => {
     const mockSuccessResponse: RenameDatabaseCmsResponse = {
       __EXEC_TIME: '482 ms',
@@ -1042,6 +1109,28 @@ describe('DatabaseManagementService', () => {
         expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
       expect(result).toEqual(mockStartInfoResponse);
+    });
+
+    it('passes on the warnings of the cubrid.conf rename (e.g. a [@new] section already there)', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      databaseConfigService.renameAutoStart.mockResolvedValueOnce(['kept [@old]']);
+
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+
+      expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'renamed_db');
+      expect(result.warnings).toEqual(['kept [@old]']);
+    });
+
+    it('leaves cubrid.conf alone when nothing in it names the database', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+
+      expect(cmsConfigService.setSystemParam).not.toHaveBeenCalled();
     });
 
     it('should successfully rename database with advanced "off" without volume', async () => {

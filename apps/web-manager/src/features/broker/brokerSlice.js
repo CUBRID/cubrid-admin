@@ -233,20 +233,6 @@ export const fetchBrokerConfig = createAsyncThunk(
   }
 );
 
-export const updateBrokerConfig = createAsyncThunk(
-  'broker/updateBrokerConfig',
-  async ({ hostUid, confdata }, { dispatch, rejectWithValue }) => {
-    try {
-      await brokerApi.updateBrokerConfig(hostUid, confdata);
-      dispatch(fetchBrokerConfig({ hostUid }));
-      return { success: true };
-    } catch (err) {
-      if (isAmbiguousFailure(err)) dispatch(fetchBrokerConfig({ hostUid }));
-      return rejectWithValue(err.response?.data?.message || 'Failed to update broker configuration');
-    }
-  }
-);
-
 // Reads are tracked per host from pending to settled, as { requestId:
 // foreground }. Closing the host drops its entries, so a read started on the
 // earlier connection (still in flight, or queued behind one) can neither

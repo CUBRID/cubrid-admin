@@ -323,6 +323,8 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'Failed to retrieve system parameters.';
       case ConfigErrorCode.SET_SYS_PARAM_FAILED:
         return 'Failed to set system parameters.';
+      case ConfigErrorCode.CHANGED_SINCE_LOADED:
+        return 'The file was changed after it was opened.';
       case ConfigErrorCode.UNKNOWN:
       default:
         return 'A configuration operation failed.';

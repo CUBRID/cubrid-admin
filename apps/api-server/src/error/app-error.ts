@@ -254,6 +254,7 @@ export class AppError extends Error {
           case ConfigErrorCode.NO_CONFDATA:
             return 404;
           case ConfigErrorCode.DBNAME_ALREADY_EXISTS:
+          case ConfigErrorCode.CHANGED_SINCE_LOADED:
             return 409;
           case ConfigErrorCode.DBNAME_NOT_FOUND:
             return 404;
