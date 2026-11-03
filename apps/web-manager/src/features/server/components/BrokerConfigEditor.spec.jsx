@@ -4,6 +4,8 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock('../../../infrastructure/hooks/useConfirm', () => ({ useConfirm: () => confirmMock }));
 vi.mock('../../broker/brokerApi', () => ({
   brokerApi: { getBrokerConfig: vi.fn(), updateBrokerConfig: vi.fn() },
 }));
@@ -65,7 +67,7 @@ it('tells the user the broker must be restarted after a successful save', async 
   brokerApi.updateBrokerConfig.mockResolvedValue({});
   await editAndSave();
 
-  expect(brokerApi.updateBrokerConfig).toHaveBeenCalledWith('host', ['[broker]', 'MASTER_SHM_ID=30002']);
+  expect(brokerApi.updateBrokerConfig).toHaveBeenCalledWith('host', ['[broker]', 'MASTER_SHM_ID=30002'], ['[broker]', 'MASTER_SHM_ID=30001']);
   const status = store.getState().lastStatus;
   expect(status.type).toBe('success');
   expect(status.guidance).toEqual([CM.brokerConfigRestartRequiredNotice]);

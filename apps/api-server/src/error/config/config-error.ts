@@ -168,6 +168,14 @@ export class ConfigError extends AppError {
   }
 
   /**
+   * Creates an error indicating that a configuration file changed on the host
+   * after the editor saving it had loaded it.
+   */
+  static ChangedSinceLoaded(confname: string, additionalData?: Record<string, any>) {
+    return new ConfigError('CONFIG', ConfigErrorCode.CHANGED_SINCE_LOADED, { confname, ...additionalData });
+  }
+
+  /**
    * Creates an error for an unknown configuration-related issue.
    */
   static Unknown(additionalData?: Record<string, any>, originalError?: Error) {

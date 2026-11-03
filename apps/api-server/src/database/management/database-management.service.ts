@@ -1,4 +1,3 @@
-import { DatabaseConfigService } from '@database/config/database-config.service';
 import {
   copyVolumePathKey,
   AddVolDbRequest,
@@ -29,6 +28,10 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { summarizeLocks } from './lock-summary';
+import { isHostHaModeOnFromCubridConf } from '@util';
+import { CmsConfigService } from '@cms-config/cms-config.service';
+import { DatabaseConfigService } from '@database/config/database-config.service';
+import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import {
   BaseService,
   HandleCmsErrors,
@@ -82,6 +85,7 @@ export class DatabaseManagementService extends BaseService {
     cmsClient: CmsHttpsClientService,
     private readonly databaseInfoService: DatabaseInfoService,
     private readonly databaseUserService: DatabaseUserService,
+    private readonly cmsConfigService: CmsConfigService,
     private readonly databaseConfigService: DatabaseConfigService
   ) {
     super(hostService, cmsClient);
@@ -122,10 +126,48 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     request: CopyDbRequest
-  ): Promise<CmsSuccessClientResponse> {
+  ): Promise<CmsSuccessClientResponse & { warnings?: string[] }> {
     const response = await this.copyDbCmsResponse(userId, hostUid, request);
     checkCmsStatusError(response);
-    return { success: true };
+    const warnings = await this.finishCopy(userId, hostUid, request);
+    return { success: true, ...(warnings.length ? { warnings } : {}) };
+  }
+
+  /**
+   * Bookkeeping after a successful copydb. The copy did happen, so nothing
+   * here fails it; what could not be done comes back as warnings for the
+   * user (as for a rename, see updateAutoStartAfterRename):
+   * - move=y deletes the source, so it is a rename as far as cubrid.conf and
+   *   the stored logins are concerned;
+   * - on an HA-configured host the copy gets `[@dest] ha_mode=off`, as a
+   *   created database does — otherwise `cubrid server start` refuses it
+   *   (HA mode) and it can't be deleted either.
+   */
+  async finishCopy(userId: string, hostUid: string, request: CopyDbRequest): Promise<string[]> {
+    const warnings: string[] = [];
+    if (request.move === 'y') {
+      await this.bestEffort(`clear stored login of moved database ${request.srcdbname}`, () =>
+        this.clearDbAliasCachesAfterRename(userId, hostUid, request.srcdbname, request.destdbname));
+      warnings.push(...await this.updateAutoStartAfterRename(userId, hostUid, request.srcdbname, request.destdbname));
+    }
+    try {
+      const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      if (isHostHaModeOnFromCubridConf(conf)) {
+        await this.databaseConfigService.ensureDbHaModeOff(userId, hostUid, request.destdbname);
+      }
+    } catch (err: unknown) {
+      this.logger.warn(`Failed to set ha_mode=off for copied database ${request.destdbname}: ${String(err)}`);
+      warnings.push(`Database copied to "${request.destdbname}", but cubrid.conf could not be checked or given [@${request.destdbname}] ha_mode=off. On an HA host, add that section by hand before starting it.`);
+    }
+    return warnings;
+  }
+
+  private async bestEffort(what: string, fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err: unknown) {
+      this.logger.warn(`Failed to ${what}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   async copyDbCmsResponse(
@@ -134,6 +176,11 @@ export class DatabaseManagementService extends BaseService {
     request: CopyDbRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CopyDbCmsResponse> {
+    // "Delete source" removes an HA member locally while ha_db_list and the
+    // peers still name it — the reason rename and delete are blocked for HA.
+    if (request.move === 'y' && (await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, request.srcdbname))) {
+      throw DatabaseError.RenameNotSupportedForHaDatabase({ dbname: request.srcdbname });
+    }
     if (request.destdbname.trim() === request.srcdbname.trim()) {
       throw DatabaseError.InvalidParameter('Destination database name must be different from the source');
     }
@@ -161,6 +208,17 @@ export class DatabaseManagementService extends BaseService {
           // conversion, which sorts keys within an object but retains arrays.
           volume.push({ [source]: destination });
         }
+      }
+      // copydb formats each target file, removing whatever is there first,
+      // so a target that is a source volume (its own or another volume's)
+      // would destroy the source while it is being copied.
+      const onSource = [...destinations].find((key) => sources.has(key));
+      if (onSource) {
+        throw DatabaseError.InvalidParameter(`Volume ${onSource} would be copied onto a source volume`, {
+          hostUid,
+          dbname: request.srcdbname,
+          reason: 'COPY_VOLUME_ONTO_SOURCE',
+        });
       }
     }
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.srcdbname);
@@ -540,18 +598,23 @@ export class DatabaseManagementService extends BaseService {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
     const warnings = await this.updateAutoStartAfterRename(userId, hostUid, dbname, request.rename);
-    await this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename);
+    await this.bestEffort(`clear stored login after renaming ${dbname}`, () =>
+      this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename));
     return { ...await this.getDatabaseStartInfo(userId, hostUid), ...(warnings.length ? { warnings } : {}) };
   }
 
-  /** The physical rename is already committed: report config failure without retrying it. */
+  /**
+   * The physical rename is already committed: report config failure without
+   * retrying it. Renames the database in `[service] server=` and its own
+   * `[@dbname]` section (DatabaseConfigService.renameAutoStart); returns
+   * warnings, never throws.
+   */
   async updateAutoStartAfterRename(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
     try {
-      await this.databaseConfigService.renameAutoStart(userId, hostUid, oldName, newName);
-      return [];
+      return await this.databaseConfigService.renameAutoStart(userId, hostUid, oldName, newName);
     } catch (error: unknown) {
       this.logger.warn(`Failed to update autostart after renaming ${oldName} to ${newName}: ${String(error)}`);
-      return [`Database renamed from "${oldName}" to "${newName}", but the autostart list in cubrid.conf could not be updated. Replace the old name in [service] server with the new name before relying on autostart. Do not repeat the rename.`];
+      return [`Database renamed from "${oldName}" to "${newName}", but the autostart list in cubrid.conf could not be updated. Replace the old name in [service] server, and the [@${oldName}] section header if there is one, with the new name before relying on autostart. Do not repeat the rename.`];
     }
   }
 

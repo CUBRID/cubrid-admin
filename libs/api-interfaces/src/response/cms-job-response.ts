@@ -10,6 +10,7 @@ export type CmsJobType =
   | 'copy'
   | 'addvol'
   | 'rename'
+  | 'delete'
   | 'backupdb'
   | 'restore';
 

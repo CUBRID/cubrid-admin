@@ -70,10 +70,6 @@ export const databaseApi = {
     return apiClient.post(`/${hostUid}/database/auto-start/remove`, payload);
   },
 
-  deleteDatabase: (hostUid, dbname, payload) => {
-    return apiClient.delete(`/${hostUid}/database/${dbname}`, { data: payload });
-  },
-
   loginDatabase: (hostUid, dbname, payload) => {
     return apiClient.post(`/${hostUid}/database/users/login/${encodeURIComponent(dbname)}`, payload);
   },

@@ -38,10 +38,38 @@ describe('individual database copy volumes', () => {
       { type: 'PERMANENT', volid: 1, location: '\\\\host\\volumes', spacename: 'source_x001' },
     ]).map((v, i) => ({ ...v, newLocation: 'D:\\copy\\', newVolumeName: `target${i}` }));
     expect(canCopyIndividualVolumes(volumes)).toBe(true);
+    // Sent with '/': CMS makes each target's lob directory from its last '/'
+    // before converting the path for Windows.
     expect(buildCopyVolumeMappings(volumes)).toEqual([
-      { 'C:\\db\\source': 'D:\\copy\\target0' },
-      { '\\\\host\\volumes\\source_x001': 'D:\\copy\\target1' },
+      { 'C:/db/source': 'D:/copy/target0' },
+      { '//host/volumes/source_x001': 'D:/copy/target1' },
     ]);
+  });
+
+  it('keeps a backslash in a non-Windows path as it is', () => {
+    const volumes = normalizeCopyVolumes([
+      { type: 'PERMANENT', volid: 0, location: '/db/a\\b', spacename: '/db/a\\b/source' },
+    ]).map((v) => ({ ...v, newLocation: '/copy', newVolumeName: 'target' }));
+    expect(buildCopyVolumeMappings(volumes)).toEqual([{ '/db/a\\b/source': '/copy/target' }]);
+  });
+
+  it('answers false, not throws, for a volume without a target directory yet', () => {
+    const volumes = normalizeCopyVolumes([{ type: 'PERMANENT', volid: 0, spacename: '/db/source' }])
+      .map((v) => ({ ...v, newVolumeName: 'target' }));
+    expect(canCopyIndividualVolumes(volumes)).toBe(false);
+  });
+
+  it('refuses a target that is a source volume, its own or another volume\'s', () => {
+    const base = normalizeCopyVolumes([
+      { type: 'PERMANENT', volid: 0, spacename: '/db/source' },
+      { type: 'PERMANENT', volid: 1, spacename: '/db/source_x001' },
+    ]);
+    const withTargets = (targets) => base.map((v, i) => ({ ...v, newLocation: targets[i][0], newVolumeName: targets[i][1] }));
+
+    expect(canCopyIndividualVolumes(withTargets([['/copy', 'target'], ['/copy', 'target_x001']]))).toBe(true);
+    expect(canCopyIndividualVolumes(withTargets([['/db', 'source'], ['/copy', 'target_x001']]))).toBe(false);
+    expect(canCopyIndividualVolumes(withTargets([['/db', 'source_x001'], ['/copy', 'target_x001']]))).toBe(false);
+    expect(canCopyIndividualVolumes(withTargets([['/copy', 'target'], ['/db/./', 'source']]))).toBe(false);
   });
 
   it.each([

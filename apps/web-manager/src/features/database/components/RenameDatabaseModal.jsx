@@ -87,6 +87,8 @@ export default function RenameDatabaseModal() {
     try {
       const payload = {
         rename: renameTo,
+        // 'none': renamedb renames the extension volumes where they are.
+        // A path here is `renamedb -E`, which moves them into that directory.
         exvolpath: 'none',
         advanced: 'off',
         forcedel: forcedel ? 'y' : 'n',

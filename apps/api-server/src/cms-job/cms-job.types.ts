@@ -6,6 +6,7 @@ import {
   CopyDbRequest,
   CreateDatabaseWithConfigRequest,
   CmsJobStatus,
+  DeleteDatabaseRequest,
   CmsJobType,
   LoadDatabaseRequest,
   OptimizeDatabaseRequest,
@@ -24,6 +25,7 @@ export type CmsJobPayload =
   | CopyDbRequest
   | AddVolDbRequest
   | RenameDatabaseRequest
+  | DeleteDatabaseRequest
   | BackupDbClientRequest
   | RestoreDbClientRequest;
 

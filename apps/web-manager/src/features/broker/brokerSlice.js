@@ -220,20 +220,6 @@ export const fetchBrokerConfig = createAsyncThunk(
   }
 );
 
-export const updateBrokerConfig = createAsyncThunk(
-  'broker/updateBrokerConfig',
-  async ({ hostUid, confdata }, { dispatch, rejectWithValue }) => {
-    try {
-      await brokerApi.updateBrokerConfig(hostUid, confdata);
-      dispatch(fetchBrokerConfig({ hostUid }));
-      return { success: true };
-    } catch (err) {
-      if (isAmbiguousFailure(err)) dispatch(fetchBrokerConfig({ hostUid }));
-      return rejectWithValue(err.response?.data?.message || 'Failed to update broker configuration');
-    }
-  }
-);
-
 const initialState = {
   // Keyed by hostUid — a bare shared `brokers` array meant a slow, still
   // in-flight fetch for a host the user has since switched away from could
