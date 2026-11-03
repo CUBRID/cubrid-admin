@@ -64,7 +64,8 @@ export function catalogDefaultToConf(c: EngineCatalogDbParam): string | undefine
   return undefined;
 }
 
-function scopeFromFlags(flags: string[]): ResolvedParamSchemaEntry['scope'] | undefined {
+/** Which process(es) a parameter affects: system_parameter.c's PRM_FOR_SERVER / PRM_FOR_CLIENT flags. */
+export function scopeFromFlags(flags: string[]): ResolvedParamSchemaEntry['scope'] | undefined {
   const server = flags.includes('PRM_FOR_SERVER');
   const client = flags.includes('PRM_FOR_CLIENT');
   if (server && client) return 'BOTH';

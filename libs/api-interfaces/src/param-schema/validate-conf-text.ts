@@ -6,6 +6,7 @@ import { DEPRECATED_PARAM_REPLACEMENTS } from './deprecated-param-replacements';
 import { validateCmConfText } from './validate-cm-conf-text';
 import { CM_PENDING_PARAM_SCHEMA, CM_TEMPLATE_ONLY_KEYS } from './cm-unreleased-keys';
 import { parseGuardInt } from './validate-param-value';
+import { resolveBrokerKeyGuards } from './broker-key-guards';
 
 export type ConfFileKind = 'cubridconf' | 'brokerconf' | 'cmconf';
 
@@ -18,6 +19,12 @@ export interface ConfTextProblem {
 }
 
 const COMMON_SECTION: Record<Exclude<ConfFileKind, 'cmconf'>, string> = { cubridconf: 'common', brokerconf: 'broker' };
+
+// Broker guards for a caller with no host version (no `knownKeys`): the
+// newest released line's rules (11.4), which is also what this check used
+// before it became version-aware. develop's narrower APPL_SERVER table is
+// not released yet; the server always passes the host's own rules.
+const FALLBACK_BROKER_GUARDS = resolveBrokerKeyGuards('11.4');
 
 /**
  * Validates a whole hand-edited cubrid.conf / cubrid_broker.conf / cm.conf text —
@@ -90,6 +97,14 @@ export function validateConfText(
         const guard = knownKeys?.databaseGuards?.[key.toLowerCase()];
         if (guard) {
           entry = { key: key.toLowerCase(), category: 'advanced', guard };
+          generated.push(entry);
+        }
+      }
+      // broker.conf keys the schema doesn't cover, read only per broker.
+      if (!entry && kind === 'brokerconf' && section.name?.startsWith('%') && (!known || known.has(key.toLowerCase()))) {
+        const guard = (knownKeys?.brokerGuards ?? FALLBACK_BROKER_GUARDS)[key.toUpperCase()];
+        if (guard) {
+          entry = { key: key.toUpperCase(), category: 'advance', guard };
           generated.push(entry);
         }
       }

@@ -228,10 +228,15 @@ describe('validateParamValue', () => {
       expect(validateParamValue(guard, '1G')).toBeNull();
     });
 
-    it('data_buffer_size: below 1024 pages on every page size is rejected, a 4K-page-sized minimum is not', () => {
+    // cubrid.conf is first read at the default 16K pages whatever the database's page size; on a
+    // 4K-page 11.4.5 database 16760832 bytes (1023 pages at 16K) stopped cub_server from
+    // starting and 16760833 started.
+    it('data_buffer_size: below 1024 pages at 16K is rejected, even though it is 1024 pages at 4K', () => {
       const { guard } = entry('data_buffer_size');
-      expect(validateParamValue(guard, '1M')).not.toBeNull();
-      expect(validateParamValue(guard, '4M')).toBeNull(); // exactly 1024 pages at 4K
+      expect(validateParamValue(guard, '4M')).not.toBeNull();
+      expect(validateParamValue(guard, '16760832')).not.toBeNull();
+      expect(validateParamValue(guard, '16760833')).toBeNull();
+      expect(validateParamValue(guard, '16M')).toBeNull();
       expect(validateParamValue(guard, '512M')).toBeNull();
     });
 
@@ -246,15 +251,16 @@ describe('validateParamValue', () => {
       expect(validateParamValue(entry('sort_buffer_size').guard, '1')).toBeNull();
     });
 
-    it('log_buffer_size: below 128 log pages on every page size is rejected', () => {
+    it('log_buffer_size: below 128 log pages at 16K is rejected', () => {
       const { guard } = entry('log_buffer_size');
-      expect(validateParamValue(guard, '256K')).not.toBeNull(); // 64 pages at 4K
-      expect(validateParamValue(guard, '512K')).toBeNull(); // 128 pages at 4K
+      expect(validateParamValue(guard, '512K')).not.toBeNull(); // 128 pages at 4K, 32 at 16K
+      expect(validateParamValue(guard, '2M')).toBeNull(); // 128 pages at 16K
     });
 
-    it('index_scan_oid_buffer_size: outside [0.05, 16] pages on every page size is rejected', () => {
+    it('index_scan_oid_buffer_size: outside [0.05, 16] pages at 16K is rejected', () => {
       const { guard } = entry('index_scan_oid_buffer_size');
-      expect(validateParamValue(guard, '100')).not.toBeNull();
+      expect(validateParamValue(guard, '655')).not.toBeNull(); // ceil(0.039 * 100) / 100 pages
+      expect(validateParamValue(guard, '656')).toBeNull();
       expect(validateParamValue(guard, '64K')).toBeNull();
       expect(validateParamValue(guard, '256K')).toBeNull();
       expect(validateParamValue(guard, '257K')).not.toBeNull();
