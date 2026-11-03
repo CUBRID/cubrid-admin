@@ -33,6 +33,7 @@ import { BaseService, HandleCmsErrors } from '@common';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { CmsError } from '@error/cms/cms-error';
 import { resolveHostParamSchemas } from './param-schema.util';
+import { ConfigError } from '@error/config/config-error';
 import { ConfFileKind, EngineKnownKeys, ParamSchemaEntry, formatConfTextProblem, isBlockingConfTextProblem, validateConfText } from '@api-interfaces';
 
 /**
@@ -74,6 +75,19 @@ const statdumpLeaseKey = (hostUid: string, dbname: string) => JSON.stringify([ho
 
 const cmsFailureNote = (err: unknown): string =>
   err instanceof CmsError ? String(err.additionalData?.response?.note ?? '') : '';
+
+/**
+ * Throws ConfigError.ChangedSinceLoaded unless the file as it is now
+ * (`current`) has the same text as `loaded`. Compared as CMS reads a file
+ * back, without trailing CR/LF on each line, so an empty file matches [''].
+ */
+function assertUnchangedSinceLoaded(confname: string, loaded: string[], current: string[] | string | undefined): void {
+  const text = (lines: string[] | string | undefined) =>
+    (Array.isArray(lines) ? lines : lines === undefined ? [] : [lines]).map((line) => line.replace(/[\r\n]+$/, '')).join('\n');
+  if (text(loaded) !== text(current)) {
+    throw ConfigError.ChangedSinceLoaded(confname);
+  }
+}
 
 /**
  * Service for managing CMS environment configuration operations.
@@ -390,13 +404,17 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
    * any other confname as a file name under $CUBRID/conf
    * (cm_job_task.cpp _get_confpath_by_name), so e.g. "cubrid_broker.conf"
    * would otherwise skip the broker.conf check entirely.
+   *
+   * `loaded` is the file as the editor opened it; the save is turned away
+   * (ConfigError.ChangedSinceLoaded) when the file is different now.
    */
   @HandleCmsErrors()
   async setSystemParamFromRawEdit(
     userId: string,
     hostUid: string,
     confname: string,
-    confdata: string[]
+    confdata: string[],
+    loaded: string[]
   ): Promise<SetSysParamClientResponse> {
     if (confname !== 'cubridconf' && confname !== 'cmconf') {
       throw ValidationError.InvalidFieldFormat('confname', 'cubridconf | cmconf', {
@@ -408,7 +426,11 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     const warnings = confname === 'cubridconf'
       ? this.assertValidConfText(paramSchemas.database, confdata, 'cubridconf', paramSchemas.knownKeys)
       : this.assertValidConfText(paramSchemas.cm ?? [], confdata, 'cmconf', paramSchemas.knownKeys);
-    const result = await this.setSystemParam(userId, hostUid, confname, confdata);
+    const result = await this.withHostConfigMutex(userId, hostUid, async () => {
+      const current = await this.getAllSystemParam(userId, hostUid, confname);
+      assertUnchangedSinceLoaded(confname, loaded, current.conflist?.[0]?.confdata);
+      return this.setSystemParam(userId, hostUid, confname, confdata);
+    });
     return warnings.length > 0 ? { ...result, warnings } : result;
   }
 
@@ -481,17 +503,23 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
    * Entry point for the raw brokerconf text editor's save — same reasoning
    * as `setSystemParamFromRawEdit`: `setBrokerParam` itself does no
    * validation of its own, so this is the one place hand-edited
-   * broker.conf text needs validating before being accepted.
+   * broker.conf text needs validating before being accepted, and turned
+   * away when the file changed since `loaded` was read.
    */
   @HandleCmsErrors()
   async setBrokerParamFromRawEdit(
     userId: string,
     hostUid: string,
-    confdata: string[]
+    confdata: string[],
+    loaded: string[]
   ): Promise<SetSysParamClientResponse> {
     const { broker: schema, knownKeys } = (await this.getEnv(userId, hostUid)).paramSchemas;
     const warnings = this.assertValidConfText(schema, confdata, 'brokerconf', knownKeys);
-    const result = await this.setBrokerParam(userId, hostUid, confdata);
+    const result = await this.withHostConfigMutex(userId, hostUid, async () => {
+      const current = await this.getAddBrokerInfo(userId, hostUid, 'brokerconf');
+      assertUnchangedSinceLoaded('brokerconf', loaded, current.conflist?.[0]?.confdata);
+      return this.setBrokerParam(userId, hostUid, confdata);
+    });
     return warnings.length > 0 ? { ...result, warnings } : result;
   }
 

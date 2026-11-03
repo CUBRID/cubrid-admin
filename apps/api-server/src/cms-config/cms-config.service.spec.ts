@@ -60,7 +60,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       const confdata = ['[common]', '  csql_history_num \t = \t 100  '];
 
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', confdata)
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', confdata, [])
       ).resolves.toEqual({ success: true });
     });
 
@@ -70,7 +70,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       const confdata = ['[common]', '\tcsql_history_num\t=\t9999'];
 
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', confdata)
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', confdata, [])
       ).rejects.toMatchObject({
         additionalData: { message: expect.stringContaining('csql_history_num') },
       });
@@ -83,7 +83,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       const confdata = ['[broker]', '\tMASTER_SHM_ID\t=\t   ', '[%broker1]', 'BROKER_PORT=30000'];
 
       await expect(
-        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, confdata)
+        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, confdata, [])
       ).rejects.toMatchObject({
         additionalData: { message: expect.stringContaining('MASTER_SHM_ID') },
       });
@@ -101,7 +101,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       ];
 
       await expect(
-        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, confdata)
+        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, confdata, [])
       ).rejects.toMatchObject({
         additionalData: { message: expect.stringContaining('MAX_NUM_APPL_SERVER') },
       });
@@ -113,29 +113,29 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
 
     it('rejects a cubrid.conf line with no "=" (the engine fails to load the whole file)', async () => {
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients 100'])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients 100'], [])
       ).rejects.toMatchObject({ additionalData: { message: expect.stringContaining('Line 2') } });
       expect(postAuthenticated.mock.calls.some(([, req]) => req.task === 'setsysparam')).toBe(false);
     });
 
     it('rejects a present-but-empty value for a non-string cubrid.conf key', async () => {
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients='])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients='], [])
       ).rejects.toMatchObject({ additionalData: { message: expect.stringContaining('max_clients') } });
     });
 
     it('rejects broker.conf with no [broker] section', async () => {
       await expect(
-        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, ['[%broker1]', 'BROKER_PORT=30000'])
+        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, ['[%broker1]', 'BROKER_PORT=30000'], [])
       ).rejects.toMatchObject({ additionalData: { message: expect.stringContaining('[broker]') } });
     });
 
     it('rejects a key the host\'s engine (11.4.5, catalogued exactly) does not know', async () => {
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_client=100'])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_client=100'], [])
       ).rejects.toMatchObject({ additionalData: { message: expect.stringContaining('max_client') } });
       await expect(
-        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, ['[broker]', 'MASTER_SHM_ID=30001', '[%b1]', 'BROKER_PORT=30000', 'BROKR_PORT=1'])
+        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, ['[broker]', 'MASTER_SHM_ID=30001', '[%b1]', 'BROKER_PORT=30000', 'BROKR_PORT=1'], [])
       ).rejects.toMatchObject({ additionalData: { message: expect.stringContaining('BROKR_PORT') } });
     });
 
@@ -145,7 +145,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
         '#execute_diag=ON', 'server_long_query_time=10', 'auto_job_timeout=43200', '#token_active_time=7200',
         'support_mon_statistic=NO', 'max_log_files=10', 'cm_port 8001',
       ];
-      const result = await service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', template);
+      const result = await service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', template, []);
       expect(result).toMatchObject({ success: true, warnings: [expect.stringContaining('server_long_query_time')] });
       expect(postAuthenticated.mock.calls.some(([, req]) => req.task === 'setsysparam')).toBe(true);
     });
@@ -170,7 +170,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
 
     it('rejects out-of-range / mistyped / unknown cm.conf values with a 400 listing each line', async () => {
       const error = await service
-        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['[cm]', 'cm_port=70000', 'auto_job_timeout=abc', 'cm_prot=8001'])
+        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['[cm]', 'cm_port=70000', 'auto_job_timeout=abc', 'cm_prot=8001'], [])
         .catch((e) => e);
       expect(error.additionalData.problems).toEqual([
         { lineNo: 2, key: 'cm_port', message: expect.stringContaining('<= 65535') },
@@ -184,29 +184,29 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
 
     it('accepts CMS aliases case-insensitively', async () => {
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['MonitorInterval=10', 'HTTPTIMEOUT=60'])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['MonitorInterval=10', 'HTTPTIMEOUT=60'], [])
       ).resolves.toEqual({ success: true });
     });
 
     it('only warns for the develop-only async keys (not in any released engine pin)', async () => {
-      const result = await service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['async_job_ttl_sec=10']);
+      const result = await service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['async_job_ttl_sec=10'], []);
       expect(result).toMatchObject({ success: true, warnings: [expect.stringContaining('async_job_ttl_sec')] });
     });
 
     it('refuses any confname other than cubridconf/cmconf (CMS would write it as a raw file name)', async () => {
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubrid_broker.conf', ['[broker]', 'MASTER_SHM_ID=0'])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubrid_broker.conf', ['[broker]', 'MASTER_SHM_ID=0'], [])
       ).rejects.toMatchObject({ additionalData: { confname: 'cubrid_broker.conf' } });
       expect(writes()).toHaveLength(0);
     });
 
     it('returns structured problems for cubrid.conf too, and warnings for deprecated keys', async () => {
       const error = await service
-        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=5000'])
+        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=5000'], [])
         .catch((e) => e);
       expect(error.additionalData.problems).toEqual([{ lineNo: 2, key: 'max_clients', message: expect.stringContaining('<= 4000') }]);
       await expect(
-        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'data_buffer_pages=32768'])
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'data_buffer_pages=32768'], [])
       ).resolves.toMatchObject({ warnings: [expect.stringContaining('use data_buffer_size')] });
     });
   });
@@ -222,6 +222,70 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
     it('asks for server parameters only by default', async () => {
       await service.getParamDump(mockUserId, mockHostUid, 'demodb');
       expect(paramdumpRequest()).toMatchObject({ both: 'n' });
+    });
+  });
+
+  describe('raw save when the file changed since the editor loaded it', () => {
+    let onHost: string[];
+    beforeEach(() => {
+      onHost = ['[common]', 'max_clients=100'];
+      postAuthenticated.mockImplementation((_url, req) => {
+        if (req.task === 'getallsysparam' || req.task === 'getaddbrokerinfo') {
+          return Promise.resolve({ ...cmsResponseFor(req.task), conflist: [{ confdata: onHost }] });
+        }
+        return Promise.resolve(cmsResponseFor(req.task));
+      });
+    });
+    const writes = (task: string) => postAuthenticated.mock.calls.filter(([, req]) => req.task === task);
+
+    it('writes when the file on the host is still what the editor loaded', async () => {
+      await expect(
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=200'], ['[common]', 'max_clients=100'])
+      ).resolves.toEqual({ success: true });
+      expect(writes('setsysparam')).toHaveLength(1);
+    });
+
+    it('refuses with 409 and writes nothing when the file changed on the host', async () => {
+      const error = await service
+        .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=200'], ['[common]', 'max_clients=50'])
+        .catch((e) => e);
+      expect(error.code).toBe('CHANGED_SINCE_LOADED');
+      expect(error.toProblemDetails().status).toBe(409);
+      expect(writes('setsysparam')).toHaveLength(0);
+    });
+
+    it('compares lines as CMS reads them back (no trailing CR), and an empty file as [\'\']', async () => {
+      await expect(
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]'], ['[common]\r', 'max_clients=100\r'])
+      ).resolves.toEqual({ success: true });
+      onHost = [];
+      await expect(
+        service.setBrokerParamFromRawEdit(mockUserId, mockHostUid, ['[broker]', 'MASTER_SHM_ID=30001'], [''])
+      ).resolves.toEqual({ success: true });
+    });
+
+    it('checks broker.conf the same way', async () => {
+      onHost = ['[broker]', 'MASTER_SHM_ID=30001'];
+      const error = await service
+        .setBrokerParamFromRawEdit(mockUserId, mockHostUid, ['[broker]', 'MASTER_SHM_ID=30002'], ['[broker]', 'MASTER_SHM_ID=30009'])
+        .catch((e) => e);
+      expect(error.code).toBe('CHANGED_SINCE_LOADED');
+      expect(writes('broker_setparam')).toHaveLength(0);
+    });
+
+    it('lets a second save of the same tab through only after the first one wrote (one host queue)', async () => {
+      postAuthenticated.mockImplementation((_url, req) => {
+        if (req.task === 'getallsysparam') return Promise.resolve({ ...cmsResponseFor(req.task), conflist: [{ confdata: onHost }] });
+        if (req.task === 'setsysparam') onHost = req.confdata;
+        return Promise.resolve(cmsResponseFor(req.task));
+      });
+      const loaded = ['[common]', 'max_clients=100'];
+      const results = await Promise.allSettled([
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=200'], loaded),
+        service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=300'], loaded),
+      ]);
+      expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected']);
+      expect(onHost).toEqual(['[common]', 'max_clients=200']);
     });
   });
 });

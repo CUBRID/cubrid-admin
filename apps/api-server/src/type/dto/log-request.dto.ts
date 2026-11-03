@@ -21,3 +21,10 @@ export class ViewLogDto {
   @IsNotEmpty()
   end: string;
 }
+
+/** Body for a complete, size-limited Top SQL capture. */
+export class LogSnapshotDto {
+  @IsString()
+  @IsNotEmpty()
+  path: string;
+}

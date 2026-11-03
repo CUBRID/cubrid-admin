@@ -26,6 +26,9 @@ export const brokerApi = {
   getBrokerLogs: (hostUid, brokerName) => {
     return apiClient.get(`/${hostUid}/log/broker/${brokerName}`);
   },
+  captureLogSnapshot: (hostUid, path) => {
+    return apiClient.post(`/${hostUid}/log/snapshot`, { path });
+  },
   viewLog: (hostUid, logParams) => {
     return apiClient.post(`/${hostUid}/log/view`, logParams);
   },
@@ -41,7 +44,7 @@ export const brokerApi = {
   getBrokerConfig: (hostUid, confname = 'brokerconf') => {
     return apiClient.get(`/${hostUid}/cms-config/broker-config/${confname}`);
   },
-  updateBrokerConfig: (hostUid, confdata) => {
-    return apiClient.post(`/${hostUid}/cms-config/broker-set-param`, { confdata });
+  updateBrokerConfig: (hostUid, confdata, loaded) => {
+    return apiClient.post(`/${hostUid}/cms-config/broker-set-param`, { confdata, loaded });
   },
 };

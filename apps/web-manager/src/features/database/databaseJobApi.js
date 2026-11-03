@@ -82,6 +82,13 @@ export const databaseJobApi = {
   submitRename: (hostUid, dbname, payload) =>
     submitJob(`/${hostUid}/database/rename/${encodeURIComponent(dbname)}`, payload),
 
+  submitDelete: (hostUid, dbname, payload) =>
+    apiClient.delete(`/${hostUid}/database/${encodeURIComponent(dbname)}`, {
+      data: payload,
+      validateStatus: ACCEPTED,
+      timeout: JOB_SUBMIT_TIMEOUT_MS,
+    }),
+
   submitBackup: (hostUid, dbname, payload) =>
     submitJob(`/${hostUid}/database/backup-db/${encodeURIComponent(dbname)}`, payload),
 

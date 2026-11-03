@@ -66,13 +66,14 @@ describe('CmsConfigController', () => {
       cmsConfigService.setBrokerParamFromRawEdit.mockResolvedValue({ success: true });
 
       const req = { user: { sub: 'user-123' } };
-      const body = { confdata: ['[broker]', 'SERVICE=ON'] };
+      const body = { confdata: ['[broker]', 'SERVICE=ON'], loaded: ['[broker]'] };
       const result = await controller.setBrokerParam(req as any, 'host-uid-1', body);
 
       expect(cmsConfigService.setBrokerParamFromRawEdit).toHaveBeenCalledWith(
         'user-123',
         'host-uid-1',
-        body.confdata
+        body.confdata,
+        body.loaded
       );
       expect(result).toEqual({ success: true });
     });

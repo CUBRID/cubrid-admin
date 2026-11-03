@@ -350,6 +350,7 @@ export const CM = {
   jobTypeCopy: 'Copy',
   jobTypeAddVol: 'Add volume',
   jobTypeRename: 'Rename',
+  jobTypeDelete: 'Delete',
   jobTypeBackupDb: 'Backup',
   jobTypeRestore: 'Restore',
   databaseAction: 'Database Action',
@@ -775,6 +776,8 @@ export const CM = {
   lblDescLogPathName: 'Log file path:',
   lblVolumePathName: 'Extend volume path:',
   btnCopyVolume: 'Copy individual volumes',
+  copyDestinationSameAsSource: 'Destination database name must be different from the source.',
+  copyVolumeMappingInvalid: 'Individual-volume copy requires complete volume information and a valid name and absolute directory for every destination. Reopen this dialog to reload volume information.',
   tblColumnCurrentVolName: 'Current volume name',
   tblColumnCopyNewVolName: 'New volume name',
   tblColumnCopyNewDirPath: 'New directory path',
@@ -1404,6 +1407,7 @@ export const CM = {
   errControlFile: 'The error control file is not valid.',
   errClassFile: 'The ignored table file is not valid.',
   errNoSelectedPath: 'Please check the unloaded files of the selected database from the following list.',
+  loadCountRange: (min, max) => `between ${min.toLocaleString()} and ${max.toLocaleString()}`,
   errNumOfInstances: 'The estimated number of instances is not valid. It can only be an integer greater than 0.',
 
 
@@ -1640,6 +1644,9 @@ export const CM = {
   brokerConfigSaveError: 'An error occurred while saving broker configuration.',
   invalidConfigValues: 'Invalid parameter value(s)',
   invalidConfigValuesMsg: 'The server rejected this configuration, so nothing was saved. Fix these lines and save again:',
+  confChangedOnHostTitle: 'File changed on the host',
+  confChangedOnHostDesc: 'This file was changed after you opened it, so nothing was saved. Reload the current file? Your edits will be discarded.',
+  reloadFileBtn: 'Reload',
   initializingEditor: 'Initializing Editor...',
   brokerConfig: 'Broker Config',
   brokerConfiguration: 'Broker Configuration',
@@ -1938,6 +1945,9 @@ export const CM = {
   countLabel: 'Count',
   errorsLabel: 'Errors',
   sqlPattern: 'SQL Pattern',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: 'No queries found to analyze.',
 
   // AllLogsViewer

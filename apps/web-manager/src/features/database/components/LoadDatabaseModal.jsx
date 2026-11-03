@@ -1,3 +1,4 @@
+import { isValidLoadCount, LOAD_COUNT_MIN, LOAD_COUNT_MAX } from '@api-interfaces';
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeLoadDatabaseModal } from '../databaseSlice';
@@ -228,7 +229,7 @@ export default function LoadDatabaseModal() {
   };
 
   const handleLoadDatabase = async () => {
-    if (!selectedHostUid || !selectedDatabase || !isLoggedIn) return;
+    if (!selectedHostUid || !selectedDatabase || !isLoggedIn || !isFormValid) return;
 
     startAction();
     try {
@@ -318,15 +319,15 @@ export default function LoadDatabaseModal() {
 
     if (formData.checkBoxes.estimated) {
       const val = formData.values.estimated;
-      if (!val || isNaN(val) || !Number.isInteger(Number(val)) || Number(val) <= 0) {
-        return CM.errNumOfInstances || 'The estimated number of instances is not valid. It can only be an integer greater than 0.';
+      if (!isValidLoadCount(val)) {
+        return `${CM.estimatedInstances}: ${CM.loadCountRange(LOAD_COUNT_MIN, LOAD_COUNT_MAX)}`;
       }
     }
 
     if (formData.checkBoxes.period) {
       const val = formData.values.period;
-      if (!val || isNaN(val) || !Number.isInteger(Number(val)) || Number(val) <= 0) {
-        return CM.errInsertCount || 'The value of insertion count for periodic commit is not valid. It can only be an integer value greater than 0.';
+      if (!isValidLoadCount(val)) {
+        return `${CM.insertionCountPeriodicCommit}: ${CM.loadCountRange(LOAD_COUNT_MIN, LOAD_COUNT_MAX)}`;
       }
     }
 
@@ -348,9 +349,6 @@ export default function LoadDatabaseModal() {
   const validationError = getValidationError();
   const isFormValid = !isActive && !!formData.dbUsername && !validationError;
 
-  // handleLoadDatabase itself doesn't re-check isFormValid (only the footer
-  // button's disabled prop does), so Enter-to-submit needs its own guard to
-  // avoid bypassing that gate.
   const handleFormSubmit = () => {
     if (!isFormValid) return;
     handleLoadDatabase();

@@ -56,6 +56,16 @@ import {
 } from '@type/cms-response';
 import { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
 import { parseConfigParams } from '@util';
+import {
+  editServerList,
+  forgetDbInCubridConf,
+  isAutostart,
+  removeAutostart,
+  renameAutostart,
+  renameDbSection,
+  serverEntries,
+  serviceHeaderLine,
+} from './cubrid-conf-edit';
 import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 
 /**
@@ -208,6 +218,16 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: SetAutoStartRequest
   ): Promise<SetAutoStartResponse> {
+    return this.withHostConfigMutex(userId, hostUid, () => this.setAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  // In the host's cubrid.conf queue (BaseService.withHostConfigMutex), like
+  // ensureDbHaModeOff, rename and the raw editor save.
+  private async setAutoStartUnlocked(
+    userId: string,
+    hostUid: string,
+    request: SetAutoStartRequest
+  ): Promise<SetAutoStartResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
 
     const confname = CMS_CONFNAME_CUBRID;
@@ -229,72 +249,33 @@ export class DatabaseConfigService extends BaseService {
     }
     this.logger.debug(JSON.stringify(currentConfig));
 
-    // Find the server parameter in the [service] section
-    const params = parseConfigParams(currentConfig as GetAllSysParamCmsResponse);
-    const serverParam = params.find(
-      (param) => param.key === 'server' && param.section === 'service'
-    );
-
+    // Only the server= value changes (cubrid-conf-edit), so the file's
+    // comments, indentation and quoting stay as they were.
     let updatedConfdata: string[];
 
-    if (!serverParam) {
-      // Server parameter does not exist in [service] section
-      // Find [service] section in confdata (case-sensitive, lowercase)
-      let serviceSectionStartIndex = -1;
-
-      for (let i = 0; i < confdata.length; i++) {
-        const line = confdata[i].trim();
-
-        // Check for [service] section (case-sensitive, lowercase)
-        if (line === '[service]') {
-          serviceSectionStartIndex = i;
-          break;
-        }
-      }
-
-      if (serviceSectionStartIndex === -1) {
-        // [service] section does not exist, throw error
+    if (serverEntries(confdata).length === 0) {
+      // No server= in [service]: add one right after the section header.
+      const headerLine = serviceHeaderLine(confdata);
+      if (headerLine === undefined) {
         throw ConfigError.ServerParamNotFound(confname, {
           message: '[service] section not found in configuration file',
         });
       }
-
-      // [service] section exists, add server parameter after the section header
-      const insertIndex = serviceSectionStartIndex + 1;
       updatedConfdata = [
-        ...confdata.slice(0, insertIndex),
+        ...confdata.slice(0, headerLine),
         `server=${request.dbname}`,
-        ...confdata.slice(insertIndex),
+        ...confdata.slice(headerLine),
       ];
       this.logger.debug(
-        `Server parameter not found in [service] section, adding server=${request.dbname} at line ${insertIndex + 1}`
+        `Server parameter not found in [service] section, adding server=${request.dbname} at line ${headerLine + 1}`
       );
+    } else if (isAutostart(confdata, request.dbname)) {
+      this.logger.debug(
+        `Database name ${request.dbname} already exists in server parameter, returning current configuration`
+      );
+      return currentConfig as unknown as SetAutoStartResponse;
     } else {
-      // Parse existing server values
-      const existingDbnames = serverParam.value
-        ? serverParam.value
-            .split(',')
-            .map((db) => db.trim())
-            .filter((db) => db.length > 0)
-        : [];
-
-      // Check if dbname already exists - if it does, return success without modification
-      if (existingDbnames.includes(request.dbname)) {
-        this.logger.debug(
-          `Database name ${request.dbname} already exists in server parameter, returning current configuration`
-        );
-        const rv: SetAutoStartResponse = currentConfig as unknown as SetAutoStartResponse;
-        this.logger.debug(JSON.stringify(rv));
-        return rv;
-      }
-
-      // Append new dbname
-      const updatedDbnames = [...existingDbnames, request.dbname];
-      const updatedServerLine = `server=${updatedDbnames.join(',')}`;
-
-      // Update confdata with new server line (lineNumber is 1-based, convert to 0-based index)
-      updatedConfdata = [...confdata];
-      updatedConfdata[serverParam.lineNumber - 1] = updatedServerLine;
+      updatedConfdata = editServerList(confdata, (names) => [...names, request.dbname], { lastOnly: true });
     }
 
     const rv = await this.cmsConfigService.setSystemParam(
@@ -334,7 +315,7 @@ export class DatabaseConfigService extends BaseService {
     // other's write. Serialize the whole read-modify-write per host (not
     // per dbname, unlike withQueryPlanMutex above) so concurrent callers on
     // the same host queue instead of racing.
-    return this.withHostConfigMutex(hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
+    return this.withHostConfigMutex(userId, hostUid, () => this.ensureDbHaModeOffUnlocked(userId, hostUid, dbname));
   }
 
   private async ensureDbHaModeOffUnlocked(userId: string, hostUid: string, dbname: string): Promise<void> {
@@ -405,6 +386,32 @@ export class DatabaseConfigService extends BaseService {
     hostUid: string,
     request: RemoveAutoStartRequest
   ): Promise<RemoveAutoStartResponse> {
+    return this.withHostConfigMutex(userId, hostUid, () => this.removeAutoStartUnlocked(userId, hostUid, request));
+  }
+
+  /**
+   * After a database is deleted: takes it out of the `[service]` autostart
+   * list and drops its `[@dbname]` section (forgetDbInCubridConf). No login
+   * gate — the deleted database can't log in any more, and the delete itself
+   * went through the gate.
+   */
+  async forgetDatabaseAfterDelete(userId: string, hostUid: string, dbname: string): Promise<void> {
+    await this.withHostConfigMutex(userId, hostUid, async () => {
+      const conf = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      const confdata = conf.conflist?.[0]?.confdata;
+      if (!confdata || confdata.length === 0) return;
+      const updated = forgetDbInCubridConf(confdata, dbname);
+      if (updated) {
+        await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
+      }
+    });
+  }
+
+  private async removeAutoStartUnlocked(
+    userId: string,
+    hostUid: string,
+    request: RemoveAutoStartRequest
+  ): Promise<RemoveAutoStartResponse> {
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.dbname);
 
     const confname = CMS_CONFNAME_CUBRID;
@@ -425,39 +432,16 @@ export class DatabaseConfigService extends BaseService {
       throw ConfigError.NoConfdata(confname);
     }
 
-    // Find the server parameter in the [service] section
-    const params = parseConfigParams(currentConfig as GetAllSysParamCmsResponse);
-    const serverParam = params.find(
-      (param) => param.key === 'server' && param.section === 'service'
-    );
-
-    if (!serverParam) {
+    if (serverEntries(confdata).length === 0) {
       throw ConfigError.ServerParamNotFound(confname, {
         message: 'server parameter not found in [service] section',
       });
     }
-
-    // Parse existing server values
-    const existingDbnames = serverParam.value
-      ? serverParam.value
-          .split(',')
-          .map((db) => db.trim())
-          .filter((db) => db.length > 0)
-      : [];
-
-    // Check if dbname exists
-    if (!existingDbnames.includes(request.dbname)) {
+    if (!isAutostart(confdata, request.dbname)) {
       throw ConfigError.DbnameNotFound(confname, request.dbname);
     }
-
-    // Remove dbname
-    const updatedDbnames = existingDbnames.filter((db) => db !== request.dbname);
-    const updatedServerLine =
-      updatedDbnames.length > 0 ? `server=${updatedDbnames.join(',')}` : 'server=';
-
-    // Update confdata with updated server line (lineNumber is 1-based, convert to 0-based index)
-    const updatedConfdata = [...confdata];
-    updatedConfdata[serverParam.lineNumber - 1] = updatedServerLine;
+    // Only the server= value changes (cubrid-conf-edit).
+    const updatedConfdata = removeAutostart(confdata, request.dbname);
 
     // Set updated configuration
     return await this.cmsConfigService.setSystemParam(
@@ -466,6 +450,28 @@ export class DatabaseConfigService extends BaseService {
       confname,
       updatedConfdata
     );
+  }
+
+  /**
+   * After a rename (or a copy that deletes its source): renames the database
+   * in `[service] server=` (renameAutostart) and its own `[@oldName]` section
+   * header (renameDbSection). No-op when neither names the old name,
+   * including reconciliation retries. Returns a warning when `[@newName]`
+   * already exists and `[@oldName]` was left as it is.
+   */
+  async renameAutoStart(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
+    return this.withHostConfigMutex(userId, hostUid, async () => {
+      const current = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
+      const confdata = current.conflist?.[0]?.confdata;
+      if (!confdata?.length) throw ConfigError.NoConfdata(CMS_CONFNAME_CUBRID);
+      const { lines: updated, kept } = renameDbSection(renameAutostart(confdata, oldName, newName), oldName, newName);
+      const warnings = kept
+        ? [`cubrid.conf already has a [@${newName}] section, so the [@${oldName}] section was left as it is. Move its settings to [@${newName}] by hand if "${newName}" needs them.`]
+        : [];
+      if (updated.length === confdata.length && updated.every((line, index) => line === confdata[index])) return warnings;
+      await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);
+      return warnings;
+    });
   }
 
   /**
@@ -808,27 +814,6 @@ export class DatabaseConfigService extends BaseService {
       resolve();
       if (this.queryPlanMutex.get(key) === next) {
         this.queryPlanMutex.delete(key);
-      }
-    }
-  }
-
-  // Serializes concurrent cubridconf read-modify-write operations per hostUid
-  // (not per dbname — unlike queryPlanMutex, two different databases on the
-  // same host still share one physical conflist and must not interleave).
-  private readonly hostConfigMutex = new Map<string, Promise<void>>();
-
-  private async withHostConfigMutex<T>(hostUid: string, fn: () => Promise<T>): Promise<T> {
-    const pending = this.hostConfigMutex.get(hostUid) ?? Promise.resolve();
-    let resolve!: () => void;
-    const next = new Promise<void>((r) => (resolve = r));
-    this.hostConfigMutex.set(hostUid, next);
-    try {
-      await pending;
-      return await fn();
-    } finally {
-      resolve();
-      if (this.hostConfigMutex.get(hostUid) === next) {
-        this.hostConfigMutex.delete(hostUid);
       }
     }
   }

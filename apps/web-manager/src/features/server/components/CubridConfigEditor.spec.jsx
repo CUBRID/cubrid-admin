@@ -4,6 +4,8 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock('../../../infrastructure/hooks/useConfirm', () => ({ useConfirm: () => confirmMock }));
 vi.mock('../../host/hostApi', () => ({ hostApi: { getHostConfig: vi.fn(), setHostConfig: vi.fn() } }));
 vi.mock('../../layout/layoutSlice', () => ({
   setTabDirty: payload => ({ type: 'dirty', payload }),

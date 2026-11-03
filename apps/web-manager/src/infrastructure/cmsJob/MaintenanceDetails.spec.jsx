@@ -127,3 +127,14 @@ it('copies available output and displays a fallback when clipboard access fails'
   await act(async () => container.querySelector('button').click());
   expect(container.querySelector('[role="status"]').textContent).toContain('Select the text');
 });
+
+it('retains rename warnings in restored snapshots and displays them in background results and details', async () => {
+  const warning = 'The database was renamed, but autostart needs manual attention. Do not repeat the rename.';
+  const job = normalizeTrackedJob({ ...completed, type: 'rename', maintenanceSummary: undefined, warnings: [warning] });
+  expect(normalizeTrackedJob({ jobId: job.jobId }, job).warnings).toEqual([warning]);
+  await render(<JobResultModal result={{ ...job, status: 'succeeded' }} onClose={vi.fn()} />);
+  expect(container.querySelector('[role="alert"]').textContent).toBe(warning);
+  await render(<BackgroundJobsPanel jobs={[job]} activeCount={0} expanded onToggleExpanded={vi.fn()} onDismiss={vi.fn()} onClearCompleted={vi.fn()} />);
+  await act(async () => container.querySelector('li > div').click());
+  expect(container.querySelector('[data-testid="job-detail-modal"] [role="alert"]').textContent).toBe(warning);
+});
