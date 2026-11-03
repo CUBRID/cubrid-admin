@@ -1,4 +1,6 @@
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import {
+  copyVolumePathKey,
   AddVolDbRequest,
   AddVolDbResponse,
   CheckDatabaseRequest,
@@ -79,7 +81,8 @@ export class DatabaseManagementService extends BaseService {
     hostService: HostService,
     cmsClient: CmsHttpsClientService,
     private readonly databaseInfoService: DatabaseInfoService,
-    private readonly databaseUserService: DatabaseUserService
+    private readonly databaseUserService: DatabaseUserService,
+    private readonly databaseConfigService: DatabaseConfigService
   ) {
     super(hostService, cmsClient);
   }
@@ -131,6 +134,35 @@ export class DatabaseManagementService extends BaseService {
     request: CopyDbRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CopyDbCmsResponse> {
+    if (request.destdbname.trim() === request.srcdbname.trim()) {
+      throw DatabaseError.InvalidParameter('Destination database name must be different from the source');
+    }
+    const advanced = request.advanced === 'on' || request.advanced === 'y';
+    let volume: Record<string, string>[] | undefined;
+    if (advanced) {
+      if (!Array.isArray(request.volume) || request.volume.length === 0) {
+        throw DatabaseError.InvalidParameter('Individual-volume copy requires volume mappings');
+      }
+      volume = [];
+      const sources = new Set<string>();
+      const destinations = new Set<string>();
+      for (const item of request.volume) {
+        if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length === 0) {
+          throw DatabaseError.InvalidParameter('Invalid copy volume mapping');
+        }
+        for (const [source, destination] of Object.entries(item)) {
+          if (!source.trim() || typeof destination !== 'string' || !destination.trim() ||
+              sources.has(copyVolumePathKey(source)) || destinations.has(copyVolumePathKey(destination))) {
+            throw DatabaseError.InvalidParameter('Copy volume paths must be non-empty and unique');
+          }
+          sources.add(copyVolumePathKey(source));
+          destinations.add(copyVolumePathKey(destination));
+          // Preserve the caller's physical volume order through CMS's JSON
+          // conversion, which sorts keys within an object but retains arrays.
+          volume.push({ [source]: destination });
+        }
+      }
+    }
     await this.databaseUserService.ensureDbLogin(userId, hostUid, request.srcdbname);
 
     const cmsRequest: CopyDbCmsRequest = {
@@ -142,12 +174,10 @@ export class DatabaseManagementService extends BaseService {
       logpath: request.logpath,
       overwrite: request.overwrite,
       move: request.move,
-      advanced: request.advanced,
+      advanced: advanced ? 'on' : request.advanced,
     };
-    if (request.advanced === 'on' || request.advanced === 'y') {
-      if (request.volume && request.volume.length > 0) {
-        cmsRequest.volume = request.volume;
-      }
+    if (volume) {
+      cmsRequest.volume = volume;
     }
 
     return this.executeAsyncCmsJobRequest<CopyDbCmsRequest, CopyDbCmsResponse>(
@@ -506,11 +536,23 @@ export class DatabaseManagementService extends BaseService {
     hostUid: string,
     dbname: string,
     request: RenameDatabaseRequest
-  ): Promise<StartInfoClientResponse> {
+  ): Promise<StartInfoClientResponse & { warnings?: string[] }> {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
+    const warnings = await this.updateAutoStartAfterRename(userId, hostUid, dbname, request.rename);
     await this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename);
-    return await this.getDatabaseStartInfo(userId, hostUid);
+    return { ...await this.getDatabaseStartInfo(userId, hostUid), ...(warnings.length ? { warnings } : {}) };
+  }
+
+  /** The physical rename is already committed: report config failure without retrying it. */
+  async updateAutoStartAfterRename(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
+    try {
+      await this.databaseConfigService.renameAutoStart(userId, hostUid, oldName, newName);
+      return [];
+    } catch (error: unknown) {
+      this.logger.warn(`Failed to update autostart after renaming ${oldName} to ${newName}: ${String(error)}`);
+      return [`Database renamed from "${oldName}" to "${newName}", but the autostart list in cubrid.conf could not be updated. Replace the old name in [service] server with the new name before relying on autostart. Do not repeat the rename.`];
+    }
   }
 
   /**

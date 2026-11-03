@@ -85,6 +85,7 @@ export function CmsJobProvider({ children }) {
         error: job.error,
         maintenanceSummary: job.maintenanceSummary,
         result: job.result,
+        warnings: job.warnings,
         startedAt: job.startedAt,
         finishedAt: job.finishedAt,
         successMessage,

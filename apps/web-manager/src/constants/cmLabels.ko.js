@@ -729,6 +729,8 @@ export const CM_KO = {
   lblDescLogPathName: '로그 볼륨 경로:',
   lblVolumePathName: '확장 볼륨 경로:',
   btnCopyVolume: '개별 볼륨 복사 설정',
+  copyDestinationSameAsSource: 'Destination database name must be different from the source.',
+  copyVolumeMappingInvalid: 'Individual-volume copy requires complete volume information and a valid name and absolute directory for every destination. Reopen this dialog to reload volume information.',
   tblColumnCurrentVolName: '기존 볼륨 이름',
   tblColumnCopyNewVolName: '새 볼륨 이름',
   tblColumnCopyNewDirPath: '새 경로',
@@ -1359,6 +1361,7 @@ export const CM_KO = {
   errControlFile: '오류에 대한 제어 파일이 유효하지 않습니다.',
   errClassFile: '로드하지 않을 테이블을 기록한 파일이 유효하지 않습니다.',
   errNoSelectedPath: '리스트에서 데이터베이스의 언로드 파일을 선택해 주십시오.',
+  loadCountRange: (min, max) => `between ${min.toLocaleString()} and ${max.toLocaleString()}`,
   errNumOfInstances: '인스턴스의 대략적인 개수가 유효하지 않습니다. 이 값은 반드시 0보다 커야 합니다.',
 
 
@@ -1892,6 +1895,9 @@ export const CM_KO = {
   countLabel: '횟수',
   errorsLabel: '오류',
   sqlPattern: 'SQL 패턴',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: '분석할 쿼리가 없습니다.',
 
   // 전체 로그 뷰어

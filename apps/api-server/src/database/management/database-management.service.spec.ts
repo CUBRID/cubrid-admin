@@ -1,3 +1,4 @@
+import { DatabaseConfigService } from '@database/config/database-config.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseManagementService } from './database-management.service';
 import { HostService } from '@host';
@@ -8,6 +9,7 @@ import { DatabaseError } from '@error/database/database-error';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import {
+  CopyDbRequest,
   UnloadDatabaseRequest,
   LoadDatabaseRequest,
   CheckDatabaseRequest,
@@ -32,6 +34,7 @@ import {
 describe('DatabaseManagementService', () => {
   let service: DatabaseManagementService;
   let hostService: jest.Mocked<HostService>;
+  let configService: { renameAutoStart: jest.Mock };
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
   let databaseUserService: { loginDatabase: jest.Mock; ensureDbLogin: jest.Mock; deleteDbProfile: jest.Mock };
 
@@ -75,6 +78,7 @@ describe('DatabaseManagementService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DatabaseManagementService,
+        { provide: DatabaseConfigService, useValue: { renameAutoStart: jest.fn().mockResolvedValue(undefined) } },
         {
           provide: HostService,
           useValue: mockHostService,
@@ -99,6 +103,8 @@ describe('DatabaseManagementService', () => {
     cmsClient = module.get(CmsHttpsClientService);
     databaseUserService = mockDatabaseUserService;
 
+    configService = module.get(DatabaseConfigService);
+
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
   });
@@ -109,6 +115,87 @@ describe('DatabaseManagementService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('copyDb', () => {
+    const request: CopyDbRequest = {
+      srcdbname: 'source', destdbname: 'clone', destdbpath: '/copy',
+      exvolpath: '/copy', logpath: '/copy', overwrite: 'n', move: 'n', advanced: 'on',
+      volume: [{ '/z/source': '/copy/clone' }, { '/a/extra': '/copy/clone_x001' }],
+    };
+
+    it('preserves physical mapping order and sends one key per CMS volume object', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/z/source': '/copy/clone', '/a/extra': '/copy/clone_x001' }],
+      });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ advanced: 'on', volume: request.volume }), expect.any(Object)
+      );
+    });
+
+    it('normalizes the supported advanced=y alias to CMS advanced=on', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, advanced: 'y' });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String), expect.objectContaining({ advanced: 'on', volume: request.volume }), expect.any(Object)
+      );
+    });
+
+    it.each([
+      undefined, [], [{}], [null], [{ '/db/source': '' }], [{ '/db/source': 123 }],
+      [{ '/db/source': '/copy/clone' }, { '/db/source': '/copy/other' }],
+      [{ '/db/source': '/copy/clone' }, { '/db/extra': '/copy/clone' }],
+    ].map(volume => [volume]))('rejects invalid advanced mappings before CMS is called: %j', async volume => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: volume as CopyDbRequest['volume'],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['/copy/clone', '/copy/./clone'],
+      ['/copy/clone', '/copy/sub/../clone'],
+      ['/copy/clone', '/copy//clone'],
+      ['C:\\copy\\clone', 'c:/copy/./clone'],
+      ['C:\\copy\\clone', 'C:\\COPY\\sub\\..\\clone'],
+      ['\\\\server\\share\\copy\\clone', '\\\\SERVER\\share\\copy\\.\\clone'],
+    ])('rejects aliased destinations before CMS: %s and %s', async (first, second) => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': first }, { '/db/extra': second }],
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('rejects aliased source paths before CMS', async () => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, volume: [{ '/db/source': '/copy/clone' }, { '/db/./source': '/copy/extra' }],
+      })).rejects.toThrow(DatabaseError);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('preserves valid POSIX paths, including case-distinct filenames, in the CMS request', async () => {
+      const volume = [{ '/db/source': '/copy/./Clone' }, { '/db/extra': '/copy/sub/../clone' }];
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, volume });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).toEqual(expect.objectContaining({ volume }));
+    });
+
+    it.each(['on', 'off'])('rejects copying onto the source before CMS is called (advanced=%s)', async advanced => {
+      await expect(service.copyDbCmsResponse(mockUserId, mockHostUid, {
+        ...request, destdbname: ' source ', advanced, overwrite: 'y',
+      })).rejects.toThrow(DatabaseError);
+      expect(databaseUserService.ensureDbLogin).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('omits mappings for normal copy', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'copydb', status: 'success', note: 'none' });
+      await service.copyDb(mockUserId, mockHostUid, { ...request, advanced: 'off' });
+      expect(cmsClient.postAuthenticated.mock.calls[0][1]).not.toHaveProperty('volume');
+    });
   });
 
   describe('unloadDatabase', () => {
@@ -893,6 +980,33 @@ describe('DatabaseManagementService', () => {
         '/old/path2': '/new/path2',
       },
     ];
+
+    it('updates autostart only after a successful physical rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(configService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'newdb');
+      expect(cmsClient.postAuthenticated.mock.invocationCallOrder[0]).toBeLessThan(configService.renameAutoStart.mock.invocationCallOrder[0]);
+    });
+
+    it('returns a warning without failing or resubmitting an already committed rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+      configService.renameAutoStart.mockRejectedValue(new Error('config write failed'));
+      const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      });
+      expect(result.warnings?.[0]).toContain('Do not repeat the rename');
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not change autostart after a failed CMS rename', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'failure', task: 'renamedb', note: 'rename failed' });
+      await expect(service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
+        rename: 'newdb', exvolpath: 'none', advanced: 'off', forcedel: 'n',
+      })).rejects.toThrow();
+      expect(configService.renameAutoStart).not.toHaveBeenCalled();
+    });
 
     it('should successfully rename database with advanced "on" and volume', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
