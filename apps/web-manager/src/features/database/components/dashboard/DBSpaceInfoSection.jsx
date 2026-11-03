@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchDatabaseSpaceInfo } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -6,6 +6,7 @@ import { Table } from '../../../../components/ds/layout/Table';
 import { Card } from '../../../../components/ds/layout/Card';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
+import { useRefreshWhenShown } from './useRefreshWhenShown';
 
 export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, pollingProps }) {
   const CM = useCM();
@@ -17,14 +18,7 @@ export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, polling
     if (hostUid && dbname) dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
   };
 
-  const wasActiveAndExpanded = useRef(isTabActive && !isCollapsed);
-  useEffect(() => {
-    const currentActiveAndExpanded = isTabActive && !isCollapsed;
-    if (currentActiveAndExpanded && !wasActiveAndExpanded.current) {
-      refresh();
-    }
-    wasActiveAndExpanded.current = currentActiveAndExpanded;
-  }, [isTabActive, isCollapsed, hostUid, dbname]);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
 
   useEffect(() => {
     let interval;

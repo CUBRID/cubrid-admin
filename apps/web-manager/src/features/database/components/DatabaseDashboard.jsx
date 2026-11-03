@@ -1,4 +1,5 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
+import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 import React, { useState } from 'react';
 import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
@@ -65,7 +66,9 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   // Tabs are always opened as `db:${hostUid}:${dbname}` (DatabaseTree.jsx) —
   // comparing against a bare `db:${dbname}` here never matched, so every
   // dashboard section's "became active, refetch" effect silently never fired.
-  const isTabActive = document.visibilityState === 'visible' && activeMainTab === `db:${hostUid}:${dbname}`;
+  // Sections stop polling while a modal covers the dashboard.
+  const anyModalOpen = useAnyModalOpen();
+  const isTabActive = document.visibilityState === 'visible' && activeMainTab === `db:${hostUid}:${dbname}` && !anyModalOpen;
 
 
   // Pass polling props to sections
