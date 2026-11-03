@@ -3,7 +3,9 @@ import { hostApi } from '../host/hostApi';
 import { databaseApi } from '../database/databaseApi';
 import { brokerApi } from '../broker/brokerApi';
 import monitoringApi from './monitoringApi';
-import { computeBrokerRates, extractBrokerList } from './hostMetrics';
+import { computeBrokerRates, extractBrokerList, volumeGroup } from './hostMetrics';
+
+const usedPct = (totalPages, freePages) => (totalPages > 0 ? Math.round(((totalPages - freePages) * 100) / totalPages) : -1);
 
 /**
  * Thunk to fetch comprehensive summary for a single host
@@ -39,8 +41,6 @@ export const fetchHostSummary = createAsyncThunk(
         if (!vol || !vol.spaceinfo) return;
         freespaceOnStorage = (vol.freespace || 0) * 1024 * 1024;
         vol.spaceinfo.forEach(s => {
-          const type = (s.type || '').toUpperCase();
-          const purpose = (s.purpose || '').toUpperCase();
           // CMS returns totalpage/freepage as strings (e.g. "8192"), and some
           // volume rows (e.g. log volumes) return a blank/space value. Summing
           // those directly with += on a numeric accumulator silently degrades
@@ -50,21 +50,14 @@ export const fetchHostSummary = createAsyncThunk(
           const totalPage = parseInt(s.totalpage) || 0;
           const freePage = parseInt(s.freepage) || 0;
 
-          if (type === 'DATA' || type === 'INDEX' || type === 'GENERIC') {
+          const group = volumeGroup(s);
+          if (group === 'permPerm') {
             totalPagePerm += totalPage;
             freePagePerm += freePage;
-          } else if (type === 'TEMP') {
+          } else if (group === 'permTemp') {
             totalPagePermTemp += totalPage;
             freePagePermTemp += freePage;
-          } else if (type === 'PERMANENT') {
-            if (purpose === 'PERMANENT') {
-              totalPagePerm += totalPage;
-              freePagePerm += freePage;
-            } else {
-              totalPagePermTemp += totalPage;
-              freePagePermTemp += freePage;
-            }
-          } else if (type === 'TEMPORARY') {
+          } else if (group === 'tempTemp') {
             totalPageTempTemp += totalPage;
             freePageTempTemp += freePage;
           }
@@ -125,9 +118,10 @@ export const fetchHostSummary = createAsyncThunk(
           dbOff: (dbInfo?.dblist?.dbs?.length || 0) - (dbInfo?.activelist?.active?.length || 0),
           version: envInfo?.os_info || envInfo?.os || 'Unknown',
           brokerPorts: brokerPorts.join(', '),
-          permFree: totalPagePerm > 0 ? Math.round((freePagePerm * 100) / totalPagePerm) : -1,
-          permTempFree: totalPagePermTemp > 0 ? Math.round((freePagePermTemp * 100) / totalPagePermTemp) : -1,
-          tempTempFree: totalPageTempTemp > 0 ? Math.round((freePageTempTemp * 100) / totalPageTempTemp) : -1,
+          // Percent of each volume group in use (-1 = the host has none).
+          permUsed: usedPct(totalPagePerm, freePagePerm),
+          permTempUsed: usedPct(totalPagePermTemp, freePagePermTemp),
+          tempTempUsed: usedPct(totalPageTempTemp, freePageTempTemp),
         }
       };
     } catch (err) {

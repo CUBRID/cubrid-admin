@@ -91,6 +91,19 @@ describe('DBVolumesSection rows', () => {
     expect(container.textContent).toContain('demodb_x001');
     expect(container.textContent).not.toContain(CM.dataUnavailableTitle);
   });
+
+  it('shows used / total pages, and "-" for a log volume with no free page count, as the CSV export does', async () => {
+    const volumes = [
+      { name: '/data/demodb', type: 'PERMANENT', purpose: 'PERMANENT', free: '3,904 pages', total: '8,192 pages', date: '-', path: '/data' },
+      { name: '/data/demodb_lgat', type: 'ACTIVE_LOG', purpose: '-', free: '-', total: '32,768 pages', date: '-', path: '/data' },
+    ];
+    await render(<DBVolumesSection volumes={volumes} volumesStatus="ok" pollingProps={pollingProps} />);
+    const rows = [...container.querySelectorAll('tr')].map((tr) => tr.textContent);
+    expect(rows.find((t) => t.includes('demodb_lgat') === false && t.includes('demodb'))).toContain('4,288 / 8,192');
+    const logRow = rows.find((t) => t.includes('demodb_lgat'));
+    expect(logRow).not.toContain('32,768 / 32,768');
+    expect(logRow).toContain('-');
+  });
 });
 
 describe('DBJobAutomationSection empty state', () => {

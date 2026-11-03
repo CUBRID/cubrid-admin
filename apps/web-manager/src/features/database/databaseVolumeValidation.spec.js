@@ -48,7 +48,7 @@ describe('database volume validation', () => {
       expect(labels.volumeSizePositiveError).toBeTruthy();
       expect(labels.generalVolumeSizeMinError).toBeTruthy();
       expect(labels.generalVolumeSizeMaxError).toBeTruthy();
-      expect(labels.createDbGuidance.some((item) => item.includes('20 GB'))).toBe(true);
+      expect(labels.createDbGuidance.some((item) => item.includes('20 GiB'))).toBe(true);
     }
   });
 });
