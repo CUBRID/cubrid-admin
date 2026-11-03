@@ -24,7 +24,7 @@ import {
   setSelectedDatabase, resetDatabaseState, clearDatabaseLoginsForHost
 } from '../../database/databaseCoreSlice';
 import { restartDatabasesInBulk, bulkResultStatusModal, serviceSkippedTable } from '../../database/databaseBulkActions';
-import { autoStartServers, loginSkipsOf, readStartInfoDatabases, restartLoginSkips, serviceStartTargets, serviceStopTargets } from '../../database/loginSkips';
+import { autoStartServers, haModeOn, loginSkipsOf, readStartInfoDatabases, restartLoginSkips, serviceDatabases, serviceStartTargets, serviceStopTargets } from '../../database/loginSkips';
 import { hostApi } from '../../host/hostApi';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
 import { restartHostService } from '../../host/hostServiceRestart';
@@ -444,18 +444,29 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     }
   };
 
-  const readAutoStart = (hostUid) => hostApi.getHostConfig(hostUid, 'cubridconf')
-    .then((response) => new Set(autoStartServers(response?.conflist?.[0]?.confdata)))
-    .catch(() => new Set());
+  // The cubrid.conf parts a service action follows: the autostart list, and
+  // whether the host is an HA node (ha_mode). Unreadable: no autostart list,
+  // and HA node, so the HA notes still show.
+  const readServiceConf = (hostUid) => hostApi.getHostConfig(hostUid, 'cubridconf')
+    .then((response) => {
+      const lines = response?.conflist?.[0]?.confdata;
+      return { autoStart: new Set(autoStartServers(lines)), haNode: haModeOn(lines) };
+    })
+    .catch(() => ({ autoStart: new Set(), haNode: true }));
+  // start-info databases and the service conf, read as a service dialog opens.
+  const readServiceState = async (hostUid) => {
+    const [databases, { autoStart, haNode }] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readServiceConf(hostUid)]);
+    return { databases: serviceDatabases(databases, haNode), autoStart };
+  };
   // Service start brings up the autostart list and, on an HA host, the HA
   // databases with one node-wide ha_start. The autostart ones not running
   // and not logged in are named before it runs, with the HA notes.
   const requestStartService = async (hostUid) => {
     if (!hostUid) return;
-    const [databases, autoStart] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readAutoStart(hostUid)]);
-    const targets = serviceStartTargets(databases || [], autoStart);
-    const skips = loginSkipsOf(databases || [], targets);
-    const hasHa = (databases || []).some((db) => db.isHa);
+    const { databases, autoStart } = await readServiceState(hostUid);
+    const targets = serviceStartTargets(databases, autoStart);
+    const skips = loginSkipsOf(databases, targets);
+    const hasHa = databases.some((db) => db.isHa);
     if (skips.count === 0 && !hasHa) {
       handleServiceAction(hostUid, 'start');
       return;
@@ -474,9 +485,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // start would bring up stay stopped. Both are named before it runs.
   const requestRestartService = async (hostUid, serverName) => {
     if (!hostUid) return;
-    const [databases, autoStart] = await Promise.all([dispatch(readStartInfoDatabases(hostUid)), readAutoStart(hostUid)]);
-    const { keepsRunning, notStarted } = restartLoginSkips(databases || [], autoStart);
-    const hasHa = (databases || []).some((db) => db.isHa);
+    const { databases, autoStart } = await readServiceState(hostUid);
+    const { keepsRunning, notStarted } = restartLoginSkips(databases, autoStart);
+    const hasHa = databases.some((db) => db.isHa);
     const description = withHaServiceNotes(keepsRunning.length + notStarted.length === 0 ? CM.confirmRestartServiceDesc(serverName) : (
       <>
         {CM.confirmRestartServiceDesc(serverName)}
@@ -515,15 +526,15 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   const requestStopService = async (hostUid, serverName) => {
     if (!hostUid) return;
-    const databases = await dispatch(readStartInfoDatabases(hostUid));
+    const { databases } = await readServiceState(hostUid);
     setStopServiceConfirm({
       isOpen: true,
       hostUid,
       serverName: serverName || hostUid,
       // Running non-HA databases not logged in are skipped and keep running;
       // HA ones go down with the node-wide ha_stop.
-      skips: loginSkipsOf(databases || [], serviceStopTargets(databases || [])),
-      hasHa: (databases || []).some((db) => db.isHa),
+      skips: loginSkipsOf(databases, serviceStopTargets(databases)),
+      hasHa: databases.some((db) => db.isHa),
     });
   };
 

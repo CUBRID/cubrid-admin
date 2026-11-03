@@ -39,6 +39,31 @@ export function loginSkipsOf(databases, targets) {
   return { loggedOut, notLoggedIn, count: loggedOut.length + notLoggedIn.length };
 }
 
+// ha_mode values the engine reads as off; absent means off too.
+const HA_MODE_OFF = new Set(['', 'off', 'no', 'n', 'false', '0']);
+
+/**
+ * Whether cubrid.conf makes the host an HA node for a service action:
+ * `[common]` `ha_mode` is not off (on, replica). The api-server decides the
+ * same way (getServiceHaDbNames); the engine refuses `cubrid heartbeat` with
+ * ha_mode off.
+ */
+export function haModeOn(confLines) {
+  const common = parseConfText(confLines || []).sections.find((section) => section.name === 'common');
+  const value = [...(common?.entries || [])].reverse().find((entry) => entry.key.toLowerCase() === 'ha_mode')?.value;
+  return !HA_MODE_OFF.has((value || '').trim().toLowerCase());
+}
+
+/**
+ * start-info databases as a service action sees them: an `ha_db_list`
+ * database is HA only on an HA node; elsewhere it is a plain database
+ * (login-checked, started by the autostart list).
+ */
+export function serviceDatabases(databases, haNode) {
+  if (haNode) return databases || [];
+  return (databases || []).map((db) => (db.isHa ? { ...db, isHa: false } : db));
+}
+
 /**
  * The non-HA databases a service start brings up: the stopped ones in the
  * autostart list. HA databases go up with one node-wide ha_start, whatever

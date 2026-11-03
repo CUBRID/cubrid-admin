@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoStartServers, loginSkipsOf, restartLoginSkips, serviceStartTargets, serviceStopTargets, startInfoDatabases } from './loginSkips';
+import { autoStartServers, haModeOn, loginSkipsOf, restartLoginSkips, serviceDatabases, serviceStartTargets, serviceStopTargets, startInfoDatabases } from './loginSkips';
 import { serviceSkippedTable } from './databaseBulkActions';
 import { CM } from '../../constants/cmLabels';
 
@@ -85,5 +85,30 @@ describe('service restart skips', () => {
 
   it('names nothing when every database is logged in', () => {
     expect(restartLoginSkips([db('a', true, true), db('b', false, true)], new Set(['b']))).toEqual({ keepsRunning: [], notStarted: [] });
+  });
+});
+
+describe('HA node for a service action', () => {
+  it.each([
+    [['[common]', 'ha_mode=on'], true],
+    [['[common]', 'HA_MODE = replica  # standby'], true],
+    [['[common]', 'ha_mode=off'], false],
+    [['[common]', 'ha_mode=no'], false],
+    [['[common]', 'data_buffer_size=512M'], false],
+    [['[service]', 'ha_mode=on'], false],
+  ])('reads ha_mode from [common] as the engine does: %j -> %s', (lines, expected) => {
+    expect(haModeOn(lines)).toBe(expected);
+  });
+
+  it('treats ha_db_list databases as plain ones when the host is not an HA node', () => {
+    const databases = [
+      { dbname: 'ha1', running: true, isHa: true, loggedIn: false, loggedOut: false },
+      { dbname: 'db1', running: false, isHa: false, loggedIn: false, loggedOut: false },
+    ];
+    expect(serviceDatabases(databases, true)).toBe(databases);
+    const plain = serviceDatabases(databases, false);
+    expect(plain.map((db) => db.isHa)).toEqual([false, false]);
+    expect(serviceStopTargets(plain)).toEqual(['ha1']);
+    expect(restartLoginSkips(plain, new Set(['db1']))).toEqual({ keepsRunning: ['ha1'], notStarted: ['db1'] });
   });
 });
