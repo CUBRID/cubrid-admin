@@ -4,6 +4,13 @@ import { createSharedReads, createSingleFlight } from '../../infrastructure/util
 const volumeReads = createSingleFlight();
 const startInfoReads = createSharedReads();
 
+// Database start/stop answers only when the database is up or down — an HA
+// start alone waits 10 s, a large database can take minutes to recover, and
+// Start/Stop All and service start/stop wait for every database — so the
+// default 60 s timeout would report a failure while the server is still
+// working (and holding the database against a retry).
+const BULK_DATABASE_ACTION_TIMEOUT_MS = 30 * 60 * 1000;
+
 export const databaseApi = {
   getStartInfo: (hostUid) => {
     return apiClient.get(`/${hostUid}/database/start-info`);
@@ -17,22 +24,22 @@ export const databaseApi = {
     return startInfoReads(key, () => apiClient.get(url), { fresh });
   },
   startDatabase: (hostUid, dbname) => {
-    return apiClient.post(`/${hostUid}/database/start/${encodeURIComponent(dbname)}`, {});
+    return apiClient.post(`/${hostUid}/database/start/${encodeURIComponent(dbname)}`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   stopDatabase: (hostUid, dbname) => {
-    return apiClient.post(`/${hostUid}/database/stop/${encodeURIComponent(dbname)}`, {});
+    return apiClient.post(`/${hostUid}/database/stop/${encodeURIComponent(dbname)}`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   startAllDatabases: (hostUid, dbnames) => {
-    return apiClient.post(`/${hostUid}/database/start-all`, { dbnames });
+    return apiClient.post(`/${hostUid}/database/start-all`, { dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   stopAllDatabases: (hostUid, dbnames) => {
-    return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames });
+    return apiClient.post(`/${hostUid}/database/stop-all`, { dbnames }, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   startWholeService: (hostUid) => {
-    return apiClient.post(`/${hostUid}/database/service/start`, {});
+    return apiClient.post(`/${hostUid}/database/service/start`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   stopWholeService: (hostUid) => {
-    return apiClient.post(`/${hostUid}/database/service/stop`, {});
+    return apiClient.post(`/${hostUid}/database/service/stop`, {}, { timeout: BULK_DATABASE_ACTION_TIMEOUT_MS });
   },
   getVolumeInfo: (hostUid, dbname) => {
     const url = `/${hostUid}/database/volume-info/${encodeURIComponent(dbname)}`;

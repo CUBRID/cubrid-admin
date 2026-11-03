@@ -118,7 +118,7 @@ export function validateEffectiveParams(
       if (reason) errors[entry.key] = `Empty value reads as 0 — ${reason}`;
       continue;
     }
-    if (emptyValueIsError && isBlank && raw !== undefined && raw !== null && entry.guard.kind !== 'string') {
+    if (emptyValueIsError && isBlank && raw !== undefined && raw !== null && (entry.guard.kind !== 'string' || entry.guard.nonEmpty)) {
       errors[entry.key] = 'Empty value — the engine rejects it and fails to load the file.';
       continue;
     }

@@ -114,7 +114,9 @@ export class CmsAuthService {
     });
     await this.rememberTokenActiveTime(userId, uid, token);
 
-    return this.getHaInfo(userId, uid);
+    const haInfo = await this.getHaInfo(userId, uid);
+    // CMS installs with admin/admin; the client suggests changing it.
+    return host.id === 'admin' && host.password === 'admin' ? { ...haInfo, usesDefaultPassword: true } : haInfo;
   }
 
   /**

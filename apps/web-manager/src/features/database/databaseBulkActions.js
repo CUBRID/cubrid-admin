@@ -4,16 +4,16 @@ const errorText = (err) => (typeof err === 'string' ? err : err?.message || Stri
 
 // "Restart All Databases": bulk stop, then bulk start, of the same list —
 // each phase isolates its own per-database failures (same endpoints and HA
-// rule as Start/Stop All). Failures are tagged with their phase; an HA
-// database skipped in both phases (non-admin CMS account) is listed once.
+// rule as Start/Stop All). Failures are tagged with their phase; a database
+// skipped in both phases is listed once.
 //
-// If the stop request itself fails (e.g. the client timed out or the
-// response was lost), the server may still have stopped some or all of
-// them, so the start phase runs anyway for the whole list — CMS startdb on
-// an already running database is a no-op success — and a restart never
-// leaves a database down. The stop failure is reported only for those a
-// fresh status read shows still running, or for all of them if it can't be
-// read.
+// If the stop request itself fails (e.g. the response was lost), the server
+// may still have stopped some or all of them, so the stop failure is
+// reported only for those a fresh status read shows still running, or for
+// all of them if it can't be read. Only the databases that read shows as
+// stopped are started again — startdb on a running database is an error
+// ("already running"), not a no-op — so a restart never leaves a stopped
+// database down and never reports a database twice.
 export async function restartDatabasesInBulk(dispatch, hostUid, dbnames) {
   if (dbnames.length === 0) return { failed: [], skipped: [] };
   let stopResult;
@@ -27,7 +27,11 @@ export async function restartDatabasesInBulk(dispatch, hostUid, dbnames) {
       skipped: [],
     };
   }
-  const startResult = await dispatch(startAllDatabases({ hostUid, dbnames })).unwrap();
+  const activeAfterStop = await readActiveDbnames(dispatch, hostUid);
+  const toStart = activeAfterStop ? dbnames.filter((d) => !activeAfterStop.has(d)) : dbnames;
+  const startResult = toStart.length > 0
+    ? await dispatch(startAllDatabases({ hostUid, dbnames: toStart })).unwrap()
+    : { succeeded: [], failed: [], skipped: [] };
   const tag = (list, phase) => (list || []).map(({ dbname, error }) => ({ dbname, phase, error }));
   const skipped = new Map();
   [...(stopResult.skipped || []), ...(startResult.skipped || [])].forEach((s) => {
@@ -94,8 +98,7 @@ export function bulkResultStatusModal(CM, { title, failedMsg, failed = [], skipp
       nameLabel: CM.database,
       variant: 'skipped',
       testId: 'bulk-skipped-table',
-      // The only skip reason the server reports (HA admin-only rule).
-      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: CM.haBulkRequiresAdminReason }] })),
+      rows: skippedList.map((sk) => ({ name: sk.dbname, reasons: [{ reason: sk.reason }] })),
     });
   }
   return {

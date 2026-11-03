@@ -32,4 +32,18 @@ export interface EngineKnownKeys {
    * cached getEnv payloads still type-check.
    */
   databaseDeprecated?: string[];
+  /**
+   * Which process(es) each cubrid.conf key (lowercased) affects, from the
+   * engine's PRM_FOR_SERVER / PRM_FOR_CLIENT flags — for keys the schema
+   * doesn't list too (paramdump shows every parameter). A key with neither
+   * flag is absent. Optional so older cached getEnv payloads still type-check.
+   */
+  databaseScopes?: Record<string, 'SERVER' | 'CLIENT' | 'BOTH'>;
+  /**
+   * Value rules for broker.conf keys the broker schema doesn't list,
+   * resolved from BROKER_KEY_GUARDS for this host's engine version. Keyed
+   * by upper-case key (unlike `broker`), as broker-key-guards.ts writes
+   * them. Optional so older cached getEnv payloads still type-check.
+   */
+  brokerGuards?: Record<string, ParamGuard>;
 }

@@ -58,7 +58,7 @@ it('Restart All: headline plus a failed table (phase per row, database once) and
       { dbname: 'otherdb', phase: 'stop', error: 'Error: Missing credentials for otherdb' },
       { dbname: 'otherdb', phase: 'start', error: 'Missing credentials for otherdb' },
     ],
-    skipped: [{ dbname: 'hadb1', reason: 'HA bulk start/stop is limited to the CMS admin account' }],
+    skipped: [{ dbname: 'hadb1', reason: 'not running' }],
     showPhase: true,
   }));
 
@@ -69,7 +69,7 @@ it('Restart All: headline plus a failed table (phase per row, database once) and
     ['start', 'Missing credentials for otherdb'],
   ]);
   expect(document.querySelector('[data-testid="bulk-failed-table"] td[rowspan="2"]').textContent).toBe('otherdb');
-  expect(rowsOf('bulk-skipped-table')).toEqual([['hadb1', 'HA bulk start/stop requires the CMS admin account']]);
+  expect(rowsOf('bulk-skipped-table')).toEqual([['hadb1', 'not running']]);
 });
 
 it('Start All: no phase column, and nothing to show when every database succeeded', async () => {

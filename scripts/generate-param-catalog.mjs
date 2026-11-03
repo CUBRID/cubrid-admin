@@ -114,6 +114,12 @@ const SPOT_CHECKS = [
     upperLimit: '9223372036854775807',
     defaultValue: '0',
   },
+  // Enum-valued limits: TRAN_READ_COMMITTED..TRAN_SERIALIZABLE (dbtran_def.h).
+  { key: 'isolation_level', lowerLimit: '4', upperLimit: '6', defaultValue: '4' },
+  { key: 'ha_mode', setDup: undefined },
+  { key: 'lock_timeout', setDup: 'prm_msec_to_sec' },
+  { key: 'data_buffer_size', setDup: 'prm_size_to_io_pages' },
+  { key: 'log_buffer_size', setDup: 'prm_size_to_log_pages' },
 ];
 
 // The cub_server release build is what reads cubrid.conf, so conditionals are resolved as it sees them.
@@ -151,6 +157,24 @@ const ENGINE_MACRO_HEADERS = [
   'src/query/vacuum.h',
   'src/object/deduplicate_key.h',
   'src/transaction/log_storage.hpp',
+];
+
+// Headers that declare the enums keyword tables and some limits are written in (isolation
+// levels, HA modes, error severities, perfmon activation flags, ...). Only their enum members and
+// string-literal #defines (keyword words such as HA_MODE_OFF_STR) are taken, never other #defines,
+// so constants already resolved from the headers above keep their values. A member under an #if is taken anyway; the spot checks below pin the values that matter.
+const ENGINE_ENUM_HEADERS = [
+  'src/base/system_parameter.h',
+  'src/base/error_manager.h',
+  'src/base/fault_injection.h',
+  'src/base/perf_monitor.h',
+  'src/compat/dbtran_def.h',
+  'src/connection/connection_defs.h',
+  'src/transaction/boot.h',
+  'src/transaction/log_applier.h',
+  'src/storage/tde.h',
+  'src/storage/page_buffer.h',
+  'src/query/string_regex_constants.hpp',
 ];
 
 const DATATYPES = {
@@ -575,7 +599,7 @@ function renderValue(expr, macros, stats) {
   const str = bare.match(/^"((?:[^"\\]|\\.)*)"$/);
   if (str) return JSON.parse(`"${str[1]}"`);
   try {
-    return formatNumber(evalConstExpr(raw, macros));
+    return formatNumber(evalConstExpr(stripScopes(raw), macros));
   } catch (e) {
     if (!(e instanceof Unresolvable)) throw e;
     // Pointer casts are dropped so old-style (static var) and new-style refs read the same.
@@ -632,13 +656,136 @@ function collectHeaderConstants(src) {
   return new Map([...found].filter(([, v]) => v !== null));
 }
 
-function parseDb(cSrc, hSrc, headerSrcs, label) {
+/**
+ * Enum members of a header as name -> expression. A member with no initializer is the previous
+ * one plus 1 (or 0 when first). Typed enums (`enum class x : int {`) are read the same way; their
+ * qualified names (`ns::x::NAME`) are matched by the last component (see stripScopes).
+ */
+function collectEnumConstants(src) {
+  const text = joinContinuations(stripComments(src));
+  const found = new Map();
+  const add = (name, value) => {
+    const prev = found.get(name);
+    if (prev === undefined) found.set(name, value);
+    else if (prev !== null && prev !== value) found.set(name, null);
+  };
+  const enumRe = /\benum\s+(?:class\s+|struct\s+)?(?:[A-Za-z_]\w*\s*)?(?::\s*[\w\s:]+?)?\{([^{}]*)\}/g;
+  for (const m of text.matchAll(enumRe)) {
+    let prev = null;
+    for (const part of splitTopLevel(m[1])) {
+      const item = part.replace(/^[ \t]*#.*$/gm, '').trim();
+      if (!item) continue;
+      const member = item.match(/^([A-Za-z_]\w*)\s*(?:=\s*([\s\S]+))?$/);
+      if (!member) {
+        prev = null;
+        continue;
+      }
+      const expr =
+        member[2] !== undefined ? normalizeWs(member[2]) : prev === null ? '0' : `(${prev}) + 1`;
+      add(member[1], expr);
+      prev = member[1];
+    }
+  }
+  return new Map([...found].filter(([, v]) => v !== null));
+}
+
+/** string_regex.cpp's `engine_name[]`, indexed by engine_type (absent before 11.2). */
+function parseRegexEngineNames(src) {
+  if (src === null) return null;
+  const m = stripComments(src).match(/engine_name\s*\[\s*\]\s*=\s*\{([^}]*)\}/);
+  return m ? [...m[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((x) => x[1]) : null;
+}
+
+/** `cubregex::engine_type::LIB_RE2` -> `LIB_RE2`; enum members are keyed by their bare name. */
+function stripScopes(expr) {
+  return expr.replace(/\b(?:[A-Za-z_]\w*\s*::\s*)+([A-Za-z_]\w*)/g, '$1');
+}
+
+/** Each `KEYVAL name[] = { {"word", value}, ... }` table in the preprocessed source. */
+function parseKeywordTables(text, macros, engineNames) {
+  const tables = new Map();
+  const headRe = /(?:static\s+)?(?:const\s+)?KEYVAL\s+(\w+)\s*\[\s*\]\s*=\s*\{/g;
+  for (const m of text.matchAll(headRe)) {
+    const start = m.index + m[0].length;
+    let depth = 1;
+    let i = start;
+    for (; i < text.length && depth > 0; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') depth--;
+    }
+    const entries = [];
+    for (const entry of splitTopLevel(text.slice(start, i - 1))) {
+      if (!entry.trim()) continue;
+      const [word, value] = splitTopLevel(stripOuterBraces(entry));
+      // A word may be a macro for the literal (`HA_MODE_OFF_STR`), or the regexp engine name
+      // lookup `get_engine_name (engine_type::LIB_RE2)` (string_regex.cpp's engine_name[]).
+      let wordExpr = word.trim();
+      const engine = wordExpr.match(/^get_engine_name\s*\(\s*([\w:\s]+?)\s*\)$/);
+      if (engine) {
+        const index = Number(evalConstExpr(stripScopes(engine[1]), macros).i);
+        if (engineNames?.[index] !== undefined) wordExpr = JSON.stringify(engineNames[index]);
+      }
+      for (let hops = 0; hops < 4 && macros.has(wordExpr); hops++) wordExpr = macros.get(wordExpr);
+      const lit = wordExpr.match(/^"((?:[^"\\]|\\.)*)"$/);
+      if (!lit) throw new Error(`Unexpected KEYVAL entry in ${m[1]}: ${entry}`);
+      entries.push({ word: JSON.parse(`"${lit[1]}"`), expr: normalizeWs(value) });
+    }
+    tables.set(m[1], entries);
+  }
+  return tables;
+}
+
+/**
+ * Which keyword table each PRM_KEYWORD parameter is read with, keyed by its PRM_NAME_ macro or
+ * PRM_ID_. Released branches pick the table by name in sysprm_generate_new_value's PRM_KEYWORD
+ * case (`intl_mbs_casecmp (prm->name, PRM_NAME_X) == 0` ... `prm_keyword (-1, value, x_words,
+ * ...)`); develop moved that to prm_get_keyval's `case PRM_ID_X:` switch. Several keys can share
+ * one table.
+ */
+function parseKeywordTableUse(text) {
+  const use = new Map();
+  for (const region of text.split(/case\s+PRM_KEYWORD\s*:/).slice(1)) {
+    const body = region.split(/case\s+PRM_NO_TYPE\s*:/)[0];
+    if (!/prm_keyword\s*\(\s*-1\s*,\s*value\s*,/.test(body)) continue;
+    let pending = [];
+    const re =
+      /intl_mbs_casecmp\s*\(\s*prm->name\s*,\s*(PRM_NAME_\w+)\s*\)\s*==\s*0|prm_keyword\s*\(\s*-1\s*,\s*value\s*,\s*(\w+)\s*,/g;
+    for (const m of body.matchAll(re)) {
+      if (m[1]) pending.push(m[1]);
+      else {
+        for (const name of pending) use.set(name, m[2]);
+        pending = [];
+      }
+    }
+    return use;
+  }
+  const fn = text.match(/prm_get_keyval\s*\([^)]*\)\s*\{([\s\S]*?)\n\}/);
+  if (!fn) throw new Error('No keyword table lookup found (sysprm_generate_new_value / prm_get_keyval)');
+  let pending = [];
+  const re = /case\s+(PRM_ID_\w+)\s*:|prm_keyword\s*\(\s*value\s*,\s*name\s*,\s*(\w+)\s*,/g;
+  for (const m of fn[1].matchAll(re)) {
+    if (m[1]) pending.push(m[1]);
+    else {
+      for (const id of pending) use.set(id, m[2]);
+      pending = [];
+    }
+  }
+  return use;
+}
+
+function parseDb(cSrc, hSrc, headerSrcs, label, enumSrcs = [], engineNames = null) {
   const h = preprocess(hSrc);
   const c = preprocess(cSrc);
   const macros = new Map(Object.entries(BUILTIN_MACROS));
   for (const hs of headerSrcs) for (const [k, v] of collectHeaderConstants(hs)) macros.set(k, v);
   for (const [k, v] of h.defines) macros.set(k, v);
   for (const [k, v] of c.defines) macros.set(k, v);
+  for (const es of enumSrcs) {
+    for (const [k, v] of collectEnumConstants(es)) if (!macros.has(k)) macros.set(k, v);
+    // Keyword words can be string macros there (`#define HA_MODE_OFF_STR "off"`).
+    for (const [k, v] of collectHeaderConstants(es))
+      if (!macros.has(k) && /^"(?:[^"\\]|\\.)*"$/.test(v)) macros.set(k, v);
+  }
 
   const enumIds = parseEnum(h.text);
   const body = extractBraced(c.text, /SYSPRM_PARAM\s+prm_Def\s*\[\s*\]\s*=\s*\{/);
@@ -655,7 +802,8 @@ function parseDb(cSrc, hSrc, headerSrcs, label) {
     const f = splitTopLevel(stripOuterBraces(entryText));
     if (f.length !== 12)
       throw new Error(`${label}: prm_Def entry has ${f.length} fields: ${entryText.slice(0, 120)}`);
-    const [prmId, nameMacro, staticFlag, datatypeTok, , defaultExpr, , upperExpr, lowerExpr] = f;
+    const [prmId, nameMacro, staticFlag, datatypeTok, , defaultExpr, , upperExpr, lowerExpr, , setDupExpr] =
+      f;
 
     usedNames.add(nameMacro);
     const nameLit = macros.get(nameMacro);
@@ -704,6 +852,9 @@ function parseDb(cSrc, hSrc, headerSrcs, label) {
       lowerLimit: resolve(lowerExpr),
       upperLimit: resolve(upperExpr),
     };
+    // How a conf value is converted before the range check and storing (PRM_DIFFER_UNIT keys).
+    const setDup = stripPointerCast(normalizeWs(setDupExpr).replace(/^\(\s*DUP_PRM_FUNC\s*\)\s*/, ''));
+    if (setDup !== 'NULL') param.setDup = setDup;
     if (stats.unresolved.length > before) stats.unresolvedByParam.push(key);
 
     const lower = key.toLowerCase();
@@ -713,6 +864,28 @@ function parseDb(cSrc, hSrc, headerSrcs, label) {
     );
     seenKeys.set(lower, prmId);
     params.push(param);
+  }
+
+  const keywordTables = parseKeywordTables(c.text, macros, engineNames);
+  const keywordUse = parseKeywordTableUse(c.text);
+  const tableByKey = new Map();
+  for (const [ref, table] of keywordUse) {
+    if (ref.startsWith('PRM_ID_')) {
+      const param = params.find((p) => p.prmId === ref);
+      if (check(param, `${label}: keyword table for unknown ${ref}`)) tableByKey.set(param.key, table);
+      continue;
+    }
+    const lit = macros.get(ref)?.match(/^"([^"\\]*)"$/);
+    if (check(lit, `${label}: keyword name ${ref} does not resolve`)) tableByKey.set(lit[1], table);
+  }
+  for (const param of params) {
+    if (param.datatype !== 'keyword') continue;
+    const table = tableByKey.get(param.key);
+    if (!check(table && keywordTables.has(table), `${label}: no keyword table for ${param.key}`))
+      continue;
+    param.keywords = keywordTables
+      .get(table)
+      .map(({ word, expr }) => ({ word, value: renderValue(expr, macros, stats) }));
   }
 
   const defIds = entries.map((e) => splitTopLevel(stripOuterBraces(e))[0]);
@@ -860,6 +1033,14 @@ function render(versions) {
   lines.push('  defaultValue: string | null;');
   lines.push('  lowerLimit: string | null;');
   lines.push('  upperLimit: string | null;');
+  lines.push(
+    "  /** PRM_DIFFER_UNIT keys: the engine function that converts a conf value before the range check (e.g. 'prm_size_to_io_pages'). */"
+  );
+  lines.push('  setDup?: string;');
+  lines.push(
+    '  /** PRM_KEYWORD keys: the words the engine accepts (case-insensitive) and the value each stands for. */'
+  );
+  lines.push('  keywords?: { word: string; value: string | null }[];');
   lines.push('}');
   lines.push('');
   lines.push('export interface EngineCatalogBrokerKey {');
@@ -917,7 +1098,9 @@ function main() {
       gitShow(args.repo, ref, 'src/base/system_parameter.c'),
       gitShow(args.repo, ref, 'src/base/system_parameter.h'),
       ENGINE_MACRO_HEADERS.map((f) => gitShowOptional(args.repo, ref, f)).filter((x) => x !== null),
-      label
+      label,
+      ENGINE_ENUM_HEADERS.map((f) => gitShowOptional(args.repo, ref, f)).filter((x) => x !== null),
+      parseRegexEngineNames(gitShowOptional(args.repo, ref, 'src/query/string_regex.cpp'))
     );
     const broker = parseBroker(gitShow(args.repo, ref, 'src/broker/broker_config.c'), label);
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../api/apiClient', () => ({ default: {
   defaults: { headers: { common: { Authorization: 'session-a' } } },
   get: vi.fn(),
+  post: vi.fn(),
 } }));
 import apiClient from '../../api/apiClient';
 import { databaseApi } from './databaseApi';
@@ -41,5 +42,20 @@ describe('volume read coalescing', () => {
     await expect(databaseApi.getVolumeInfo('host', 'demodb')).rejects.toThrow('timeout');
     await databaseApi.getVolumeInfo('host', 'demodb');
     expect(apiClient.get).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('bulk database actions', () => {
+  it('wait well past the default timeout, since HA databases go one at a time', async () => {
+    apiClient.post.mockResolvedValue({});
+    await databaseApi.startAllDatabases('host', ['a']);
+    await databaseApi.stopAllDatabases('host', ['a']);
+    await databaseApi.startWholeService('host');
+    await databaseApi.stopWholeService('host');
+
+    expect(apiClient.post).toHaveBeenCalledTimes(4);
+    for (const call of apiClient.post.mock.calls) {
+      expect(call[2].timeout).toBeGreaterThanOrEqual(10 * 60 * 1000);
+    }
   });
 });

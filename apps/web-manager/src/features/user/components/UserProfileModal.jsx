@@ -228,6 +228,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
                 onChange={(e) => setPasswords((prev) => ({ ...prev, confirmPassword: e.target.value }))}
                 disabled={loading || globalLoading}
                 placeholder="••••••••"
+                error={passwords.confirmPassword && passwords.newPassword !== passwords.confirmPassword ? CM.passwordsDoNotMatch : null}
               />
             </div>
           </div>
