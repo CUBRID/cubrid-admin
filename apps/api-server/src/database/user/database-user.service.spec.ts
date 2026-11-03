@@ -325,12 +325,14 @@ describe('DatabaseUserService', () => {
     const updateUserRequest = () => cmsClient.postAuthenticated.mock.calls
       .map(([, body]) => body)
       .find((body) => body.task === 'updateuser');
+    // Answers by task, so the tests hold whether or not ensureDbLogin calls
+    // dbmtuserlogin first.
+    const answerByTask = () => cmsClient.postAuthenticated.mockImplementation(async (_url: string, body: { task: string }) => (
+      ({ dbmtuserlogin: { note: 'none', status: 'success', task: 'dbmtuserlogin' }, userinfo: userInfoWithYifan, updateuser: updateUserSuccess } as Record<string, unknown>)[body.task]
+    ));
 
     it('keeps the current password for an empty one: userpass is left out of updateuser', async () => {
-      cmsClient.postAuthenticated
-        .mockResolvedValueOnce(dbmtLoginSuccess)
-        .mockResolvedValueOnce(userInfoWithYifan)
-        .mockResolvedValueOnce(updateUserSuccess);
+      answerByTask();
 
       const result = await service.updateUser(mockUserId, mockHostUid, 'demodb', 'yifan', '', updateParams.groups, updateParams.authorization);
 
@@ -340,10 +342,7 @@ describe('DatabaseUserService', () => {
     });
 
     it('sends a new password to updateuser', async () => {
-      cmsClient.postAuthenticated
-        .mockResolvedValueOnce(dbmtLoginSuccess)
-        .mockResolvedValueOnce(userInfoWithYifan)
-        .mockResolvedValueOnce(updateUserSuccess);
+      answerByTask();
 
       await service.updateUser(mockUserId, mockHostUid, 'demodb', 'yifan', 'n3w-pass', updateParams.groups, updateParams.authorization);
 
