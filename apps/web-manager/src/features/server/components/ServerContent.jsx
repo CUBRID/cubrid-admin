@@ -21,6 +21,7 @@ import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsP
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
+import { autoStartDatabases } from '../autoStartDatabases';
 
 // See the HA-abnormal fast-poll effect below.
 const HA_ABNORMAL_POLL_INTERVAL_MS = 1000;
@@ -111,21 +112,9 @@ const Component = function ServerContent({ hostUid }) {
     const version = ++autoStartReadVersion.current;
     try {
       const response = await hostApi.getHostConfig(hostUid, 'cubridconf');
-      const lines = response?.conflist?.[0]?.confdata || [];
-      let serviceEnabled = false, servers = [];
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('#') || !trimmed) continue;
-        if (trimmed.startsWith('service=')) {
-          const val = trimmed.split('=')[1] || '';
-          if (val.split(',').map(s => s.trim().toLowerCase()).includes('server')) serviceEnabled = true;
-        }
-        if (trimmed.startsWith('server=')) {
-          servers = (trimmed.split('=')[1] || '').split(',').map(s => s.trim());
-        }
-      }
+      const servers = autoStartDatabases(response?.conflist?.[0]?.confdata || []);
       if (version === autoStartReadVersion.current) {
-        setAutoStartDBs(serviceEnabled ? servers : []);
+        setAutoStartDBs(servers);
         setAutoStartReady(true);
       }
     } catch (err) {

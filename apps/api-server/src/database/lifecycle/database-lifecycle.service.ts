@@ -1088,24 +1088,25 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Delete a database.
-   * Also removes the database name from the server parameter in cubridconf if it exists.
-   * Returns start-info (db list) on success.
+   * Delete a database (CMS task: deletedb), run as a CMS job. Refused for a
+   * database that still takes part in HA. The bookkeeping after a successful
+   * delete is forgetDeletedDatabase, which the job runs.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
    * @param dbname Database name
    * @param request Client request containing delbackup option
-   * @returns StartInfoClientResponse Latest database list (start-info) on success
-   * @throws DatabaseError If request fails or CMS status is fail
+   * @returns The final deletedb response
+   * @throws DatabaseError If the database is in HA or the request fails
    */
   @HandleCmsErrors()
-  async deleteDatabase(
+  async deleteDatabaseCmsResponse(
     userId: string,
     hostUid: string,
     dbname: string,
-    request: DeleteDatabaseRequest
-  ): Promise<StartInfoClientResponse> {
+    request: DeleteDatabaseRequest,
+    onUuid?: (uuid: string) => void | Promise<void>
+  ): Promise<DeleteDatabaseCmsResponse> {
     const cubridConf = await this.cmsConfigService.getAllSystemParam(
       userId,
       hostUid,
@@ -1140,12 +1141,21 @@ export class DatabaseLifecycleService extends BaseService {
 
     this.logger.debug(`Deleting database: ${dbname} on host: ${hostUid}`);
 
-    await this.executeAsyncCmsJobRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
+    return this.executeAsyncCmsJobRequest<DeleteDatabaseCmsRequest, DeleteDatabaseCmsResponse>(
       userId,
       hostUid,
-      cmsRequest
+      cmsRequest,
+      { skipStatusCheck: true, onUuid }
     );
+  }
 
+  /**
+   * After a successful delete: forgets the database's stored login and
+   * removes it from cubrid.conf. The database is already gone, so nothing
+   * here throws; what could not be done comes back as warnings for the user.
+   */
+  async forgetDeletedDatabase(userId: string, hostUid: string, dbname: string): Promise<string[]> {
+    const warnings: string[] = [];
     // Forget this dbname's stored login profile and ensureDbLogin cache
     // entry — both are keyed by dbname alone (see DatabaseUserService), so
     // without this a database later created or renamed to reuse this exact
@@ -1154,6 +1164,7 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       await this.databaseUserService.deleteDbProfile(userId, hostUid, dbname);
     } catch (error: unknown) {
+      warnings.push(`Database "${dbname}" was deleted, but its saved login could not be removed. Remove it from the database's login settings if "${dbname}" is created again.`);
       this.logger.warn(
         `Failed to clear stored login profile/cache for deleted database ${dbname}: ` +
         `${error instanceof Error ? error.message : String(error)}`,
@@ -1163,10 +1174,10 @@ export class DatabaseLifecycleService extends BaseService {
 
     // Remove dbname from server parameter in cubridconf if it exists
     try {
-      await this.databaseConfigService.removeAutoStart(userId, hostUid, {
-        confname: CMS_CONFNAME_CUBRID,
-        dbname: dbname,
-      });
+      // Not removeAutoStart: its login gate would fail here, since the
+      // stored login of this database was just cleared above. Also drops
+      // its [@dbname] section.
+      await this.databaseConfigService.forgetDatabaseAfterDelete(userId, hostUid, dbname);
       this.logger.debug(
         `Successfully removed database name ${dbname} from server parameter in cubridconf`
       );
@@ -1181,6 +1192,7 @@ export class DatabaseLifecycleService extends BaseService {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const errorStack = error instanceof Error ? error.stack : undefined;
         const errorCode = error instanceof ConfigError ? error.code : 'UNKNOWN';
+        warnings.push(`Database "${dbname}" was deleted, but cubrid.conf could not be updated. Remove "${dbname}" from [service] server and drop its [@${dbname}] section by hand.`);
         this.logger.warn(
           `Failed to remove dbname from server parameter during database deletion: ${errorMessage}`,
           {
@@ -1192,8 +1204,6 @@ export class DatabaseLifecycleService extends BaseService {
         );
       }
     }
-
-    // Return latest db list (start-info)
-    return await this.databaseInfoService.startInfo(userId, hostUid);
+    return warnings;
   }
 }

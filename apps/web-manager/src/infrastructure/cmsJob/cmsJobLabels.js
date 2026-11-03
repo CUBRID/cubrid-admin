@@ -8,6 +8,7 @@ const TYPE_KEYS = {
   copy: 'jobTypeCopy',
   addvol: 'jobTypeAddVol',
   rename: 'jobTypeRename',
+  delete: 'jobTypeDelete',
   backupdb: 'jobTypeBackupDb',
   restore: 'jobTypeRestore',
 };
@@ -27,6 +28,7 @@ const GUIDANCE_KEYS = {
   copy: 'copyDbGuidance',
   addvol: 'addVolumeGuidance',
   rename: 'renameDbGuidance',
+  delete: 'deleteDbGuidance',
   backupdb: 'backupDbGuidance',
   restore: 'restoreDbGuidance',
 };

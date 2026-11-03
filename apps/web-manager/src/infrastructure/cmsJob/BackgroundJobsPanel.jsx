@@ -1,3 +1,4 @@
+import { JobWarnings } from './JobWarnings';
 import React, { useEffect, useState } from 'react';
 import { useSelector, shallowEqual } from 'react-redux';
 import { Icon } from '../../components/ds/foundation/Icon';
@@ -114,6 +115,7 @@ function JobDetailModal({ job, CM, hostLabel, onClose }) {
             </pre>
           </div>
         )}
+        <JobWarnings warnings={job.warnings} />
         {isMaintenanceJob(job) && <MaintenanceDetails key={job.jobId} job={job} />}
         {!isMaintenanceJob(job) && job.result != null && (
           <div>

@@ -305,6 +305,7 @@ export const CM_KO = {
   jobTypeCopy: '복사',
   jobTypeAddVol: '볼륨 추가',
   jobTypeRename: '이름 변경',
+  jobTypeDelete: '삭제',
   jobTypeBackupDb: '백업',
   jobTypeRestore: '복구',
   databaseAction: '데이터베이스 작업',
@@ -723,6 +724,8 @@ export const CM_KO = {
   lblDescLogPathName: '로그 볼륨 경로:',
   lblVolumePathName: '확장 볼륨 경로:',
   btnCopyVolume: '개별 볼륨 복사 설정',
+  copyDestinationSameAsSource: 'Destination database name must be different from the source.',
+  copyVolumeMappingInvalid: 'Individual-volume copy requires complete volume information and a valid name and absolute directory for every destination. Reopen this dialog to reload volume information.',
   tblColumnCurrentVolName: '기존 볼륨 이름',
   tblColumnCopyNewVolName: '새 볼륨 이름',
   tblColumnCopyNewDirPath: '새 경로',
@@ -1353,6 +1356,7 @@ export const CM_KO = {
   errControlFile: '오류에 대한 제어 파일이 유효하지 않습니다.',
   errClassFile: '로드하지 않을 테이블을 기록한 파일이 유효하지 않습니다.',
   errNoSelectedPath: '리스트에서 데이터베이스의 언로드 파일을 선택해 주십시오.',
+  loadCountRange: (min, max) => `between ${min.toLocaleString()} and ${max.toLocaleString()}`,
   errNumOfInstances: '인스턴스의 대략적인 개수가 유효하지 않습니다. 이 값은 반드시 0보다 커야 합니다.',
 
 
@@ -1589,6 +1593,9 @@ export const CM_KO = {
   brokerConfigSaveError: '브로커 구성을 저장하는 동안 오류가 발생했습니다.',
   invalidConfigValues: '잘못된 파라미터 값',
   invalidConfigValuesMsg: '서버가 이 설정을 거부하여 저장되지 않았습니다. 아래 줄을 수정한 뒤 다시 저장하세요:',
+  confChangedOnHostTitle: '호스트에서 파일이 변경됨',
+  confChangedOnHostDesc: '파일을 연 뒤에 변경되어 저장하지 않았습니다. 현재 파일을 다시 불러올까요? 편집한 내용은 사라집니다.',
+  reloadFileBtn: '다시 불러오기',
   initializingEditor: '에디터 초기화 중...',
   brokerConfig: '브로커 구성',
   brokerConfiguration: '브로커 설정',
@@ -1886,6 +1893,9 @@ export const CM_KO = {
   countLabel: '횟수',
   errorsLabel: '오류',
   sqlPattern: 'SQL 패턴',
+  topSQLScopeLabel: (total) => `Full log analyzed: ${total.toLocaleString()} lines`,
+  topSQLReadFailed: 'Could not analyze the complete log. Refresh and try again.',
+  topSQLLogChanged: 'The log was truncated or rotated during analysis. Refresh and try again.',
   noQueriesToAnalyze: '분석할 쿼리가 없습니다.',
 
   // 전체 로그 뷰어

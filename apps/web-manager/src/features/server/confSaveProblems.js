@@ -10,3 +10,7 @@ export function confSaveProblems(err) {
   if (!Array.isArray(problems) || problems.length === 0) return null;
   return problems.map(({ lineNo, message }) => (lineNo ? `Line ${lineNo}: ${message}` : message));
 }
+
+// The server turned the save away because the file on the host changed
+// after the editor loaded it (409 CHANGED_SINCE_LOADED).
+export const isConfChangedSinceLoaded = (err) => err?.response?.data?.data?.code === 'CHANGED_SINCE_LOADED';
