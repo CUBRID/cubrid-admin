@@ -109,6 +109,7 @@ import EditCMSUserModal from '../../host/components/EditCMSUserModal';
 import { openCreateGroupModal, openDeleteGroupModal, openRenameGroupModal, openAddHostModal, openManageGroupMembersModal } from '../../host/hostSlice';
 import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME, orderedGroupEntries } from '../../host/hostGroupUtils';
 import { useHostActivation } from '../../host/useHostActivation';
+import { useRefillNavigatorLists } from '../sidebar/useRefillNavigatorLists';
 
 // A selection updater keeping only the names in `namesText` (newline-joined).
 const keepOnly = (namesText) => (prev) => {
@@ -369,6 +370,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   useEffect(() => {
     dispatch(loadHosts());
   }, [dispatch]);
+
+  useRefillNavigatorLists();
 
   const closeAllContextMenus = useCallback(() => {
     setContextMenu(null);

@@ -69,7 +69,10 @@ export default function MonitoringProvider({ children }) {
   // Nothing behind an open modal can be read, so both timers stop and restart
   // (with an immediate refresh) when it closes.
   const anyModalOpen = useAnyModalOpen();
-  const isMonitoringTab = (activeMainTab?.startsWith('host:') || activeMainTab?.startsWith('db:')) && !anyModalOpen;
+  // A host dashboard refreshes its own databases, brokers and volumes
+  // (ServerContent) at the dashboard interval; polling them here too sent
+  // each request twice per interval.
+  const isMonitoringTab = activeMainTab?.startsWith('db:') && !anyModalOpen;
 
   // Dashboard Interval Refresh (Databases & Volumes)
   useEffect(() => {

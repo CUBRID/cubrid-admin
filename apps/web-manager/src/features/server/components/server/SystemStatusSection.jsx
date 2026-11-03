@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { fetchMonitoringData, clearMonitoring } from '../../monitoringSlice';
+import { fetchMonitoringData } from '../../monitoringSlice';
 import { Card } from '../../../../components/ds/layout/Card';
 import { Table } from '../../../../components/ds/layout/Table';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -9,7 +9,6 @@ import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { InfoBanner } from '../../../../components/ds/foundation/InfoBanner';
 import { useCM } from '../../../../constants/useCM';
-import { startSerialPolling } from '../../../../infrastructure/utils/serialPolling';
 
 const getStatusColor = (p) => {
   if (p > 85) return 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]';
@@ -28,7 +27,13 @@ const MetricBar = ({ pct }) => (
 const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(2));
 const cpuCell = (value) => (value === null || value === undefined ? null : { display: `${value.toFixed(1)}%`, pct: value });
 
-export default function SystemStatusSection({ hostUid, isTabActive = true }) {
+/**
+ * Host CPU/memory/disk and TPS/QPS. It is read by the host dashboard's own
+ * refresh (ServerContent), at the dashboard interval and together with the
+ * broker list it shares, while this section is expanded; onExpandedChange
+ * tells it so. Expanding it reads once.
+ */
+export default function SystemStatusSection({ hostUid, isTabActive = true, onExpandedChange }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
@@ -38,35 +43,19 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
   const hostHaInfo = haInfo[hostUid] || {};
   const isHA = hostHaInfo.isHA;
 
-  const [isStopped, setIsStopped] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true); // Default to expanded
-  const inFlight = useRef(null);
-  const [pollGeneration, setPollGeneration] = useState(0);
-  
-  // Monitoring is active only if tab is visible AND section is expanded
-  const isEffectivelyActive = isTabActive && isExpanded;
-  const startPolling = () => {
-    dispatch(clearMonitoring(hostUid));
-    setPollGeneration(value => value + 1);
-  };
+  const dashboardInterval = useSelector((state) => state.user.preferences?.dashboardInterval);
+  const isLive = isTabActive && isExpanded && dashboardInterval > 0;
 
+  const wasExpanded = useRef(isExpanded);
   useEffect(() => {
-    if (!hostUid || !isAuthorized || !isEffectivelyActive) return;
-    setIsStopped(false);
-    return startSerialPolling(() => {
-      // Reuse a pending read when a tab is quickly collapsed/reopened, including
-      // React StrictMode's effect restart. An old loop cannot restart its timer.
-      if (!inFlight.current || inFlight.current.hostUid !== hostUid) {
-        const entry = { hostUid };
-        entry.promise = dispatch(fetchMonitoringData(hostUid)).finally(() => {
-          if (inFlight.current === entry) inFlight.current = null;
-        });
-        inFlight.current = entry;
-      }
-      return inFlight.current.promise;
-    }, count => count >= 31 ? null : count < 16 ? 1000 : 30000,
-    () => setIsStopped(true));
-  }, [hostUid, isAuthorized, isEffectivelyActive, dispatch, pollGeneration]);
+    onExpandedChange?.(isExpanded);
+    // Collapsed, it was not refreshed; the first open is the dashboard's own read.
+    if (isExpanded && !wasExpanded.current && hostUid && isAuthorized) {
+      dispatch(fetchMonitoringData(hostUid));
+    }
+    wasExpanded.current = isExpanded;
+  }, [isExpanded, onExpandedChange, hostUid, isAuthorized, dispatch]);
 
   const formatBytes = (bytes) => {
     if (bytes === undefined || bytes === null || isNaN(bytes)) return '-';
@@ -194,18 +183,9 @@ export default function SystemStatusSection({ hostUid, isTabActive = true }) {
               </div>
             )}
             <span className="text-12 text-slate-400 font-normal ml-1">
-              {isStopped ? `· ${CM.paused}` : `· ${CM.live}`}
+              {isLive ? `· ${CM.live}` : `· ${CM.paused}`}
             </span>
           </div>
-          {isStopped && (
-            <button 
-              onClick={startPolling}
-              className="px-2 py-0.5 rounded-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-12 font-bold text-amber-500 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors flex items-center gap-1"
-            >
-              <Icon name="refresh" size="13px" />
-              {CM.resume}
-            </button>
-          )}
         </div>
       }
       collapsible
