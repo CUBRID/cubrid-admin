@@ -132,6 +132,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // fresh by this tab's own onFetch above, which populates
   // lastKnownBrokerFromList directly from its own request's result).
   const brokerFromList = lastKnownBrokerFromList || {};
+  // CMS lists a stopped broker without its settings (getbrokersinfo sends
+  // them only for a running one), so they show as unknown, not as defaults.
+  const isBrokerOff = brokerFromList.state === 'OFF';
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,
@@ -291,12 +294,13 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               // the rest are cubrid_broker.conf parameters, named as in the
               // conf file in every language.
               { label: CM.jobQueue,               value: basicInfo.job_queue                ?? '0',    accent: 'slate'   },
-              { label: 'AUTO_ADD_APPL_SERVER',    value: basicInfo.auto_add_as             || 'OFF',  badge: true       },
-              { label: 'SQL_LOG',                 value: basicInfo.sql_log_mode            || 'OFF',  badge: true       },
-              { label: 'LONG_TRANSACTION_TIME',   value: `${basicInfo.long_transaction_time || '0'}s`, accent: 'slate'   },
-              { label: 'LONG_QUERY_TIME',         value: `${basicInfo.long_query_time       || '0'}s`, accent: 'slate'   },
+              { label: 'AUTO_ADD_APPL_SERVER',    value: isBrokerOff ? '-' : basicInfo.auto_add_as             || 'OFF',  badge: true       },
+              { label: 'SQL_LOG',                 value: isBrokerOff ? '-' : basicInfo.sql_log_mode            || 'OFF',  badge: true       },
+              { label: 'LONG_TRANSACTION_TIME',   value: isBrokerOff ? '-' : `${basicInfo.long_transaction_time || '0'}s`, accent: 'slate'   },
+              { label: 'LONG_QUERY_TIME',         value: isBrokerOff ? '-' : `${basicInfo.long_query_time       || '0'}s`, accent: 'slate'   },
             ].map((m, i, arr) => {
-              const isActive = m.badge && m.value && m.value !== 'IDLE' && m.value !== 'OFF';
+              // The engine reports SQL_LOG=OFF as NONE.
+              const isActive = m.badge && m.value && !['IDLE', 'OFF', 'NONE', '-'].includes(m.value);
               const accentBar = m.accent === 'emerald'
                 ? 'bg-emerald-500'
                 : m.accent === 'amber'

@@ -191,3 +191,30 @@ describe('BrokerStatus job queue', () => {
     expect(elapsedCells).toEqual([['5s', CM.jobReceivedAt('23:59:58')], ['—', '']]);
   });
 });
+
+describe('BrokerStatus basic information values', () => {
+  const cell = (label) => [...container.querySelectorAll('span')].find((span) => span.textContent === label)?.parentElement;
+  const isLit = (label) => !!cell(label)?.querySelector('.bg-emerald-50');
+
+  it('shows SQL_LOG as off when the engine reports NONE', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker({ sqll: 'NONE' })] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+
+    expect(cell('SQL_LOG').textContent).toContain('NONE');
+    expect(isLit('SQL_LOG')).toBe(false);
+    expect(isLit('AUTO_ADD_APPL_SERVER')).toBe(true);
+  });
+
+  it('shows the settings of a stopped broker as unknown, not as defaults', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: BROKER_NAME, state: 'OFF' }] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+
+    for (const label of ['AUTO_ADD_APPL_SERVER', 'SQL_LOG', 'LONG_TRANSACTION_TIME', 'LONG_QUERY_TIME']) {
+      expect(cell(label).textContent).toBe(`${label}-`);
+    }
+  });
+});
