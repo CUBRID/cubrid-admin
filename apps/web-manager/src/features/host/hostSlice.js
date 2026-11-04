@@ -491,6 +491,9 @@ const initialState = {
   error: null,
   loginErrorHostUid: null, // host whose failed login wrote `error`
   reconnectQueue: [],
+  // Hosts in reconnectQueue whose saved password no longer works, so the
+  // reconnect window asks for the new one (askHostPassword).
+  reconnectPasswordHosts: [],
 };
 
 const hostSlice = createSlice({
@@ -688,7 +691,16 @@ const hostSlice = createSlice({
       }
     },
     closeReconnectModal: (state) => {
-      state.reconnectQueue.shift();
+      const hostUid = state.reconnectQueue.shift();
+      state.reconnectPasswordHosts = (state.reconnectPasswordHosts ?? []).filter((uid) => uid !== hostUid);
+    },
+    // The CMS account this host logs in with got a new password (Edit CMS
+    // User): ask for it instead of logging in again with the saved one.
+    askHostPassword: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid) return;
+      if (!state.reconnectQueue.includes(hostUid)) state.reconnectQueue.push(hostUid);
+      state.reconnectPasswordHosts = [...new Set([...(state.reconnectPasswordHosts ?? []), hostUid])];
     },
   },
   extraReducers: (builder) => {
@@ -766,6 +778,7 @@ const hostSlice = createSlice({
           state.authorizedHosts.push(hostUid);
         }
         state.reconnectQueue = state.reconnectQueue.filter((uid) => uid !== hostUid);
+        state.reconnectPasswordHosts = (state.reconnectPasswordHosts ?? []).filter((uid) => uid !== hostUid);
         state.haInfo[hostUid] = haInfo;
         localStorage.setItem('cubrid_ha_info', JSON.stringify(state.haInfo));
 
@@ -1061,6 +1074,7 @@ export const {
   closeEditCmsUserModal,
   openReconnectModal,
   closeReconnectModal,
+  askHostPassword,
 } = hostSlice.actions;
 
 /**

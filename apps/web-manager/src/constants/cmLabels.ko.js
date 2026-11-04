@@ -386,6 +386,8 @@ export const CM_KO = {
   connectionLost: '연결 끊김',
   reconnect: '재연결',
   reconnectPrompt: '세션 연결이 끊어졌습니다. 토큰이 만료되었거나 다른 사용자가 이 호스트에 로그인했을 수 있습니다. 재연결을 클릭해 다시 시도하세요.',
+  reconnectNewPasswordTitle: '새 비밀번호 입력',
+  reconnectNewPasswordPrompt: '이 호스트에 접속할 때 쓰는 CMS 계정의 비밀번호가 바뀌었습니다. 다시 연결하려면 새 비밀번호를 입력하세요.',
   editHost: '호스트 편집',
   deleteHost: '호스트 삭제',
   changePassword: '비밀번호 변경',

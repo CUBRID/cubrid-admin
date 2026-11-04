@@ -6,6 +6,7 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
+import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
 
 export default function ReconnectHostModal() {
@@ -17,6 +18,14 @@ export default function ReconnectHostModal() {
 
   const [localError, setLocalError] = useState(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  // Asked after the CMS account's password changed: the saved one no longer
+  // works, so the user types the new one and it is saved only once it logs in.
+  const needsPassword = useSelector((state) => !!state.host.reconnectPasswordHosts?.includes(reconnectHostUid));
+  const [password, setPassword] = useState('');
+
+  useEffect(() => {
+    setPassword('');
+  }, [reconnectHostUid]);
 
   useEffect(() => {
     if (isReconnectModalOpen) {
@@ -31,14 +40,14 @@ export default function ReconnectHostModal() {
   const displayError = localError || hostAuthErrors?.[reconnectHostUid];
 
   const handleReconnect = () => {
-    if (!reconnectHostUid) return;
+    if (!reconnectHostUid || (needsPassword && !password)) return;
 
     setLocalError(null);
     setIsReconnecting(true);
 
     // Just re-login to refresh the CMS token. No state reset.
     // The existing UI data (databases, brokers, monitoring) stays intact.
-    dispatch(loginToHost(reconnectHostUid))
+    dispatch(loginToHost(needsPassword ? { hostUid: reconnectHostUid, changes: { password } } : reconnectHostUid))
       .unwrap()
       .then(async () => {
         // Clear the 401 guard so new requests go through again
@@ -144,14 +153,14 @@ export default function ReconnectHostModal() {
     <Modal
       isOpen={isReconnectModalOpen}
       onClose={handleDisconnect}
-      title={CM.connectionLost || 'Connection Lost'}
+      title={needsPassword ? CM.reconnectNewPasswordTitle : (CM.connectionLost || 'Connection Lost')}
       icon="warning"
       iconVariant="warning"
       loading={isReconnecting}
       maxWidth="max-w-[440px]"
       testId="reconnect-host"
       onSubmit={handleReconnect}
-      submitDisabled={isReconnecting}
+      submitDisabled={isReconnecting || (needsPassword && !password)}
       footer={
         <>
           <Button
@@ -167,6 +176,7 @@ export default function ReconnectHostModal() {
             variant="primary"
             onClick={handleReconnect}
             loading={isReconnecting}
+            disabled={needsPassword && !password}
             icon="sync"
             className="min-w-[120px]"
           >
@@ -199,9 +209,23 @@ export default function ReconnectHostModal() {
         <div className="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/8 rounded-xl">
           <Icon name="info" size="sm" className="text-sky-500 shrink-0 mt-0.5" weight={300} />
           <Typography variant="caption" className="text-slate-500 font-medium leading-relaxed">
-            {CM.reconnectPrompt || 'Your session was disconnected, possibly because another user logged into this host. Click Reconnect to attempt to re-establish the connection.'}
+            {needsPassword ? CM.reconnectNewPasswordPrompt : (CM.reconnectPrompt || 'Your session was disconnected, possibly because another user logged into this host. Click Reconnect to attempt to re-establish the connection.')}
           </Typography>
         </div>
+
+        {needsPassword && (
+          <Input
+            data-testid="reconnect-host-password-input"
+            label={CM.newPassword}
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            disabled={isReconnecting}
+            icon="key"
+            autoFocus
+          />
+        )}
       </div>
     </Modal>
   );
