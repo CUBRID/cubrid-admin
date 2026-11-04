@@ -428,16 +428,22 @@ const brokerSlice = createSlice({
         }
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
-        const { brokerName } = action.meta.arg;
+        const { brokerName, isBackground } = action.meta.arg;
         if (!state.detailedStatus[brokerName]) {
           state.detailedStatus[brokerName] = { data: {}, loading: true, error: null };
+          return;
         }
+        // A background poll keeps what is shown, the data or the last error,
+        // until it answers. Showing the loading view meanwhile made a stopped
+        // broker's status flash between loading and error on every poll.
+        if (isBackground) return;
         state.detailedStatus[brokerName].loading = true;
         state.detailedStatus[brokerName].error = null;
       })
       .addCase(fetchDetailedBrokerStatus.fulfilled, (state, action) => {
         const { brokerName, data } = action.payload;
         state.detailedStatus[brokerName].loading = false;
+        state.detailedStatus[brokerName].error = null;
         state.detailedStatus[brokerName].data = data;
       })
       .addCase(fetchDetailedBrokerStatus.rejected, (state, action) => {
