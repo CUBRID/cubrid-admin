@@ -311,3 +311,10 @@ it('keeps the newer database\'s values when an earlier database\'s config answer
   expect(rowOf('max_clients').textContent).toContain('456');
   expect(rowOf('max_clients').textContent).not.toContain('123');
 });
+
+it('takes a deprecated key and its replacement from [@db] whole when it sets either', async () => {
+  const schema = [...DATABASE_PARAM_SCHEMA, { key: 'lock_timeout', category: 'general', guard: { kind: 'time' }, default: '-1' }];
+  await renderConf(['[common]', 'lock_timeout_in_secs=10', '[@demodb]', 'lock_timeout=5s'], schema);
+  expect(rowOf('lock_timeout').textContent).toContain('5s');
+  expect(container.textContent).not.toContain('lock_timeout_in_secs');
+});

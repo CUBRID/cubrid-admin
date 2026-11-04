@@ -355,13 +355,18 @@ export default function DatabasePropertyModal() {
           // A database runs with [common] and its own [@db] over it, key by
           // key, so a database view shows both: the values in effect.
           const inherited = selectedDatabase ? read('common') : {};
-          // A buffer's pages and size keys are one setting to the engine,
-          // the later one read winning (system_parameter.c), and [@db] is
-          // read after [common]: a pair [@db] sets at all hides [common]'s.
-          bufferGroups.forEach(({ pagesKey, sizeKey }) => {
-            if (pagesKey in own || sizeKey in own) {
-              delete inherited[pagesKey];
-              delete inherited[sizeKey];
+          // Some pairs of keys are one setting to the engine, the later line
+          // read winning (system_parameter.c): a buffer's pages and size,
+          // and a deprecated key and its replacement. [@db] is read after
+          // [common], so a pair [@db] sets at all hides [common]'s.
+          const pairs = [
+            ...bufferGroups.map(({ pagesKey, sizeKey }) => [pagesKey, sizeKey]),
+            ...databaseParamSchema.filter(e => e.deprecated?.replacedBy).map(e => [e.key, e.deprecated.replacedBy]),
+          ];
+          pairs.forEach(([first, second]) => {
+            if (first in own || second in own) {
+              delete inherited[first];
+              delete inherited[second];
             }
           });
           const newParams = { ...inherited, ...own };
@@ -393,7 +398,10 @@ export default function DatabasePropertyModal() {
             fetchedConfigKeyRef.current = null;
           }
         }
-        finally { setFetching(false); }
+        finally {
+          // An earlier read's late end must not end the current one's spinner.
+          if (fetchedConfigKeyRef.current === configKey) setFetching(false);
+        }
       };
       fetchParams();
     }
