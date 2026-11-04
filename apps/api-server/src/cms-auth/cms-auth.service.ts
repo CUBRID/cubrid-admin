@@ -79,6 +79,7 @@ export class CmsAuthService {
     const host = await this.loadHost(userId, uid);
     const token = await this.requestToken(userId, uid, host);
     await this.adoptToken(userId, uid, token);
+    this.restoreDbLogins(userId, uid, token);
     return this.finishLogin(userId, uid, host, token);
   }
 
@@ -100,7 +101,11 @@ export class CmsAuthService {
     changes: UpdateHostRequest
   ): Promise<CmsHostLoginClientResponse> {
     const startedAt = Date.now();
+    const loginBy = startedAt + CONNECT_LOGIN_DEADLINE_MS;
     const stored = await this.loadHost(userId, uid);
+    // The save's own checks first: a login that the save then refuses would
+    // only start a CMS session for nothing.
+    await this.hostService.checkHostUpdate(userId, uid, changes);
     const host: HostInfo = {
       ...stored,
       address: changes.address ?? stored.address,
@@ -110,12 +115,13 @@ export class CmsAuthService {
     };
 
     const token = await settleBy(
-      this.requestToken(userId, uid, host, { timeoutMs: CONNECT_LOGIN_DEADLINE_MS }),
-      startedAt + CONNECT_LOGIN_DEADLINE_MS,
+      this.requestToken(userId, uid, host, { notAfter: loginBy }),
+      loginBy,
       () => CmsError.NoResponse({ hostUid: uid, deadlineMs: CONNECT_LOGIN_DEADLINE_MS })
     );
 
     await this.hostService.updateHost(userId, uid, { ...changes, token });
+    this.restoreDbLogins(userId, uid, token);
     await this.adoptToken(userId, uid, token);
     try {
       return await settleBy(
@@ -143,7 +149,7 @@ export class CmsAuthService {
     userId: string,
     uid: string,
     host: HostInfo,
-    options?: { timeoutMs?: number }
+    options?: { notAfter?: number }
   ): Promise<string> {
     const url = `https://${host.address}:${host.port}/cm_api`;
     const request: LoginCmsRequest = {
@@ -207,16 +213,22 @@ export class CmsAuthService {
     });
   }
 
-  /** What follows a stored login: DB logins, the token lifetime, HA details. */
+  /**
+   * The new token ended every DB login CMS held for the old one. Called right
+   * after the token is stored, before anything else awaits, so a DB request
+   * in between waits for the re-login instead of finding no login.
+   */
+  private restoreDbLogins(userId: string, uid: string, token: string): void {
+    this.databaseUserService.restoreDbLoginsAfterHostLogin(userId, uid, token);
+  }
+
+  /** What follows a stored login and its DB logins: the token lifetime, HA details. */
   private async finishLogin(
     userId: string,
     uid: string,
     host: HostInfo,
     token: string
   ): Promise<CmsHostLoginClientResponse> {
-    // The new token ended every DB login CMS held for the old one. Started
-    // before anything else awaits, so a DB request in between waits for it.
-    this.databaseUserService.restoreDbLoginsAfterHostLogin(userId, uid, token);
     await this.rememberTokenActiveTime(userId, uid, token);
 
     const haInfo = await this.getHaInfo(userId, uid);

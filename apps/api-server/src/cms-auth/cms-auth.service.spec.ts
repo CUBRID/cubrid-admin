@@ -25,7 +25,7 @@ describe('CMSAuthService', () => {
         { provide: CmsConfigService, useValue: { getAllSystemParam: jest.fn() } },
         { provide: HaService, useValue: { heartbeatlistInternal: jest.fn() } },
         { provide: DatabaseUserService, useValue: { restoreDbLoginsAfterHostLogin: jest.fn() } },
-        { provide: HostService, useValue: { updateHost: jest.fn() } },
+        { provide: HostService, useValue: { updateHost: jest.fn(), checkHostUpdate: jest.fn() } },
       ],
     }).compile();
 
@@ -133,11 +133,40 @@ describe('CMSAuthService', () => {
         expect(client.postPublic).toHaveBeenCalledWith(
           'https://10.0.0.1:8002/cm_api',
           expect.objectContaining({ task: 'login', port: '8002', password: 'pw' }),
-          expect.objectContaining({ timeoutMs: CONNECT_LOGIN_DEADLINE_MS })
+          { notAfter: expect.any(Number) }
         );
         expect(updateHost).toHaveBeenCalledWith('u1', 'h1', { port: 8002, alias: 'renamed', token: 'new-token' });
         expect(client.postPublic.mock.invocationCallOrder[0]).toBeLessThan(updateHost.mock.invocationCallOrder[0]);
         expect(saved()).toMatchObject({ port: 8002, alias: 'renamed', token: 'new-token', initialLogin: false });
+      });
+
+      it('checks the save first, so a save that would be refused sends no login', async () => {
+        const checkHostUpdate = moduleRef.get(HostService).checkHostUpdate as jest.Mock;
+        checkHostUpdate.mockRejectedValue(Object.assign(new Error('DUPLICATED_ALIAS'), { code: 'DUPLICATED_ALIAS' }));
+
+        await expect(service.connect('u1', 'h1', { alias: 'taken' })).rejects.toMatchObject({ code: 'DUPLICATED_ALIAS' });
+
+        expect(checkHostUpdate).toHaveBeenCalledWith('u1', 'h1', { alias: 'taken' });
+        expect(client.postPublic).not.toHaveBeenCalled();
+        expect(updateHost).not.toHaveBeenCalled();
+      });
+
+      it('starts the DB re-login right after saving the new token, before anything else awaits', async () => {
+        const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
+        let finishAdopt!: () => void;
+        repository.atomicUpdateUser.mockImplementationOnce(
+          (_id, update) => new Promise((resolve) => { finishAdopt = () => resolve(update(user)); })
+        );
+
+        const connect = service.connect('u1', 'h1', { port: 8002 });
+        await new Promise((r) => setImmediate(r));
+        // updateHost stored the new token; adoptToken's write has not finished.
+        expect(updateHost).toHaveBeenCalled();
+        expect(restore).toHaveBeenCalledTimes(1);
+        expect(restore).toHaveBeenCalledWith('u1', 'h1', 'new-token');
+        finishAdopt();
+        await connect;
+        expect(restore).toHaveBeenCalledTimes(1);
       });
 
       it('saves nothing when the login with the changed settings fails', async () => {

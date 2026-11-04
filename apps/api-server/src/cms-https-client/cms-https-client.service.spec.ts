@@ -80,6 +80,25 @@ describe('CmsHttpsClientService', () => {
     expect(post.mock.calls[1][1].task).toBe('setautoexecquery');
   });
 
+  it('does not send a public request still queued when its caller gave up, and bounds one that is sent', async () => {
+    const blocked = new Subject();
+    post.mockReturnValueOnce(blocked).mockReturnValue(of({ data: { status: 'success', token: 't' } }));
+    const ahead = service.postAuthenticated('https://cms/cm_api', { task: 'getstartinfo', token: 'test' });
+    const late = service.postPublic('https://cms/cm_api', { task: 'login' }, { notAfter: Date.now() + 20 });
+    const failure = expect(late).rejects.toMatchObject({ code: 'NO_RESPONSE' });
+    await new Promise((r) => setTimeout(r, 40));
+    blocked.next({ data: { status: 'success' } });
+    blocked.complete();
+    await ahead;
+    await failure;
+    expect(post).toHaveBeenCalledTimes(1);
+
+    const notAfter = Date.now() + 10_000;
+    await service.postPublic('https://cms/cm_api', { task: 'login' }, { notAfter });
+    expect(post.mock.calls[1][2].timeout).toBeGreaterThan(0);
+    expect(post.mock.calls[1][2].timeout).toBeLessThanOrEqual(10_000);
+  });
+
   it('does not block another host behind a pending read', async () => {
     const blocked = new Subject();
     post.mockReturnValueOnce(blocked).mockReturnValue(of({ data: { status: 'success' } }));
