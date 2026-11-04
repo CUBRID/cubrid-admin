@@ -15,6 +15,7 @@ import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
 import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
+import HostReadErrorBanner from './server/HostReadErrorBanner';
 import DatabaseListSection from './server/DatabaseListSection';
 import HaClusterStatusSection from './server/HaClusterStatusSection';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
@@ -280,6 +281,7 @@ const Component = function ServerContent({ hostUid }) {
 
       {/* ── Scrollable Body ── */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <HostReadErrorBanner hostUid={hostUid} />
         <HaClusterStatusSection hostUid={hostUid} />
         <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
         <Brokers hostUid={hostUid} isSection={true} />
