@@ -21,7 +21,7 @@ import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsP
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
-import { autoStartDatabases } from '../autoStartDatabases';
+import { autoStartDatabases } from '@api-interfaces';
 
 // See the HA-abnormal fast-poll effect below.
 const HA_ABNORMAL_POLL_INTERVAL_MS = 1000;

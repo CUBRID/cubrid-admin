@@ -35,6 +35,7 @@ export { hostConfigKey, withHostConfigQueue } from './concurrency/host-config-mu
 export {
   parseHaDbListDbNamesFromHaConf,
   isHostHaModeOnFromCubridConf,
+  readHaDbNames,
   getPerDbHaModeOffDbNames,
   extractDbNamesFromStartInfo,
   extractDbNamesFromHeartbeatList,

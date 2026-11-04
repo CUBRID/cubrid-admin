@@ -1,4 +1,5 @@
 import type { HaClusterNodeClient } from '@api-interfaces';
+import { splitConfList } from '@api-interfaces';
 import type { GetAllSysParamCmsResponse } from '@type/cms-response/get-all-sys-param-cms-response';
 import type {
   HaApplyLogElementItem,
@@ -9,11 +10,13 @@ import type {
   HeartbeatListCmsResponse,
 } from '@type/cms-response/heartbeat-list-cms-response';
 import type { StartInfoCmsResponse } from '@type/cms-response/start-info-cms-response';
+import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_HACONF } from '@database/database.constants';
 import { parseConfigParamsBySection } from '../config/parse-config-params';
 
 /**
  * Database names listed in `[common]` `ha_db_list` of cubrid_ha.conf (CMS confname `haconf`).
- * Values are comma-separated; empty or missing `ha_db_list` yields an empty set (no HA DBs).
+ * The list splits as the engine splits it (splitConfList: spaces, commas,
+ * colons); empty or missing `ha_db_list` yields an empty set (no HA DBs).
  */
 export function parseHaDbListDbNamesFromHaConf(
   response: Pick<GetAllSysParamCmsResponse, 'conflist'>
@@ -36,8 +39,8 @@ export function parseHaDbListDbNamesFromHaConf(
 
   // Allow inline comments and quoted db names in config values.
   const valueWithoutComment = raw.replace(/[;#].*$/, '').trim();
-  for (const part of valueWithoutComment.split(',')) {
-    const name = part.trim().replace(/^['"]+|['"]+$/g, '');
+  for (const part of splitConfList(valueWithoutComment)) {
+    const name = part.replace(/^['"]+|['"]+$/g, '');
     if (name) {
       out.add(name);
     }
@@ -51,10 +54,15 @@ export function parseHaDbListDbNamesFromHaConf(
 // HA_MODE_FAIL_BACK), means HA is enabled for this host. A prior version of
 // this check only matched the literal string "on", which made replica hosts
 // (whose own cubrid.conf sets ha_mode=replica, not ha_mode=on) look like
-// non-HA hosts entirely, skipping heartbeat/peer discovery for them.
-const HA_MODE_OFF_KEYWORDS = new Set(['off', 'no', 'n', '0', 'false']);
+// non-HA hosts entirely, skipping heartbeat/peer discovery for them. An
+// empty value counts as off, like a missing key.
+const HA_MODE_OFF_KEYWORDS = new Set(['', 'off', 'no', 'n', '0', 'false']);
 
-/** Normalized flag from `[common]` (or fallback) `ha_mode` — host-level HA enabled. */
+/**
+ * Whether cubrid.conf makes the host an HA node: `[common]` `ha_mode` is not
+ * off (on, replica). The engine reads cubrid_ha.conf and runs `cubrid
+ * heartbeat` only then.
+ */
 export function isHostHaModeOnFromCubridConf(
   response: Pick<GetAllSysParamCmsResponse, 'conflist'>
 ): boolean {
@@ -64,6 +72,21 @@ export function isHostHaModeOnFromCubridConf(
     return false;
   }
   return !HA_MODE_OFF_KEYWORDS.has(raw.trim().toLowerCase());
+}
+
+/**
+ * The HA databases of a host: the `ha_db_list` ones of cubrid_ha.conf when
+ * cubrid.conf makes it an HA node (isHostHaModeOnFromCubridConf), none
+ * otherwise. `readConf` reads a conf file by CMS confname; cubrid_ha.conf is
+ * read only on an HA node.
+ */
+export async function readHaDbNames(
+  readConf: (confname: string) => Promise<Pick<GetAllSysParamCmsResponse, 'conflist'>>
+): Promise<Set<string>> {
+  if (!isHostHaModeOnFromCubridConf(await readConf(CMS_CONFNAME_CUBRID))) {
+    return new Set<string>();
+  }
+  return parseHaDbListDbNamesFromHaConf(await readConf(CMS_CONFNAME_HACONF));
 }
 
 /**

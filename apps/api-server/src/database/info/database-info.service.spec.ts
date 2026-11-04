@@ -185,64 +185,59 @@ describe('DatabaseInfoService', () => {
     });
   });
 
-  describe('getServiceHaDbNames', () => {
+  describe('HA databases (getHaDbNames, getHaNodeState, effectiveHaDbForDbname)', () => {
     type SysParam = Awaited<ReturnType<CmsConfigService['getAllSystemParam']>>;
-    const confs = (haMode: string | null) => async (_u: string, _h: string, confname: string) => ({
-      conflist: [{
-        confdata: confname === 'haconf'
-          ? ['[common]', 'ha_db_list=hadb1,hadb2']
-          : ['[common]', ...(haMode === null ? [] : [`ha_mode=${haMode}`]), '[service]', 'service=server'],
-      }],
-    }) as SysParam;
+    // cubrid.conf with `ha_mode` (none when null), cubrid_ha.conf with
+    // `ha_db_list`, or an unreadable cubrid_ha.conf when it is an Error.
+    const confs = (haMode: string | null, haDbList: string | Error = 'hadb1,hadb2') => async (_u: string, _h: string, confname: string) => {
+      if (confname === CMS_CONFNAME_HACONF && haDbList instanceof Error) throw haDbList;
+      return {
+        conflist: [{
+          confdata: confname === CMS_CONFNAME_HACONF
+            ? ['[common]', `ha_db_list=${haDbList}`]
+            : ['[common]', ...(haMode === null ? [] : [`ha_mode=${haMode}`]), '[service]', 'service=server'],
+        }],
+      } as SysParam;
+    };
 
-    it.each(['on', 'replica', 'ON'])('is the ha_db_list databases when ha_mode is %s', async (haMode) => {
+    it.each(['on', 'replica', 'ON'])('are the ha_db_list databases when ha_mode is %s', async (haMode) => {
       cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
-      expect([...(await service.getServiceHaDbNames(mockUserId, mockHostUid))].sort()).toEqual(['hadb1', 'hadb2']);
+      expect([...(await service.getHaDbNames(mockUserId, mockHostUid))].sort()).toEqual(['hadb1', 'hadb2']);
+      expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({
+        haNode: true,
+        haDbNames: new Set(['hadb1', 'hadb2']),
+        haDbListError: null,
+      });
     });
 
-    it.each(['off', 'no', null])('is empty when ha_mode is %s, since the engine refuses heartbeat then', async (haMode) => {
+    it.each(['off', 'no', '', null])('are none when ha_mode is %j, since the engine refuses heartbeat then', async (haMode) => {
       cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
-      expect([...(await service.getServiceHaDbNames(mockUserId, mockHostUid))]).toEqual([]);
-    });
-  });
-
-  describe('effectiveHaDbForDbname', () => {
-    it('returns false when dbname is not in ha_db_list', async () => {
-      cmsConfigService.getAllSystemParam.mockResolvedValue({
-        confname: CMS_CONFNAME_HACONF,
-        conflist: [{ confdata: ['[common]', 'ha_db_list=demodb,otherdb'] }],
-      });
-
-      const result = await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'testdb');
-
-      expect(cmsConfigService.getAllSystemParam).toHaveBeenCalledWith(
-        mockUserId,
-        mockHostUid,
-        CMS_CONFNAME_HACONF
-      );
-      expect(result).toBe(false);
+      expect([...(await service.getHaDbNames(mockUserId, mockHostUid))]).toEqual([]);
+      expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({ haNode: false, haDbNames: new Set(), haDbListError: null });
+      expect(await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'hadb1')).toBe(false);
+      expect(cmsConfigService.getAllSystemParam).not.toHaveBeenCalledWith(mockUserId, mockHostUid, CMS_CONFNAME_HACONF);
     });
 
-    it('returns true when dbname is in ha_db_list', async () => {
-      cmsConfigService.getAllSystemParam.mockResolvedValue({
-        confname: CMS_CONFNAME_HACONF,
-        conflist: [{ confdata: ['[common]', 'ha_db_list=demodb,testdb'] }],
-      });
-
-      const result = await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'testdb');
-
-      expect(result).toBe(true);
+    it('split ha_db_list on spaces, commas and colons, as the engine does', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', 'hadb1 hadb2:hadb3,,hadb4'));
+      expect([...(await service.getHaDbNames(mockUserId, mockHostUid))].sort()).toEqual(['hadb1', 'hadb2', 'hadb3', 'hadb4']);
     });
 
-    it('returns false when ha_db_list is empty', async () => {
-      cmsConfigService.getAllSystemParam.mockResolvedValue({
-        confname: CMS_CONFNAME_HACONF,
-        conflist: [{ confdata: ['[common]', 'ha_port_id=59901'] }],
+    it('keep an unreadable cubrid_ha.conf on an HA node as haDbListError, so the node-wide request still goes out', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', CmsError.RequestFailed({ message: 'cannot open cubrid_ha.conf' })));
+      expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({
+        haNode: true,
+        haDbNames: new Set(),
+        haDbListError: 'cannot open cubrid_ha.conf',
       });
+    });
 
-      const result = await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'testdb');
-
-      expect(result).toBe(false);
+    it('tell whether one database is an HA database: in ha_db_list on an HA node', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', 'demodb,testdb'));
+      expect(await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'testdb')).toBe(true);
+      expect(await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'otherdb')).toBe(false);
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', ''));
+      expect(await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'testdb')).toBe(false);
     });
   });
 
