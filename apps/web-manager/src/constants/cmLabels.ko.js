@@ -23,6 +23,9 @@ const volumeErrors = Object.fromEntries(VOLUME_ERROR_TYPES.flatMap((type) => [
   ...Object.entries(VOLUME_ERROR_REASONS).map(([reason, text]) => [`database/${type}:${reason}`, text]),
 ]));
 
+// An HA step's failed ha_start/ha_stop request, after its sentence.
+const sentFailure = (d, failure) => (d.sendFailure ? ` (${failure(d.sendFailure)})` : '');
+
 // class-validator check names in invalidFields.
 const CONSTRAINT_TEXT = {
   isNotEmpty: '비어 있음', isDefined: '비어 있음', min: '최솟값보다 작음', max: '최댓값보다 큼',
@@ -2080,6 +2083,10 @@ export const CM_KO = {
     'database/ha_not_running_after_start': (d, failure) => `HA 시작 후에도 실행되지 않음: ${(d.dbnames ?? []).join(', ')}${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`,
     'database/ha_still_running_after_stop': (d, failure) => `HA 중지 후에도 실행 중: ${(d.dbnames ?? []).join(', ')}${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`,
     'database/ha_start_not_checked': (d, failure) => `HA 데이터베이스가 시작되었는지 확인하지 못했습니다${d.readFailure ? `: ${failure(d.readFailure)}` : ''}${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`,
+    'database/ha_start_not_checked:HA_DB_LIST_EMPTY': (d, failure) => `cubrid_ha.conf의 ha_db_list가 비어 있어 HA 시작 결과를 확인하지 못했습니다${sentFailure(d, failure)}`,
+    'database/ha_start_not_checked:HA_DB_LIST_UNREADABLE': (d, failure) => `cubrid_ha.conf를 읽지 못해 HA 시작 결과를 확인하지 못했습니다${d.haConfFailure ? `: ${failure(d.haConfFailure)}` : ''}${sentFailure(d, failure)}`,
+    'database/ha_stop_not_checked:HA_DB_LIST_EMPTY': (d, failure) => `cubrid_ha.conf의 ha_db_list가 비어 있어 HA 중지 결과를 확인하지 못했습니다${sentFailure(d, failure)}`,
+    'database/ha_stop_not_checked:HA_DB_LIST_UNREADABLE': (d, failure) => `cubrid_ha.conf를 읽지 못해 HA 중지 결과를 확인하지 못했습니다${d.haConfFailure ? `: ${failure(d.haConfFailure)}` : ''}${sentFailure(d, failure)}`,
     'database/ha_stop_not_checked': (d, failure) => (d.readFailure && d.sendFailure
       ? `${failure(d.sendFailure)} (실행 중인 데이터베이스를 읽지 못했습니다: ${failure(d.readFailure)})`
       : `HA 데이터베이스가 중지되었는지 확인하지 못했습니다${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`),

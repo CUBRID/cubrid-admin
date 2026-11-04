@@ -214,3 +214,24 @@ describe('HA steps a server could not check', () => {
       .toBe('HA 데이터베이스가 중지되었는지 확인하지 못했습니다 (CMS 작업이 실패했습니다. (Failed))');
   });
 });
+
+describe('HA steps with no ha_db_list to check against', () => {
+  const step = (action, reason, fields) => ({
+    dbname: 'HA databases (heartbeat)', code: `HA_${action.toUpperCase()}_NOT_CHECKED`,
+    type: `/errors/database/ha_${action}_not_checked`, reason, error: 'English', ...fields,
+  });
+  const send = { error: 'Failed', code: 'REQUEST_FAILED', type: '/errors/cms/request_failed', cmsNote: 'Failed', cmsTask: 'ha_start' };
+  const conf = { error: 'cannot open cubrid_ha.conf', code: 'REQUEST_FAILED', type: '/errors/cms/request_failed', cmsNote: 'cannot open cubrid_ha.conf', cmsTask: 'getallsysparam' };
+
+  it('says the list is empty, with the failed request when there is one', () => {
+    expect(failureText(step('start', 'HA_DB_LIST_EMPTY', { sendFailure: send }), KO))
+      .toBe('cubrid_ha.conf의 ha_db_list가 비어 있어 HA 시작 결과를 확인하지 못했습니다 (CMS 작업이 실패했습니다. (Failed))');
+    expect(failureText(step('stop', 'HA_DB_LIST_EMPTY', {}), KO)).toBe('cubrid_ha.conf의 ha_db_list가 비어 있어 HA 중지 결과를 확인하지 못했습니다');
+  });
+
+  it('says why cubrid_ha.conf could not be read, and stays whole without the reason', () => {
+    expect(failureText(step('start', 'HA_DB_LIST_UNREADABLE', { haConfFailure: conf }), KO))
+      .toBe('cubrid_ha.conf를 읽지 못해 HA 시작 결과를 확인하지 못했습니다: CMS 작업이 실패했습니다. (cannot open cubrid_ha.conf)');
+    expect(failureText(step('stop', 'HA_DB_LIST_UNREADABLE', {}), KO)).toBe('cubrid_ha.conf를 읽지 못해 HA 중지 결과를 확인하지 못했습니다');
+  });
+});
