@@ -59,7 +59,9 @@ const Component = function Brokers({ hostUid, isSection = false }) {
       // and spin it each time.
       if (!silent) setLoading(true);
       try {
-        const result = await dispatch(fetchBrokerList(hostUid)).unwrap();
+        // A background poll reads as one, so it leaves the sidebar's list and
+        // spinner alone and takes a read already in flight.
+        const result = await dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
         setBrokers(result);
         setLoadFailed(false);
       } catch (err) {
