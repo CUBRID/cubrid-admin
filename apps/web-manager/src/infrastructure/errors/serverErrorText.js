@@ -12,6 +12,18 @@ import { getCM, getStoredLocale } from '../../constants/useCM';
 // CMS ends some of its messages with a literal "<end>".
 const cleanNote = (note) => String(note).replace(/\s*<end>\s*$/i, '').trim();
 
+// CMS's own text in the UI language: by its exact wording, then by a
+// pattern for text with names or paths in it; otherwise as CMS sent it.
+function cmsNoteText(note, CM) {
+  const exact = CM.cmsNotes?.[note];
+  if (exact !== undefined) return exact;
+  for (const [pattern, say] of CM.cmsNotePatterns ?? []) {
+    const match = pattern.exec(note);
+    if (match) return say(match);
+  }
+  return note;
+}
+
 const originalOf = (apiData, data) =>
   apiData?.note || data?.message || data?.detail || data?.title || apiData?.message || '';
 
@@ -59,12 +71,12 @@ export function serverErrorText(apiData, CM) {
     && data?.reason === undefined && data?.cmsTask === undefined;
   const cmsNote = data?.cmsNote ? cleanNote(data.cmsNote) : (fromCmsOnly ? original : '');
   if (entry === undefined) {
-    if (cmsNote) return CM.cmsFailedWithNote(CM.cmsNotes?.[cmsNote] ?? cmsNote);
+    if (cmsNote) return CM.cmsFailedWithNote(cmsNoteText(cmsNote, CM));
     return original ? CM.requestFailedWithDetail(original) : CM.requestFailedMsg;
   }
   const failure = (inner) => failureText(inner, CM);
   const text = typeof entry === 'function' ? entry(data ?? {}, failure) : entry;
-  if (cmsNote) return `${text} (${CM.cmsNotes?.[cmsNote] ?? cmsNote})`;
+  if (cmsNote) return `${text} (${cmsNoteText(cmsNote, CM)})`;
   if (!(key in SERVER_FIXED_TEXT) || byReason !== undefined || !original || original === SERVER_FIXED_TEXT[key]) {
     return text;
   }

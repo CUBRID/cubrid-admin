@@ -142,7 +142,8 @@ describe('serverErrorText with reasons and fields', () => {
 
   it('shows the CMS text the server sends apart', () => {
     const notHa = body('/errors/cms/request_failed', { cmsNote: 'The server was not configured for HA.', cmsTask: 'heartbeatlist' }, 'The server was not configured for HA.');
-    expect(serverErrorText(notHa, KO)).toBe('CMS 작업이 실패했습니다. (The server was not configured for HA.)');
+    expect(serverErrorText(notHa, KO)).toBe('CMS 작업이 실패했습니다. (이 서버는 HA로 구성되어 있지 않습니다)');
+    expect(serverErrorText(notHa, EN)).toBe('The server was not configured for HA.');
   });
 });
 
@@ -155,7 +156,7 @@ describe('failureText', () => {
   };
 
   it('says a failure inside a successful response like an error response', () => {
-    expect(failureText(brokers, KO)).toBe('CMS 작업이 실패했습니다. (Error: Cannot open shared memory (os error = No such file or directory))');
+    expect(failureText(brokers, KO)).toBe('CMS 작업이 실패했습니다. (공유 메모리를 열 수 없습니다(OS 오류: No such file or directory))');
     expect(failureText(brokers, EN)).toBe('Error: Cannot open shared memory (os error = No such file or directory)');
     expect(failureText({ message: 'Job interrupted because the API server restarted.', code: 'JOB_INTERRUPTED', type: '/errors/job/job_interrupted' }, KO))
       .toBe('API 서버가 다시 시작되어 작업이 중단되었습니다.');
@@ -184,5 +185,32 @@ describe('warningText', () => {
     expect(warningText(english, { code: 'SOMETHING_NEW' }, KO)).toBe(english);
     expect(warningText(english, undefined, KO)).toBe(english);
     expect(warningText(english, { code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new' }, EN)).toBe(english);
+  });
+});
+
+describe('CMS text in Korean', () => {
+  const cmsFailure = (note) => body('/errors/cms/request_failed', { cmsNote: note, cmsTask: 't' }, note);
+
+  it('says known CMS text with names and paths in it (INQUISITOR C1-C3)', () => {
+    expect(serverErrorText(cmsFailure('Database(demodb@127.0.0.1) is not active state'), KO))
+      .toBe('CMS 작업이 실패했습니다. (데이터베이스(demodb@127.0.0.1)가 실행 중이 아닙니다)');
+    expect(failureText({
+      message: 'x', code: 'REQUEST_FAILED', type: '/errors/cms/request_failed', cmsTask: 'deletedb',
+      cmsNote: 'Unable to mount disk volume "/data/db1". The database "/data/db1", to which the disk volume belongs, is in use by user cubrid on process 1234 of host node1 since Tue Nov  4 10:00:00 2026.<end>',
+    }, KO)).toBe('CMS 작업이 실패했습니다. (디스크 볼륨 "/data/db1"을(를) 마운트할 수 없습니다. 이 볼륨이 속한 데이터베이스 "/data/db1"을(를) 호스트 node1의 프로세스 1234(사용자 cubrid)가 Tue Nov  4 10:00:00 2026부터 쓰고 있습니다)');
+    expect(serverErrorText(cmsFailure('The server was not configured for HA.'), KO)).toBe('CMS 작업이 실패했습니다. (이 서버는 HA로 구성되어 있지 않습니다)');
+  });
+
+  it('keeps CMS text it does not know as CMS sent it', () => {
+    expect(serverErrorText(cmsFailure('Something new happened'), KO)).toBe('CMS 작업이 실패했습니다. (Something new happened)');
+  });
+});
+
+describe('HA steps a server could not check', () => {
+  it('stays whole without the list read that failed', () => {
+    const send = { type: '/errors/cms/request_failed', cmsNote: 'Failed', cmsTask: 'ha_stop', error: 'Failed' };
+    expect(failureText({ type: '/errors/database/ha_start_not_checked', error: 'x' }, KO)).toBe('HA 데이터베이스가 시작되었는지 확인하지 못했습니다');
+    expect(failureText({ type: '/errors/database/ha_stop_not_checked', error: 'x', sendFailure: send }, KO))
+      .toBe('HA 데이터베이스가 중지되었는지 확인하지 못했습니다 (CMS 작업이 실패했습니다. (Failed))');
   });
 });
