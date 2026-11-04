@@ -134,7 +134,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   const brokerFromList = lastKnownBrokerFromList || {};
   // CMS lists a stopped broker without its settings (getbrokersinfo sends
   // them only for a running one), so they show as unknown, not as defaults.
-  const isBrokerOff = brokerFromList.state === 'OFF';
+  // With the whole broker service off the list has no state at all; a broker
+  // is only ever ON, SUSPENDED or OFF.
+  const isBrokerOff = brokerFromList.state !== 'ON' && brokerFromList.state !== 'SUSPENDED';
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,

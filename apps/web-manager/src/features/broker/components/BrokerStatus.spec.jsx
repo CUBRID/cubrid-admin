@@ -207,6 +207,17 @@ describe('BrokerStatus basic information values', () => {
     expect(isLit('AUTO_ADD_APPL_SERVER')).toBe(true);
   });
 
+  it('shows the settings as unknown when the broker service is off and the list has no state', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: BROKER_NAME }] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+
+    for (const label of ['AUTO_ADD_APPL_SERVER', 'SQL_LOG', 'LONG_TRANSACTION_TIME', 'LONG_QUERY_TIME']) {
+      expect(cell(label).textContent).toBe(`${label}-`);
+    }
+  });
+
   it('shows the settings of a stopped broker as unknown, not as defaults', async () => {
     brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: BROKER_NAME, state: 'OFF' }] });
     brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
