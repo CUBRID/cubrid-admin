@@ -678,6 +678,8 @@ export const CM_KO = {
     `이 디렉터리에는 이미 레벨 ${level} 백업이 있습니다. 다시 백업하면 기존 백업을 덮어씁니다.`,
   backupPlanIdRequiredMsg: 'Plan ID는 필수 입력 항목입니다.',
   databaseBackedUpMsg: (db, dir) => `데이터베이스 "${db}"가 "${dir}"에 성공적으로 백업되었습니다.`,
+  backupWrittenMsg: (kind, db, dir) => `"${db}"의 ${kind}을 "${dir}"에 저장했습니다.`,
+  backupStartFailedMsg: '백업을 시작하지 못했습니다. 다시 시도하세요.',
   restoringDatabase: '데이터베이스 복구 중',
   reconstructingInstance: '데이터베이스 복구 중',
   restoreCompleted: '복구 완료',

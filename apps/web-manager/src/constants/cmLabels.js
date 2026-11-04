@@ -721,6 +721,8 @@ export const CM = {
     `A level ${level} backup already exists in this directory. Running the backup again will overwrite it.`,
   backupPlanIdRequiredMsg: 'A Plan ID is required.',
   databaseBackedUpMsg: (db, dir) => `Database "${db}" has been successfully backed up to "${dir}".`,
+  backupWrittenMsg: (kind, db, dir) => `${kind} of "${db}" was written to "${dir}".`,
+  backupStartFailedMsg: 'Backup could not be started. Please try again.',
   restoringDatabase: 'Restoring Database',
   reconstructingInstance: 'Restoring Database',
   restoreCompleted: 'Restore Completed',

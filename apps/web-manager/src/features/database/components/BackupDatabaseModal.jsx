@@ -62,7 +62,10 @@ export default function BackupDatabaseModal() {
     isSuccess,
     isError
   } = useActionState();
-  const { trackJob } = useCmsJobs();
+  const { trackJob, dismissJobResult } = useCmsJobs();
+  // Read when a backup settles, to tell whether this modal shows its result.
+  const isOpenRef = useRef(isBackupDatabaseModalOpen);
+  useEffect(() => { isOpenRef.current = isBackupDatabaseModalOpen; }, [isBackupDatabaseModalOpen]);
   const [jobStatus, setJobStatus] = useState(null);
   // Identifies the most recent handleBackup() call. This modal has no
   // runJob()/background() concept (unlike the other CMS-job modals) — its
@@ -197,6 +200,11 @@ export default function BackupDatabaseModal() {
     const invocationToken = {};
     latestBackupTokenRef.current = invocationToken;
     const progressOpts = { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) };
+    // While this modal is open it shows the result itself, so the job
+    // tray's result window for the same backup would be a second one.
+    // Closed, the tray's window is the only notice.
+    let jobId;
+    const dismissTrayResult = () => { if (isOpenRef.current) dismissJobResult(jobId); };
     try {
       const payload = {
         level: formData.backupLevel,
@@ -215,24 +223,25 @@ export default function BackupDatabaseModal() {
         pendingBackupJob?.dbname === selectedDatabase &&
         JSON.stringify(pendingBackupJob?.payload) === JSON.stringify(payload);
 
-      let jobId;
       if (exactMatch) {
         jobId = pendingBackupJob.jobId;
       } else {
         const created = await databaseJobApi.submitBackup(selectedHostUid, selectedDatabase, payload);
         jobId = created?.jobId;
-        if (!jobId) throw new Error('Backup could not be started. Please try again.');
+        if (!jobId) throw new Error(CM.backupStartFailedMsg);
         // Replace only after confirmed acceptance — preserves the previous pending job if submit fails
         dispatch(setPendingBackupJob({ jobId, hostUid: selectedHostUid, dbname: selectedDatabase, payload }));
       }
 
       await trackJob(jobId, progressOpts);
       if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
+      dismissTrayResult();
       dispatch(clearPendingBackupJob());
-      endSuccess(CM.databaseBackedUpMsg(selectedDatabase, formData.backupDir));
+      endSuccess(backupWrittenMsg);
     } catch (err) {
       if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
       if (!err?.cancelled) {
+        dismissTrayResult();
         // Terminal job failure on the server — clear pending so retry submits a new backup.
         // Transient polling failures keep pendingBackupJob to allow reconnect on retry.
         if (err?.jobTerminalFailure) dispatch(clearPendingBackupJob());
@@ -240,6 +249,9 @@ export default function BackupDatabaseModal() {
       }
     }
   };
+
+  const backupKind = [CM.backupLevelFullTitle, CM.backupLevelIncrL1Title, CM.backupLevelIncrL2Title][Number(formData.backupLevel)];
+  const backupWrittenMsg = CM.backupWrittenMsg(backupKind, selectedDatabase, formData.backupDir);
 
   // Don't clear pendingBackupJob on close — the open effect reconnects on reopen
   const handleClose = () => dispatch(closeBackupDatabaseModal());
@@ -351,7 +363,7 @@ export default function BackupDatabaseModal() {
       <Modal isOpen title={CM.backupCompleted} icon="backup" iconVariant="success" onClose={handleClose} maxWidth="720px">
         <ModalStatusSuccess 
           title={CM.snapshotSecured}
-          message={`A complete backup of ${selectedDatabase} has been written to: ${formData.backupDir}.`}
+          message={backupWrittenMsg}
           onConfirm={handleClose}
           confirmText={CM.ok}
         />
