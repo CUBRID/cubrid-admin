@@ -321,3 +321,21 @@ describe('Start/Stop/Restart All run on the start-info read made when the confir
     expect(await emptyStore().dispatch(planLoginCheckedAction('h1', runningDbNames))).toEqual({ outcome: 'allSkipped' });
   });
 });
+
+describe('bulk result failures in Korean', () => {
+  it('words each failure from its type and names the HA step', () => {
+    const KO = { ...CM, ...CM_KO };
+    const report = bulkResultStatusModal(KO, {
+      title: KO.startAllDatabases, failedMsg: KO.someDatabasesFailedToStartMsg,
+      failed: [
+        { dbname: 'demodb', type: '/errors/validation/missing_db_credentials', code: 'MISSING_DB_CREDENTIALS', reason: 'notLoggedIn', error: 'Not logged in to database demodb. Log in to it first.' },
+        { dbname: 'HA databases (heartbeat)', type: '/errors/database/ha_not_running_after_start', code: 'HA_NOT_RUNNING_AFTER_START', dbnames: ['hadb1'], error: 'Not running after the HA start: hadb1' },
+      ],
+    });
+    const rows = report.tables[0].rows.map((row) => [row.name, row.reasons.map((r) => r.reason)]);
+    expect(rows).toEqual([
+      ['demodb', ['데이터베이스 demodb에 로그인하지 않았습니다. 먼저 로그인하세요.']],
+      ['HA 데이터베이스(heartbeat)', ['HA 시작 후에도 실행되지 않음: hadb1']],
+    ]);
+  });
+});

@@ -2,6 +2,41 @@
  * CUBRID Manager 스타일 UI 라벨 (한국어).
  * cmLabels.js 와 동일한 키 구조.
  */
+// Volume problems: each volume error type names the same reasons.
+const VOLUME_ERROR_TYPES = [
+  'invalid_volume_string', 'invalid_volume_format', 'invalid_volume_info',
+  'invalid_volume_size', 'parse_volume_failed', 'convert_volume_failed',
+];
+const VOLUME_ERROR_REASONS = {
+  LOG_SIZE_NOT_POSITIVE: '로그 크기는 0보다 큰 MB 값이어야 합니다.',
+  LOG_PAGE_SIZE_NOT_POSITIVE: '로그 페이지 크기는 0보다 큰 바이트 값이어야 합니다.',
+  LOG_SIZE_TOO_SMALL: '로그 크기가 너무 작습니다(MB를 페이지 수로 바꾼 값).',
+  VOLUME_PAGE_COUNT_NOT_POSITIVE: '일반 볼륨 페이지 수는 0보다 커야 합니다.',
+  VOLUME_PAGE_SIZE_NOT_POSITIVE: '일반 볼륨 페이지 크기는 0보다 커야 합니다.',
+  VOLUME_SIZE_TOO_LARGE: '일반 볼륨 크기는 20 GB를 넘을 수 없습니다.',
+  EMPTY_VOLUME_STRING: '볼륨 정보가 비어 있습니다.',
+  VOLUME_TYPE_OR_PATH_MISSING: '볼륨 정보에 종류와 경로가 있어야 합니다.',
+  VOLUME_SIZE_NOT_POSITIVE: '볼륨 크기와 페이지 크기는 0보다 커야 합니다.',
+};
+const volumeErrors = Object.fromEntries(VOLUME_ERROR_TYPES.flatMap((type) => [
+  [`database/${type}`, '볼륨 정보가 올바르지 않습니다.'],
+  ...Object.entries(VOLUME_ERROR_REASONS).map(([reason, text]) => [`database/${type}:${reason}`, text]),
+]));
+
+// class-validator check names in invalidFields.
+const CONSTRAINT_TEXT = {
+  isNotEmpty: '비어 있음', isDefined: '비어 있음', min: '최솟값보다 작음', max: '최댓값보다 큼',
+  isInt: '정수가 아님', isNumber: '숫자가 아님', isString: '문자열이 아님', isBoolean: '참/거짓 값이 아님',
+  isIn: '허용된 값이 아님', isEnum: '허용된 값이 아님', maxLength: '너무 김', minLength: '너무 짧음',
+  matches: '형식이 맞지 않음', isArray: '목록이 아님',
+};
+const fieldProblems = (fields) => fields
+  .map(({ field, constraints = [] }) => {
+    const said = constraints.map((c) => CONSTRAINT_TEXT[c] ?? c);
+    return said.length > 0 ? `${field}(${said.join(', ')})` : field;
+  })
+  .join(', ');
+
 export const CM_KO = {
   ok: '확인',
   cancel: '취소',
@@ -1935,15 +1970,24 @@ export const CM_KO = {
     'cms/no_response': 'CMS가 응답하지 않았습니다.',
     'cms/tls_error': 'CMS와 보안 연결(TLS)을 맺지 못했습니다.',
     'cms/request_failed': 'CMS 작업이 실패했습니다.',
+    'cms/request_failed:NO_TOKEN': 'CMS 로그인 응답에 인증 토큰이 없습니다. 다시 연결하세요.',
+    'cms/request_failed:ASYNC_JOB_TIMEOUT': (d) => `CMS 작업(${d.cmsTask})이 ${Math.round(d.timeoutMs / 1000)}초 안에 끝나지 않았습니다.`,
+    'cms/request_failed:RESPONSE_TOO_LARGE': 'CMS 응답이 분석할 수 있는 크기를 넘었습니다. 더 작은 보관 로그를 고르세요.',
     'cms/unknown': 'CMS 작업이 실패했습니다.',
-    'validation/invalid_request_body': '요청 내용이 올바르지 않습니다.',
-    'validation/missing_required_field': '필수 항목이 비어 있습니다.',
+    'validation/invalid_request_body': (d) => (d.invalidFields?.length
+      ? `입력 값이 올바르지 않습니다: ${fieldProblems(d.invalidFields)}`
+      : '요청 내용이 올바르지 않습니다.'),
+    'validation/missing_required_field': (d) => (d.missingFields?.length
+      ? `필수 항목이 비어 있습니다: ${d.missingFields.join(', ')}`
+      : '필수 항목이 비어 있습니다.'),
     'validation/missing_db_credentials': (d) => {
       if (d.reason === 'loggedOut') return `데이터베이스 ${d.dbname}에서 로그아웃했습니다. 먼저 로그인하세요.`;
       if (d.reason === 'notLoggedIn') return `데이터베이스 ${d.dbname}에 로그인하지 않았습니다. 먼저 로그인하세요.`;
       return d.dbname ? `데이터베이스 ${d.dbname}의 로그인 정보가 필요합니다.` : '데이터베이스 로그인 정보가 필요합니다.';
     },
     'validation/invalid_field_format': '입력 형식이 올바르지 않습니다.',
+    'validation/invalid_field_format:CONFNAME_NOT_SAVABLE': (d) => `설정 파일 "${d.confname}"은(는) 여기서 저장할 수 없습니다(cubridconf, cmconf만 저장할 수 있고 broker.conf는 따로 저장함).`,
+    'validation/invalid_field_format:INVALID_CONF_TEXT': '설정 내용에 문제가 있어 저장하지 않았습니다.',
     'validation/unknown': '입력 내용을 확인하세요.',
     'auth/invalid_credentials': '아이디 또는 비밀번호가 올바르지 않습니다.',
     'auth/invalid_token': '인증이 만료되었거나 올바르지 않습니다. 다시 로그인하세요.',
@@ -1958,13 +2002,46 @@ export const CM_KO = {
     'resource/no_such_host': '호스트를 찾을 수 없습니다.',
     'resource/exceed_max_hosts': '등록할 수 있는 호스트 수를 넘었습니다.',
     'resource/invalid_format': '호스트 정보 형식이 올바르지 않습니다.',
+    'resource/invalid_format:MISSING_OR_BLANK_ALIAS': '호스트를 추가하려면 이름(별칭)이 필요합니다.',
+    'resource/invalid_format:BLANK_ALIAS_NOT_ALLOWED': '이름(별칭)은 비워 둘 수 없습니다.',
+    'resource/invalid_format:ALIAS_TOO_LONG': (d) => `이름(별칭)은 ${d.max}자까지 쓸 수 있습니다.`,
+    'resource/invalid_format:GROUP_NOT_FOUND': '그룹을 찾을 수 없습니다.',
+    'resource/invalid_format:BLANK_GROUP_NAME_NOT_ALLOWED': '그룹 이름을 입력하세요.',
+    'resource/invalid_format:GROUP_NAME_INVALID_START': (d) => `"${d.groupName}"은(는) 그룹 이름으로 쓸 수 없습니다. 영문자나 숫자로 시작해야 합니다.`,
+    'resource/invalid_format:DEFAULT_HOST_NOT_IN_GROUP': '기본 호스트는 이 그룹에 속한 호스트여야 합니다.',
+    'resource/invalid_format:CANNOT_RENAME_UNGROUPED': '"미분류"의 이름은 바꿀 수 없습니다.',
+    'resource/invalid_format:CANNOT_DELETE_UNGROUPED': '"미분류"는 삭제할 수 없습니다.',
     'resource/duplicated_host': '이미 등록된 호스트입니다.',
-    'resource/duplicated_alias': '다른 호스트가 이미 쓰는 이름입니다. 다른 이름을 고르세요.',
+    'resource/duplicated_alias': (d) => (d.alias
+      ? `"${d.alias}"은(는) 다른 호스트가 이미 쓰는 이름입니다. 다른 이름을 고르세요.`
+      : '다른 호스트가 이미 쓰는 이름입니다. 다른 이름을 고르세요.'),
     'resource/cms_api_failure': '리소스 모니터링을 위한 CMS 호출이 실패했습니다.',
     'resource/host_not_found': '모니터링할 호스트를 찾을 수 없습니다.',
     'resource/unknown': '작업이 실패했습니다.',
     'database/no_such_database': (d) => (d.dbname ? `데이터베이스 ${d.dbname}을(를) 찾을 수 없습니다.` : '데이터베이스를 찾을 수 없습니다.'),
     'database/database_action_in_progress': (d) => (d.dbname ? `데이터베이스 ${d.dbname}에서 다른 작업이 진행 중입니다.` : '이 데이터베이스에서 다른 작업이 진행 중입니다.'),
+    'database/operation_in_progress': (d) => (d.dbname
+      ? `"${d.dbname}"에서 백그라운드 작업이 이미 실행 중입니다. 끝난 뒤 다시 시도하세요.`
+      : '이 호스트에서 백그라운드 작업이 이미 실행 중입니다. 끝난 뒤 다시 시도하세요.'),
+    'database/load_not_supported_for_ha_database': (d) => `${d.dbname ? `"${d.dbname}"은(는) HA 데이터베이스입니다. ` : ''}로드는 항상 오프라인으로 실행되어 HA 상대 노드에 복제되지 않으므로 HA 데이터베이스에서는 할 수 없습니다.`,
+    'database/rename_not_supported_for_ha_database': (d) => `${d.dbname ? `"${d.dbname}"은(는) HA 데이터베이스입니다. ` : ''}이름을 바꾸면 상대 노드와의 HA 연결이 깨지므로 HA 데이터베이스에서는 할 수 없습니다.`,
+    'database/restore_not_supported_for_ha_database': (d) => `${d.dbname ? `"${d.dbname}"은(는) HA 데이터베이스입니다. ` : ''}복구하면 HA 상대 노드와 복제 적용 위치가 어긋나므로 HA 데이터베이스에서는 할 수 없습니다.`,
+    'database/invalid_parameter': '입력 값이 올바르지 않습니다.',
+    'database/invalid_parameter:HA_HOST_DELETE_DB_BLOCKED': 'HA로 구성된 호스트에서는 데이터베이스를 삭제할 수 없습니다.',
+    'database/invalid_parameter:COPY_DEST_SAME_AS_SOURCE': '대상 데이터베이스 이름은 원본과 달라야 합니다.',
+    'database/invalid_parameter:COPY_VOLUME_MAPPINGS_REQUIRED': '볼륨별 복사에는 볼륨마다 새 경로가 필요합니다.',
+    'database/invalid_parameter:COPY_VOLUME_MAPPING_INVALID': '볼륨 복사 경로가 올바르지 않습니다.',
+    'database/invalid_parameter:COPY_VOLUME_PATHS_NOT_UNIQUE': '볼륨 복사 경로는 비어 있지 않고 서로 달라야 합니다.',
+    'database/invalid_parameter:COPY_VOLUME_ONTO_SOURCE': (d) => `볼륨 ${d.path}을(를) 복사하면 원본 볼륨 위에 덮어씁니다.`,
+    'database/invalid_parameter:UNLOAD_NOTHING_SELECTED': '스키마와 데이터 중 하나 이상을 고르세요.',
+    'database/invalid_parameter:KILL_PARAMETER_REQUIRED': (d) => `트랜잭션 종료 방식 '${d.killType}'에 필요한 값이 없습니다.`,
+    'database/login_database_failed:LOGGED_OUT_WHILE_LOGGING_IN': '로그인하는 동안 로그아웃되었습니다.',
+    'database/get_user_info_failed:USER_NOT_IN_USERINFO': (d) => `"${d.username}"의 비밀번호를 바꾸지 않았습니다. "${d.dbname}"에서 이 사용자의 현재 그룹·권한을 확인하지 못했습니다.`,
+    'database/ha_not_running_after_start': (d, failure) => `HA 시작 후에도 실행되지 않음: ${(d.dbnames ?? []).join(', ')}${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`,
+    'database/ha_still_running_after_stop': (d, failure) => `HA 중지 후에도 실행 중: ${(d.dbnames ?? []).join(', ')}${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`,
+    'database/ha_start_not_checked': (d, failure) => `HA 데이터베이스가 시작되었는지 확인하지 못했습니다: ${failure(d.readFailure)}${d.sendFailure ? ` (${failure(d.sendFailure)})` : ''}`,
+    'database/ha_stop_not_checked': (d, failure) => `${failure(d.sendFailure)} (실행 중인 데이터베이스를 읽지 못했습니다: ${failure(d.readFailure)})`,
+    ...volumeErrors,
     'database/duplicated_database_profile': '이 데이터베이스의 로그인 정보가 이미 있습니다.',
     'database/get_start_info_failed': '데이터베이스 목록 정보를 가져오지 못했습니다.',
     'database/start_database_failed': '데이터베이스를 시작하지 못했습니다.',
@@ -1978,10 +2055,13 @@ export const CM_KO = {
     'database/get_db_space_info_failed': '데이터베이스 공간 정보를 가져오지 못했습니다.',
     'database/get_dbsize_failed': '데이터베이스 크기를 가져오지 못했습니다.',
     'database/copy_db_failed': '데이터베이스를 복사하지 못했습니다.',
-    'database/convert_volume_failed': '볼륨 정보가 올바르지 않습니다.',
-    'database/duplicated_file': '이미 있는 파일입니다.',
+    'database/duplicated_file': (d) => (d.path ? `이미 있는 파일입니다: ${d.path}` : '이미 있는 파일입니다.'),
     'database/unknown': '데이터베이스 작업이 실패했습니다.',
     'config/server_param_not_found': '서버 파라미터를 찾을 수 없습니다.',
+    'config/server_param_not_found:SERVICE_SECTION_NOT_FOUND': '설정 파일에 [service] 구역이 없습니다.',
+    'config/server_param_not_found:SERVER_PARAM_NOT_IN_SERVICE': '[service] 구역에 server 파라미터가 없습니다.',
+    'config/query_plan_not_found': '질의 자동화 계획을 찾을 수 없습니다.',
+    'config/duplicate_query_id': (d) => (d.queryId ? `이미 있는 질의 ID입니다: ${d.queryId}` : '이미 있는 질의 ID입니다.'),
     'config/no_confdata': '설정 내용을 찾을 수 없습니다.',
     'config/dbname_already_exists': '이미 있는 데이터베이스 이름입니다.',
     'config/dbname_not_found': '데이터베이스 이름을 찾을 수 없습니다.',
@@ -2005,6 +2085,21 @@ export const CM_KO = {
     'storage/permission_denied': '파일에 접근할 권한이 없습니다.',
     'storage/unknown': '저장소 작업이 실패했습니다.',
     'internal/internal_error': '서버 내부 오류가 났습니다.',
+    'job/job_interrupted': 'API 서버가 다시 시작되어 작업이 중단되었습니다.',
+    'http/job_not_found': '작업을 찾을 수 없습니다.',
+    'http/log_too_large': '로그가 분석 한도(100,000줄 또는 16 MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.',
+    'http/log_capture_incomplete': '로그 전체를 가져오지 못했습니다. 새로 고친 뒤 다시 시도하세요.',
+  },
+  // Job warnings by their code in warningDetails (see warningText).
+  jobWarnings: {
+    RENAME_SECTION_KEPT: (d) => `cubrid.conf에 이미 [@${d.newName}] 구역이 있어 [@${d.oldName}] 구역은 그대로 두었습니다. "${d.newName}"에 그 설정이 필요하면 [@${d.newName}]으로 직접 옮기세요.`,
+    RENAME_AUTOSTART_NOT_UPDATED: (d) => `데이터베이스 이름을 "${d.oldName}"에서 "${d.newName}"(으)로 바꿨지만 cubrid.conf의 자동 시작 목록을 고치지 못했습니다. 자동 시작을 쓰려면 [service] server의 옛 이름과, 있다면 [@${d.oldName}] 구역 이름을 새 이름으로 직접 바꾸세요. 이름 변경을 다시 하지 마세요.`,
+    COPY_HA_MODE_NOT_SET: (d) => `"${d.dbname}"(으)로 복사했지만 cubrid.conf를 확인하거나 [@${d.dbname}] ha_mode=off를 넣지 못했습니다. HA 호스트라면 시작하기 전에 이 구역을 직접 넣으세요.`,
+    DELETE_LOGIN_NOT_REMOVED: (d) => `데이터베이스 "${d.dbname}"을(를) 삭제했지만 저장된 로그인 정보를 지우지 못했습니다. "${d.dbname}"을(를) 다시 만들면 데이터베이스 로그인 설정에서 지우세요.`,
+    DELETE_CONF_NOT_UPDATED: (d) => `데이터베이스 "${d.dbname}"을(를) 삭제했지만 cubrid.conf를 고치지 못했습니다. [service] server에서 "${d.dbname}"을(를) 빼고 [@${d.dbname}] 구역을 직접 지우세요.`,
+    DB_LIST_NOT_REFRESHED: (d) => (d.jobType === 'rename'
+      ? '데이터베이스 이름을 바꿨지만 데이터베이스 목록을 새로 읽지 못했습니다. 목록을 직접 새로 고치고, 이름 변경을 다시 하지 마세요.'
+      : '데이터베이스를 복사했지만 데이터베이스 목록을 새로 읽지 못했습니다. 목록을 직접 새로 고치고, 복사를 다시 하지 마세요.'),
   },
   administratorLabel: '관리자',
   notAssignedFallback: '지정되지 않음',
@@ -2426,4 +2521,8 @@ export const CM_KO = {
   importAliasInUseMsg: '이미 쓰고 있는 이름입니다.',
   importDuplicateConnectionMsg: '가져오기 파일 안에 주소 + 포트가 겹칩니다.',
   importDuplicateAliasMsg: '가져오기 파일 안에 이름이 겹칩니다.',
+  serviceFailuresMsg: (action, items) => `서비스를 ${action === 'start' ? '시작' : '중지'}하지 못한 항목: ${items.join(', ')}`,
+  serviceStepBrokers: '브로커',
+  serviceStepDatabases: '데이터베이스',
+  haNodeStepName: 'HA 데이터베이스(heartbeat)',
 };

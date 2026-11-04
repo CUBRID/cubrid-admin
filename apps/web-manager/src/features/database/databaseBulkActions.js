@@ -1,4 +1,6 @@
 import { fetchDatabaseStartInfo, startAllDatabases, stopAllDatabases } from './databaseCoreSlice';
+import { HA_NODE_STEP } from '../host/haNodeStep';
+import { failureText } from '../../infrastructure/errors/serverErrorText';
 
 const errorText = (err) => (typeof err === 'string' ? err : err?.message || String(err));
 
@@ -70,9 +72,9 @@ async function readActiveDbnames(dispatch, hostUid) {
 // so one database failing in several phases is counted and listed once.
 export function groupBulkFailures(failed) {
   const byDb = new Map();
-  for (const { dbname, phase, error } of failed) {
+  for (const { dbname, ...failure } of failed) {
     if (!byDb.has(dbname)) byDb.set(dbname, []);
-    byDb.get(dbname).push({ phase, error });
+    byDb.get(dbname).push(failure);
   }
   return [...byDb].map(([dbname, reasons]) => ({ dbname, reasons }));
 }
@@ -98,8 +100,8 @@ export function bulkResultStatusModal(CM, {
       variant: 'failed',
       testId: 'bulk-failed-table',
       rows: grouped.map(({ dbname, reasons }) => ({
-        name: dbname,
-        reasons: reasons.map((r) => ({ phase: phaseLabel[r.phase] ?? r.phase, reason: r.error })),
+        name: dbname === HA_NODE_STEP ? CM.haNodeStepName : dbname,
+        reasons: reasons.map((r) => ({ phase: phaseLabel[r.phase] ?? r.phase, reason: failureText({ dbname, ...r }, CM) })),
       })),
     });
   }

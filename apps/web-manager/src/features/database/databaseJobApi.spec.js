@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import apiClient from '../../api/apiClient';
+import { LOCALE_STORAGE_KEY } from '../../constants/useCM';
 import { databaseJobApi, pollCmsJob } from './databaseJobApi';
 
 beforeEach(() => vi.useFakeTimers());
@@ -48,5 +50,23 @@ describe('pollCmsJob result certainty', () => {
     const result = pollCmsJob('job-1').promise;
     await vi.advanceTimersByTimeAsync(4000);
     expect(await result).toEqual(succeeded);
+  });
+});
+
+describe('job status in the UI language', () => {
+  afterEach(() => localStorage.removeItem(LOCALE_STORAGE_KEY));
+
+  it('words a job error and its warnings from their codes', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
+    vi.spyOn(apiClient, 'get').mockResolvedValue({
+      jobId: 'job-1', jobStatus: 'failed', finishedAt: 1,
+      error: { message: 'Unable to mount disk volume', code: 'REQUEST_FAILED', type: '/errors/cms/request_failed', cmsNote: 'Unable to mount disk volume', cmsTask: 'backupdb' },
+      warnings: ['Database "olddb" was deleted, but cubrid.conf could not be updated.'],
+      warningDetails: [{ code: 'DELETE_CONF_NOT_UPDATED', dbname: 'olddb' }],
+    });
+    const job = await databaseJobApi.getJob('job-1');
+    expect(job.error.message).toBe('CMS 작업이 실패했습니다. (Unable to mount disk volume)');
+    expect(job.error.cmsTask).toBe('backupdb');
+    expect(job.warnings).toEqual(['데이터베이스 "olddb"을(를) 삭제했지만 cubrid.conf를 고치지 못했습니다. [service] server에서 "olddb"을(를) 빼고 [@olddb] 구역을 직접 지우세요.']);
   });
 });

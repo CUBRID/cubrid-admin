@@ -2357,4 +2357,8 @@ export const CM = {
   importAliasInUseMsg: 'Alias already in use',
   importDuplicateConnectionMsg: 'Duplicate address + port in import file',
   importDuplicateAliasMsg: 'Duplicate alias in import file',
+  serviceFailuresMsg: (action, items) => `Failed to ${action} service for: ${items.join(', ')}`,
+  serviceStepBrokers: 'brokers',
+  serviceStepDatabases: 'databases',
+  haNodeStepName: 'HA databases (heartbeat)',
 };

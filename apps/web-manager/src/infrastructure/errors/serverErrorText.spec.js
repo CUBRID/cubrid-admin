@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AxiosError } from 'axios';
 import apiClient from '../../api/apiClient';
 import { getCM, LOCALE_STORAGE_KEY } from '../../constants/useCM';
-import { requestErrorText, serverErrorText } from './serverErrorText';
+import { failureText, requestErrorText, serverErrorText, warningText } from './serverErrorText';
 
 const KO = getCM('ko');
 const EN = getCM('en');
@@ -86,5 +86,94 @@ describe('apiClient', () => {
     const timeout = await failWith((config) => new AxiosError('timeout of 60000ms exceeded', 'ECONNABORTED', config, {}));
     expect(requestErrorText(network)).toBe('서버에 연결하지 못했습니다.');
     expect(requestErrorText(timeout)).toBe('서버가 제시간에 응답하지 않았습니다.');
+  });
+});
+
+describe('serverErrorText with reasons and fields', () => {
+  // POST /host with an empty address and port 70000 (server-error-codes.md, section 8).
+  const badHostBody = {
+    data: {
+      type: '/errors/validation/invalid_request_body', title: 'Invalid Request Body', status: 400,
+      detail: 'address should not be empty; port must not be greater than 65535', code: 'INVALID_REQUEST_BODY',
+      missingFields: ['address', 'port'],
+      invalidFields: [{ field: 'address', constraints: ['isNotEmpty'] }, { field: 'port', constraints: ['max'] }],
+      message: 'address should not be empty; port must not be greater than 65535',
+    },
+    status: 400,
+    note: 'address should not be empty; port must not be greater than 65535',
+  };
+
+  it('names each wrong field in Korean', () => {
+    expect(serverErrorText(badHostBody, KO)).toBe('입력 값이 올바르지 않습니다: address(비어 있음), port(최댓값보다 큼)');
+  });
+
+  it('says the situation a reason names', () => {
+    expect(serverErrorText(body('/errors/resource/invalid_format', { reason: 'GROUP_NOT_FOUND', field: 'groupId' }, 'Group "g9" does not exist.'), KO))
+      .toBe('그룹을 찾을 수 없습니다.');
+    expect(serverErrorText(body('/errors/resource/invalid_format', { reason: 'ALIAS_TOO_LONG', field: 'alias', max: 64 }), KO))
+      .toBe('이름(별칭)은 64자까지 쓸 수 있습니다.');
+    expect(serverErrorText(body('/errors/cms/request_failed', { reason: 'NO_TOKEN', cmsTask: 'login' }, 'CMS login did not return a token'), KO))
+      .toBe('CMS 로그인 응답에 인증 토큰이 없습니다. 다시 연결하세요.');
+  });
+
+  it('keeps a specific English reason a server without reasons sends, but not its fixed sentence', () => {
+    expect(serverErrorText(body('/errors/resource/invalid_format', {}, 'The alias cannot be blank.'), KO))
+      .toBe('호스트 정보 형식이 올바르지 않습니다. (The alias cannot be blank.)');
+    expect(serverErrorText(body('/errors/resource/invalid_format', {}, 'Invalid host information format.'), KO))
+      .toBe('호스트 정보 형식이 올바르지 않습니다.');
+    expect(serverErrorText(body('/errors/validation/invalid_request_body', {}, 'port must not be greater than 65535'), KO))
+      .toBe('요청 내용이 올바르지 않습니다. (port must not be greater than 65535)');
+  });
+
+  it('adds no English to CMS errors CMS itself did not word', () => {
+    expect(serverErrorText(body('/errors/cms/no_response', {}, 'No response was received from CMS.'), KO)).toBe('CMS가 응답하지 않았습니다.');
+    expect(serverErrorText(body('/errors/cms/invalid_token', {}, 'Request is rejected due to invalid token. Please reconnect.'), KO))
+      .toBe('CMS가 인증 토큰을 거부했습니다. 호스트에 다시 연결하세요.');
+  });
+
+  it('shows the CMS text the server sends apart', () => {
+    const notHa = body('/errors/cms/request_failed', { cmsNote: 'The server was not configured for HA.', cmsTask: 'heartbeatlist' }, 'The server was not configured for HA.');
+    expect(serverErrorText(notHa, KO)).toBe('CMS 작업이 실패했습니다. (The server was not configured for HA.)');
+  });
+});
+
+describe('failureText', () => {
+  // A service stop's failed[] entry (server-error-codes.md, section 8).
+  const brokers = {
+    name: 'brokers', type: '/errors/cms/request_failed', code: 'REQUEST_FAILED',
+    cmsNote: 'Error: Cannot open shared memory (os error = No such file or directory)', cmsTask: 'stopbroker',
+    error: 'Error: Cannot open shared memory (os error = No such file or directory)',
+  };
+
+  it('says a failure inside a successful response like an error response', () => {
+    expect(failureText(brokers, KO)).toBe('CMS 작업이 실패했습니다. (Error: Cannot open shared memory (os error = No such file or directory))');
+    expect(failureText(brokers, EN)).toBe('Error: Cannot open shared memory (os error = No such file or directory)');
+    expect(failureText({ message: 'Job interrupted because the API server restarted.', code: 'JOB_INTERRUPTED', type: '/errors/job/job_interrupted' }, KO))
+      .toBe('API 서버가 다시 시작되어 작업이 중단되었습니다.');
+  });
+
+  it('words an HA step from its databases and the failed request inside it', () => {
+    const step = {
+      dbname: 'HA databases (heartbeat)', type: '/errors/database/ha_not_running_after_start', code: 'HA_NOT_RUNNING_AFTER_START',
+      dbnames: ['hadb1', 'hadb2'], error: 'Not running after the HA start: hadb1, hadb2 (Failed)',
+      sendFailure: { type: '/errors/cms/request_failed', code: 'REQUEST_FAILED', cmsNote: 'Failed', cmsTask: 'ha_start', error: 'Failed' },
+    };
+    expect(failureText(step, KO)).toBe('HA 시작 후에도 실행되지 않음: hadb1, hadb2 (CMS 작업이 실패했습니다. (Failed))');
+  });
+
+  it('shows a failure without a type as given', () => {
+    expect(failureText({ dbname: 'demodb', error: '데이터베이스 demodb에 로그인하지 않았습니다.' }, KO)).toBe('데이터베이스 demodb에 로그인하지 않았습니다.');
+    expect(failureText(undefined, KO)).toBe('');
+  });
+});
+
+describe('warningText', () => {
+  it('says a job warning in Korean by its code, and keeps one it does not know', () => {
+    const english = 'cubrid.conf already has a [@new] section, so the [@old] section was left as it is.';
+    expect(warningText(english, { code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new' }, KO))
+      .toBe('cubrid.conf에 이미 [@new] 구역이 있어 [@old] 구역은 그대로 두었습니다. "new"에 그 설정이 필요하면 [@new]으로 직접 옮기세요.');
+    expect(warningText(english, { code: 'SOMETHING_NEW' }, KO)).toBe(english);
+    expect(warningText(english, undefined, KO)).toBe(english);
+    expect(warningText(english, { code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new' }, EN)).toBe(english);
   });
 });

@@ -25,6 +25,7 @@ import { ModalStatusLoading,
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { failureText } from '../../../infrastructure/errors/serverErrorText';
 import {
   MAX_GENERAL_VOLUME_SIZE_MB,
   MIN_GENERAL_VOLUME_SIZE_MB,
@@ -347,16 +348,16 @@ export default function CreateDatabaseModal() {
       // apply — surface which ones so it isn't silently lost.
       const result = finishedJob?.result;
       const failedSteps = [
-        result?.startDatabase?.success === false && { label: CM.startDatabase, message: result.startDatabase.error?.message },
-        result?.updateUser?.success === false && { label: CM.wizardSetDbaPass, message: result.updateUser.error?.message },
-        result?.setAutoAddVol?.success === false && { label: CM.wizardAutoVol, message: result.setAutoAddVol.error?.message },
-        result?.setAutoStart?.success === false && { label: CM.autoStart, message: result.setAutoStart.error?.message },
+        result?.startDatabase?.success === false && { label: CM.startDatabase, message: failureText(result.startDatabase.error, CM) },
+        result?.updateUser?.success === false && { label: CM.wizardSetDbaPass, message: failureText(result.updateUser.error, CM) },
+        result?.setAutoAddVol?.success === false && { label: CM.wizardAutoVol, message: failureText(result.setAutoAddVol.error, CM) },
+        result?.setAutoStart?.success === false && { label: CM.autoStart, message: failureText(result.setAutoStart.error, CM) },
         // On an HA-configured host, a failure here means the new database
         // never got its ha_mode=off marker — it silently stays subject to
         // the host's HA replication, and can't be deleted through this API
         // until that marker is added (deleteDatabase's HA gate checks for
         // it). Surfacing nothing here would make that look like full success.
-        result?.haModeConfig?.success === false && { label: CM.wizardHaModeConfig, message: result.haModeConfig.error?.message },
+        result?.haModeConfig?.success === false && { label: CM.wizardHaModeConfig, message: failureText(result.haModeConfig.error, CM) },
       ].filter(Boolean);
       setCreationWarning(
         failedSteps.length > 0

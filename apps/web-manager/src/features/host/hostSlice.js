@@ -218,8 +218,12 @@ export const setHostPassword = createAsyncThunk(
   }
 );
 
-export const formatServiceFailures = (actionLabel, failures) => (
-  `Failed to ${actionLabel} for: ${failures.map(({ name, error }) => `${name} (${error})`).join(', ')}`
+// One line naming each service step ('start' or 'stop') that failed and why.
+const serviceStepName = (name, CM) => (
+  { brokers: CM.serviceStepBrokers, databases: CM.serviceStepDatabases, [HA_NODE_STEP]: CM.haNodeStepName }[name] ?? name
+);
+export const formatServiceFailures = (action, failures, CM = getCM(getStoredLocale())) => (
+  CM.serviceFailuresMsg(action, failures.map((failure) => `${serviceStepName(failure.name, CM)} (${failureText(failure, CM)})`))
 );
 
 // Async thunk to start CUBRID service (Brokers + Auto-start Databases, and
@@ -239,7 +243,7 @@ export const startService = createAsyncThunk(
       // Partial results come back as they are, so the caller can show the
       // failed and the skipped (not logged in) databases together.
       return {
-        problem: failed.length > 0 ? formatServiceFailures('start service', failed) : '',
+        problem: failed.length > 0 ? formatServiceFailures('start', failed) : '',
         skipped,
         haNodeFailed: failed.some((f) => f.name === HA_NODE_STEP),
       };
@@ -265,7 +269,7 @@ export const stopService = createAsyncThunk(
       dispatch(refreshHaInfo(hostUid));
       // Partial results come back as they are, so the caller can show the
       // failed and the skipped (not logged in) databases together.
-      return { problem: failed.length > 0 ? formatServiceFailures('stop service', failed) : '', skipped };
+      return { problem: failed.length > 0 ? formatServiceFailures('stop', failed) : '', skipped };
     } catch (err) {
       return rejectWithValue(requestErrorText(err));
     }
@@ -1271,7 +1275,7 @@ export const loginHostsBatch = createAsyncThunk(
 );
 
 import { registerLoginToHost } from '../../api/apiClient';
-import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
+import { failureText, requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 registerLoginToHost((hostUid) => {
   return import('../../app/store').then(({ store }) => {
