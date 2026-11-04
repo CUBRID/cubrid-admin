@@ -201,6 +201,14 @@ describe('CMS text in Korean', () => {
     expect(serverErrorText(cmsFailure('The server was not configured for HA.'), KO)).toBe('CMS 작업이 실패했습니다. (이 서버는 HA로 구성되어 있지 않습니다)');
   });
 
+  it('says every shared memory error the broker writes, and a missing parameter with or without a period', () => {
+    expect(serverErrorText(cmsFailure('Cannot open shared memory'), KO)).toBe('CMS 작업이 실패했습니다. (공유 메모리를 열 수 없습니다)');
+    expect(serverErrorText(cmsFailure('Error: Cannot open shared memory (Version mismatched)'), KO)).toBe('CMS 작업이 실패했습니다. (공유 메모리를 열 수 없습니다(버전이 맞지 않음))');
+    expect(serverErrorText(cmsFailure('Cannot open shared memory (os error = Permission denied)'), KO)).toBe('CMS 작업이 실패했습니다. (공유 메모리를 열 수 없습니다(OS 오류: Permission denied))');
+    expect(serverErrorText(cmsFailure('Parameter(targetid) missing in the request.'), KO)).toBe('CMS 작업이 실패했습니다. (요청에 파라미터(targetid)가 없습니다)');
+    expect(serverErrorText(cmsFailure('Parameter(targetid) missing in the request'), KO)).toBe('CMS 작업이 실패했습니다. (요청에 파라미터(targetid)가 없습니다)');
+  });
+
   it('keeps CMS text it does not know as CMS sent it', () => {
     expect(serverErrorText(cmsFailure('Something new happened'), KO)).toBe('CMS 작업이 실패했습니다. (Something new happened)');
   });

@@ -1994,7 +1994,7 @@ export const CM_KO = {
     [/^Failed to get user profile for '(.*)'$/, (m) => `'${m[1]}'의 사용자 정보를 가져오지 못했습니다`],
     [/^Password file\((.*)\) integrity failure$/, (m) => `비밀번호 파일(${m[1]})이 손상되었습니다`],
     [/^Password file\((.*)\) open error$/, (m) => `비밀번호 파일(${m[1]})을 열지 못했습니다`],
-    [/^Parameter\((.*)\) missing in the request$/, (m) => `요청에 파라미터(${m[1]})가 없습니다`],
+    [/^Parameter\((.*)\) missing in the request\.?$/, (m) => `요청에 파라미터(${m[1]})가 없습니다`],
     [/^Directory\((.*)\) creation failed$/, (m) => `디렉터리(${m[1]})를 만들지 못했습니다`],
     [/^Failed to read directory\((.*)\)$/, (m) => `디렉터리(${m[1]})를 읽지 못했습니다`],
     [/^File\((.*)\) open error$/, (m) => `파일(${m[1]})을 열지 못했습니다`],
@@ -2004,7 +2004,10 @@ export const CM_KO = {
     [/^Command returned error : ([\s\S]*)$/, (m) => `명령이 오류를 돌려주었습니다: ${m[1]}`],
     [/^Unable to mount disk volume "(.*?)"\. The database "(.*?)", to which the disk volume belongs, is in use by user (\S+) on process (\d+) of host (\S+) since (.*?)\.?$/,
       (m) => `디스크 볼륨 "${m[1]}"을(를) 마운트할 수 없습니다. 이 볼륨이 속한 데이터베이스 "${m[2]}"을(를) 호스트 ${m[5]}의 프로세스 ${m[4]}(사용자 ${m[3]})가 ${m[6]}부터 쓰고 있습니다`],
-    [/^Error: Cannot open shared memory \(os error = (.*)\)$/, (m) => `공유 메모리를 열 수 없습니다(OS 오류: ${m[1]})`],
+    // broker_admin_pub.c SHM_OPEN_ERR_MSG, sometimes after "Error: ".
+    [/^(?:Error: )?Cannot open shared memory \(Version mismatched\)$/, () => '공유 메모리를 열 수 없습니다(버전이 맞지 않음)'],
+    [/^(?:Error: )?Cannot open shared memory \(os error = (.*)\)$/, (m) => `공유 메모리를 열 수 없습니다(OS 오류: ${m[1]})`],
+    [/^(?:Error: )?Cannot open shared memory$/, () => '공유 메모리를 열 수 없습니다'],
   ],
   // Server errors by their Problem Details type, "{kind}/{code}" (see
   // serverErrorText). English has no table: the server's message is English.
