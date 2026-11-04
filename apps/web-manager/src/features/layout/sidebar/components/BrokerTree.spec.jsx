@@ -84,3 +84,12 @@ it('keeps a multi-selection and the highlight on a right-click inside it', async
   expect([...selection].sort()).toEqual(['b1', 'b2']);
   expect(store.getState().broker.selectedBroker).toBe('b1');
 });
+
+it('starts a Ctrl/Cmd click from a broker selected by right-click', async () => {
+  await render();
+  await fire('b1', 'click');
+  await fire('b2', 'contextmenu');
+  await fire('b3', 'click', { ctrlKey: true });
+
+  expect([...selection].sort()).toEqual(['b2', 'b3']);
+});

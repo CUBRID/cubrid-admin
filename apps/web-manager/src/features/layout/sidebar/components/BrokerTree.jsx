@@ -97,6 +97,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
               // the selection stays, for the menu to act on all of it.
               if (!(selectedBrokerNames?.size > 1 && selectedBrokerNames.has(broker.name))) {
                 if (selectedBrokerNames?.size > 0) onSelectedBrokerNamesChange?.(new Set());
+                handleMultiSelect.setAnchor(broker.name);
                 dispatch(setSelectedBroker(broker.name));
                 dispatch(setSelectedBrokerSubItem(null));
               }

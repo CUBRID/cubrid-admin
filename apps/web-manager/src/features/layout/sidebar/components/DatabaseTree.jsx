@@ -312,6 +312,7 @@ export default function DatabaseTree({
               // the selection stays, for the menu to act on all of it.
               if (!(selectedDbNames?.size > 1 && selectedDbNames.has(db.dbname))) {
                 if (selectedDbNames?.size > 0) onSelectedDbNamesChange?.(new Set());
+                handleMultiSelect.setAnchor(db.dbname);
                 dispatch(setSelectedDatabase(db.dbname));
                 dispatch(setSelectedDatabaseSubItem(null));
               }

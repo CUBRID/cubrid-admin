@@ -200,3 +200,16 @@ it('leaves the highlight where it was on a right-click inside a multi-selection'
   expect([...selection].sort()).toEqual(['a', 'b']);
   expect(store.getState().database.selectedDatabase).toBe('a');
 });
+
+it('starts Ctrl/Cmd and Shift clicks from a database selected by right-click', async () => {
+  await render();
+  await clickDb('a');
+  await rightClickDb('b');
+  await clickDb('c', { ctrlKey: true });
+  expect([...selection].sort()).toEqual(['b', 'c']);
+
+  await clickDb('a');
+  await rightClickDb('b');
+  await clickDb('d', { shiftKey: true });
+  expect([...selection].sort()).toEqual(['b', 'c', 'd']);
+});
