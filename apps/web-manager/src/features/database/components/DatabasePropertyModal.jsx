@@ -105,7 +105,7 @@ function isEffectivelyDefault(guard, value, defaultValue) {
 // explicit conf line can coincidentally match the default; an implicit field
 // is always shown as the default, but not every default-valued field is
 // implicit).
-function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge, deprecatedBadge, deprecatedHint }) {
+function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge, deprecatedBadge, deprecatedHint, fromCommonBadge }) {
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
@@ -130,6 +130,16 @@ function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, de
           Default badge above. */}
       {deprecatedBadge && (
         <DeprecatedBadge label={deprecatedBadge} hint={deprecatedHint} />
+      )}
+      {/* A database view's value that comes from [common], its own section
+          not setting the key. */}
+      {fromCommonBadge && (
+        <span
+          data-testid="param-from-common-badge"
+          className="shrink-0 text-10 font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500"
+        >
+          {fromCommonBadge}
+        </span>
       )}
       {isImplicit && (
         <span
@@ -256,6 +266,12 @@ export default function DatabasePropertyModal() {
   // (see the "Edit in Text Editor" banner below).
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [params, setParams] = useState({});
+  // What this view's own section sets: [@db] for a database, [common]
+  // otherwise. Validated on its own, since the section rules (a [common]-only
+  // key set under [@db], say) are about what is written where.
+  const [sectionParams, setSectionParams] = useState({});
+  // Keys a database view shows from [common] because its [@db] doesn't set them.
+  const [commonKeys, setCommonKeys] = useState(() => new Set());
   const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [brokers, setBrokers] = useState([]);
   const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
@@ -276,6 +292,8 @@ export default function DatabasePropertyModal() {
       setShowDiscardConfirm(false);
       setConnectionDirty(false);
       setParams({});
+      setSectionParams({});
+      setCommonKeys(new Set());
       setBufferMode(DEFAULT_BUFFER_MODE);
       setActiveSidebar('Server Parameter');
       fetchedConfigKeyRef.current = null;
@@ -319,28 +337,27 @@ export default function DatabasePropertyModal() {
         try {
           const response = await hostApi.getHostConfig(selectedHostUid, 'cubridconf');
           const lines = response?.conflist?.[0]?.confdata || [];
-          const newParams = {};
-          // Deliberately NOT merged: engine inheritance between [common]
-          // and [@dbname] is real (unlike broker.conf's [broker]), but
-          // showing a [common] value as if it were explicitly present in
-          // this db's own section is still a UI fiction here - it made a
-          // hidden commonOnly field (e.g. cubrid_port_id, filtered out of
-          // the individual-properties view entirely) carry a non-blank
-          // value anyway, which validateEffectiveParams then correctly
-          // flagged as "set in the wrong section" even though nothing was
-          // ever actually written there. [common] and [@dbname] are
-          // edited as fully separate targets, same as
-          // BrokerPropertyModal's identical [broker]/[%name] split.
           // The engine matches [@dbname] case-sensitively against the
           // database name (prm_section_cmp with ignore_case=false), so
           // [@DemoDB] and [@demodb] are different sections to it.
           const target = selectedDatabase ? `@${selectedDatabase}` : 'common';
           // Same engine-faithful parser the raw editor validates with, so
           // this view and the editor never disagree about what a line says.
-          const section = parseConfText(lines).sections.find(s => s.name === target);
-          for (const { key, value } of section?.entries ?? []) {
-            newParams[key.toLowerCase()] = value;
-          }
+          const sections = parseConfText(lines).sections;
+          const read = (name) => {
+            const values = {};
+            for (const { key, value } of sections.find(sec => sec.name === name)?.entries ?? []) {
+              values[key.toLowerCase()] = value;
+            }
+            return values;
+          };
+          const own = read(target);
+          // A database runs with [common] and its own [@db] over it, key by
+          // key, so a database view shows both: the values in effect.
+          const inherited = selectedDatabase ? read('common') : {};
+          const newParams = { ...inherited, ...own };
+          setSectionParams(own);
+          setCommonKeys(new Set(Object.keys(inherited).filter(key => !(key in own))));
 
           // Mirrors CA's PageSizeChoiceComposite#initBtnState: prefer the
           // pages key if it has a value, else fall back to size.
@@ -389,6 +406,8 @@ export default function DatabasePropertyModal() {
     setConnectionDirty(false);
     dispatch(closeDatabasePropertyModal());
     setParams({});
+    setSectionParams({});
+    setCommonKeys(new Set());
     setBufferMode(DEFAULT_BUFFER_MODE);
   };
 
@@ -405,8 +424,8 @@ export default function DatabasePropertyModal() {
   // cubrid.conf and fails its own guard — a passive diagnostic pointing at
   // the text editor, not something Apply can block.
   const reconciledParams = useMemo(
-    () => getEffectiveParams(params, bufferMode, bufferGroups),
-    [params, bufferMode, bufferGroups]
+    () => getEffectiveParams(sectionParams, bufferMode, bufferGroups),
+    [sectionParams, bufferMode, bufferGroups]
   );
   const guardErrors = useMemo(
     () => validateEffectiveParams(databaseParamSchema, reconciledParams, {
@@ -455,8 +474,9 @@ export default function DatabasePropertyModal() {
       // Never in the conf file — the value shown is purely e.default, not
       // anything anyone actually set.
       isImplicit: params[e.key] === undefined || params[e.key] === '',
+      isFromCommon: commonKeys.has(e.key),
     }))
-  , [databaseParamSchema, params, guardErrors, selectedDatabase]);
+  , [databaseParamSchema, params, guardErrors, selectedDatabase, commonKeys]);
 
   const advancedRows = useMemo(() => databaseParamSchema
     // See generalRows' comment — commonOnly keys (ha_mode/ha_node_list/
@@ -484,9 +504,10 @@ export default function DatabasePropertyModal() {
         inactiveHint: isInactive ? CM.paramInactiveWhileHint(dep.dependsOnKey) : null,
         isDefaultValue: isEffectivelyDefault(e.guard, params[e.key], e.default),
         isImplicit: params[e.key] === undefined || params[e.key] === '',
+        isFromCommon: commonKeys.has(e.key),
       };
     })
-  , [databaseParamSchema, params, guardErrors, schemaDefaults, CM, selectedDatabase]);
+  , [databaseParamSchema, params, guardErrors, schemaDefaults, CM, selectedDatabase, commonKeys]);
 
   // Connection Information configures how this web manager instance itself
   // reaches the broker for a specific database — meaningless while editing
@@ -506,7 +527,7 @@ export default function DatabasePropertyModal() {
   // Advanced table (and CA itself): the value cell shows the current value,
   // falling back to the default as a placeholder.
   const generalColumns = [
-    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} /> },
+    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} fromCommonBadge={row.isFromCommon ? CM.fromCommonSectionBadge : null} /> },
     {
       header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
       render: (_, row) => {
@@ -533,7 +554,7 @@ export default function DatabasePropertyModal() {
       header: CM.parameter, accessor: 'key', width: '30%',
       className: '!sticky left-0 z-20 bg-slate-100 dark:bg-slate-900',
       cellClassName: 'sticky left-0 z-[1] bg-white dark:bg-slate-900',
-      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} />,
+      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} fromCommonBadge={row.isFromCommon ? CM.fromCommonSectionBadge : null} />,
     },
     {
       header: CM.parameterTypeLabel, accessor: 'scope', width: '16%',

@@ -231,3 +231,46 @@ it('compares time values in ms, so 360000 (ms) counts as the 6min default', asyn
   expect(row.textContent).toContain('360000');
   expect(row.textContent).toContain('Default');
 });
+
+// A database runs with [common] and its own [@db] over it, so its view shows
+// both (test DB #20/#27: some values in the view were not the ones in effect).
+const renderConf = async (confdata, schema = DATABASE_PARAM_SCHEMA, selectedDatabase = 'demodb') => {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata }] });
+  const state = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: schema } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  await act(async () => root.render(
+    <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+};
+const rowOf = (key) => [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes(key));
+
+it('shows a [common] value the database does not set, marked as from [common]', async () => {
+  await renderConf(['[common]', 'max_clients=200', 'checkpoint_interval=10min', '[@demodb]', 'max_clients=123']);
+  expect(rowOf('checkpoint_interval').textContent).toContain('10min');
+  expect(rowOf('checkpoint_interval').querySelector('[data-testid="param-from-common-badge"]').textContent).toBe('[common]');
+});
+
+it('shows the database\'s own value over [common], unmarked', async () => {
+  await renderConf(['[common]', 'max_clients=200', '[@demodb]', 'max_clients=123']);
+  expect(rowOf('max_clients').textContent).toContain('123');
+  expect(rowOf('max_clients').textContent).not.toContain('200');
+  expect(rowOf('max_clients').querySelector('[data-testid="param-from-common-badge"]')).toBeNull();
+});
+
+it('does not flag a [common]-only key as set in the wrong section when it comes from [common]', async () => {
+  const schema = [...DATABASE_PARAM_SCHEMA, { key: 'cubrid_port_id', category: 'general', commonOnly: true, guard: { kind: 'int', min: 1 }, default: '1523' }];
+  await renderConf(['[common]', 'cubrid_port_id=1523', '[@demodb]', 'max_clients=123'], schema);
+  expect(container.textContent).not.toMatch(/\d+ invalid/);
+});
+
+it('leaves the [common] view as it was: no badge', async () => {
+  await renderConf(['[common]', 'max_clients=200', 'checkpoint_interval=10min'], DATABASE_PARAM_SCHEMA, null);
+  expect(rowOf('checkpoint_interval').textContent).toContain('10min');
+  expect(container.querySelector('[data-testid="param-from-common-badge"]')).toBeNull();
+});

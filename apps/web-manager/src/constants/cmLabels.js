@@ -849,6 +849,7 @@ export const CM = {
   implicitValueBadge: 'Implicit',
   implicitValueHint: (defaultValue) => `Not written in the conf file at all — purely the engine's own built-in default ("${defaultValue}"). It only becomes an explicit setting once you add it in the text editor.`,
   deprecatedParamBadge: 'Deprecated',
+  fromCommonSectionBadge: '[common]',
   deprecatedParamHint: (replacedBy) => (replacedBy ? `Deprecated by the engine — use ${replacedBy} instead. Shown only because it is set in the conf file.` : 'Deprecated by the engine. Shown only because it is set in the conf file.'),
   autoStartHaDisabledHint: 'CUBRID refuses to start an HA-configured database through the plain service autostart list — use HA heartbeat start instead.',
   generalParamsTab: 'General Settings',
