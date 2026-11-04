@@ -80,8 +80,8 @@ export default defineConfig(({ mode, command }) => {
             injectRegister: 'auto',
             includeAssets: ['cubrid-logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
             manifest: {
-              name: 'Next CUBRID Admin',
-              short_name: 'NCA',
+              name: 'CUBRID Admin',
+              short_name: 'CUBRID Admin',
               description: 'Modern Web-based Management Interface for CUBRID Database.',
               theme_color: '#ffffff',
               background_color: '#ffffff',

@@ -62,7 +62,7 @@ export function logStartupBanner(
 
   const lines = [
     '========================================',
-    ' Next CUBRID Admin — API Server',
+    ' CUBRID Admin — API Server',
     '========================================',
     `  Listening on      : ${where}`,
     `  Environment       : ${configService.getEnvironment()}`,
