@@ -478,6 +478,9 @@ const initialState = {
   cmsUsers: {}, // { [hostUid]: [] }
   cmsUsersLoading: {}, // { [hostUid]: boolean }
   isCmsUserManagementModalOpen: false,
+  // The host whose CMS users the modal manages (the one right-clicked), not
+  // necessarily the selected one.
+  cmsUserManagementHostUid: null,
   isEditCmsUserModalOpen: false,
   cmsUserToEdit: null, // { hostUid, user }
   error: null,
@@ -659,11 +662,13 @@ const hostSlice = createSlice({
     clearHostError: (state) => {
       state.error = null;
     },
-    openCmsUserManagementModal: (state) => {
+    openCmsUserManagementModal: (state, action) => {
       state.isCmsUserManagementModalOpen = true;
+      state.cmsUserManagementHostUid = action.payload ?? state.selectedHostUid;
     },
     closeCmsUserManagementModal: (state) => {
       state.isCmsUserManagementModalOpen = false;
+      state.cmsUserManagementHostUid = null;
     },
     openEditCmsUserModal: (state, action) => {
       state.isEditCmsUserModalOpen = true;

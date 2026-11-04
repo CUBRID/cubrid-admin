@@ -1359,14 +1359,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           <MenuItem 
             icon="lock" 
             label={CM.changePassword} 
-            disabled={!(selectedHostUid === contextMenu.hostUid && authorizedHosts.includes(contextMenu.hostUid))}
+            disabled={!authorizedHosts.includes(contextMenu.hostUid)}
             onClick={() => { dispatch(openChangePasswordModal(contextMenu.hostUid)); setContextMenu(null); }} 
           />
           <MenuItem 
             icon="supervisor_account" 
             label={CM.userManagement} 
-            disabled={!(selectedHostUid === contextMenu.hostUid && authorizedHosts.includes(contextMenu.hostUid))}
-            onClick={() => { dispatch(openCmsUserManagementModal()); setContextMenu(null); }} 
+            disabled={!authorizedHosts.includes(contextMenu.hostUid)}
+            onClick={() => { dispatch(openCmsUserManagementModal(contextMenu.hostUid)); setContextMenu(null); }} 
           />
           <MenuItem icon="info" label={CM.serverVersion} onClick={() => { dispatch(openServerVersionModal(contextMenu.hostUid)); setContextMenu(null); }} />
         </ContextMenuWrapper>

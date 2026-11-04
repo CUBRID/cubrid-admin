@@ -24,29 +24,29 @@ export default function CMSUserManagementModal() {
   const [deletingUser, setDeletingUser] = useState(null);
   const { 
     isCmsUserManagementModalOpen, 
-    selectedHostUid, 
+    cmsUserManagementHostUid: hostUid, 
     hosts,
     cmsUsers, 
     cmsUsersLoading 
   } = useSelector((state) => state.host, shallowEqual);
 
   const isOpen = isCmsUserManagementModalOpen;
-  const userlist = cmsUsers[selectedHostUid] || [];
-  const isLoading = cmsUsersLoading[selectedHostUid];
-  const selectedHost = hosts.find(h => h.uid === selectedHostUid);
+  const userlist = cmsUsers[hostUid] || [];
+  const isLoading = cmsUsersLoading[hostUid];
+  const selectedHost = hosts.find(h => h.uid === hostUid);
 
   useEffect(() => {
-    if (isOpen && selectedHostUid) {
-      dispatch(fetchCmsUsers(selectedHostUid));
+    if (isOpen && hostUid) {
+      dispatch(fetchCmsUsers(hostUid));
     }
-  }, [isOpen, selectedHostUid, dispatch]);
+  }, [isOpen, hostUid, dispatch]);
 
   const handleAddUser = () => {
-    dispatch(openEditCmsUserModal({ hostUid: selectedHostUid, user: null }));
+    dispatch(openEditCmsUserModal({ hostUid: hostUid, user: null }));
   };
 
   const handleEditUser = (user) => {
-    dispatch(openEditCmsUserModal({ hostUid: selectedHostUid, user }));
+    dispatch(openEditCmsUserModal({ hostUid: hostUid, user }));
   };
 
   const handleDeleteUser = async (username) => {
@@ -65,7 +65,7 @@ export default function CMSUserManagementModal() {
 
     setDeletingUser(username);
     try {
-      await dispatch(deleteCmsUser({ hostUid: selectedHostUid, targetid: username })).unwrap();
+      await dispatch(deleteCmsUser({ hostUid: hostUid, targetid: username })).unwrap();
       dispatch(showStatusModal({
         type: 'success',
         title: CM.success,
@@ -198,7 +198,7 @@ export default function CMSUserManagementModal() {
       isOpen={isOpen}
       onClose={() => dispatch(closeCmsUserManagementModal())}
       title={CM.userManagement}
-      subtitle={selectedHost?.alias || selectedHostUid}
+      subtitle={selectedHost?.alias || hostUid}
       icon="manage_accounts"
       maxWidth="680px"
       testId="cms-user-management"

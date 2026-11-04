@@ -41,6 +41,8 @@ export default function EditCMSUserModal() {
     selectedHostUid,
     cmsUserToEdit,
   } = useSelector((state) => state.host, shallowEqual);
+  // The host the user list was opened for, which need not be the selected one.
+  const hostUid = cmsUserToEdit?.hostUid ?? selectedHostUid;
 
   const isOpen = isEditCmsUserModalOpen;
   const isEditMode = !!cmsUserToEdit?.user;
@@ -114,13 +116,13 @@ export default function EditCMSUserModal() {
       if (isEditMode) {
         if (changePassword) {
           await dispatch(setHostPassword({
-            hostUid: selectedHostUid,
+            hostUid,
             payload: { targetid: formData.targetid, newpassword: formData.password }
           })).unwrap();
         }
         if (!isAdmin) {
           await dispatch(updateCmsUser({
-            hostUid: selectedHostUid,
+            hostUid,
             payload: {
               targetid: formData.targetid,
               casauth: formData.casauth,
@@ -133,7 +135,7 @@ export default function EditCMSUserModal() {
         endSuccess(CM.userUpdatedSuccessMsg(formData.targetid));
       } else {
         await dispatch(addCmsUser({
-          hostUid: selectedHostUid,
+          hostUid,
           payload: {
             targetid: formData.targetid,
             password: formData.password,
@@ -144,7 +146,7 @@ export default function EditCMSUserModal() {
         })).unwrap();
         endSuccess(CM.userCreatedSuccessMsg(formData.targetid));
       }
-      dispatch(fetchCmsUsers(selectedHostUid));
+      dispatch(fetchCmsUsers(hostUid));
     } catch (err) {
       endError(err?.message || CM.synchronizationFailed);
     }
