@@ -1725,6 +1725,8 @@ export const CM_KO = {
   // 언로드 결과 모달
   classLabel: '클래스',
   resultLabel: '결과',
+  unloadTableNameLabel: '테이블 이름',
+  unloadRowCountLabel: '행 수',
   noResultsLabel: '결과 없음',
 
   // 자동화 볼륨 설정 모달

@@ -1769,6 +1769,8 @@ export const CM = {
   // UnloadResultModal
   classLabel: 'Class',
   resultLabel: 'Result',
+  unloadTableNameLabel: 'Table',
+  unloadRowCountLabel: 'Rows',
   noResultsLabel: 'No results',
 
   // SetAutomationVolumeModal
