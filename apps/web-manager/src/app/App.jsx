@@ -58,6 +58,7 @@ import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import { useDesktopMenuLanguage } from '../features/desktop/hooks/useDesktopMenuLanguage';
+import { isDesktopApp } from '../features/desktop/isDesktopApp';
 import { useDesktopMenuActions } from '../features/desktop/hooks/useDesktopMenuActions';
 import { useLoggedOutDbCleanup } from '../features/layout/useLoggedOutDbCleanup';
 import RegisterPage from '../features/auth/components/RegisterPage';
@@ -585,9 +586,10 @@ function App() {
     <>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={<LoginPage />} />
+        {/* The desktop app has no app login: its server acts as the desktop user. */}
+        <Route path="/login" element={isDesktopApp() ? <Navigate to="/home" replace /> : <LoginPage />} />
         <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register" element={isDesktopApp() ? <Navigate to="/home" replace /> : <RegisterPage />} />
         <Route
           path="/*"
           element={
