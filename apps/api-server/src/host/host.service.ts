@@ -224,7 +224,9 @@ export class HostService {
       ];
       const sameTarget = [existingHost.address, existingHost.port, existingHost.id, existingHost.password]
         .every((value, i) => String(value) === String(nextTarget[i]));
-      if (!sameTarget) forgetCmsToken(existingHost.token);
+      // A new session (a login that saves these settings) replaces the old one.
+      const newToken = hostInfo.token !== undefined && hostInfo.token !== existingHost.token;
+      if (!sameTarget || newToken) forgetCmsToken(existingHost.token);
 
       ref.group.hosts[hostUid] = {
         uid: hostUid,

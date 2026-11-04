@@ -109,12 +109,14 @@ export class CmsHttpsClientService {
   @HandleCmsErrors()
   public async postPublic<T extends Omit<BaseCmsRequest, 'token'>, P>(
     url: string,
-    data: T
+    data: T,
+    options?: { timeoutMs?: number }
   ): Promise<P> {
     return this.withHostQueue(url, async () => {
       const config = {
         headers: { 'Content-Type': 'application/json' },
         httpsAgent: this.getHttpsAgent(),
+        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
       };
       const startedAt = Date.now();
       this.logCmsRequest('public', url, data);

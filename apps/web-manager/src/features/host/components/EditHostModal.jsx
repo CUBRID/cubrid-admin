@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { editHost, moveHost, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
+import { editHost, moveHost, fetchHosts, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
@@ -100,12 +100,18 @@ export default function EditHostModal() {
     return payload;
   };
 
+  // Resolves to whether the host was moved (the move's answer carries the
+  // whole host list).
+  const moveToChosenGroup = async (targetUid) => {
+    const currentGroupId = findGroupIdForHost(hostGroups, targetUid) || UNGROUPED_GROUP_ID;
+    if (formData.groupId === currentGroupId) return false;
+    await dispatch(moveHost({ hostUid: targetUid, targetGroupId: formData.groupId })).unwrap();
+    return true;
+  };
+
   const persistHostChanges = async (targetUid) => {
     await dispatch(editHost({ hostUid: targetUid, payload: buildPayload() })).unwrap();
-    const currentGroupId = findGroupIdForHost(hostGroups, targetUid) || UNGROUPED_GROUP_ID;
-    if (formData.groupId !== currentGroupId) {
-      await dispatch(moveHost({ hostUid: targetUid, targetGroupId: formData.groupId })).unwrap();
-    }
+    await moveToChosenGroup(targetUid);
   };
 
   // Save only — persists changes without attempting a CMS login.
@@ -125,9 +131,11 @@ export default function EditHostModal() {
     }
   };
 
-  // Save then attempt to actually log in with the given credentials. On
-  // failure the modal stays open (loginToHost.rejected populates
-  // state.host.error) so the user can see why and correct the password here.
+  // Log in with the changed settings; the server saves them only if that
+  // login succeeds, so a failed attempt (a wrong port or password, a CMS that
+  // does not answer) leaves the stored settings as they were. On failure the
+  // modal stays open (loginToHost.rejected populates state.host.error) so the
+  // user can see why and correct the settings here.
   const handleTestConnectionAndSave = async () => {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
@@ -138,23 +146,25 @@ export default function EditHostModal() {
     const targetUid = hostToEditUid;
 
     try {
-      await persistHostChanges(targetUid);
+      await dispatch(loginToHostWithSideEffects({ hostUid: targetUid, changes: buildPayload() })).unwrap();
     } catch {
-      return; // Edit failed: modal stays open, error shown via state.host.error
+      return; // Login failed: nothing saved, modal stays open, error shown via state.host.error
     }
 
     try {
-      await dispatch(loginToHostWithSideEffects(targetUid)).unwrap();
-      dispatch(closeEditHostModal());
-      dispatch(clearHostError());
-      dispatch(setSelectedHost(targetUid));
-      dispatch(setActiveMainTab(`host:${targetUid}`));
-      dispatch(fetchDatabaseStartInfo(targetUid));
-      dispatch(fetchBrokerList(targetUid));
-      dispatch(fetchHostEnv(targetUid));
+      // The login saved the settings; show them in the host list.
+      if (!(await moveToChosenGroup(targetUid))) dispatch(fetchHosts());
     } catch {
-      // Login failed: modal stays open, error shown via state.host.error
+      return; // Move failed: modal stays open, error shown via state.host.error
     }
+
+    dispatch(closeEditHostModal());
+    dispatch(clearHostError());
+    dispatch(setSelectedHost(targetUid));
+    dispatch(setActiveMainTab(`host:${targetUid}`));
+    dispatch(fetchDatabaseStartInfo(targetUid));
+    dispatch(fetchBrokerList(targetUid));
+    dispatch(fetchHostEnv(targetUid));
   };
 
   const handleClose = () => {

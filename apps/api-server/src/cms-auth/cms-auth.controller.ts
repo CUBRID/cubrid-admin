@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Post, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Request } from '@nestjs/common';
+import { UpdateHostClientDto } from '@type/index';
 import { CmsAuthService } from './cms-auth.service';
 
 /**
@@ -27,6 +28,24 @@ export class CmsAuthController {
   async login(@Request() request: any, @Param('hostUid') hostUid: string) {
     const userId = request.user.sub;
     return await this.cmsAuthService.login(userId, hostUid);
+  }
+
+  /**
+   * Logs in with changed connection settings, saving them only when the
+   * login succeeds (the host edit dialog's Connect & Save).
+   *
+   * @route POST /:hostUid/cms-auth/connect
+   * @param changes - The host settings to log in with, as PUT /host/:hostUid takes them.
+   * @returns Same shape as `login`'s payload.
+   */
+  @Post('connect')
+  async connect(
+    @Request() request: any,
+    @Param('hostUid') hostUid: string,
+    @Body() changes: UpdateHostClientDto
+  ) {
+    const userId = request.user.sub;
+    return await this.cmsAuthService.connect(userId, hostUid, changes);
   }
 
   /**

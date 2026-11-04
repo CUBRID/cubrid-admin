@@ -272,14 +272,20 @@ export const stopService = createAsyncThunk(
   }
 );
 
+// loginToHost takes a host uid, or { hostUid, changes } to log in with changed
+// settings that the server saves only if the login succeeds.
+const loginHostUid = (arg) => (typeof arg === 'string' ? arg : arg?.hostUid);
+
 // Async thunk to explicitly login/forward to a specific host
 export const loginToHost = createAsyncThunk(
   'host/loginToHost',
-  async (hostUid, { rejectWithValue, getState }) => {
+  async (arg, { rejectWithValue, getState, dispatch }) => {
+    const hostUid = loginHostUid(arg);
+    const changes = typeof arg === 'string' ? undefined : arg?.changes;
     // Same locale source as useCM: the message is stored as shown.
     const CM = getCM(getState().user?.preferences?.uiLocale ?? getStoredLocale());
     try {
-      const response = await hostApi.loginToHost(hostUid);
+      const response = changes ? await hostApi.connectHost(hostUid, changes) : await hostApi.loginToHost(hostUid);
       // The API returns { success: true, isHA: boolean, ... }
       if (
         response === false ||
@@ -288,6 +294,8 @@ export const loginToHost = createAsyncThunk(
       ) {
         return rejectWithValue(CM.hostLoginFailedMsg);
       }
+      // Logged in and saved, but the server could not read the HA details in time.
+      if (response?.haInfoUnavailable) dispatch(refreshHaInfo(hostUid));
       return { hostUid, ...response };
     } catch (err) {
       return rejectWithValue(hostLoginErrorMessage(err, CM));
@@ -743,7 +751,7 @@ const hostSlice = createSlice({
           state.loading = true;
         }
         // Clean up previous error for this host if any
-        clearHostLoginError(state, action.meta.arg);
+        clearHostLoginError(state, loginHostUid(action.meta.arg));
       })
       .addCase(loginToHost.fulfilled, (state, action) => {
         if (!state.isBatchHostLogin) {
@@ -778,10 +786,11 @@ const hostSlice = createSlice({
           state.isLoggingIntoHost = false;
           state.loading = false;
         }
-        state.hostAuthErrors[action.meta.arg] = action.payload;
+        const hostUid = loginHostUid(action.meta.arg);
+        state.hostAuthErrors[hostUid] = action.payload;
         if (!state.isBatchHostLogin) {
           state.error = action.payload;
-          state.loginErrorHostUid = action.meta.arg;
+          state.loginErrorHostUid = hostUid;
         }
       })
       // Silent background refresh — no loading/error state, so a failure
@@ -1202,9 +1211,10 @@ export const haFollowUpAction = (followUp, hostState) => {
 /** Login + HA side effects — use instead of bare loginToHost for user-initiated logins. */
 export const loginToHostWithSideEffects = createAsyncThunk(
   'host/loginToHostWithSideEffects',
-  async (hostUid, { dispatch, rejectWithValue }) => {
+  async (arg, { dispatch, rejectWithValue }) => {
+    const hostUid = loginHostUid(arg);
     try {
-      await dispatch(loginToHost(hostUid)).unwrap();
+      await dispatch(loginToHost(arg)).unwrap();
       await dispatch(processHaLoginSideEffects(hostUid)).unwrap();
       return hostUid;
     } catch (err) {
