@@ -219,7 +219,7 @@ export class BrokerService extends BaseService {
     if (stopped) {
       this.logger.log(
         `${bname === undefined ? 'Brokers' : `Broker ${bname}`} on host ${hostUid} ` +
-        'already stopped; stop counted as done'
+        `already stopped; stop counted as done (CMS: ${err.additionalData?.message ?? err.message})`
       );
     }
     return stopped;

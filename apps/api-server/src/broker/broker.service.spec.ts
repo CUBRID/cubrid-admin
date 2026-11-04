@@ -235,9 +235,11 @@ describe('BrokerService', () => {
           .mockResolvedValueOnce(
             brokersInfo('ON', [{ name: 'query_editor', state: 'ON' }, { name: 'broker1', state: 'OFF' }])
           );
+        const log = jest.spyOn(service['logger'], 'log');
 
         await expect(service.stopBroker(mockUserId, mockHostUid, 'broker1')).resolves.toEqual({ success: true });
         expect(sentTasks()).toEqual(['broker_stop', 'getbrokersinfo']);
+        expect(log).toHaveBeenCalledWith(expect.stringContaining('Broker[broker1] is not running'));
       });
 
       it('counts as done when every broker is off', async () => {
