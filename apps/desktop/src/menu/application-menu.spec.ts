@@ -71,7 +71,7 @@ it('mirrors the header menu in English and Korean', () => {
 
 it('adds the macOS app menu and keeps Quit out of File there', () => {
   const mac = buildApplicationMenuTemplate('en', true, allEnabled);
-  expect(mac[0].label).toBe('Next CUBRID Admin');
+  expect(mac[0].label).toBe('CUBRID Admin');
   expect(labels(top(mac, 'File'))).not.toContain('Quit');
   expect(top(mac, 'Window').map((item) => item.role)).toContain('front');
 });

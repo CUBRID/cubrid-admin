@@ -4,7 +4,7 @@ import { getDesktopSettingsPath } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
 import { getMainWindow } from '../window/window-registry';
 
-const PRODUCT_NAME = 'Next CUBRID Admin';
+const PRODUCT_NAME = 'CUBRID Admin';
 
 export type MenuLanguage = 'en' | 'ko';
 
