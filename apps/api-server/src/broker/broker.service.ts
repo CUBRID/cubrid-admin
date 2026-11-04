@@ -168,12 +168,61 @@ export class BrokerService extends BaseService {
       bname: bname,
     };
 
-    await this.executeAsyncCmsJobRequest<
-      HandleBrokerCmsRequest,
-      BaseCmsResponse
-    >(userId, hostUid, cmsRequest);
+    try {
+      await this.executeAsyncCmsJobRequest<
+        HandleBrokerCmsRequest,
+        BaseCmsResponse
+      >(userId, hostUid, cmsRequest);
+    } catch (err) {
+      if (!(await this.isAlreadyStopped(err, userId, hostUid, bname))) throw err;
+    }
 
     return { success: true };
+  }
+
+  /**
+   * CMS fails a stop when there is nothing to stop: broker_stop with
+   * "Broker[<name>] is not running", and both broker_stop and stopbroker with
+   * "Cannot open shared memory" once every broker is off. After such a
+   * failure the broker state is read again (getbrokersinfo); when the broker,
+   * or with no `bname` the whole broker service, is already off, the stop
+   * counts as done. Any other state, an unknown broker name, or a failed
+   * re-read keeps the stop error.
+   */
+  private async isAlreadyStopped(
+    err: unknown,
+    userId: string,
+    hostUid: string,
+    bname?: string
+  ): Promise<boolean> {
+    if (!(err instanceof CmsError) || err.code !== CmsErrorCode.REQUEST_FAILED) return false;
+
+    let info: GetBrokersInfoCmsResponse;
+    try {
+      info = await this.executeCmsRequest<BaseCmsRequest, GetBrokersInfoCmsResponse>(
+        userId,
+        hostUid,
+        { task: 'getbrokersinfo' }
+      );
+    } catch {
+      return false;
+    }
+
+    // With every broker off, CMS lists the configured brokers without a state.
+    const serviceOff = info.brokerstatus === 'OFF';
+    const stopped =
+      bname === undefined
+        ? serviceOff
+        : (info.brokersinfo ?? [])
+            .flatMap((list) => list?.broker ?? [])
+            .some((broker) => broker?.name === bname && (serviceOff || broker.state === 'OFF'));
+    if (stopped) {
+      this.logger.log(
+        `${bname === undefined ? 'Brokers' : `Broker ${bname}`} on host ${hostUid} ` +
+        `already stopped; stop counted as done (CMS: ${err.additionalData?.message ?? err.message})`
+      );
+    }
+    return stopped;
   }
 
   @HandleCmsErrors()
@@ -290,10 +339,14 @@ export class BrokerService extends BaseService {
     const cmsRequest: StopAllBrokersCmsRequest = {
       task: 'stopbroker',
     };
-    await this.executeAsyncCmsJobRequest<
-      StopAllBrokersCmsRequest,
-      StopAllBrokersCmsResponse
-    >(userId, hostUid, cmsRequest);
+    try {
+      await this.executeAsyncCmsJobRequest<
+        StopAllBrokersCmsRequest,
+        StopAllBrokersCmsResponse
+      >(userId, hostUid, cmsRequest);
+    } catch (err) {
+      if (!(await this.isAlreadyStopped(err, userId, hostUid))) throw err;
+    }
 
     return { success: true };
   }

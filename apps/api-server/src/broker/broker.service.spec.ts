@@ -33,6 +33,23 @@ describe('BrokerService', () => {
   const mockUserId = 'user-123';
   const mockHostUid = 'host-uid-1';
 
+  // getbrokersinfo as CMS sends it: with every broker off, `brokerstatus` is
+  // OFF and the configured brokers come without a state.
+  const brokersInfo = (brokerstatus: string, broker: Array<{ name: string; state?: string }>) => ({
+    status: 'success',
+    note: 'none',
+    task: 'getbrokersinfo',
+    brokersinfo: [{ broker }],
+    brokerstatus,
+  });
+  const sentTasks = () =>
+    cmsClient.postAuthenticated.mock.calls.map(([, req]) => (req as { task: string }).task);
+  // The stop's own CMS failure, carrying CMS's message.
+  const stopError = (message: string) => ({
+    code: 'REQUEST_FAILED',
+    additionalData: expect.objectContaining({ message: expect.stringContaining(message) }),
+  });
+
   beforeEach(async () => {
     const mockHostService = { findHostInternal: jest.fn() };
     const mockCmsClient = { postAuthenticated: jest.fn() };
@@ -145,6 +162,113 @@ describe('BrokerService', () => {
       await expect(
         service.stopAllBrokers(mockUserId, mockHostUid)
       ).rejects.toThrow(CmsError);
+    });
+
+    describe('when the stop fails', () => {
+      const stopFailure = {
+        status: 'failure',
+        note: 'Error: Cannot open shared memory (os error = No such file or directory)',
+        task: 'stopbroker',
+      };
+
+      it('counts as done when the brokers are already off', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce(stopFailure)
+          .mockResolvedValueOnce(brokersInfo('OFF', [{ name: 'broker1' }]));
+
+        await expect(service.stopAllBrokers(mockUserId, mockHostUid)).resolves.toEqual({ success: true });
+        expect(sentTasks()).toEqual(['stopbroker', 'getbrokersinfo']);
+      });
+
+      it('keeps the stop error when the brokers are still on', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce(stopFailure)
+          .mockResolvedValueOnce(brokersInfo('ON', [{ name: 'broker1', state: 'ON' }]));
+
+        await expect(service.stopAllBrokers(mockUserId, mockHostUid)).rejects.toMatchObject(
+          stopError('Cannot open shared memory')
+        );
+      });
+
+      it('keeps the stop error when the state cannot be read', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce(stopFailure)
+          .mockRejectedValueOnce(new Error('connection reset'));
+
+        await expect(service.stopAllBrokers(mockUserId, mockHostUid)).rejects.toMatchObject(
+          stopError('Cannot open shared memory')
+        );
+      });
+
+      it('does not read the state again when CMS did not answer the stop', async () => {
+        cmsClient.postAuthenticated.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
+
+        await expect(service.stopAllBrokers(mockUserId, mockHostUid)).rejects.toMatchObject({ code: 'UNKNOWN' });
+        expect(sentTasks()).toEqual(['stopbroker']);
+      });
+    });
+  });
+
+  describe('stopBroker', () => {
+    it('sends broker_stop with the broker name', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', note: 'none', task: 'broker_stop' });
+
+      await expect(service.stopBroker(mockUserId, mockHostUid, 'broker1')).resolves.toEqual({ success: true });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'broker_stop', bname: 'broker1' }),
+        expect.anything()
+      );
+    });
+
+    describe('when the stop fails', () => {
+      const notRunning = { status: 'failure', note: 'Error: Broker[broker1] is not running', task: 'broker_stop' };
+      const noSharedMemory = {
+        status: 'failure',
+        note: 'Error: Cannot open shared memory (os error = No such file or directory)',
+        task: 'broker_stop',
+      };
+
+      it('counts as done when that broker is already off', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce(notRunning)
+          .mockResolvedValueOnce(
+            brokersInfo('ON', [{ name: 'query_editor', state: 'ON' }, { name: 'broker1', state: 'OFF' }])
+          );
+        const log = jest.spyOn(service['logger'], 'log');
+
+        await expect(service.stopBroker(mockUserId, mockHostUid, 'broker1')).resolves.toEqual({ success: true });
+        expect(sentTasks()).toEqual(['broker_stop', 'getbrokersinfo']);
+        expect(log).toHaveBeenCalledWith(expect.stringContaining('Broker[broker1] is not running'));
+      });
+
+      it('counts as done when every broker is off', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce(noSharedMemory)
+          .mockResolvedValueOnce(brokersInfo('OFF', [{ name: 'query_editor' }, { name: 'broker1' }]));
+
+        await expect(service.stopBroker(mockUserId, mockHostUid, 'broker1')).resolves.toEqual({ success: true });
+      });
+
+      it('keeps the stop error for a broker name that is not configured', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce(noSharedMemory)
+          .mockResolvedValueOnce(brokersInfo('OFF', [{ name: 'query_editor' }]));
+
+        await expect(service.stopBroker(mockUserId, mockHostUid, 'broker1')).rejects.toMatchObject(
+          stopError('Cannot open shared memory')
+        );
+      });
+
+      it('keeps the stop error when that broker is still on', async () => {
+        cmsClient.postAuthenticated
+          .mockResolvedValueOnce({ ...notRunning, note: 'Error: something else' })
+          .mockResolvedValueOnce(brokersInfo('ON', [{ name: 'broker1', state: 'ON' }]));
+
+        await expect(service.stopBroker(mockUserId, mockHostUid, 'broker1')).rejects.toMatchObject(
+          stopError('something else')
+        );
+      });
     });
   });
 
