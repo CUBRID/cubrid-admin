@@ -6,11 +6,11 @@ import { HostModule } from '@host';
 import { LockModule } from '@lock';
 import { MonitoringModule } from '@monitoring';
 import { Module } from '@nestjs/common';
-import { APP_GUARD, Reflector } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { UserRepositoryModule } from '@repository';
 import { EncryptionService, SecurityModule } from '@security';
 import { StorageModule, StorageService } from '@storage';
-import { TokenModule } from '@token';
+import { JwtAuthGuard, TokenModule } from '@token';
 import { UserModule } from '@user';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,8 +23,6 @@ import { CmsHttpsClientModule } from '@cms-https-client/cms-https-client.module'
 import { LogModule } from './log/log.module';
 import { HaModule } from '@ha';
 import { CmsJobModule } from '@cms-job/cms-job.module';
-import { selectAppGuard } from './desktop/select-app-guard';
-import { DesktopUserService } from './desktop/desktop-user.service';
 import { VersionModule } from './version/version.module';
 
 /**
@@ -67,8 +65,7 @@ import { VersionModule } from './version/version.module';
     ConfigService,
     EncryptionService,
     StorageService,
-    DesktopUserService,
-    { provide: APP_GUARD, useFactory: selectAppGuard, inject: [ConfigService, Reflector] },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
 export class AppModule {}
