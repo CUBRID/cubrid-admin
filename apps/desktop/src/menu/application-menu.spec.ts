@@ -11,7 +11,7 @@ jest.mock('../window/window-registry', () => ({
   getMainWindow: () => ({ isDestroyed: () => false, webContents: { send } }),
 }));
 
-import { Menu } from 'electron';
+import { Menu, shell } from 'electron';
 import {
   buildApplicationMenuTemplate,
   getMenuLanguage,
@@ -50,7 +50,7 @@ it('mirrors the header menu in English and Korean', () => {
     'Help',
     'Report Bug',
     'CUBRID Online Forum',
-    'CUBRID tools developments',
+    'CUBRID Admin on GitHub',
     'Check for Updates',
     'Host Engine Version',
     'About CUBRID Admin',
@@ -131,4 +131,11 @@ it('keeps the reported language for the app\'s own dialogs', () => {
   expect(getMenuLanguage()).toBe('ko');
   installApplicationMenu('en');
   expect(getMenuLanguage()).toBe('en');
+});
+
+it('opens the CUBRID Admin repository from Help', () => {
+  const help = top(buildApplicationMenuTemplate('en', false, allEnabled), 'Help');
+  const item = help.find((entry) => entry.label === 'CUBRID Admin on GitHub') as Item;
+  (item.click as () => void)();
+  expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/CUBRID/cubrid-admin');
 });

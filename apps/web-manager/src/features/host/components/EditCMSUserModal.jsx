@@ -219,11 +219,11 @@ export default function EditCMSUserModal() {
             <div className="grid grid-cols-2 gap-4">
               <Input
                 data-testid="edit-cms-user-password-input"
-                label={CM.password}
+                label={isEditMode ? CM.newPassword : CM.password}
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
-                placeholder={isEditMode ? CM.passwordConfirm : CM.password}
+                placeholder={isEditMode ? CM.newPassword : CM.password}
                 icon="lock"
                 required={settingPassword}
                 disabled={!settingPassword}
@@ -232,7 +232,7 @@ export default function EditCMSUserModal() {
               />
               <Input
                 data-testid="edit-cms-user-confirm-password-input"
-                label={CM.passwordConfirm}
+                label={isEditMode ? CM.confirmNewPassword : CM.passwordConfirm}
                 type="password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData(p => ({ ...p, confirmPassword: e.target.value }))}

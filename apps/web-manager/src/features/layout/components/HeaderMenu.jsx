@@ -95,7 +95,7 @@ export default function HeaderMenu() {
         <MenuItem
           icon="code"
           label={CM.cubridToolsDevelopment}
-          onClick={() => window.open('https://github.com/CUBRID/cubrid-manager', '_blank')}
+          onClick={() => window.open('https://github.com/CUBRID/cubrid-admin', '_blank')}
         />
         <MenuDivider />
         <MenuItem

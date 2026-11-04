@@ -76,3 +76,9 @@ it('saves to the host the user list was opened for, not the selected one', async
   await act(async () => q('edit-cms-user-save-btn').click());
   expect(updateCmsUser.mock.calls[0][0]).toMatchObject({ hostUid: 'h2' });
 });
+
+it('names the password fields as new ones when editing', async () => {
+  await render();
+  expect(q('edit-cms-user-password-input').placeholder).toBe('New Password');
+  expect(document.body.textContent).toContain('Confirm New Password');
+});

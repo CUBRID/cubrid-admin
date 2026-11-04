@@ -27,10 +27,11 @@ vi.hoisted(() => {
     removeEventListener: () => undefined,
   });
 });
-vi.mock('../authApi', () => ({ authApi: {} }));
+vi.mock('../authApi', () => ({ authApi: { login: vi.fn() } }));
 
 import { version as rootVersion } from '../../../../../../package.json';
 import LoginPage from './LoginPage';
+import { authApi } from '../authApi';
 
 let container;
 let root;
@@ -61,4 +62,38 @@ it('shows the product version from the root package.json in the footer', async (
 
   expect(container.querySelector('[data-testid="login-app-version"]').textContent).toBe(`v${rootVersion}`);
   expect(container.textContent).not.toContain('12.4.0');
+});
+
+const setValue = (input, value) => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+const tryLogin = async (rejection) => {
+  authApi.login.mockRejectedValue(rejection);
+  const state = { auth: { loading: false }, layout: { theme: 'light' }, user: { preferences: { uiLocale: 'en' } } };
+  await act(async () => {
+    root.render(
+      <Provider store={configureStore({ reducer: () => state })}>
+        <MemoryRouter initialEntries={['/login']}>
+          <LoginPage />
+        </MemoryRouter>
+      </Provider>
+    );
+  });
+  await act(async () => {
+    setValue(container.querySelector('[data-testid="login-username-input"]'), 'admin');
+    setValue(container.querySelector('[data-testid="login-password-input"]'), 'wrong');
+  });
+  await act(async () => container.querySelector('[data-testid="login-submit-btn"]').click());
+};
+
+it('says a wrong ID or password in plain words', async () => {
+  await tryLogin({ response: { data: { message: 'Invalid credentials.', data: { type: '/errors/auth/invalid_credentials' } } } });
+  expect(container.textContent).toContain('Login failed. Check your ID and password.');
+  expect(container.textContent).not.toContain('Invalid credentials.');
+});
+
+it('shows any other login failure as the server says it', async () => {
+  await tryLogin({ response: { data: { message: 'Could not reach the server.', data: { type: '/errors/internal/internal_error' } } } });
+  expect(container.textContent).toContain('Could not reach the server.');
 });

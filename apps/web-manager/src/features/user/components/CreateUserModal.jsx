@@ -208,11 +208,9 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             <p className="text-15 font-black text-slate-800 dark:text-white">
               {isEditMode ? CM.editingUser(editingUser) : CM.newDatabaseUserTitle}
             </p>
-            <p className="text-13 text-slate-400 mt-0.5">
-              {isEditMode
-                ? CM.updateCredentialsSubtitle
-                : CM.defineIdentitySubtitle}
-            </p>
+            {isEditMode && (
+              <p className="text-13 text-slate-400 mt-0.5">{CM.updateCredentialsSubtitle}</p>
+            )}
           </div>
         </div>
 

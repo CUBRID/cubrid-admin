@@ -369,7 +369,7 @@ export default function BackupDatabaseModal() {
     return (
       <Modal isOpen title={CM.backupCompleted} icon="backup" iconVariant="success" onClose={handleClose} maxWidth="720px">
         <ModalStatusSuccess 
-          title={CM.snapshotSecured}
+          title={false}
           message={backupWrittenMsg}
           onConfirm={handleClose}
           confirmText={CM.ok}

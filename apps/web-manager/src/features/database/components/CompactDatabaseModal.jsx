@@ -113,7 +113,7 @@ export default function CompactDatabaseModal() {
           guidance={CM.compactDbGuidance}
           onRetry={handleCompact}
           onCancel={resetAction}
-          retryText={CM.retryOptimization}
+          retryText={CM.retry}
           cancelText={CM.dismiss}
         />
       </Modal>

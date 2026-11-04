@@ -74,7 +74,9 @@ export default function LoginPage() {
       }));
       navigate('/home', { replace: true });
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg;
+      // A wrong ID or password says so in plain words in every language.
+      const wrongLogin = err.response?.data?.data?.type === '/errors/auth/invalid_credentials';
+      const msg = wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg);
       dispatch(loginFailure(msg));
       setApiError(msg);
     }

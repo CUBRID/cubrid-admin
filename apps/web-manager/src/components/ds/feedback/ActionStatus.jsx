@@ -50,7 +50,8 @@ export const ModalStatusSuccess = ({
   children,
 }) => {
   const CM = useCM();
-  const displayTitle = title || CM.operationComplete;
+  // title={false}: the dialog's own title already says it.
+  const displayTitle = title === false ? null : title || CM.operationComplete;
   const displayMessage = message || CM.operationCompletedSuccess;
   const displayConfirmText = confirmText || CM.ok;
   return (
@@ -63,7 +64,9 @@ export const ModalStatusSuccess = ({
       </div>
 
       <div className="w-full min-w-0 space-y-2 px-8">
-        <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white break-words">{displayTitle}</Typography>
+        {displayTitle && (
+          <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white break-words">{displayTitle}</Typography>
+        )}
         <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[360px] mx-auto break-words">
           {displayMessage}
         </Typography>

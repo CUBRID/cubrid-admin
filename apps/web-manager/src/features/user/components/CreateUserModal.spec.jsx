@@ -77,6 +77,11 @@ it('does not render a description field in create mode', async () => {
   expectNoDescriptionField();
 });
 
+it('asks for nothing it does not have fields for in create mode', async () => {
+  await render(undefined);
+  expect(document.body.textContent).not.toMatch(/credentials|role membership/i);
+});
+
 it('does not render a description field in edit mode, even when the user has a comment', async () => {
   await render('alice');
   expect(el('create-user-username-input').value).toBe('alice');

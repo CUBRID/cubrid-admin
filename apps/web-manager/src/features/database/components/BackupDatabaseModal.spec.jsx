@@ -108,6 +108,8 @@ it('names an incremental backup as incremental, not complete', async () => {
 
   expect(container.textContent).toContain('Incremental (L1) of "demodb" was written to "/backup".');
   expect(container.textContent).not.toMatch(/complete backup/i);
+  // The dialog title says it once; the result below does not repeat it.
+  expect(document.body.textContent.split('Backup Completed').length - 1).toBe(1);
 });
 
 describe('a backup that ends after the modal was reopened for another database', () => {
