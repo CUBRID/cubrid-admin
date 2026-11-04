@@ -1,4 +1,4 @@
-import { parseConfText } from '@api-interfaces';
+import { autoStartDatabases, parseConfText } from '@api-interfaces';
 import { fetchDatabaseStartInfo } from './databaseCoreSlice';
 
 // Bulk and service actions skip the databases the user isn't logged in to
@@ -125,14 +125,8 @@ export const planLoginCheckedAction = (hostUid, pickTargets, { blockWhenAllSkipp
 
 /**
  * The cubrid.conf `[service]` autostart list (the last `server=`), empty when
- * `service=` leaves out server. Read with the engine's own parsing rules
- * (key case, trailing comments, continued lines); the list splits on spaces,
- * commas and colons as util_service.c does.
+ * `service=` leaves out server, read as the engine reads it (autoStartDatabases).
  */
 export function autoStartServers(confLines) {
-  const service = parseConfText(confLines || []).sections.find((section) => section.name === 'service');
-  const last = (key) => [...(service?.entries || [])].reverse().find((entry) => entry.key.toLowerCase() === key)?.value;
-  const list = (value) => (value || '').replace(/^["']|["']$/g, '').split(/[\s,:]+/).filter(Boolean);
-  if (!list(last('service')).map((s) => s.toLowerCase()).includes('server')) return [];
-  return list(last('server'));
+  return autoStartDatabases(confLines || []);
 }
