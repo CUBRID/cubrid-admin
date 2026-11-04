@@ -173,7 +173,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
         .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['[cm]', 'cm_port=70000', 'auto_job_timeout=abc', 'cm_prot=8001'], [])
         .catch((e) => e);
       expect(error.additionalData.problems).toEqual([
-        { lineNo: 2, key: 'cm_port', code: 'MAX', params: { max: 65535 }, message: expect.stringContaining('<= 65535') },
+        { lineNo: 2, key: 'cm_port', code: 'MAX', params: { max: 65535 }, message: expect.stringContaining('≤ 65535') },
         { lineNo: 3, key: 'auto_job_timeout', code: 'NOT_INT32', message: expect.stringContaining('32-bit integer') },
         { lineNo: 4, key: 'cm_prot', code: 'CM_UNKNOWN_KEY', message: expect.stringContaining('not a cm.conf parameter') },
       ]);
@@ -210,7 +210,7 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
         section: 'common',
         code: 'MAX',
         params: { max: 4000 },
-        message: expect.stringContaining('<= 4000'),
+        message: expect.stringContaining('≤ 4000'),
       }]);
       await expect(
         service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'data_buffer_pages=32768'], [])

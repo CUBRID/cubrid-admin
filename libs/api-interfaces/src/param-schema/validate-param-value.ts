@@ -161,8 +161,8 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
     case 'bigint': {
       if (!/^-?\d+$/.test(value.trim())) return issue('NOT_INTEGER', 'Must be an integer');
       const n = BigInt(value.trim());
-      if (guard.min !== undefined && n < BigInt(guard.min)) return issue('MIN', `Must be >= ${guard.min}`, { min: guard.min });
-      if (guard.max !== undefined && n > BigInt(guard.max)) return issue('MAX', `Must be <= ${guard.max}`, { max: guard.max });
+      if (guard.min !== undefined && n < BigInt(guard.min)) return issue('MIN', `Must be ≥ ${guard.min}`, { min: guard.min });
+      if (guard.max !== undefined && n > BigInt(guard.max)) return issue('MAX', `Must be ≤ ${guard.max}`, { max: guard.max });
       return null;
     }
     case 'int': {
@@ -172,8 +172,8 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
           ? issue('NOT_HEX_INT32', 'Must be a hexadecimal 32-bit integer')
           : issue('NOT_INT32', 'Must be a 32-bit integer');
       }
-      if (guard.min !== undefined && n < guard.min) return issue('MIN', `Must be >= ${guard.min}`, { min: guard.min });
-      if (guard.max !== undefined && n > guard.max) return issue('MAX', `Must be <= ${guard.max}`, { max: guard.max });
+      if (guard.min !== undefined && n < guard.min) return issue('MIN', `Must be ≥ ${guard.min}`, { min: guard.min });
+      if (guard.max !== undefined && n > guard.max) return issue('MAX', `Must be ≤ ${guard.max}`, { max: guard.max });
       return null;
     }
     case 'size': {
@@ -186,11 +186,11 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
       if (!Number.isFinite(bytes)) return issue('TOO_LARGE', 'Value is too large');
       if (guard.min !== undefined && BigInt(bytes) < BigInt(guard.min)) {
         const min = formatSizeBound(guard.min);
-        return issue('MIN', `Must be >= ${min}`, { min });
+        return issue('MIN', `Must be ≥ ${min}`, { min });
       }
       if (guard.max !== undefined && BigInt(bytes) > BigInt(guard.max)) {
         const max = formatSizeBound(guard.max);
-        return issue('MAX', `Must be <= ${max}`, { max });
+        return issue('MAX', `Must be ≤ ${max}`, { max });
       }
       return null;
     }
@@ -206,10 +206,10 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
       if (kb > 2147483647) return issue('TOO_LARGE', 'Must be under 2T', { max: '2T' });
       const truncatedKb = Math.trunc(kb);
       if (guard.minKb !== undefined && truncatedKb < guard.minKb) {
-        return issue('MIN', `Must be >= ${guard.minKb}K`, { min: `${guard.minKb}K` });
+        return issue('MIN', `Must be ≥ ${guard.minKb}K`, { min: `${guard.minKb}K` });
       }
       if (guard.maxKb !== undefined && truncatedKb > guard.maxKb) {
-        return issue('MAX', `Must be <= ${guard.maxKb}K`, { max: `${guard.maxKb}K` });
+        return issue('MAX', `Must be ≤ ${guard.maxKb}K`, { max: `${guard.maxKb}K` });
       }
       if (guard.exactKb && !guard.exactKb.includes(truncatedKb)) {
         const options = guard.exactKb.map((kb) => `${kb}K`);
@@ -227,9 +227,9 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
       if (sec > 2147483647) return issue('TOO_LARGE', 'Too large');
       const checked = guard.truncate ? Math.trunc(sec) : sec;
       const minSec = guard.minSec ?? 0;
-      if (checked < minSec) return issue('MIN', `Must be >= ${minSec} seconds`, { min: minSec, unit: 's' });
+      if (checked < minSec) return issue('MIN', `Must be ≥ ${minSec} seconds`, { min: minSec, unit: 's' });
       if (guard.maxSec !== undefined && checked > guard.maxSec) {
-        return issue('MAX', `Must be <= ${guard.maxSec} seconds`, { max: guard.maxSec, unit: 's' });
+        return issue('MAX', `Must be ≤ ${guard.maxSec} seconds`, { max: guard.maxSec, unit: 's' });
       }
       return null;
     }
@@ -244,8 +244,8 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
         if (factor === undefined) return issue('BAD_TIME_UNIT', 'Unit must be ms/msec, s/sec, min or h');
         ms = Math.trunc(parsed.number * factor);
       }
-      if (guard.min !== undefined && ms < guard.min) return issue('MIN', `Must be >= ${guard.min} ms`, { min: guard.min, unit: 'ms' });
-      if (guard.max !== undefined && ms > guard.max) return issue('MAX', `Must be <= ${guard.max} ms`, { max: guard.max, unit: 'ms' });
+      if (guard.min !== undefined && ms < guard.min) return issue('MIN', `Must be ≥ ${guard.min} ms`, { min: guard.min, unit: 'ms' });
+      if (guard.max !== undefined && ms > guard.max) return issue('MAX', `Must be ≤ ${guard.max} ms`, { max: guard.max, unit: 'ms' });
       return null;
     }
     case 'float': {
@@ -256,16 +256,16 @@ export function checkParamValue(guard: ParamGuard | undefined, rawValue: unknown
       const n = hex ? (hex[1] === '-' ? -1 : 1) * parseInt(hex[2], 16)
         : /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text) ? Number(text) : NaN;
       if (Number.isNaN(n)) return issue('NOT_NUMBER', 'Must be a number');
-      if (guard.min !== undefined && n < guard.min) return issue('MIN', `Must be >= ${guard.min}`, { min: guard.min });
-      if (guard.max !== undefined && n > guard.max) return issue('MAX', `Must be <= ${guard.max}`, { max: guard.max });
+      if (guard.min !== undefined && n < guard.min) return issue('MIN', `Must be ≥ ${guard.min}`, { min: guard.min });
+      if (guard.max !== undefined && n > guard.max) return issue('MAX', `Must be ≤ ${guard.max}`, { max: guard.max });
       return null;
     }
     case 'cmsMegabytes': {
       const match = /^(\d+)[mM]?$/.exec(value.trim());
       if (!match) return issue('NOT_MEGABYTES', 'Must be a whole number of megabytes, optionally followed by M (e.g. 4M)');
       const mb = Number(match[1]);
-      if (mb < guard.min) return issue('MIN', `Must be >= ${guard.min}M`, { min: `${guard.min}M` });
-      if (mb > guard.max) return issue('MAX', `Must be <= ${guard.max}M`, { max: `${guard.max}M` });
+      if (mb < guard.min) return issue('MIN', `Must be ≥ ${guard.min}M`, { min: `${guard.min}M` });
+      if (mb > guard.max) return issue('MAX', `Must be ≤ ${guard.max}M`, { max: `${guard.max}M` });
       return null;
     }
     default:
