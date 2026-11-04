@@ -57,9 +57,9 @@ import { withDatabaseActionLock } from './database-action-lock';
  * consumes one of CMS's async-job slots for the duration of the call. That
  * cap is small (CMS enforces a single-digit global limit per host, shared
  * across every task and user), so a host with many non-HA databases must
- * not fire startAllDatabases/stopAllDatabases's per-db calls all at once —
- * see mapWithConcurrency below. Kept well under the cap to leave headroom
- * for whatever else is concurrently using async jobs on the same host.
+ * not fire its per-db calls all at once — see runNonHaAction. Kept well
+ * under the cap to leave headroom for whatever else is concurrently using
+ * async jobs on the same host.
  */
 const NON_HA_BULK_ACTION_CONCURRENCY = 4;
 
@@ -69,7 +69,7 @@ const NON_HA_BULK_ACTION_CONCURRENCY = 4;
  */
 type StepCode = { code?: string; type?: string; reason?: string };
 
-/** Outcome of startAllDatabases/stopAllDatabases, per database. */
+/** Outcome of a bulk or service database start/stop, per database. */
 export type BulkDatabaseActionResult = {
   succeeded: string[];
   /** `phase` is set only by a restart, for the step that failed. */
@@ -114,6 +114,23 @@ export type ServiceRestartResult = {
  * per-database outcome.
  */
 export const HA_NODE_STEP = 'HA databases (heartbeat)';
+
+/**
+ * The non-HA databases of `dbnames` an action needs: not running for a
+ * start, running for a stop. One already in the wanted state is left out,
+ * since CMS answers a second start or stop with an error; if the running
+ * list couldn't be read (`running` null), every one is tried.
+ */
+function nonHaTargets(
+  dbnames: string[],
+  haDbNames: Set<string>,
+  running: Set<string> | null,
+  action: 'start' | 'stop'
+): string[] {
+  return dbnames.filter(
+    (d) => !haDbNames.has(d) && (running === null || (action === 'start' ? !running.has(d) : running.has(d)))
+  );
+}
 
 export const BULK_SKIP_REASON = {
   notFound: 'Not a database on this host',
@@ -212,8 +229,8 @@ export class DatabaseLifecycleService extends BaseService {
     // no db user credentials. Every database action (this one included) is
     // required to go through a dbmtuserlogin first, as a standing
     // authentication gate rather than an as-needed one. Reused by
-    // startDatabase, restartDatabase, and startAllDatabases alike, so this
-    // one call site covers the individual and bulk paths together.
+    // startDatabase, restartDatabase, and the bulk and service paths alike
+    // (runNonHaAction), so this one call site covers them together.
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     return this.executeAsyncCmsJobRequest<StartDatabaseCmsRequest & { task: 'startdb' }, BaseCmsResponse>(
@@ -232,7 +249,7 @@ export class DatabaseLifecycleService extends BaseService {
     dbname: string
   ): Promise<BaseCmsResponse> {
     // See startNonHaDatabase's comment — same standing policy, covers
-    // stopDatabase, restartDatabase, and stopAllDatabases together.
+    // stopDatabase, restartDatabase, and runNonHaAction together.
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     return this.executeAsyncCmsJobRequest<StopDatabaseCmsRequest & { task: 'stopdb' }, BaseCmsResponse>(
@@ -643,13 +660,7 @@ export class DatabaseLifecycleService extends BaseService {
     const runPhase = async (phase: 'start' | 'stop', dbs: string[]): Promise<BulkDatabaseActionResult> => {
       const phaseOut: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
       await this.runHaBulkAction(userId, hostUid, dbs.filter((d) => haDbNames.has(d)), phase, phaseOut);
-      const nonHa = dbs.filter((d) => !haDbNames.has(d));
-      const results = await mapWithConcurrency(nonHa, NON_HA_BULK_ACTION_CONCURRENCY, (dbname) =>
-        phase === 'start'
-          ? this.startNonHaDatabase(userId, hostUid, dbname)
-          : this.stopNonHaDatabase(userId, hostUid, dbname)
-      );
-      results.forEach((result, index) => addOutcome(phaseOut, nonHa[index], result));
+      await this.runNonHaAction(userId, hostUid, dbs.filter((d) => !haDbNames.has(d)), phase, phaseOut);
       return phaseOut;
     };
 
@@ -698,9 +709,9 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Start every database in `dbnames` on a host, correctly for the whole
-   * service: non-HA databases with `startdb` in parallel, HA-configured
-   * databases one by one with `ha_start <db>` (see runHaBulkAction).
+   * Start every database in `dbnames` on a host (Start All): non-HA
+   * databases with `startdb` in parallel, HA databases (getHaDbNames) one by
+   * one with `ha_start <db>` (see runHaBulkAction).
    *
    * CUBRID refuses to start an HA database through the non-HA `server=`
    * autostart list, so every `ha_db_list` entry that isn't running is
@@ -709,134 +720,121 @@ export class DatabaseLifecycleService extends BaseService {
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
-   * @param dbnames Non-HA database names to start (e.g. the auto-start list)
+   * @param dbnames Non-HA database names to start
    * @returns Per-database outcome (succeeded/failed/skipped); never throws
    *   for individual failures
    */
-  async startAllDatabases(
-    userId: string,
-    hostUid: string,
-    dbnames: string[],
-    options: { haNode?: boolean } = {}
-  ): Promise<BulkDatabaseActionResult> {
+  async startAllDatabases(userId: string, hostUid: string, dbnames: string[]): Promise<BulkDatabaseActionResult> {
     await this.assertNoActiveJob(userId, hostUid);
 
-    const haNode = options.haNode ? await this.databaseInfoService.getHaNodeState(userId, hostUid) : undefined;
-    const haDbNames = haNode ? haNode.haDbNames : await this.databaseInfoService.getHaDbNames(userId, hostUid);
+    const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
     return this.holdingDatabases(userId, hostUid, [...haDbNames, ...dbnames], 'startAllDatabases', () =>
-      this.startAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames, { haNode })
+      this.runAllDatabasesAction(userId, hostUid, dbnames, haDbNames, 'start')
     );
   }
 
   /**
-   * `haNode` (getHaNodeState): on an HA node the HA databases go up with one
-   * node-wide `ha_start` (whole-service start only).
-   */
-  private async startAllDatabasesUnlocked(
-    userId: string,
-    hostUid: string,
-    dbnames: string[],
-    haDbNames: Set<string>,
-    { haNode }: { haNode?: HaNodeState } = {}
-  ): Promise<BulkDatabaseActionResult> {
-    const succeeded: string[] = [];
-    const failed: BulkDatabaseActionResult['failed'] = [];
-    const skipped: Array<{ dbname: string; reason: string }> = [];
-
-    // A database already in the wanted state is left out: CMS answers a
-    // second start with an error ("already running" / not active). If the
-    // running list can't be read, every listed database is tried.
-    let running: Set<string> | null = null;
-    try {
-      running = await this.readActiveDbnames(userId, hostUid);
-    } catch {
-      running = null;
-    }
-    const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d) && (running === null || !running.has(d)));
-
-    if (haNode) {
-      await this.runHaNodeAction(userId, hostUid, haNode, 'start', { succeeded, failed, skipped });
-    } else {
-      await this.runHaBulkAction(userId, hostUid, [...haDbNames], 'start', { succeeded, failed, skipped }, running);
-    }
-
-    const results = await mapWithConcurrency(
-      nonHaTargets,
-      NON_HA_BULK_ACTION_CONCURRENCY,
-      (dbname) => this.startNonHaDatabase(userId, hostUid, dbname)
-    );
-    results.forEach((result, index) => addOutcome({ succeeded, failed, skipped }, nonHaTargets[index], result));
-
-    return { succeeded, failed, skipped };
-  }
-
-  /**
-   * Stop every database in `dbnames` on a host, correctly for the whole
-   * service — non-HA with `stopdb`, HA one by one with `ha_stop <db>`.
+   * Stop every database in `dbnames` on a host (Stop All): non-HA with
+   * `stopdb`, HA (getHaDbNames) one by one with `ha_stop <db>`.
    *
    * Every running `ha_db_list` entry is stopped regardless of whether it's
    * also present in `dbnames`, if the database is logged in.
    *
    * @param userId User ID from JWT
    * @param hostUid Host UID
-   * @param dbnames Non-HA database names to stop (e.g. the currently active list)
+   * @param dbnames Non-HA database names to stop
    * @returns Per-database outcome; never throws for individual failures
    */
-  async stopAllDatabases(
-    userId: string,
-    hostUid: string,
-    dbnames: string[],
-    options: { haNode?: boolean } = {}
-  ): Promise<BulkDatabaseActionResult> {
+  async stopAllDatabases(userId: string, hostUid: string, dbnames: string[]): Promise<BulkDatabaseActionResult> {
     await this.assertNoActiveJob(userId, hostUid);
 
-    const haNode = options.haNode ? await this.databaseInfoService.getHaNodeState(userId, hostUid) : undefined;
-    const haDbNames = haNode ? haNode.haDbNames : await this.databaseInfoService.getHaDbNames(userId, hostUid);
+    const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
     return this.holdingDatabases(userId, hostUid, [...haDbNames, ...dbnames], 'stopAllDatabases', () =>
-      this.stopAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames, { haNode })
+      this.runAllDatabasesAction(userId, hostUid, dbnames, haDbNames, 'stop')
     );
   }
 
-  /**
-   * `haNode` (getHaNodeState): on an HA node the HA databases go down with
-   * one node-wide `ha_stop` (whole-service stop only).
-   */
-  private async stopAllDatabasesUnlocked(
+  /** startAllDatabases/stopAllDatabases with the databases already held. */
+  private async runAllDatabasesAction(
     userId: string,
     hostUid: string,
     dbnames: string[],
     haDbNames: Set<string>,
-    { haNode }: { haNode?: HaNodeState } = {}
+    action: 'start' | 'stop'
   ): Promise<BulkDatabaseActionResult> {
-    const succeeded: string[] = [];
-    const failed: BulkDatabaseActionResult['failed'] = [];
-    const skipped: Array<{ dbname: string; reason: string }> = [];
+    const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
+    const running = await this.readRunningOrNull(userId, hostUid);
+    const targets = nonHaTargets(dbnames, haDbNames, running, action);
+    await this.runHaBulkAction(userId, hostUid, [...haDbNames], action, out, running);
+    await this.runNonHaAction(userId, hostUid, targets, action, out);
+    return out;
+  }
 
-    // A database already in the wanted state is left out: CMS answers a
-    // second stop with an error ("already running" / not active). If the
-    // running list can't be read, every listed database is tried.
-    let running: Set<string> | null = null;
-    try {
-      running = await this.readActiveDbnames(userId, hostUid);
-    } catch {
-      running = null;
-    }
-    const nonHaTargets = dbnames.filter((d) => !haDbNames.has(d) && (running === null || running.has(d)));
+  /**
+   * The databases of a whole-service start: the `autoStart` ones with
+   * `startdb`, and on an HA node (getHaNodeState) the HA databases with one
+   * node-wide `ha_start` (see runHaNodeAction).
+   */
+  private async startServiceDatabases(userId: string, hostUid: string, autoStart: string[]): Promise<BulkDatabaseActionResult> {
+    await this.assertNoActiveJob(userId, hostUid);
 
-    if (haNode) {
-      await this.runHaNodeAction(userId, hostUid, haNode, 'stop', { succeeded, failed, skipped });
-    } else {
-      await this.runHaBulkAction(userId, hostUid, [...haDbNames], 'stop', { succeeded, failed, skipped }, running);
-    }
-
-    const results = await mapWithConcurrency(
-      nonHaTargets,
-      NON_HA_BULK_ACTION_CONCURRENCY,
-      (dbname) => this.stopNonHaDatabase(userId, hostUid, dbname)
+    const haNode = await this.databaseInfoService.getHaNodeState(userId, hostUid);
+    return this.holdingDatabases(userId, hostUid, [...haNode.haDbNames, ...autoStart], 'startServiceDatabases', () =>
+      this.runServiceDatabasesAction(userId, hostUid, autoStart, haNode, 'start')
     );
-    results.forEach((result, index) => addOutcome({ succeeded, failed, skipped }, nonHaTargets[index], result));
+  }
 
-    return { succeeded, failed, skipped };
+  /**
+   * The databases of a whole-service stop: the `dbnames` ones with
+   * `stopdb`, and on an HA node (getHaNodeState) the HA databases with one
+   * node-wide `ha_stop` (see runHaNodeAction).
+   */
+  private async stopServiceDatabases(userId: string, hostUid: string, dbnames: string[]): Promise<BulkDatabaseActionResult> {
+    await this.assertNoActiveJob(userId, hostUid);
+
+    const haNode = await this.databaseInfoService.getHaNodeState(userId, hostUid);
+    return this.holdingDatabases(userId, hostUid, [...haNode.haDbNames, ...dbnames], 'stopServiceDatabases', () =>
+      this.runServiceDatabasesAction(userId, hostUid, dbnames, haNode, 'stop')
+    );
+  }
+
+  /** startServiceDatabases/stopServiceDatabases with the databases already held (also restartWholeService). */
+  private async runServiceDatabasesAction(
+    userId: string,
+    hostUid: string,
+    dbnames: string[],
+    haNode: HaNodeState,
+    action: 'start' | 'stop'
+  ): Promise<BulkDatabaseActionResult> {
+    const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
+    const running = await this.readRunningOrNull(userId, hostUid);
+    const targets = nonHaTargets(dbnames, haNode.haDbNames, running, action);
+    await this.runHaNodeAction(userId, hostUid, haNode, action, out);
+    await this.runNonHaAction(userId, hostUid, targets, action, out);
+    return out;
+  }
+
+  /** The running databases, or null when the list can't be read. */
+  private async readRunningOrNull(userId: string, hostUid: string): Promise<Set<string> | null> {
+    try {
+      return await this.readActiveDbnames(userId, hostUid);
+    } catch {
+      return null;
+    }
+  }
+
+  /** `startdb`/`stopdb` for each of `targets`, NON_HA_BULK_ACTION_CONCURRENCY at a time. */
+  private async runNonHaAction(
+    userId: string,
+    hostUid: string,
+    targets: string[],
+    action: 'start' | 'stop',
+    out: BulkDatabaseActionResult
+  ): Promise<void> {
+    const results = await mapWithConcurrency(targets, NON_HA_BULK_ACTION_CONCURRENCY, (dbname) =>
+      action === 'start' ? this.startNonHaDatabase(userId, hostUid, dbname) : this.stopNonHaDatabase(userId, hostUid, dbname)
+    );
+    results.forEach((result, index) => addOutcome(out, targets[index], result));
   }
 
   /**
@@ -868,7 +866,7 @@ export class DatabaseLifecycleService extends BaseService {
     // outright.
     await this.assertNoActiveJob(userId, hostUid);
     const { failed, skipped } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
-      this.startAllDatabases(userId, hostUid, autoStart, { haNode: true })
+      this.startServiceDatabases(userId, hostUid, autoStart)
     );
     return { failed, skipped };
   }
@@ -943,7 +941,7 @@ export class DatabaseLifecycleService extends BaseService {
     // stopped.
     await this.assertNoActiveJob(userId, hostUid);
     return this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
-      this.stopAllDatabases(userId, hostUid, dbnames, { haNode: true })
+      this.stopServiceDatabases(userId, hostUid, dbnames)
     );
   }
 
@@ -969,7 +967,7 @@ export class DatabaseLifecycleService extends BaseService {
     // an uncaught throw here would both lose that broker failure (we'd never
     // reach `return { failed }`) and skip stopping the databases entirely,
     // leaving the host in an undocumented partial-stop state. Without a
-    // dbname list there is nothing to pass to stopAllDatabases, so surface
+    // dbname list there is nothing to pass to stopDatabases, so surface
     // this as its own failure entry instead of continuing.
     // A running database can be missing from dblist (CMS lists only the
     // databases.txt entries whose host field matches), so the active list is
@@ -989,8 +987,8 @@ export class DatabaseLifecycleService extends BaseService {
       return { failed, skipped };
     }
 
-    // stopAllDatabases itself can throw uncaught (its own assertNoActiveJob
-    // re-check, or a getHaDbNames CMS query failure) before it ever produces
+    // stopDatabases itself can throw uncaught (its own assertNoActiveJob
+    // re-check, or a getHaNodeState CMS query failure) before it ever produces
     // a per-dbname { failed } list — same reasoning as the startInfo guard
     // above, so it gets the same treatment instead of losing the brokers
     // failure already collected.
@@ -1041,10 +1039,10 @@ export class DatabaseLifecycleService extends BaseService {
     return this.holdingDatabases(userId, hostUid, held, 'restartWholeService', async () => {
       const wasRunning = await this.readActiveDbnames(userId, hostUid);
       const { failed: stopFailed, skipped: stopSkipped } = await this.stopWholeServiceSteps(userId, hostUid, (dbnames) =>
-        this.stopAllDatabasesUnlocked(userId, hostUid, dbnames, haDbNames, { haNode })
+        this.runServiceDatabasesAction(userId, hostUid, dbnames, haNode, 'stop')
       );
       const { failed: startFailed, skipped: startSkipped, haNodeSent } = await this.startWholeServiceSteps(userId, hostUid, (autoStart) =>
-        this.startAllDatabasesUnlocked(userId, hostUid, autoStart, haDbNames, { haNode })
+        this.runServiceDatabasesAction(userId, hostUid, autoStart, haNode, 'start')
       );
       // A database skipped at the stop kept running; one skipped at the start
       // stayed stopped.
