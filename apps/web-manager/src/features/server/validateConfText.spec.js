@@ -51,7 +51,7 @@ describe('validateConfText — cubridconf', () => {
     expect(validateConfText(DB_SCHEMA, '[common]\nmax_clients=100\nmax_clients=9999', 'cubridconf'))
       .toEqual([
         expect.objectContaining({ lineNo: 2, severity: 'warning' }),
-        expect.objectContaining({ lineNo: 3, key: 'max_clients', message: expect.stringContaining('<= 4000') }),
+        expect.objectContaining({ lineNo: 3, key: 'max_clients', message: expect.stringContaining('≤ 4000') }),
       ]);
   });
 

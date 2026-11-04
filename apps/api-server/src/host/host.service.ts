@@ -164,7 +164,7 @@ export class HostService {
         throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED', message: 'A group name is required.' });
       }
       if (!isValidGroupNameStart(trimmed)) {
-        throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START', message: `"${trimmed}" is not a valid group name — it must start with a letter or digit.` });
+        throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START', groupName: trimmed, message: `"${trimmed}" is not a valid group name — it must start with a letter or digit.` });
       }
       createEmptyGroup(user, trimmed);
       return user;
@@ -190,7 +190,7 @@ export class HostService {
           throw HostError.InvalidFormat({ field: 'name', reason: 'BLANK_GROUP_NAME_NOT_ALLOWED', message: 'A group name is required.' });
         }
         if (code === 'GROUP_NAME_INVALID_START') {
-          throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START', message: `"${patch.name}" is not a valid group name — it must start with a letter or digit.` });
+          throw HostError.InvalidFormat({ field: 'name', reason: 'GROUP_NAME_INVALID_START', groupName: patch.name, message: `"${patch.name}" is not a valid group name — it must start with a letter or digit.` });
         }
         if (code === 'DEFAULT_HOST_NOT_IN_GROUP') {
           throw HostError.InvalidFormat({ field: 'defaultHostUid', reason: 'DEFAULT_HOST_NOT_IN_GROUP', message: 'The default host must already be a member of this group.' });

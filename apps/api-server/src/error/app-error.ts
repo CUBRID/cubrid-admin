@@ -8,7 +8,7 @@ import { ConfigErrorCode } from '@error/config/config-error-code';
 import { BrokerErrorCode } from '@error/broker/broker-error-code';
 import { CmsErrorCode } from '@error/cms/cms-error-code';
 import type { ErrorKind } from '@error/error-kind';
-import { getPublicClientErrorMessage } from '@error/client-error-messages';
+import { cmsFieldsFromPayload, getPublicClientErrorMessage } from '@error/client-error-messages';
 
 export type { ErrorKind };
 
@@ -43,12 +43,16 @@ export class AppError extends Error {
       code: this.code,
     };
 
+    // CMS's own text and task, apart from the message, for a client that
+    // shows its own wording with the CMS text added.
+    const cmsFields = this.kind === 'CMS' ? cmsFieldsFromPayload(this.additionalData) : {};
+
     if (this.additionalData) {
       const safeFields = this.getSafeFieldsForClient(this.additionalData);
       // Exclude 'message' from safeFields since it's already used in detail
       const { message, ...fieldsWithoutMessage } = safeFields;
-      if (Object.keys(fieldsWithoutMessage).length > 0) {
-        return { ...baseResponse, ...fieldsWithoutMessage };
+      if (Object.keys(fieldsWithoutMessage).length > 0 || Object.keys(cmsFields).length > 0) {
+        return { ...baseResponse, ...fieldsWithoutMessage, ...cmsFields };
       }
     }
 
@@ -77,20 +81,40 @@ export class AppError extends Error {
   private getSafeFieldsForClient(additionalData: Record<string, any>): Record<string, any> {
     const safeFields: Record<string, any> = {};
 
+    // Not 'type': Problem Details' own `type` is what clients map an error by.
     const allowedFields = [
       'missingFields',
       'dbname',
       'bname',
       'confname',
-      'type',
       'parameter',
       'requestedSizeBytes',
       'maximumSizeBytes',
       // Per-line reasons from the conf text check (validateConfText) —
-      // { lineNo, key, message }, no host data.
+      // { lineNo, key, message, code, ... }, no host data.
       'problems',
-      // Why a database has no login: 'loggedOut' or 'notLoggedIn'.
+      // Which case of the error code: UPPER_SNAKE (e.g. GROUP_NOT_FOUND), or
+      // why a database has no login ('loggedOut' / 'notLoggedIn').
       'reason',
+      // Values the English message is built from, for clients that show their
+      // own text.
+      'field',
+      'fieldName',
+      'expectedFormat',
+      'min',
+      'max',
+      'alias',
+      'groupName',
+      'username',
+      'path',
+      'srcdbname',
+      'destdbname',
+      'killType',
+      'volumeName',
+      'queryId',
+      'maxBytes',
+      'timeoutMs',
+      'invalidFields',
     ];
 
     const sensitiveFields = [

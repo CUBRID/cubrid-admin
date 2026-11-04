@@ -1089,7 +1089,13 @@ describe('DatabaseLifecycleService', () => {
 
       const result = await service.startWholeService(mockUserId, mockHostUid);
 
-      expect(result.failed).toEqual([{ name: HA_NODE_STEP, error: 'Not running after the HA start: hadb2' }]);
+      expect(result.failed).toEqual([{
+        name: HA_NODE_STEP,
+        error: 'Not running after the HA start: hadb2',
+        code: 'HA_NOT_RUNNING_AFTER_START',
+        type: '/errors/database/ha_not_running_after_start',
+        dbnames: ['hadb2'],
+      }]);
     });
 
     it('reports a stop as done when no HA database is running afterwards, even if CMS failed (no cub_master left)', async () => {
@@ -1116,7 +1122,13 @@ describe('DatabaseLifecycleService', () => {
 
       const result = await service.stopWholeService(mockUserId, mockHostUid);
 
-      expect(result.failed).toEqual([{ name: HA_NODE_STEP, error: 'Still running after the HA stop: hadb2' }]);
+      expect(result.failed).toEqual([{
+        name: HA_NODE_STEP,
+        error: 'Still running after the HA stop: hadb2',
+        code: 'HA_STILL_RUNNING_AFTER_STOP',
+        type: '/errors/database/ha_still_running_after_stop',
+        dbnames: ['hadb2'],
+      }]);
     });
 
     it('reports a start as not confirmed when the running list cannot be read afterwards', async () => {
@@ -1128,7 +1140,13 @@ describe('DatabaseLifecycleService', () => {
 
       const result = await service.startWholeService(mockUserId, mockHostUid);
 
-      expect(result.failed).toEqual([{ name: HA_NODE_STEP, error: 'Could not check whether the HA databases started: status unavailable' }]);
+      expect(result.failed).toEqual([{
+        name: HA_NODE_STEP,
+        error: 'Could not check whether the HA databases started: status unavailable',
+        code: 'HA_START_NOT_CHECKED',
+        type: '/errors/database/ha_start_not_checked',
+        readFailure: { error: 'status unavailable' },
+      }]);
     });
 
     it('does not fail a stop that CMS accepted when the running list cannot be read afterwards', async () => {
@@ -1876,8 +1894,10 @@ describe('DatabaseLifecycleService', () => {
       expect(result.updateUser).toEqual({
         success: false,
         error: {
-          message: DatabaseErrorCode.UNKNOWN,
+          // The API's message for the error, not its bare code.
+          message: 'A database operation failed.',
           code: DatabaseErrorCode.UNKNOWN,
+          type: '/errors/database/unknown',
           details: undefined,
         },
       });
@@ -1913,8 +1933,10 @@ describe('DatabaseLifecycleService', () => {
       expect(result.setAutoAddVol).toEqual({
         success: false,
         error: {
-          message: DatabaseErrorCode.UNKNOWN,
+          // The API's message for the error, not its bare code.
+          message: 'A database operation failed.',
           code: DatabaseErrorCode.UNKNOWN,
+          type: '/errors/database/unknown',
           details: undefined,
         },
       });
@@ -1940,8 +1962,10 @@ describe('DatabaseLifecycleService', () => {
       expect(result.setAutoStart).toEqual({
         success: false,
         error: {
-          message: DatabaseErrorCode.UNKNOWN,
+          // The API's message for the error, not its bare code.
+          message: 'A database operation failed.',
           code: DatabaseErrorCode.UNKNOWN,
+          type: '/errors/database/unknown',
           details: undefined,
         },
       });

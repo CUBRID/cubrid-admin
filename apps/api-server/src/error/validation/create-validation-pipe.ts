@@ -12,6 +12,24 @@ function flattenFieldNames(errors: ClassValidatorError[], prefix = ''): string[]
   });
 }
 
+/**
+ * Each invalid field with the names of the checks it failed (class-validator
+ * constraint names such as isInt, max, isNotEmpty), for a client that shows
+ * its own text instead of the English messages.
+ */
+function flattenInvalidFields(
+  errors: ClassValidatorError[],
+  prefix = ''
+): Array<{ field: string; constraints: string[] }> {
+  return errors.flatMap((err) => {
+    const path = prefix ? `${prefix}.${err.property}` : err.property;
+    if (err.children?.length) {
+      return flattenInvalidFields(err.children, path);
+    }
+    return [{ field: path, constraints: Object.keys(err.constraints ?? {}) }];
+  });
+}
+
 function flattenMessages(errors: ClassValidatorError[]): string[] {
   return errors.flatMap((err) => {
     if (err.children?.length) {
@@ -44,6 +62,7 @@ export function createValidationPipe(): ValidationPipe {
       const messages = flattenMessages(errors);
       return ValidationError.InvalidRequestBody(fieldNames, {
         message: messages.join('; ') || `Invalid request body: ${fieldNames.join(', ')}`,
+        invalidFields: flattenInvalidFields(errors),
       });
     },
   });

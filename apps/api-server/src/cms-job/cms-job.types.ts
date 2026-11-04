@@ -13,6 +13,7 @@ import {
   RenameDatabaseRequest,
   RestoreDbClientRequest,
   UnloadDatabaseRequest,
+  WarningDetail,
 } from '@api-interfaces';
 
 export type CmsJobPayload =
@@ -43,7 +44,14 @@ export type CmsJobRecord = {
   result?: unknown;
   /** Follow-up work requiring attention after the main operation succeeded. */
   warnings?: string[];
-  error?: { message: string; code?: string; cmsStatus?: string };
+  /** Each warning's code and the values in its text, in the order of `warnings`. */
+  warningDetails?: WarningDetail[];
+  /**
+   * `message` as shown, with what a client maps it by, as in an error
+   * response's `data`: `type`, `code`, `reason`, `cmsNote` (CMS's own text),
+   * `cmsTask`, values like `dbname`.
+   */
+  error?: { message: string; code?: string; cmsStatus?: string; type?: string; cmsNote?: string; [field: string]: unknown };
   // CMS's own uuid for this async job, persisted as soon as CMS returns it —
   // previously only held in a poll-loop local variable, so a mid-job failure
   // (e.g. the host token going invalid) lost it permanently with no way to

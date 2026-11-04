@@ -101,8 +101,8 @@ describe('validateParamValue', () => {
   describe('bigint', () => {
     const guard = { kind: 'bigint', min: '10', max: '100' };
     it('accepts a value inside the range', () => expect(validateParamValue(guard, '50')).toBeNull());
-    it('rejects below min', () => expect(validateParamValue(guard, '9')).toBe('Must be >= 10'));
-    it('rejects above max', () => expect(validateParamValue(guard, '101')).toBe('Must be <= 100'));
+    it('rejects below min', () => expect(validateParamValue(guard, '9')).toBe('Must be ≥ 10'));
+    it('rejects above max', () => expect(validateParamValue(guard, '101')).toBe('Must be ≤ 100'));
     it('rejects a non-integer', () => expect(validateParamValue(guard, '1.5')).toBe('Must be an integer'));
   });
 
@@ -110,8 +110,8 @@ describe('validateParamValue', () => {
     const guard = { kind: 'int', min: 10, max: 4000 };
     it('accepts a value inside the range', () => expect(validateParamValue(guard, '100')).toBeNull());
     it('accepts an explicit + sign like strtol', () => expect(validateParamValue(guard, '+100')).toBeNull());
-    it('rejects below min', () => expect(validateParamValue(guard, '9')).toBe('Must be >= 10'));
-    it('rejects above max', () => expect(validateParamValue(guard, '4001')).toBe('Must be <= 4000'));
+    it('rejects below min', () => expect(validateParamValue(guard, '9')).toBe('Must be ≥ 10'));
+    it('rejects above max', () => expect(validateParamValue(guard, '4001')).toBe('Must be ≤ 4000'));
     it('rejects a non-integer', () => expect(validateParamValue(guard, '3.5')).toBe('Must be a 32-bit integer'));
     it('rejects values outside 32-bit range even with no declared limits (engine parse_int)', () => {
       expect(validateParamValue({ kind: 'int' }, '2147483647')).toBeNull();
@@ -123,8 +123,8 @@ describe('validateParamValue', () => {
   describe('float', () => {
     const guard = { kind: 'float', min: 0.05, max: 16.0 };
     it('accepts a value inside the range', () => expect(validateParamValue(guard, '4')).toBeNull());
-    it('rejects below min', () => expect(validateParamValue(guard, '0.01')).toBe('Must be >= 0.05'));
-    it('rejects above max', () => expect(validateParamValue(guard, '16.5')).toBe('Must be <= 16'));
+    it('rejects below min', () => expect(validateParamValue(guard, '0.01')).toBe('Must be ≥ 0.05'));
+    it('rejects above max', () => expect(validateParamValue(guard, '16.5')).toBe('Must be ≤ 16'));
     it('rejects a non-number', () => expect(validateParamValue(guard, 'abc')).toBe('Must be a number'));
     it('accepts what strtod reads in full', () => {
       for (const v of ['1', '+1.5', '.5', '5.', '1e1', '1.5E-1', '0x4']) expect(validateParamValue(guard, v)).toBeNull();
@@ -160,15 +160,15 @@ describe('validateParamValue', () => {
     });
     it('tells "20K" and "20M" apart instead of reading both as numeric prefix "20"', () => {
       const guard = { kind: 'size', min: 20 * 1024 * 1024 }; // 20M floor, in bytes
-      expect(validateParamValue(guard, '20K')).toBe('Must be >= 20M'); // 20*1024 bytes, way under
+      expect(validateParamValue(guard, '20K')).toBe('Must be ≥ 20M'); // 20*1024 bytes, way under
       expect(validateParamValue(guard, '20M')).toBeNull(); // exactly the floor
     });
     it('enforces min/max at the exact byte boundary (inclusive)', () => {
       const guard = { kind: 'size', min: 20 * 1024 * 1024, max: 4 * 1024 ** 3 }; // 20M..4G
-      expect(validateParamValue(guard, '19M')).toBe('Must be >= 20M');
+      expect(validateParamValue(guard, '19M')).toBe('Must be ≥ 20M');
       expect(validateParamValue(guard, '20M')).toBeNull();
       expect(validateParamValue(guard, '4G')).toBeNull();
-      expect(validateParamValue(guard, '5G')).toBe('Must be <= 4G');
+      expect(validateParamValue(guard, '5G')).toBe('Must be ≤ 4G');
     });
     it('is case-insensitive on the unit letter', () => {
       const guard = { kind: 'size', min: 1024 };
@@ -181,10 +181,10 @@ describe('validateParamValue', () => {
     it('compares INT64-sized bounds exactly, as the engine does (backup_volume_max_size_bytes)', () => {
       const { guard } = DATABASE_PARAM_SCHEMA.find(e => e.key === 'backup_volume_max_size_bytes');
       expect(validateParamValue(guard, '8191P')).toBeNull();
-      expect(validateParamValue(guard, '8192P')).toBe('Must be <= 9223372036854775807 bytes'); // 2^63
+      expect(validateParamValue(guard, '8192P')).toBe('Must be ≤ 9223372036854775807 bytes'); // 2^63
       expect(validateParamValue(guard, '9223372036854775807')).not.toBeNull(); // strtod rounds it up to 2^63
       expect(validateParamValue(guard, '32K')).toBeNull();
-      expect(validateParamValue(guard, '31K')).toBe('Must be >= 32K');
+      expect(validateParamValue(guard, '31K')).toBe('Must be ≥ 32K');
     });
   });
 
@@ -202,7 +202,7 @@ describe('validateParamValue', () => {
     });
 
     it('log_volume_size rejects a value below the engine\'s real 20M floor ("512K")', () => {
-      expect(validateParamValue(logVolumeSize.guard, '512K')).toBe('Must be >= 20M');
+      expect(validateParamValue(logVolumeSize.guard, '512K')).toBe('Must be ≥ 20M');
     });
 
     it('log_volume_size accepts its own schema default (512M)', () => {
@@ -210,11 +210,11 @@ describe('validateParamValue', () => {
     });
 
     it('log_volume_size rejects a value above the engine\'s real 4G ceiling', () => {
-      expect(validateParamValue(logVolumeSize.guard, '5G')).toBe('Must be <= 4G');
+      expect(validateParamValue(logVolumeSize.guard, '5G')).toBe('Must be ≤ 4G');
     });
 
     it('db_volume_size rejects a value above the engine\'s real 20G ceiling', () => {
-      expect(validateParamValue(dbVolumeSize.guard, '21G')).toBe('Must be <= 20G');
+      expect(validateParamValue(dbVolumeSize.guard, '21G')).toBe('Must be ≤ 20G');
     });
   });
 
@@ -223,7 +223,7 @@ describe('validateParamValue', () => {
 
     it('backup_volume_max_size_bytes: explicit 0 fails the engine range check (lower 32K); size units are accepted', () => {
       const { guard } = entry('backup_volume_max_size_bytes');
-      expect(validateParamValue(guard, '0')).toBe('Must be >= 32K');
+      expect(validateParamValue(guard, '0')).toBe('Must be ≥ 32K');
       expect(validateParamValue(guard, '32K')).toBeNull();
       expect(validateParamValue(guard, '1G')).toBeNull();
     });
@@ -247,7 +247,7 @@ describe('validateParamValue', () => {
     });
 
     it('sort_buffer_size: only 0 is below its 1-page floor', () => {
-      expect(validateParamValue(entry('sort_buffer_size').guard, '0')).toBe('Must be >= 1 byte');
+      expect(validateParamValue(entry('sort_buffer_size').guard, '0')).toBe('Must be ≥ 1 byte');
       expect(validateParamValue(entry('sort_buffer_size').guard, '1')).toBeNull();
     });
 
@@ -278,12 +278,12 @@ describe('validateParamValue', () => {
       for (const v of ['1G', '1gb', '512MB', '1024k', '1.5G']) expect(validateParamValue(hardLimit, v)).toBeNull();
     });
     it('rejects what the broker refuses to load', () => {
-      expect(validateParamValue(hardLimit, '512B')).toBe('Must be >= 1K'); // 0.5K truncates to 0
-      expect(validateParamValue(hardLimit, '0')).toBe('Must be >= 1K');
+      expect(validateParamValue(hardLimit, '512B')).toBe('Must be ≥ 1K'); // 0.5K truncates to 0
+      expect(validateParamValue(hardLimit, '0')).toBe('Must be ≥ 1K');
       expect(validateParamValue(hardLimit, '1T')).toBe('Unit must be B, K/KB, M/MB or G/GB');
       expect(validateParamValue(hardLimit, '512MAAA')).toBe('Unit must be B, K/KB, M/MB or G/GB');
       expect(validateParamValue(hardLimit, '3000G')).toBe('Must be under 2T');
-      expect(validateParamValue(maxSize, '-1')).toBe('Must be >= 0K');
+      expect(validateParamValue(maxSize, '-1')).toBe('Must be ≥ 0K');
     });
     it('allows 0 for APPL_SERVER_MAX_SIZE (the broker only rejects < 0)', () => {
       expect(validateParamValue(maxSize, '0')).toBeNull();
@@ -296,7 +296,7 @@ describe('validateParamValue', () => {
       expect(validateParamValue(entry('BROKER_PORT'), '30000')).toBeNull();
       expect(validateParamValue(entry('BROKER_PORT'), '0x7530')).toBeNull();
       expect(validateParamValue(entry('BROKER_PORT'), '08')).not.toBeNull(); // invalid octal -> broker reads 0
-      expect(validateParamValue(entry('BROKER_PORT'), '0x10000')).toBe('Must be <= 65535');
+      expect(validateParamValue(entry('BROKER_PORT'), '0x10000')).toBe('Must be ≤ 65535');
     });
     it('MASTER_SHM_ID: hex, must fit 32 bits', () => {
       expect(validateParamValue(entry('MASTER_SHM_ID'), '30001')).toBeNull();
@@ -313,7 +313,7 @@ describe('validateParamValue', () => {
     it('rejects unknown units and out-of-range values the broker refuses', () => {
       expect(validateParamValue(entry('TIME_TO_KILL'), '2days')).toBe('Unit must be ms/msec, s/sec, min or h');
       expect(validateParamValue(entry('TIME_TO_KILL'), '-1')).not.toBeNull();
-      expect(validateParamValue(entry('MAX_QUERY_TIMEOUT'), '25h')).toBe('Must be <= 86400 seconds');
+      expect(validateParamValue(entry('MAX_QUERY_TIMEOUT'), '25h')).toBe('Must be ≤ 86400 seconds');
       expect(validateParamValue(entry('LONG_QUERY_TIME'), '86400.5')).not.toBeNull();
     });
     it('checks int-truncated seconds where the broker keeps an int', () => {
@@ -328,7 +328,7 @@ describe('validateParamValue', () => {
       expect(validateParamValue(guard, '100000')).toBeNull();
     });
     it('rejects above 2G', () => {
-      expect(validateParamValue(guard, '3G')).toBe('Must be <= 2097152K');
+      expect(validateParamValue(guard, '3G')).toBe('Must be ≤ 2097152K');
     });
   });
 });
