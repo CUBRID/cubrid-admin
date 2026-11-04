@@ -52,9 +52,12 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     hostUid,
     tabId: `brokers_status:${hostUid}`,
     pollingIntervalSeconds: preferences.brokerStatusInterval,
-    onFetch: () => async (dispatch) => {
+    onFetch: (silent) => async (dispatch) => {
       if (isSection) return;
-      setLoading(true);
+      // Only a read the user asked for (and the first load) shows on the
+      // refresh button; a background poll every few seconds used to dim it
+      // and spin it each time.
+      if (!silent) setLoading(true);
       try {
         const result = await dispatch(fetchBrokerList(hostUid)).unwrap();
         setBrokers(result);
