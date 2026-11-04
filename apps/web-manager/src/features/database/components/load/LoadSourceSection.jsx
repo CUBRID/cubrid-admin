@@ -132,7 +132,7 @@ export default function LoadSourceSection({
               <Select
                 value={selectedUnload}
                 onChange={(e) => handleUnloadSelectChange(e.target.value)}
-                placeholder="Select source database"
+                placeholder={CM.selectSourceDatabasePlaceholder}
                 options={unloadList.map(db => ({ value: db.dbname, label: db.dbname }))}
                 icon="database"
                 disabled={radio !== 0}
@@ -144,7 +144,7 @@ export default function LoadSourceSection({
             <CaDialogTable
               columns={columns}
               data={dataSource}
-              emptyMessage="No backup volumes found for this database"
+              emptyMessage={CM.noBackupVolumesForDbMsg}
             />
 
             {radio === 0 && dataSource.length > 0 && (

@@ -287,11 +287,14 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             {[
               { label: CM.pid,           value: basicInfo.pid                           || '—',    accent: 'emerald' },
               { label: CM.port,          value: basicInfo.port                          || '—',    accent: 'amber'   },
-              { label: CM.jobQueue,      value: basicInfo.job_queue                     ?? '0',    accent: 'slate'   },
-              { label: CM.autoAddAS,     value: basicInfo.auto_add_as                  || 'OFF',  badge: true       },
-              { label: CM.sqlLogMode,    value: basicInfo.sql_log_mode                 || 'OFF',  badge: true       },
-              { label: CM.longTranLabel, value: `${basicInfo.long_transaction_time      || '0'}s`, accent: 'slate'   },
-              { label: CM.longQueryLabel,value: `${basicInfo.long_query_time            || '0'}s`, accent: 'slate'   },
+              // The broker's current job queue length (CMS jq) is a status;
+              // the rest are cubrid_broker.conf parameters, named as in the
+              // conf file in every language.
+              { label: CM.jobQueue,               value: basicInfo.job_queue                ?? '0',    accent: 'slate'   },
+              { label: 'AUTO_ADD_APPL_SERVER',    value: basicInfo.auto_add_as             || 'OFF',  badge: true       },
+              { label: 'SQL_LOG',                 value: basicInfo.sql_log_mode            || 'OFF',  badge: true       },
+              { label: 'LONG_TRANSACTION_TIME',   value: `${basicInfo.long_transaction_time || '0'}s`, accent: 'slate'   },
+              { label: 'LONG_QUERY_TIME',         value: `${basicInfo.long_query_time       || '0'}s`, accent: 'slate'   },
             ].map((m, i, arr) => {
               const isActive = m.badge && m.value && m.value !== 'IDLE' && m.value !== 'OFF';
               const accentBar = m.accent === 'emerald'

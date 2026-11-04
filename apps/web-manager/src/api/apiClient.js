@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { nextSeq } from '../infrastructure/utils/singleFlight';
+import { getCM, getStoredLocale } from '../constants/useCM';
 
 export const hostActions = {
   revokeHostLogin: (hostUid) => ({ type: 'host/revokeHostLogin', payload: hostUid }),
@@ -167,7 +168,7 @@ function notifyAccessTokenRefreshFailed(err) {
 async function refreshAccessToken() {
   const refreshToken = localStorage.getItem('refreshToken');
   if (!refreshToken) {
-    throw new Error('No refresh token');
+    throw new Error(getCM(getStoredLocale()).sessionRefreshFailedMsg);
   }
 
   const response = await axios.post(
@@ -181,7 +182,7 @@ async function refreshAccessToken() {
 
   const tokens = unwrapAuthTokens(response.data);
   if (!tokens?.token) {
-    throw new Error('Refresh response missing access token');
+    throw new Error(getCM(getStoredLocale()).sessionRefreshFailedMsg);
   }
 
   localStorage.setItem('token', tokens.token);

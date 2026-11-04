@@ -13,6 +13,7 @@ import { isTerminalCmsJobStatus } from '../cmsJob/cmsJobLabels';
 import { enqueueUniqueJobResult, getCmsJobErrorResult, normalizeTrackedJob } from '../cmsJob/cmsJobUtils';
 
 import { CmsJobContext } from './cmsJobContextValue';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 const MAX_TRACKED = 50;
 const MAX_DISMISSED = 200;
@@ -115,7 +116,7 @@ export function CmsJobProvider({ children }) {
   const startTracking = useCallback(
     async (jobId, options = {}) => {
       if (!jobId) {
-        throw new Error('Job id is required');
+        throw new Error(getCM(getStoredLocale()).jobIdMissingMsg);
       }
       const session = sessionRef.current;
 
@@ -201,7 +202,7 @@ export function CmsJobProvider({ children }) {
       const created = await submitFn();
       const jobId = created?.jobId;
       if (!jobId) {
-        throw new Error('Server did not return a job id');
+        throw new Error(getCM(getStoredLocale()).jobIdMissingMsg);
       }
       return startTracking(jobId, options);
     },

@@ -65,7 +65,7 @@ export default function LoginPage() {
     try {
       const response = await authApi.login(username, password);
       if (!response?.token || !response?.refreshToken) {
-        throw new Error('Login response missing access/refresh token');
+        throw new Error(CM.loginTokenMissingMsg);
       }
       dispatch(loginSuccess({
         token: response.token,

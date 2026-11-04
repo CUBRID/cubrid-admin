@@ -71,7 +71,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
         () => hostApi.getHostConfig(hostUid, confname));
       if (version !== loadVersion.current) return;
       const lines = response?.conflist?.[0]?.confdata;
-      if (!Array.isArray(lines)) throw new Error('Configuration response has no confdata');
+      if (!Array.isArray(lines)) throw new Error(CM.configResponseEmptyMsg);
       const joined = lines.join('\n');
       originalContentRef.current = joined;
       setContent(joined);

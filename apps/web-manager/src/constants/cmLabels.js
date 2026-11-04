@@ -600,9 +600,6 @@ export const CM = {
   copyVisibleEntries: 'Copy visible entries to clipboard',
   connected: 'Connected',
 
-  autoAddAS: 'Auto Add AS',
-  sqlLogMode: 'SQL Log Mode',
-  longTranLabel: 'Long Trans',
 
   rawLog: 'Raw Log',
   parsedSQL: 'Parsed SQL',
@@ -680,6 +677,7 @@ export const CM = {
   no: 'No',
   ready: 'Ready',
   active: 'Active',
+  archive: 'Archive',
   options: 'Options',
   locks: 'Locks',
   size: 'Size',
@@ -2297,13 +2295,30 @@ export const CM = {
   },
 
   // Broker status metric labels
-  autoAddAsLabel: 'Auto Add AS',
-  sqlLogModeLabel: 'SQL Log Mode',
-  longTransLabel: 'Long Trans',
-  longQueryLabel: 'Long Query',
 
   // StatusModal
   gotIt: 'Got it',
   statusSuccessTitle: 'Operation complete',
   statusErrorTitle: 'Something went wrong',
+  reloadPageHint: 'Try reloading the page.',
+  accessDeniedTitle: 'Access Denied',
+  accessDeniedMsg: 'You do not have permission to view this content.',
+  contextMenuAriaLabel: 'Context menu',
+  loadRequiresStoppedMsg: 'Database loading can only be performed when the database is stopped.',
+  optimizeRequiresStoppedMsg: 'Database optimization can only be performed when the database is stopped.',
+  selectSourceDatabasePlaceholder: 'Select source database',
+  noBackupVolumesForDbMsg: 'No backup volumes found for this database',
+  lockInfoDbStoppedMsg: 'Database is stopped. Locking information is only available when the database is running.',
+  importHostListLabel: 'host list',
+  importHostGroupsLabel: 'host groups',
+  importInvalidXmlMsg: (what) => `Invalid XML in ${what}. Please select a valid CUBRID Manager file.`,
+  importWrongRootMsg: 'Incorrect file format. Expected <hosts> root element.',
+  importNoHostInfoMsg: 'No host connection information found in the selected file.',
+  importNoValidHostsMsg: 'The selected file contains no valid host connections.',
+  sessionRefreshFailedMsg: 'Your session could not be renewed. Log in again.',
+  loginTokenMissingMsg: 'The server did not return a login session. Try again.',
+  configResponseEmptyMsg: 'The server returned no configuration content.',
+  jobIdMissingMsg: 'The server did not return a job ID.',
+  updateStatusMalformedMsg: 'The update status could not be read.',
+  unknownActionMsg: (action) => `Unknown action: ${action}`,
 };

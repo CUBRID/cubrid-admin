@@ -51,7 +51,7 @@ describe('updateCheckClient', () => {
     it('rejects a malformed server response', async () => {
       vi.mocked(apiClient.get).mockResolvedValue({ note: 'success' });
 
-      await expect(fetchUpdateStatus()).rejects.toThrow('Malformed update status');
+      await expect(fetchUpdateStatus()).rejects.toThrow('The update status could not be read.');
     });
 
     it('propagates a failed request', async () => {

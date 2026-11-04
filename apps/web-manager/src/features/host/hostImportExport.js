@@ -5,6 +5,10 @@
  */
 
 import { UNGROUPED_GROUP_ID } from './hostGroupUtils';
+import { getCM, getStoredLocale } from '../../constants/useCM';
+
+// Import errors reach the screen as is, in the UI language.
+const labels = () => getCM(getStoredLocale());
 
 export const MIN_IMPORT_PORT = 1;
 export const MAX_IMPORT_PORT = 65535;
@@ -483,22 +487,22 @@ function parseXmlDocument(xmlString, contextLabel) {
 
   const errorNode = doc.querySelector('parsererror');
   if (errorNode) {
-    throw new Error(`Invalid XML in ${contextLabel}. Please select a valid CUBRID Manager file.`);
+    throw new Error(labels().importInvalidXmlMsg(contextLabel));
   }
 
   return doc;
 }
 
 function parseHostsFromXmlString(xmlString) {
-  const doc = parseXmlDocument(xmlString, 'host list');
+  const doc = parseXmlDocument(xmlString, labels().importHostListLabel);
 
   if (doc.documentElement.nodeName !== 'hosts') {
-    throw new Error('Incorrect file format. Expected <hosts> root element.');
+    throw new Error(labels().importWrongRootMsg);
   }
 
   const hostNodes = doc.getElementsByTagName('host');
   if (hostNodes.length === 0) {
-    throw new Error('No host connection information found in the selected file.');
+    throw new Error(labels().importNoHostInfoMsg);
   }
 
   const parsedHosts = [];
@@ -518,14 +522,14 @@ function parseHostsFromXmlString(xmlString) {
   }
 
   if (parsedHosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsMsg);
   }
 
   return parsedHosts;
 }
 
 function parseHostGroupsFromXmlString(xmlString) {
-  const doc = parseXmlDocument(xmlString, 'host groups');
+  const doc = parseXmlDocument(xmlString, labels().importHostGroupsLabel);
 
   const groupNodes = doc.getElementsByTagName('group');
   const groups = [];
@@ -606,14 +610,14 @@ function tryParseNativeJson(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(data.groups);
   if (parsed.hosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsMsg);
   }
   return parsed;
 }
 
 /** @returns {{ hosts, groups }|null} parsed native XML payload, or null if not our native format */
 function tryParseNativeXml(input) {
-  const doc = parseXmlDocument(input, 'host list');
+  const doc = parseXmlDocument(input, labels().importHostListLabel);
   if (doc.documentElement.nodeName !== 'cwm-hosts') {
     return null;
   }
@@ -639,7 +643,7 @@ function tryParseNativeXml(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(groupList);
   if (parsed.hosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsMsg);
   }
   return parsed;
 }

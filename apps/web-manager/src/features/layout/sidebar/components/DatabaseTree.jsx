@@ -598,7 +598,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
         }
       }}
     >
-      {renderCategory('Permanent_PermanentData', 'Permanent Data', 'data_usage', v => v.type === 'PERMANENT' && (v.purpose === 'PERMANENT' || !v.purpose))}
+      {renderCategory('Permanent_PermanentData', CM.permanentData, 'data_usage', v => v.type === 'PERMANENT' && (v.purpose === 'PERMANENT' || !v.purpose))}
       {renderCategory('Permanent_TemporaryData', CM.permanentTemp, 'layers', v => v.type === 'PERMANENT' && v.purpose === 'TEMPORARY')}
       {renderCategory('Temporary_TemporaryData', CM.temporary, 'auto_delete', v => v.type === 'TEMPORARY')}
       
@@ -611,7 +611,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
         hasChildren={true}
       >
         {renderCategory('Active', CM.active, 'radio_button_checked', v => v.type === 'Active_log')}
-        {renderCategory('Archive', 'Archive', 'inventory_2', v => v.type === 'Archive_log')}
+        {renderCategory('Archive', CM.archive, 'inventory_2', v => v.type === 'Archive_log')}
       </TreeNode>
     </TreeNode>
   );

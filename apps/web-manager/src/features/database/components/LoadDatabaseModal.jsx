@@ -452,7 +452,7 @@ export default function LoadDatabaseModal() {
         {isActive && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-amber-700 dark:text-amber-400 text-xs">
             <Icon name="warning" size="sm" />
-            <span>Database loading can only be performed when the database is stopped.</span>
+            <span>{CM.loadRequiresStoppedMsg}</span>
           </div>
         )}
         <LoadConfigSection formData={formData} handleInputChange={handleInputChange} />

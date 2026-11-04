@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 const PADDING = 18;
 
@@ -64,7 +65,7 @@ export default function ContextMenuWrapper({ x, y, children, onClose, width = "w
       ref={menuRef}
       role="menu"
       tabIndex={-1}
-      aria-label="Context menu"
+      aria-label={getCM(getStoredLocale()).contextMenuAriaLabel}
       className={`fixed z-1000 ${width} bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.2)] p-1.5 max-h-[calc(100vh-36px)] overflow-y-auto overflow-x-hidden custom-scrollbar animate-in fade-in zoom-in-95 duration-200 context-menu-container ${isPositioned ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
       style={{ top: position.top, left: position.left }}
       onMouseDown={(e) => e.stopPropagation()}
