@@ -23,6 +23,7 @@ import {
   StartInfoClientResponse,
   UnloadDatabaseRequest,
   UnloadInfoClientResponse,
+  WarningDetail,
 } from '@api-interfaces';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
@@ -35,7 +36,9 @@ import { CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import {
   BaseService,
   HandleCmsErrors,
+  Warning,
   checkCmsStatusError,
+  warningFields,
 } from '@common';
 import { DatabaseError } from '@error/database/database-error';
 import { HostService } from '@host';
@@ -126,11 +129,10 @@ export class DatabaseManagementService extends BaseService {
     userId: string,
     hostUid: string,
     request: CopyDbRequest
-  ): Promise<CmsSuccessClientResponse & { warnings?: string[] }> {
+  ): Promise<CmsSuccessClientResponse & { warnings?: string[]; warningDetails?: WarningDetail[] }> {
     const response = await this.copyDbCmsResponse(userId, hostUid, request);
     checkCmsStatusError(response);
-    const warnings = await this.finishCopy(userId, hostUid, request);
-    return { success: true, ...(warnings.length ? { warnings } : {}) };
+    return { success: true, ...warningFields(await this.finishCopy(userId, hostUid, request)) };
   }
 
   /**
@@ -143,8 +145,8 @@ export class DatabaseManagementService extends BaseService {
    *   created database does — otherwise `cubrid server start` refuses it
    *   (HA mode) and it can't be deleted either.
    */
-  async finishCopy(userId: string, hostUid: string, request: CopyDbRequest): Promise<string[]> {
-    const warnings: string[] = [];
+  async finishCopy(userId: string, hostUid: string, request: CopyDbRequest): Promise<Warning[]> {
+    const warnings: Warning[] = [];
     if (request.move === 'y') {
       await this.bestEffort(`clear stored login of moved database ${request.srcdbname}`, () =>
         this.clearDbAliasCachesAfterRename(userId, hostUid, request.srcdbname, request.destdbname));
@@ -157,7 +159,7 @@ export class DatabaseManagementService extends BaseService {
       }
     } catch (err: unknown) {
       this.logger.warn(`Failed to set ha_mode=off for copied database ${request.destdbname}: ${String(err)}`);
-      warnings.push(`Database copied to "${request.destdbname}", but cubrid.conf could not be checked or given [@${request.destdbname}] ha_mode=off. On an HA host, add that section by hand before starting it.`);
+      warnings.push({ code: 'COPY_HA_MODE_NOT_SET', dbname: request.destdbname, message: `Database copied to "${request.destdbname}", but cubrid.conf could not be checked or given [@${request.destdbname}] ha_mode=off. On an HA host, add that section by hand before starting it.` });
     }
     return warnings;
   }
@@ -182,25 +184,32 @@ export class DatabaseManagementService extends BaseService {
       throw DatabaseError.RenameNotSupportedForHaDatabase({ dbname: request.srcdbname });
     }
     if (request.destdbname.trim() === request.srcdbname.trim()) {
-      throw DatabaseError.InvalidParameter('Destination database name must be different from the source');
+      throw DatabaseError.InvalidParameter('Destination database name must be different from the source', {
+        reason: 'COPY_DEST_SAME_AS_SOURCE',
+        dbname: request.srcdbname,
+      });
     }
     const advanced = request.advanced === 'on' || request.advanced === 'y';
     let volume: Record<string, string>[] | undefined;
     if (advanced) {
       if (!Array.isArray(request.volume) || request.volume.length === 0) {
-        throw DatabaseError.InvalidParameter('Individual-volume copy requires volume mappings');
+        throw DatabaseError.InvalidParameter('Individual-volume copy requires volume mappings', {
+          reason: 'COPY_VOLUME_MAPPINGS_REQUIRED',
+        });
       }
       volume = [];
       const sources = new Set<string>();
       const destinations = new Set<string>();
       for (const item of request.volume) {
         if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).length === 0) {
-          throw DatabaseError.InvalidParameter('Invalid copy volume mapping');
+          throw DatabaseError.InvalidParameter('Invalid copy volume mapping', { reason: 'COPY_VOLUME_MAPPING_INVALID' });
         }
         for (const [source, destination] of Object.entries(item)) {
           if (!source.trim() || typeof destination !== 'string' || !destination.trim() ||
               sources.has(copyVolumePathKey(source)) || destinations.has(copyVolumePathKey(destination))) {
-            throw DatabaseError.InvalidParameter('Copy volume paths must be non-empty and unique');
+            throw DatabaseError.InvalidParameter('Copy volume paths must be non-empty and unique', {
+              reason: 'COPY_VOLUME_PATHS_NOT_UNIQUE',
+            });
           }
           sources.add(copyVolumePathKey(source));
           destinations.add(copyVolumePathKey(destination));
@@ -218,6 +227,7 @@ export class DatabaseManagementService extends BaseService {
           hostUid,
           dbname: request.srcdbname,
           reason: 'COPY_VOLUME_ONTO_SOURCE',
+          path: onSource,
         });
       }
     }
@@ -297,6 +307,7 @@ export class DatabaseManagementService extends BaseService {
       throw DatabaseError.InvalidParameter(
         'Both isSchemaIncluded and isDataIncluded cannot be false',
         {
+          reason: 'UNLOAD_NOTHING_SELECTED',
           isSchemaIncluded: request.isSchemaIncluded,
           isDataIncluded: request.isDataIncluded,
         }
@@ -594,13 +605,13 @@ export class DatabaseManagementService extends BaseService {
     hostUid: string,
     dbname: string,
     request: RenameDatabaseRequest
-  ): Promise<StartInfoClientResponse & { warnings?: string[] }> {
+  ): Promise<StartInfoClientResponse & { warnings?: string[]; warningDetails?: WarningDetail[] }> {
     const response = await this.renameDatabaseCmsResponse(userId, hostUid, dbname, request);
     checkCmsStatusError(response);
     const warnings = await this.updateAutoStartAfterRename(userId, hostUid, dbname, request.rename);
     await this.bestEffort(`clear stored login after renaming ${dbname}`, () =>
       this.clearDbAliasCachesAfterRename(userId, hostUid, dbname, request.rename));
-    return { ...await this.getDatabaseStartInfo(userId, hostUid), ...(warnings.length ? { warnings } : {}) };
+    return { ...await this.getDatabaseStartInfo(userId, hostUid), ...warningFields(warnings) };
   }
 
   /**
@@ -609,12 +620,12 @@ export class DatabaseManagementService extends BaseService {
    * `[@dbname]` section (DatabaseConfigService.renameAutoStart); returns
    * warnings, never throws.
    */
-  async updateAutoStartAfterRename(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
+  async updateAutoStartAfterRename(userId: string, hostUid: string, oldName: string, newName: string): Promise<Warning[]> {
     try {
       return await this.databaseConfigService.renameAutoStart(userId, hostUid, oldName, newName);
     } catch (error: unknown) {
       this.logger.warn(`Failed to update autostart after renaming ${oldName} to ${newName}: ${String(error)}`);
-      return [`Database renamed from "${oldName}" to "${newName}", but the autostart list in cubrid.conf could not be updated. Replace the old name in [service] server, and the [@${oldName}] section header if there is one, with the new name before relying on autostart. Do not repeat the rename.`];
+      return [{ code: 'RENAME_AUTOSTART_NOT_UPDATED', oldName, newName, message: `Database renamed from "${oldName}" to "${newName}", but the autostart list in cubrid.conf could not be updated. Replace the old name in [service] server, and the [@${oldName}] section header if there is one, with the new name before relying on autostart. Do not repeat the rename.` }];
     }
   }
 
@@ -895,7 +906,8 @@ export class DatabaseManagementService extends BaseService {
       throw DatabaseError.InvalidParameter(
         `Parameter is required for type '${request.type}' (${typeDescriptions[request.type] || 'unknown type'})`,
         {
-          type: request.type,
+          reason: 'KILL_PARAMETER_REQUIRED',
+          killType: request.type,
           parameter: request.parameter,
           dbname: dbname,
           message: `Missing required parameter for kill transaction type '${request.type}'. Expected: ${typeDescriptions[request.type] || 'parameter'}`,

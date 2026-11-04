@@ -64,6 +64,7 @@ export async function pollCmsAsyncJob(
       // genuinely outlives its deadline, so it was the single
       // highest-impact instance of this bug.
       throw CmsError.RequestFailed({
+        reason: 'ASYNC_JOB_TIMEOUT',
         message: `CMS async job for task "${task}" did not finish within ${timeoutMs}ms.`,
         task,
         timeoutMs,

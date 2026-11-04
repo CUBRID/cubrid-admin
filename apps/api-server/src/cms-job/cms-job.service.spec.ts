@@ -67,13 +67,17 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     const job = renameJob({ type: 'copy', dbname: 'newdb', payload: { srcdbname: 'olddb', destdbname: 'newdb', move: 'y' } as any });
     store.getJob.mockResolvedValue(job);
     managementService.copyDbCmsResponse = jest.fn().mockResolvedValue({ status: 'success' });
-    managementService.finishCopy = jest.fn().mockResolvedValue(['autostart not updated']);
+    managementService.finishCopy = jest.fn().mockResolvedValue([{ code: 'RENAME_AUTOSTART_NOT_UPDATED', oldName: 'srcdb', newName: 'newdb', message: 'autostart not updated' }]);
     managementService.getDatabaseStartInfo.mockRejectedValue(new Error('CMS unreachable'));
 
     await (service as any).runJob('ukey', 'job-1', 'op-key');
 
     expect(job.status).toBe('succeeded');
     expect(job.warnings).toEqual(['autostart not updated', expect.stringContaining('could not be refreshed')]);
+    expect(job.warningDetails).toEqual([
+      { code: 'RENAME_AUTOSTART_NOT_UPDATED', oldName: 'srcdb', newName: 'newdb' },
+      { code: 'DB_LIST_NOT_REFRESHED', jobType: 'copy' },
+    ]);
   });
 
   it('clears old/new name caches when an orphaned rename reconciles as succeeded after restart', async () => {
@@ -200,12 +204,13 @@ describe('CmsJobService delete job', () => {
   it('shows what the cleanup after a delete could not do as job warnings, the job still succeeded', async () => {
     const job = deleteJob();
     store.getJob.mockResolvedValue(job);
-    lifecycleService.forgetDeletedDatabase.mockResolvedValue(['cubrid.conf could not be updated']);
+    lifecycleService.forgetDeletedDatabase.mockResolvedValue([{ code: 'DELETE_CONF_NOT_UPDATED', dbname: 'demodb', message: 'cubrid.conf could not be updated' }]);
 
     await (service as any).runJob('ukey', 'job-2', 'op-key');
 
     expect(job.status).toBe('succeeded');
     expect(job.warnings).toEqual(['cubrid.conf could not be updated']);
+    expect(job.warningDetails).toEqual([{ code: 'DELETE_CONF_NOT_UPDATED', dbname: 'demodb' }]);
   });
 
   it('keeps the stored login and cubrid.conf entry when deletedb fails', async () => {
@@ -218,6 +223,37 @@ describe('CmsJobService delete job', () => {
     expect(job.status).toBe('failed');
     expect(job.error?.message).toContain('database is running');
     expect(lifecycleService.forgetDeletedDatabase).not.toHaveBeenCalled();
+  });
+
+  it('gives a failed job CMS\'s own text apart from the message, without CMS\'s end marker', async () => {
+    const job = deleteJob();
+    store.getJob.mockResolvedValue(job);
+    lifecycleService.deleteDatabaseCmsResponse.mockResolvedValue({
+      task: 'deletedb',
+      status: 'failure',
+      note: 'Unable to mount disk volume "/db/gonedb". The database is in use.<end>',
+    });
+
+    await (service as any).runJob('ukey', 'job-2', 'op-key');
+
+    expect(job.error).toMatchObject({
+      code: 'REQUEST_FAILED',
+      type: '/errors/cms/request_failed',
+      cmsNote: 'Unable to mount disk volume "/db/gonedb". The database is in use.',
+      cmsTask: 'deletedb',
+    });
+  });
+
+  it('hides a password a maintenance job\'s CMS text echoes in its CMS note too', async () => {
+    const status = (service as any).toStatusResponse({
+      jobId: 'job-3', userId: 'user-1', hostUid: 'host-1', dbname: 'demodb',
+      type: 'optimize', status: 'failed', createdAt: '2026-11-02T01:00:00Z',
+      payload: { dbname: 'demodb', dbuser: 'dba', dbpasswd: 's3cret' },
+      error: { message: 'optimizedb failed for dba/s3cret', cmsNote: 'optimizedb failed for dba/s3cret', code: 'REQUEST_FAILED' },
+    });
+
+    expect(status.error?.message).not.toContain('s3cret');
+    expect(status.error?.cmsNote).toBe('optimizedb failed for dba/[redacted]');
   });
 
   it('reports a refused delete (e.g. an HA database) as a failed job', async () => {

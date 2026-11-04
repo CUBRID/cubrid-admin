@@ -18,8 +18,8 @@ import {
   RestoreDbClientRequest,
   UnloadDatabaseRequest,
 } from '@api-interfaces';
-import { extractCmsLongJobFailureMessage, isCmsLongJobFailure, pollCmsAsyncJob } from '@common';
-import { AppError } from '@error';
+import { Warning, extractCmsLongJobFailureMessage, isCmsLongJobFailure, pollCmsAsyncJob, warningFields } from '@common';
+import { cmsFieldsFromPayload, failureDetails } from '@error';
 import { busyDatabase } from '@database/lifecycle/database-action-lock';
 import { DatabaseError } from '@error/database/database-error';
 import { DatabaseManagementService } from '@database/management/database-management.service';
@@ -123,6 +123,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           job.error = {
             message: 'Job interrupted because the API server restarted.',
             code: 'JOB_INTERRUPTED',
+            type: '/errors/job/job_interrupted',
           };
           job.finishedAt = job.finishedAt ?? new Date().toISOString();
           await this.store.finalizeOrphanedJob(userKey, job);
@@ -292,10 +293,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       // Each step's own success/error is still on job.result either way.
       if (res?.createDatabase?.success !== true) {
         job.status = 'failed';
-        job.error = {
-          message: res?.createDatabase?.error?.message || 'Create database failed',
-          code: res?.createDatabase?.error?.code,
-        };
+        const { details: _details, ...createError } = res?.createDatabase?.error ?? { message: '' };
+        job.error = { ...createError, message: createError.message || 'Create database failed' };
         job.result = res;
         return false;
       }
@@ -310,9 +309,12 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       job.error = {
         message: extractCmsLongJobFailureMessage(cmsResponse),
         cmsStatus: String((cmsResponse as { status?: string }).status ?? ''),
+        code: 'REQUEST_FAILED',
+        type: '/errors/cms/request_failed',
+        ...cmsFieldsFromPayload({ response: cmsResponse }),
       };
       if (getMaintenanceSummary(job)) {
-        job.error.message = redactMaintenanceText(job, cmsResponse, job.error.message);
+        redactJobError(job, cmsResponse);
         job.result = getMaintenanceResult(job, cmsResponse, false);
       }
       return false;
@@ -496,27 +498,27 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           // The rename or copy did happen: a failed list refresh is a warning,
           // not a failed job the user might run again.
           const done = job.type === 'rename' ? 'renamed' : 'copied';
-          addWarnings(job, [`The database was ${done}, but the database list could not be refreshed. Refresh the list manually; do not repeat the ${job.type}.`]);
+          addWarnings(job, [{
+            code: 'DB_LIST_NOT_REFRESHED',
+            jobType: job.type,
+            message: `The database was ${done}, but the database list could not be refreshed. Refresh the list manually; do not repeat the ${job.type}.`,
+          }]);
           this.logger.warn(`Could not refresh database list after ${job.type}: ${String(error)}`);
         }
       }
     } catch (err: unknown) {
       if (job.type === 'create') {
         job.status = 'failed';
-        job.error = {
-          message: this.jobErrorMessage(err, 'Create database failed'),
-        };
+        job.error = this.jobError(err, 'Create database failed');
       } else {
         const cmsFromError = this.cmsResponseFromError(err);
         if (cmsFromError && isCmsLongJobFailure(cmsFromError)) {
           this.applyCmsOutcome(job, cmsFromError);
         } else {
           job.status = 'failed';
-          job.error = {
-            message: this.jobErrorMessage(err, 'CMS operation failed'),
-          };
+          job.error = this.jobError(err, 'CMS operation failed');
           if (getMaintenanceSummary(job)) {
-            job.error.message = redactMaintenanceText(job, cmsFromError, job.error.message);
+            redactJobError(job, cmsFromError);
             job.result = getMaintenanceResult(job, cmsFromError, false);
           }
         }
@@ -580,20 +582,20 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * AppError#message is the internal error code (e.g. 'REQUEST_FAILED'), not the
-   * human-readable CMS detail — that only exists via toProblemDetails().detail.
+   * A job's error from what it threw. AppError#message is the internal error
+   * code (e.g. 'REQUEST_FAILED'), not the human-readable CMS detail — that
+   * only exists via toProblemDetails().detail, which failureDetails takes,
+   * with the fields a client maps the error by.
    */
-  private jobErrorMessage(err: unknown, fallback: string): string {
-    if (err instanceof AppError) {
-      return err.toProblemDetails().detail ?? fallback;
-    }
-    return err instanceof Error ? err.message : fallback;
+  private jobError(err: unknown, fallback: string): CmsJobRecord['error'] {
+    const { error: message, ...fields } = failureDetails(err);
+    return { ...fields, message: message || fallback };
   }
 
   async getJob(userId: string, jobId: string): Promise<CmsJobStatusResponse> {
     const record = await this.store.getJob(this.userKey(userId), jobId);
     if (!record || record.userId !== userId) {
-      throw new NotFoundException(`Job not found: ${jobId}`);
+      throw new NotFoundException({ message: `Job not found: ${jobId}`, code: 'JOB_NOT_FOUND', jobId });
     }
     return this.toStatusResponse(record);
   }
@@ -636,14 +638,31 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       maintenanceSummary,
       result: record.result,
       ...(record.warnings?.length ? { warnings: record.warnings } : {}),
+      ...(record.warningDetails?.length ? { warningDetails: record.warningDetails } : {}),
       error: maintenanceSummary && record.error
-        ? { ...record.error, message: redactMaintenanceText(record, undefined, record.error.message) }
+        ? redactedJobError(record, undefined, record.error)
         : record.error,
     };
   }
 }
 
-/** Appends `warnings` to the job's, keeping any it already has. */
-function addWarnings(job: CmsJobRecord, warnings: string[]): void {
-  if (warnings.length > 0) job.warnings = [...(job.warnings ?? []), ...warnings];
+/** A maintenance job's error with the secrets its texts may echo hidden. */
+function redactedJobError(job: CmsJobRecord, response: unknown, error: NonNullable<CmsJobRecord['error']>) {
+  return {
+    ...error,
+    message: redactMaintenanceText(job, response, error.message),
+    ...(typeof error.cmsNote === 'string' ? { cmsNote: redactMaintenanceText(job, response, error.cmsNote) } : {}),
+  };
+}
+
+function redactJobError(job: CmsJobRecord, response: unknown): void {
+  if (job.error) job.error = redactedJobError(job, response, job.error);
+}
+
+/** Appends `warnings` (texts and codes) to the job's, keeping any it already has. */
+function addWarnings(job: CmsJobRecord, warnings: Warning[]): void {
+  const { warnings: texts, warningDetails } = warningFields(warnings);
+  if (!texts || !warningDetails) return;
+  job.warnings = [...(job.warnings ?? []), ...texts];
+  job.warningDetails = [...(job.warningDetails ?? []), ...warningDetails];
 }

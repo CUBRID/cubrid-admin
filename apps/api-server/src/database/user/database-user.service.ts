@@ -313,7 +313,7 @@ export class DatabaseUserService extends BaseService {
     );
 
     if (this.logoutGeneration(userId, hostUid, dbname) !== generation) {
-      throw DatabaseError.LoginDatabaseFailed({ dbname, message: 'Logged out while logging in.' });
+      throw DatabaseError.LoginDatabaseFailed({ dbname, reason: 'LOGGED_OUT_WHILE_LOGGING_IN', message: 'Logged out while logging in.' });
     }
 
     // Freshen ensureDbLogin's cache regardless of which credentials were
@@ -388,6 +388,7 @@ export class DatabaseUserService extends BaseService {
       throw DatabaseError.GetUserInfoFailed({
         dbname,
         username,
+        reason: 'USER_NOT_IN_USERINFO',
         message:
           `Cannot change password for "${username}": could not confirm their current ` +
           `groups/authorization on "${dbname}" (user not found in userinfo response).`,
