@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The real databaseSlice pulls in apiClient and every database thunk; these
 // tests only render the sections' empty states.
 vi.mock('../../databaseSlice', () => ({
-  fetchDashboardVolumes: vi.fn(() => ({ type: 'test/noop' })),
   fetchDatabaseSpaceInfo: vi.fn(() => ({ type: 'test/noop' })),
   fetchDashboardCAS: vi.fn(() => ({ type: 'test/noop' })),
   fetchBackupSchedule: vi.fn(() => ({ type: 'test/noop' })),

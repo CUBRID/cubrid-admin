@@ -81,7 +81,10 @@ const BarCell = ({ val }) => {
 // dbListStatus: the host dashboard's database-list fetch state ('loading'
 // until it settles). activeDatabases is [] until then, which must not read as "no
 // running databases".
-export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded' }) {
+// refreshKey: changes when the user refreshes the dashboard (see
+// ServerContent); the table re-reads then and when its database list changes,
+// never on the dashboard's background ticks.
+export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded', refreshKey = 0 }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
@@ -155,7 +158,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     }
   }, [dbListSettled, hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
-  useEffect(() => { fetchVolumes(); }, [fetchVolumes]);
+  useEffect(() => { fetchVolumes(); }, [fetchVolumes, refreshKey]);
 
   const volumeData = React.useMemo(() => volumes?.map((result) => {
     const empty = { display: '-', pct: 0 };

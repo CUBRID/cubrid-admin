@@ -8,7 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { BaseCmsRequest, BaseCmsResponse } from '@type';
 import { StartInfoCmsResponse } from '@type/cms-response';
 import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_HACONF } from '@database/database.constants';
-import { getConfigParam, parseConfigParamsBySection, parseHaDbListDbNamesFromHaConf } from '@util';
+import { getConfigParam, parseConfigParamsBySection, parseHaDbListDbNamesFromHaConf, shareInFlight } from '@util';
 import { GetAllSysParamCmsResponse } from '@type/cms-response';
 import { mapStartInfoToClientResponse } from './start-info.mapper';
 import { DatabaseUserService } from '../user/database-user.service';
@@ -48,10 +48,14 @@ export class DatabaseInfoService extends BaseService {
     const cmsRequest: BaseCmsRequest = {
       task: 'startinfo',
     };
-    const response = await this.executeCmsRequest<
-      BaseCmsRequest,
-      StartInfoCmsResponse | BaseCmsResponse
-    >(userId, hostUid, cmsRequest);
+    // Every caller reads the same thing (the client's start-info read, and
+    // each volume-info request's "does the database exist" check), so
+    // callers that arrive while one is pending share it. The CMS token is
+    // per user and host, hence the key.
+    const response = await shareInFlight(
+      JSON.stringify(['startinfo', userId, hostUid]),
+      () => this.executeCmsRequest<BaseCmsRequest, StartInfoCmsResponse | BaseCmsResponse>(userId, hostUid, cmsRequest)
+    );
 
     return response as StartInfoCmsResponse;
   }

@@ -2,7 +2,7 @@ import React, { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../database/databaseSlice', () => ({ fetchDatabaseVolumes: vi.fn() }));
 import { fetchDatabaseVolumes } from '../../database/databaseSlice';
@@ -166,4 +166,35 @@ it('shows an unavailable state when the volume fetch failed with nothing loaded 
   const store = makeStore();
   await render(store);
   expect(volumeCard().textContent).toContain(CM.dataUnavailableTitle);
+});
+
+// The host dashboard's refresh button (and F5, and the first load) bumps
+// refreshKey; its background ticks do not, and re-render with the same key.
+describe('refreshKey', () => {
+  const activeDatabases = ['demodb'];
+  const renderWithKey = async (store, refreshKey) => act(async () => {
+    root.render(
+      <Provider store={store}>
+        <DatabaseVolumes hostUid="host1" activeDatabases={activeDatabases} dbListStatus="loaded" refreshKey={refreshKey} />
+      </Provider>
+    );
+  });
+
+  it('re-reads the volumes when the key changes', async () => {
+    mockFetchReturning(Promise.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+    const store = makeStore();
+    await renderWithKey(store, 0);
+    expect(fetchDatabaseVolumes).toHaveBeenCalledTimes(1);
+
+    await renderWithKey(store, 1);
+    expect(fetchDatabaseVolumes).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-read on a render with the same key and the same databases', async () => {
+    mockFetchReturning(Promise.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+    const store = makeStore();
+    await renderWithKey(store, 0);
+    await renderWithKey(store, 0);
+    expect(fetchDatabaseVolumes).toHaveBeenCalledTimes(1);
+  });
 });

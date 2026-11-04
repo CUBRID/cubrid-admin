@@ -9,8 +9,6 @@ import { fetchBrokerList } from '../../broker/brokerSlice';
 import DatabaseVolumes from './DatabaseVolumes';
 import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
-import { fetchDatabaseVolumes } from '../../database/databaseMonitoringSlice';
-import { dbKey } from '../../database/dbKey';
 import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
 import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
@@ -53,6 +51,11 @@ const Component = function ServerContent({ hostUid }) {
 
   const [autoStartDBs, setAutoStartDBs] = useState([]);
   const [, setAutoStartReady] = useState(false);
+  // Bumped by a refresh the user asked for (the button, F5, the first load),
+  // never by a background tick: the storage volume table (DatabaseVolumes)
+  // reads volume-info for every logged-in running database, which is too
+  // costly to poll, so it re-reads only on these and when its list changes.
+  const [volumesRefreshKey, setVolumesRefreshKey] = useState(0);
   const autoStartReadVersion = useRef(0);
   const autoStartWritePending = useRef(false);
   
@@ -71,7 +74,7 @@ const Component = function ServerContent({ hostUid }) {
     hostUid,
     tabId: `host:${hostUid}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => async (dispatch, getState) => {
+    onFetch: (silent) => async (dispatch) => {
       // 1. First fetch database status to get the current active list
       let dbInfo;
       try {
@@ -85,14 +88,9 @@ const Component = function ServerContent({ hostUid }) {
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
       setActiveDatabases(newActiveDatabases);
-      // A database stays active (running) after logout — logout only drops
-      // the session — so volumes must only be polled for ones still logged
-      // in, or this re-fetches (and DatabaseVolumes keeps showing) storage
-      // info for a database the user already logged out of. Read the login
-      // state now, not from this render: a logout during this refresh must
-      // count.
-      const { loggedInDatabases: loggedInNow } = getState().database;
-      const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInNow.includes(dbKey(hostUid, db)));
+      // Same render as the list above, so the volume table reads once with
+      // the list it was asked to show.
+      if (!silent) setVolumesRefreshKey((key) => key + 1);
 
       // 2. Then fetch other data, using the just-fetched active databases list.
       // fetchBrokerList goes first: the system status (fetchMonitoringData,
@@ -100,7 +98,6 @@ const Component = function ServerContent({ hostUid }) {
       await Promise.all([
         dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)),
         dispatch(fetchHostEnv(hostUid)),
-        dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newLoggedInActiveDatabases })),
         fetchAutoStartInfo(),
         isHA || systemStatusExpanded.current ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
       ]);
@@ -281,7 +278,7 @@ const Component = function ServerContent({ hostUid }) {
       {/* ── Scrollable Body ── */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <HaClusterStatusSection hostUid={hostUid} />
-        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
+        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} refreshKey={volumesRefreshKey} />
         <Brokers hostUid={hostUid} isSection={true} />
         <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} onExpandedChange={handleSystemStatusExpanded} />
         <DatabaseListSection dbListDisplay={dbListDisplay} dbListStatus={dbListStatus} />
