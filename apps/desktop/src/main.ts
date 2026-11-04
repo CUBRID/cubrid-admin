@@ -1,17 +1,14 @@
 import { app, BrowserWindow } from 'electron';
-import { startApiForCurrentWorkspace, stopDesktopApi } from './api/api-runtime';
+import { startApiForWorkspace, stopDesktopApi } from './api/api-runtime';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
 import { getPortableAppRoot } from './config/portable-root';
-import { registerDesktopIpcHandlers } from './ipc/handlers';
+import { registerDesktopIpcHandlers, setWorkspaceStartupError } from './ipc/handlers';
 import { installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
 import { getRendererDistDir, getWorkspacePaths, refreshWorkspacePaths } from './workspace/paths';
 import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
-import {
-  waitForWorkspaceSetupComplete,
-  wasWorkspaceSetupCompleted,
-} from './workspace/workspace-setup';
+import { waitForWorkspaceSetupComplete } from './workspace/workspace-setup';
 import { createAppWindow, toAppRouteUrl } from './window/app-window';
 import { setMainWindow } from './window/window-registry';
 
@@ -20,22 +17,12 @@ registerPrivilegedAppScheme();
 let bootstrapComplete = false;
 let isQuitting = false;
 
-function clearRendererAuthToken(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
-    return;
-  }
-
-  void window.webContents
-    .executeJavaScript('localStorage.removeItem("token")', true)
-    .catch(() => undefined);
-}
-
 function quitDesktopApp(): void {
   if (isQuitting) {
     return;
   }
   isQuitting = true;
-  stopDesktopApi();
+  void stopDesktopApi();
   app.quit();
 }
 
@@ -45,6 +32,28 @@ function requestQuit(): void {
 
 async function loadRoute(window: BrowserWindow, routePath: string): Promise<void> {
   await window.loadURL(toAppRouteUrl(routePath));
+}
+
+/**
+ * Starts the server on the configured workspace. When it cannot (say the
+ * folder is no longer writable), the workspace page shows why and asks for
+ * another or the default; nothing falls back on its own.
+ */
+async function startApiOrAskForWorkspace(window: BrowserWindow): Promise<void> {
+  for (;;) {
+    try {
+      await startApiForWorkspace(getWorkspacePaths());
+      setWorkspaceStartupError(null);
+      return;
+    } catch (error) {
+      console.error('[desktop] could not start on the workspace', error);
+      setWorkspaceStartupError(error instanceof Error ? error.message : String(error));
+      await loadRoute(window, 'desktop/workspace');
+      window.show();
+      await waitForWorkspaceSetupComplete();
+      refreshWorkspacePaths();
+    }
+  }
 }
 
 async function bootstrap(): Promise<void> {
@@ -74,17 +83,15 @@ async function bootstrap(): Promise<void> {
   });
 
   mainWindow.on('close', () => {
-    clearRendererAuthToken(mainWindow);
     if (!isQuitting) {
       setMainWindow(null);
     }
   });
 
   mainWindow.on('closed', () => {
+    // Closed on the workspace page before the app got going.
     if (!bootstrapComplete) {
-      if (requiresSetup && !wasWorkspaceSetupCompleted()) {
-        requestQuit();
-      }
+      requestQuit();
       return;
     }
 
@@ -98,13 +105,11 @@ async function bootstrap(): Promise<void> {
     mainWindow.show();
     await waitForWorkspaceSetupComplete();
     refreshWorkspacePaths();
-  } else {
-    getWorkspacePaths();
   }
 
-  await startApiForCurrentWorkspace();
+  await startApiOrAskForWorkspace(mainWindow);
 
-  await loadRoute(mainWindow, 'login');
+  await loadRoute(mainWindow, '');
   mainWindow.show();
   bootstrapComplete = true;
 }
@@ -120,7 +125,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
-  stopDesktopApi();
+  void stopDesktopApi();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

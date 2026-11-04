@@ -24,23 +24,14 @@ function withoutWorkspaceRoot(settings: DesktopSettings): DesktopSettings {
   return rest;
 }
 
+// A workspace may be any folder outside the app bundle (inside it, an app
+// update would replace it); one the user picks is kept as picked.
 function normalizeLoadedSettings(parsed: DesktopSettings): DesktopSettings {
-  const portableRoot = getPortableAppRoot();
-  const defaultWorkspace = path.join(portableRoot, 'cwm-workspace');
-
   if (!parsed.workspaceRoot?.trim()) {
     return parsed;
   }
 
-  const resolved = path.resolve(parsed.workspaceRoot.trim());
-  const underPortableRoot =
-    resolved === portableRoot || resolved.startsWith(`${portableRoot}${path.sep}`);
-
-  if (!underPortableRoot || isPathInsideAppBundle(resolved)) {
-    return withoutWorkspaceRoot(parsed);
-  }
-
-  if (path.basename(resolved) === 'test' && resolved !== defaultWorkspace) {
+  if (isPathInsideAppBundle(path.resolve(parsed.workspaceRoot.trim()))) {
     return withoutWorkspaceRoot(parsed);
   }
 

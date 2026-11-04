@@ -10,6 +10,7 @@ function resolveApiBaseUrl(): string {
 
 const desktopBridge: DesktopBridge = {
   isWorkspaceSetupRequired: () => ipcRenderer.invoke('desktop:is-workspace-setup-required'),
+  getWorkspaceStartupError: () => ipcRenderer.invoke('desktop:get-workspace-startup-error'),
   getWorkspaceInfo: () => ipcRenderer.invoke('desktop:get-workspace-info'),
   pickWorkspaceDirectory: () => ipcRenderer.invoke('desktop:pick-workspace-directory'),
   setWorkspaceRoot: (workspaceRoot) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot),

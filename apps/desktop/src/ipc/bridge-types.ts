@@ -15,6 +15,8 @@ export type WorkspaceInfo = {
 
 export type DesktopBridge = {
   isWorkspaceSetupRequired: () => Promise<boolean>;
+  /** Why the server could not start on the configured workspace at launch (a WORKSPACE_* code), or null. */
+  getWorkspaceStartupError: () => Promise<string | null>;
   getWorkspaceInfo: () => Promise<WorkspaceInfo>;
   pickWorkspaceDirectory: () => Promise<string | null>;
   setWorkspaceRoot: (workspaceRoot: string) => Promise<{ ok: true }>;

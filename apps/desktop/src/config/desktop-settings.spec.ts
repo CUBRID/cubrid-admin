@@ -60,24 +60,13 @@ describe('desktop settings', () => {
     expect(clearConfiguredWorkspaceRoot()).toEqual({ workspaceSetupComplete: true });
   });
 
-  it('drops only an out-of-root workspace on load and keeps update preferences', () => {
-    writeSettings({
-      workspaceRoot: path.join(os.tmpdir(), 'elsewhere'),
-      workspaceSetupComplete: true,
-      ...updateSettings,
-    });
+  it.each([
+    ['outside the app folder', () => path.join(os.tmpdir(), 'elsewhere')],
+    ['named "test"', () => path.join(root, 'test')],
+  ])('keeps a picked workspace %s', (_label, workspaceRoot) => {
+    writeSettings({ workspaceRoot: workspaceRoot(), workspaceSetupComplete: true, ...updateSettings });
 
-    expect(loadDesktopSettings()).toEqual({ workspaceSetupComplete: true, ...updateSettings });
-  });
-
-  it('drops only a stray "test" workspace on load and keeps update preferences', () => {
-    writeSettings({
-      workspaceRoot: path.join(root, 'test'),
-      workspaceSetupComplete: true,
-      ...updateSettings,
-    });
-
-    expect(loadDesktopSettings()).toEqual({ workspaceSetupComplete: true, ...updateSettings });
+    expect(loadDesktopSettings()).toEqual({ workspaceRoot: workspaceRoot(), workspaceSetupComplete: true, ...updateSettings });
   });
 
   it('keeps a valid workspace under the portable root', () => {
