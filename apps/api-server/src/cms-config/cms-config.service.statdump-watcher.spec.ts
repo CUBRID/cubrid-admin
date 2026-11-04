@@ -18,9 +18,6 @@ describe('CmsConfigService statdump watcher', () => {
     findHostInternal: jest.fn().mockResolvedValue({ address: '10.0.0.1', port: 8001, token: 'tok' }),
   };
   const databaseUserService = { ensureDbLogin: jest.fn() };
-  // cubrid.conf ha_mode and cubrid_ha.conf ha_db_list, read for the watcher's name.
-  let haMode: string;
-  let haDbList: string;
 
   beforeEach(async () => {
     cmsClient.postAuthenticated.mockReset();
@@ -34,62 +31,24 @@ describe('CmsConfigService statdump watcher', () => {
       ],
     }).compile();
     service = module.get(CmsConfigService);
-    haMode = 'off';
-    haDbList = '';
-    jest.spyOn(service, 'getAllSystemParam').mockImplementation(async (_u: string, _h: string, confname: string) => ({
-      conflist: [{ confdata: confname === 'haconf' ? ['[common]', `ha_db_list=${haDbList}`] : ['[common]', `ha_mode=${haMode}`] }],
-    }) as any);
   });
 
-  it('names a non-HA database bare, as CMS checks it, and an HA one at the local server, as HA needs', () => {
-    expect(statdumpWatcherTarget('testdb29', false)).toBe('testdb29');
-    expect(statdumpWatcherTarget('testdb29', true)).toBe('testdb29@127.0.0.1');
+  it('targets the local server explicitly so HA (multihost databases.txt) works', () => {
+    expect(statdumpWatcherTarget('testdb29')).toBe('testdb29@127.0.0.1');
   });
 
   describe('startStatDumpWatcher', () => {
-    it('sends start_statdump with the bare name of a non-HA database and the interval', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue({ task: 'start_statdump', status: 'success', note: 'testdb29', pid: '4242' });
+    it('sends start_statdump with the host-qualified name and interval', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'start_statdump', status: 'success', note: 'testdb29@127.0.0.1', pid: '4242' });
 
       await expect(service.startStatDumpWatcher('u1', 'h1', 'testdb29')).resolves.toEqual({ running: true, alreadyRunning: false });
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith('https://10.0.0.1:8001/cm_api', {
         task: 'start_statdump',
-        dbname: 'testdb29',
+        dbname: 'testdb29@127.0.0.1',
         interval: String(STATDUMP_WATCHER_INTERVAL_SEC),
         token: 'tok',
       });
       expect(databaseUserService.ensureDbLogin).toHaveBeenCalledWith('u1', 'h1', 'testdb29');
-    });
-
-    it('sends an HA database (ha_mode on, in ha_db_list) as name@127.0.0.1, and a listed one on a non-HA node bare', async () => {
-      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ task: body.task, status: 'success', note: body.dbname }));
-      haDbList = 'hadb hadb2';
-
-      await service.startStatDumpWatcher('u1', 'h1', 'hadb');
-      haMode = 'on';
-      await service.startStatDumpWatcher('u1', 'h1', 'hadb2');
-      await service.stopStatDumpWatcher('u1', 'h1', 'hadb2');
-
-      expect(cmsClient.postAuthenticated.mock.calls.map(([, body]) => `${body.task} ${body.dbname}`)).toEqual([
-        'start_statdump hadb',
-        'start_statdump hadb2@127.0.0.1',
-        'stop_statdump hadb2@127.0.0.1',
-      ]);
-    });
-
-    it('keeps the name it started with, for renewals and the stop, even if the HA state changes meanwhile', async () => {
-      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ task: body.task, status: 'success', note: body.dbname }));
-      haDbList = 'testdb29';
-
-      await service.startStatDumpWatcher('u1', 'h1', 'testdb29');
-      haMode = 'on';
-      await service.startStatDumpWatcher('u1', 'h1', 'testdb29');
-      await service.stopStatDumpWatcher('u1', 'h1', 'testdb29');
-
-      expect(cmsClient.postAuthenticated.mock.calls.map(([, body]) => `${body.task} ${body.dbname}`)).toEqual([
-        'start_statdump testdb29',
-        'start_statdump testdb29',
-        'stop_statdump testdb29',
-      ]);
     });
 
     it('starts nothing for a database the user is not logged in to', async () => {
@@ -113,13 +72,13 @@ describe('CmsConfigService statdump watcher', () => {
   });
 
   describe('stopStatDumpWatcher', () => {
-    it('sends stop_statdump with the bare name of a non-HA database when no start is remembered', async () => {
-      cmsClient.postAuthenticated.mockResolvedValue({ task: 'stop_statdump', status: 'success', note: 'testdb29' });
+    it('sends stop_statdump with the same host-qualified name', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({ task: 'stop_statdump', status: 'success', note: 'testdb29@127.0.0.1' });
 
       await expect(service.stopStatDumpWatcher('u1', 'h1', 'testdb29')).resolves.toEqual({ running: false, wasRunning: true });
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith('https://10.0.0.1:8001/cm_api', {
         task: 'stop_statdump',
-        dbname: 'testdb29',
+        dbname: 'testdb29@127.0.0.1',
         token: 'tok',
       });
     });
@@ -163,7 +122,7 @@ describe('CmsConfigService statdump watcher', () => {
 
       await jest.advanceTimersByTimeAsync(STATDUMP_WATCHER_SWEEP_INTERVAL_MS);
       expect(stopCalls()).toEqual([
-        ['https://10.0.0.1:8001/cm_api', { task: 'stop_statdump', dbname: 'testdb29', token: 'tok' }],
+        ['https://10.0.0.1:8001/cm_api', { task: 'stop_statdump', dbname: 'testdb29@127.0.0.1', token: 'tok' }],
       ]);
       expect(hostService.findHostInternal).toHaveBeenLastCalledWith('u1', 'h1');
 

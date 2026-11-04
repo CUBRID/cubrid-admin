@@ -32,7 +32,6 @@ import { BaseCmsResponse } from '@type/cms-response/base-cms-response';
 import { BaseService, HandleCmsErrors } from '@common';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { CmsError } from '@error/cms/cms-error';
-import { readHaDbNames } from '@util';
 import { resolveHostParamSchemas } from './param-schema.util';
 import { ConfigError } from '@error/config/config-error';
 import { ConfFileKind, EngineKnownKeys, ParamSchemaEntry, formatConfTextProblem, isBlockingConfTextProblem, validateConfText } from '@api-interfaces';
@@ -45,16 +44,14 @@ import { ConfFileKind, EngineKnownKeys, ParamSchemaEntry, formatConfTextProblem,
 export const STATDUMP_WATCHER_INTERVAL_SEC = 60;
 
 /**
- * Name CMS runs `cubrid statdump -i` against; it is also CMS's key for the
- * watcher, so stop must send the name start sent. A non-HA database: its
- * bare name. CMS checks that the database is running by the name as given
- * (start_statdump, cms_database_mode) and refuses `name@host`; the engine
- * needs a host only when databases.txt lists several (ER -985, boot_cl.c),
- * which a local non-HA database doesn't. An HA database: `@127.0.0.1`, what
- * CMS itself appends for HA in its other tasks (append_host_to_dbname); a
- * CMS without the fix for that check refuses this name as well.
+ * Name CMS runs `cubrid statdump -i` against. In HA, databases.txt lists
+ * several hosts and a bare name fails (ER -985, "hostname ... should be
+ * specified when multihost is set"), yet start_statdump still reports
+ * success. `@127.0.0.1` is what CMS itself appends for HA in its other tasks
+ * (append_host_to_dbname) and also works for a non-HA local database. It is
+ * also CMS's per-database key, so stop must use the same name.
  */
-export const statdumpWatcherTarget = (dbname: string, isHa: boolean) => (isHa ? `${dbname}@127.0.0.1` : dbname);
+export const statdumpWatcherTarget = (dbname: string) => `${dbname}@127.0.0.1`;
 
 /**
  * CMS never expires a statdump watcher, and a client that goes away (browser
@@ -70,8 +67,6 @@ interface StatdumpWatcherLease {
   userId: string;
   hostUid: string;
   dbname: string;
-  /** The name the watcher was started with (statdumpWatcherTarget). */
-  target: string;
   renewedAt: number;
 }
 
@@ -243,14 +238,11 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     // (the sweeper stops as the user who renewed it last).
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
     const key = statdumpLeaseKey(hostUid, dbname);
-    // A renewal keeps the name the watcher was started with, so the stop
-    // sends that name even if the database's HA state changed meanwhile.
-    const target = this.statdumpLeases.get(key)?.target ?? (await this.statdumpTargetOf(userId, hostUid, dbname));
     // Renew even if the start fails: CMS can mark a failed start as running.
-    this.statdumpLeases.set(key, { userId, hostUid, dbname, target, renewedAt: Date.now() });
+    this.statdumpLeases.set(key, { userId, hostUid, dbname, renewedAt: Date.now() });
     const cmsRequest: Omit<StartStatdumpCmsRequest, 'token'> = {
       task: 'start_statdump',
-      dbname: target,
+      dbname: statdumpWatcherTarget(dbname),
       interval: String(STATDUMP_WATCHER_INTERVAL_SEC),
     };
     return this.serializeStatdumpCall(key, async () => {
@@ -290,8 +282,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
   ): Promise<StatdumpWatcherClientResponse> {
     const key = statdumpLeaseKey(hostUid, dbname);
     const lease = this.statdumpLeases.get(key);
-    const target = lease?.target ?? (await this.statdumpTargetOf(userId, hostUid, dbname));
-    const result = await this.serializeStatdumpCall(key, () => this.sendStopStatdump(userId, hostUid, target));
+    const result = await this.serializeStatdumpCall(key, () => this.sendStopStatdump(userId, hostUid, dbname));
     // A start that arrived while stopping opened a newer lease; keep that one.
     if (this.statdumpLeases.get(key) === lease) this.statdumpLeases.delete(key);
     return result;
@@ -308,10 +299,10 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
       ([, lease]) => now - lease.renewedAt >= STATDUMP_WATCHER_LEASE_TTL_MS
     );
     await Promise.all(
-      expired.map(async ([key, { userId, hostUid, dbname, target }]) => {
+      expired.map(async ([key, { userId, hostUid, dbname }]) => {
         this.statdumpLeases.delete(key);
         try {
-          await this.serializeStatdumpCall(key, () => this.sendStopStatdump(userId, hostUid, target));
+          await this.serializeStatdumpCall(key, () => this.sendStopStatdump(userId, hostUid, dbname));
         } catch (err) {
           this.logger.warn(
             `Stopping the expired statdump watcher for ${dbname} on host ${hostUid} failed: ${
@@ -323,21 +314,14 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     );
   }
 
-  /** statdumpWatcherTarget for `dbname` by its HA state now (readHaDbNames). */
-  private async statdumpTargetOf(userId: string, hostUid: string, dbname: string): Promise<string> {
-    const haDbNames = await readHaDbNames((confname) => this.getAllSystemParam(userId, hostUid, confname));
-    return statdumpWatcherTarget(dbname, haDbNames.has(dbname));
-  }
-
-  /** `target`: the watcher's name (statdumpWatcherTarget). */
   private async sendStopStatdump(
     userId: string,
     hostUid: string,
-    target: string
+    dbname: string
   ): Promise<StatdumpWatcherClientResponse> {
     const cmsRequest: Omit<StopStatdumpCmsRequest, 'token'> = {
       task: 'stop_statdump',
-      dbname: target,
+      dbname: statdumpWatcherTarget(dbname),
     };
     try {
       await this.executeCmsRequest<typeof cmsRequest, BaseCmsResponse>(userId, hostUid, cmsRequest);
