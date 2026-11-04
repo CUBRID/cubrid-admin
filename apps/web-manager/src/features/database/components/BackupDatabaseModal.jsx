@@ -63,9 +63,6 @@ export default function BackupDatabaseModal() {
     isError
   } = useActionState();
   const { trackJob, dismissJobResult } = useCmsJobs();
-  // Read when a backup settles, to tell whether this modal shows its result.
-  const isOpenRef = useRef(isBackupDatabaseModalOpen);
-  useEffect(() => { isOpenRef.current = isBackupDatabaseModalOpen; }, [isBackupDatabaseModalOpen]);
   const [jobStatus, setJobStatus] = useState(null);
   // Identifies the most recent handleBackup() call. This modal has no
   // runJob()/background() concept (unlike the other CMS-job modals) — its
@@ -77,6 +74,11 @@ export default function BackupDatabaseModal() {
   // modal to its success view using whatever database is *currently*
   // selected — not the one that backup actually ran against.
   const latestBackupTokenRef = useRef(null);
+  // The backup this modal is showing, until it is closed or opened afresh.
+  // Only that backup's result replaces the job tray's result window; one
+  // that ends after the modal was closed, or reopened for another database,
+  // leaves the tray's window as its notice.
+  const attachedTokenRef = useRef(null);
 
   const [formData, setFormData] = useState({
     backupLevel: '0',
@@ -164,6 +166,8 @@ export default function BackupDatabaseModal() {
   }, [availableLevels, formData.backupLevel]);
 
   useEffect(() => {
+    // Closed by any means, or opened afresh: no backup is shown here.
+    attachedTokenRef.current = null;
     if (!isBackupDatabaseModalOpen) return;
     resetAction();
     setActiveTab(TAB_INFO);
@@ -199,12 +203,10 @@ export default function BackupDatabaseModal() {
     startAction();
     const invocationToken = {};
     latestBackupTokenRef.current = invocationToken;
+    attachedTokenRef.current = invocationToken;
     const progressOpts = { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) };
-    // While this modal is open it shows the result itself, so the job
-    // tray's result window for the same backup would be a second one.
-    // Closed, the tray's window is the only notice.
     let jobId;
-    const dismissTrayResult = () => { if (isOpenRef.current) dismissJobResult(jobId); };
+    const shownHere = () => attachedTokenRef.current === invocationToken;
     try {
       const payload = {
         level: formData.backupLevel,
@@ -235,16 +237,18 @@ export default function BackupDatabaseModal() {
 
       await trackJob(jobId, progressOpts);
       if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
-      dismissTrayResult();
       dispatch(clearPendingBackupJob());
+      if (!shownHere()) return;
+      dismissJobResult(jobId);
       endSuccess(backupWrittenMsg);
     } catch (err) {
       if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
       if (!err?.cancelled) {
-        dismissTrayResult();
         // Terminal job failure on the server — clear pending so retry submits a new backup.
         // Transient polling failures keep pendingBackupJob to allow reconnect on retry.
         if (err?.jobTerminalFailure) dispatch(clearPendingBackupJob());
+        if (!shownHere()) return;
+        dismissJobResult(jobId);
         endError(typeof err === 'string' ? err : err.message || CM.failure);
       }
     }
@@ -254,7 +258,10 @@ export default function BackupDatabaseModal() {
   const backupWrittenMsg = CM.backupWrittenMsg(backupKind, selectedDatabase, formData.backupDir);
 
   // Don't clear pendingBackupJob on close — the open effect reconnects on reopen
-  const handleClose = () => dispatch(closeBackupDatabaseModal());
+  const handleClose = () => {
+    attachedTokenRef.current = null;
+    dispatch(closeBackupDatabaseModal());
+  };
 
   const flags = [
     { field: 'checkConsistency', label: CM.checkDatabaseConsistency },
