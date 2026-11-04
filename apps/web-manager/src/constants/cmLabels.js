@@ -2361,4 +2361,5 @@ export const CM = {
   serviceStepBrokers: 'brokers',
   serviceStepDatabases: 'databases',
   haNodeStepName: 'HA databases (heartbeat)',
+  confLinePrefix: (lineNo) => `Line ${lineNo}: `,
 };

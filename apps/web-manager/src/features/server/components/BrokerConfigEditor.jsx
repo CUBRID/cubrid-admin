@@ -6,7 +6,7 @@ import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
-import { confSaveProblems, isConfChangedSinceLoaded } from '../confSaveProblems';
+import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 import ConfigEditorToolbar from './broker/ConfigEditorToolbar';
@@ -87,7 +87,7 @@ export default function BrokerConfigEditor({ hostUid }) {
       const confdata = rawContent.split('\n');
 
       const result = await brokerApi.updateBrokerConfig(hostUid, confdata, originalRawContentRef.current.split('\n'));
-      const warnings = result?.warnings ?? [];
+      const warnings = confSaveWarnings(result);
 
       originalRawContentRef.current = rawContent;
       setHasChanges(false);

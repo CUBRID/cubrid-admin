@@ -8,7 +8,7 @@ import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
-import { confSaveProblems, isConfChangedSinceLoaded } from '../confSaveProblems';
+import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 // ── Highlighted Source View ────────────────────────────────────────────────
@@ -124,7 +124,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
     try {
       const payload = { confname, confdata: content.split('\n'), loaded: originalContentRef.current.split('\n') };
       const result = await hostApi.setHostConfig(hostUid, payload);
-      const warnings = result?.warnings ?? [];
+      const warnings = confSaveWarnings(result);
       originalContentRef.current = content;
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));

@@ -18,7 +18,8 @@ import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
-import { parseConfText, parseEngineSizeToBytes, validateEffectiveParams } from '@api-interfaces';
+import { checkEffectiveParams, parseConfText, parseEngineSizeToBytes } from '@api-interfaces';
+import { paramIssuesText } from '../../../infrastructure/errors/paramIssueText';
 import { ParamScopeBadge } from './ParamScopeBadge';
 
 // The param list itself — which keys exist, their category/type/guard/
@@ -442,7 +443,7 @@ export default function DatabasePropertyModal() {
   );
 
   // One shared rule engine (required/guard/section-placement/cross-field) —
-  // see validateEffectiveParams's own doc comment. Nothing here is editable
+  // see checkEffectiveParams's own doc comment. Nothing here is editable
   // any more, so this only ever flags a value that's ALREADY stored in
   // cubrid.conf and fails its own guard — a passive diagnostic pointing at
   // the text editor, not something Apply can block.
@@ -451,13 +452,13 @@ export default function DatabasePropertyModal() {
     [sectionParams, bufferMode, bufferGroups]
   );
   const guardErrors = useMemo(
-    () => validateEffectiveParams(databaseParamSchema, reconciledParams, {
+    () => paramIssuesText(checkEffectiveParams(databaseParamSchema, reconciledParams, {
       isCommonSection: !selectedDatabase,
       commonSectionLabel: 'common',
       emptyValueIsError: true,
       sysprmKeywords: true,
-    }),
-    [databaseParamSchema, reconciledParams, selectedDatabase]
+    }), CM),
+    [databaseParamSchema, reconciledParams, selectedDatabase, CM]
   );
   const guardErrorCount = Object.keys(guardErrors).length;
 
