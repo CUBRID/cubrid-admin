@@ -98,6 +98,19 @@ describe('CMSAuthService', () => {
       await expect(service.login('u1', 'h1')).resolves.toEqual({ success: true, isHA: false, usesDefaultPassword: true });
     });
 
+    it('names a login that CMS answered without a token', async () => {
+      client.postPublic.mockResolvedValue({ status: 'success', task: 'login' });
+
+      const err = await service.login('u1', 'h1').catch((e) => e);
+
+      expect(err.toProblemDetails()).toMatchObject({
+        type: '/errors/cms/request_failed',
+        reason: 'NO_TOKEN',
+        detail: 'CMS login did not return a token',
+      });
+      expect(saved().token).toBe('old-token');
+    });
+
     it('does not flag admin with a changed password', async () => {
       cmsConfig.getAllSystemParam.mockResolvedValue({ conflist: [] });
 

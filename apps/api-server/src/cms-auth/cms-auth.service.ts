@@ -190,6 +190,7 @@ export class CmsAuthService {
     checkCmsStatusError(response, 'CMS login failed');
     if (!response.token) {
       throw CmsError.RequestFailed({
+        reason: 'NO_TOKEN',
         message: 'CMS login did not return a token',
         response,
       });
@@ -354,6 +355,7 @@ export class CmsAuthService {
     checkCmsStatusError(response, 'CMS login failed');
     if (!response.token) {
       throw CmsError.RequestFailed({
+        reason: 'NO_TOKEN',
         message: 'CMS login did not return a token',
         response,
       });
