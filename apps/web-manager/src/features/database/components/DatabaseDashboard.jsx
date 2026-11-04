@@ -101,9 +101,8 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const casStats = brokersCAS.reduce((acc, cas) => {
     acc.cpu += parseFloat(cas.cpu || 0);
     acc.memKB += parseFloat(cas.psize || 0);
-    acc.activeCount += (cas.status?.toLowerCase() === 'busy' ? 1 : 0);
     return acc;
-  }, { cpu: 0, memKB: 0, activeCount: 0 });
+  }, { cpu: 0, memKB: 0 });
 
   const totalQps = totalCasQps(brokersCAS);
   const totalMemMB = (casStats.memKB / 1024).toFixed(1);
@@ -128,7 +127,6 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     ioWrites: formatRate(rates.ioWritePerSec)
   }];
   
-  const mappedBrokers = brokersCAS.map(c => ({ broker: c.broker, id: c.id, pid: c.pid, qps: c.qps, lqs: c.lqs, status: c.status, lastConn: c.lastConn, dbname: c.dbname, _idNum: c._idNum, _pidNum: c._pidNum, _qpsNum: c._qpsNum, _lqsNum: c._lqsNum }));
   const handleExport = () => {
     const headers = [CM.sectionLabel, CM.keyLabel, CM.value];
     const rows = [
@@ -242,7 +240,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
             <DBVolumesSection volumes={mappedVolumes} volumesStatus={data.volumesStatus} pollingProps={pollingProps} />
             <DBSpaceInfoSection spaceInfo={mappedSpaceInfo} spaceInfoStatus={data.spaceInfoStatus} pollingProps={pollingProps} />
             <DBBrokersCASSection
-              brokersCAS={mappedBrokers}
+              brokersCAS={brokersCAS}
               casStatus={data.casStatus}
               pollingProps={pollingProps}
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}
