@@ -2060,7 +2060,7 @@ export const CM_KO = {
     'config/server_param_not_found': '서버 파라미터를 찾을 수 없습니다.',
     'config/server_param_not_found:SERVICE_SECTION_NOT_FOUND': '설정 파일에 [service] 구역이 없습니다.',
     'config/server_param_not_found:SERVER_PARAM_NOT_IN_SERVICE': '[service] 구역에 server 파라미터가 없습니다.',
-    'config/query_plan_not_found': '질의 자동화 계획을 찾을 수 없습니다.',
+    'config/query_plan_not_found': (d) => (d.queryId ? `질의 자동화 계획 ${d.queryId}을(를) 찾을 수 없습니다.` : '질의 자동화 계획을 찾을 수 없습니다.'),
     'config/duplicate_query_id': (d) => (d.queryId ? `이미 있는 질의 ID입니다: ${d.queryId}` : '이미 있는 질의 ID입니다.'),
     'config/no_confdata': '설정 내용을 찾을 수 없습니다.',
     'config/dbname_already_exists': '이미 있는 데이터베이스 이름입니다.',

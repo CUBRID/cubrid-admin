@@ -125,6 +125,15 @@ describe('serverErrorText with reasons and fields', () => {
       .toBe('요청 내용이 올바르지 않습니다. (port must not be greater than 65535)');
   });
 
+  it('adds no English when the sentence already uses the error\'s values', () => {
+    expect(serverErrorText(body('/errors/database/duplicated_file', { path: '/data/x.vol' }, 'File already exists: /data/x.vol'), KO))
+      .toBe('이미 있는 파일입니다: /data/x.vol');
+    expect(serverErrorText(body('/errors/validation/missing_required_field', { missingFields: ['dbname'] }, 'Missing required field(s): dbname'), KO))
+      .toBe('필수 항목이 비어 있습니다: dbname');
+    expect(serverErrorText(body('/errors/database/duplicated_file', {}, 'File already exists: /data/x.vol'), KO))
+      .toBe('이미 있는 파일입니다. (File already exists: /data/x.vol)');
+  });
+
   it('adds no English to CMS errors CMS itself did not word', () => {
     expect(serverErrorText(body('/errors/cms/no_response', {}, 'No response was received from CMS.'), KO)).toBe('CMS가 응답하지 않았습니다.');
     expect(serverErrorText(body('/errors/cms/invalid_token', {}, 'Request is rejected due to invalid token. Please reconnect.'), KO))

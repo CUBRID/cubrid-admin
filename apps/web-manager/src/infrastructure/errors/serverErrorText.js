@@ -62,14 +62,16 @@ export function serverErrorText(apiData, CM) {
     if (cmsNote) return CM.cmsFailedWithNote(CM.cmsNotes?.[cmsNote] ?? cmsNote);
     return original ? CM.requestFailedWithDetail(original) : CM.requestFailedMsg;
   }
-  const text = typeof entry === 'function'
-    ? entry(data ?? {}, (failure) => failureText(failure, CM))
-    : entry;
+  const failure = (inner) => failureText(inner, CM);
+  const text = typeof entry === 'function' ? entry(data ?? {}, failure) : entry;
   if (cmsNote) return `${text} (${CM.cmsNotes?.[cmsNote] ?? cmsNote})`;
-  const specificOnlyInEnglish = key in SERVER_FIXED_TEXT && byReason === undefined
-    && !data?.invalidFields && !data?.missingFields
-    && original && original !== SERVER_FIXED_TEXT[key];
-  return specificOnlyInEnglish ? `${text} (${original})` : text;
+  if (!(key in SERVER_FIXED_TEXT) || byReason !== undefined || !original || original === SERVER_FIXED_TEXT[key]) {
+    return text;
+  }
+  // An entry that put the error's own values (field, path, ...) in its
+  // sentence already says the specific case.
+  const saysValues = typeof entry === 'function' && text !== entry({}, failure);
+  return saysValues ? text : `${text} (${original})`;
 }
 
 /**

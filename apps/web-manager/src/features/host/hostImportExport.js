@@ -350,8 +350,11 @@ function sameAlias(a, b) {
   return left !== '' && right !== '' && left === right;
 }
 
+const problem = (code, message) => ({ code, message });
+
 /**
- * @returns {string|null} validation error message
+ * @returns {{ code: string, message: string }|null} what is wrong with the
+ *   row (code) and how to say it in the UI language (message)
  */
 export function validateImportHostEntry(entry, { existingHosts = [], batchPeers = [] } = {}) {
   const alias = String(entry.alias ?? '').trim();
@@ -361,29 +364,29 @@ export function validateImportHostEntry(entry, { existingHosts = [], batchPeers 
     ? { valid: true, port: entry.portNumber }
     : parseImportPort(entry.port);
 
-  if (!alias) return labels().importAliasRequiredMsg;
-  if (!address) return labels().addressRequired;
-  if (!id) return labels().usernameRequired;
-  if (!portResult.valid) return portResult.error;
+  if (!alias) return problem('ALIAS_REQUIRED', labels().importAliasRequiredMsg);
+  if (!address) return problem('ADDRESS_REQUIRED', labels().addressRequired);
+  if (!id) return problem('USERNAME_REQUIRED', labels().usernameRequired);
+  if (!portResult.valid) return problem('PORT_INVALID', portResult.error);
 
   const normalized = { alias, address, id, port: portResult.port };
 
   for (const existing of existingHosts) {
     if (sameConnection(normalized, existing)) {
-      return labels().importAlreadyRegisteredMsg;
+      return problem('ALREADY_REGISTERED', labels().importAlreadyRegisteredMsg);
     }
     if (sameAlias(normalized, existing)) {
-      return labels().importAliasInUseMsg;
+      return problem('ALIAS_IN_USE', labels().importAliasInUseMsg);
     }
   }
 
   for (const peer of batchPeers) {
     if (peer.rowId != null && peer.rowId === entry.rowId) continue;
     if (sameConnection(normalized, peer)) {
-      return labels().importDuplicateConnectionMsg;
+      return problem('DUPLICATE_CONNECTION_IN_FILE', labels().importDuplicateConnectionMsg);
     }
     if (sameAlias(normalized, peer)) {
-      return labels().importDuplicateAliasMsg;
+      return problem('DUPLICATE_ALIAS_IN_FILE', labels().importDuplicateAliasMsg);
     }
   }
 
@@ -432,13 +435,13 @@ export function buildImportPreviewList(parsed, existingHosts) {
         };
       });
 
-    const validationError = validateImportHostEntry(row, { existingHosts, batchPeers });
+    const invalid = validateImportHostEntry(row, { existingHosts, batchPeers });
 
     return {
       ...row,
-      validationError,
-      isDuplicate: validationError === 'Already registered (address + port)',
-      isSelectable: !validationError,
+      validationError: invalid?.message ?? null,
+      isDuplicate: invalid?.code === 'ALREADY_REGISTERED',
+      isSelectable: !invalid,
     };
   });
 }

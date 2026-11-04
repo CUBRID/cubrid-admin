@@ -6,6 +6,7 @@ import {
   parseHostsImportFile,
   partitionImportRows,
   validateImportHostEntry,
+  validateSelectedImportRows,
 } from './hostImportExport';
 import { LOCALE_STORAGE_KEY } from '../../constants/useCM';
 import { UNGROUPED_GROUP_ID } from './hostGroupUtils';
@@ -83,9 +84,16 @@ describe('validateImportHostEntry', () => {
 
   it('says what is wrong with a row in the UI language', () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
-    expect(validateImportHostEntry({ ...entry, alias: '' })).toBe('이름(별칭)을 입력하세요.');
-    expect(validateImportHostEntry({ ...entry, port: '80a' })).toBe('포트는 정수여야 합니다.');
-    expect(validateImportHostEntry(entry, { existingHosts: [{ alias: 'web1', address: '10.0.0.1', port: 8001 }] })).toBe('이미 쓰고 있는 이름입니다.');
+    expect(validateImportHostEntry({ ...entry, alias: '' })).toEqual({ code: 'ALIAS_REQUIRED', message: '이름(별칭)을 입력하세요.' });
+    expect(validateImportHostEntry({ ...entry, port: '80a' })?.message).toBe('포트는 정수여야 합니다.');
+    expect(validateImportHostEntry(entry, { existingHosts: [{ alias: 'web1', address: '10.0.0.1', port: 8001 }] })?.message).toBe('이미 쓰고 있는 이름입니다.');
     expect(validateImportHostEntry(entry)).toBeNull();
+  });
+
+  it('marks a host already registered as a duplicate in Korean too', () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
+    const [row] = buildImportPreviewList([{ ...entry, rowId: 'r1' }], [{ alias: 'old', address: '10.0.0.9', port: 8001 }]);
+    expect(row).toMatchObject({ validationError: '이미 등록된 호스트입니다(주소 + 포트).', isDuplicate: true, isSelectable: false });
+    expect(validateSelectedImportRows([row])).toEqual({ ok: true });
   });
 });
