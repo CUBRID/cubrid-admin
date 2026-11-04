@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import monitoringApi from './monitoringApi';
-import { computeBrokerRates, mapDiskInfo } from './hostMetrics';
+import { computeBrokerRates, cpuUsagePercent, mapDiskInfo } from './hostMetrics';
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 import { readSharedBrokerList } from '../broker/brokerSlice';
@@ -130,20 +130,8 @@ const monitoringSlice = createSlice({
         const totalTps = brokerRates.tps;
         const totalQps = brokerRates.qps;
 
-        // 2. Calculate CPU % (null on the first sample: no delta yet)
-        let cpuUsage = null;
-        if (hostData.prevHostStat) {
-          const prev = hostData.prevHostStat;
-          const curr = hostStat;
-
-          const cpuUserDelta = parseFloat(curr.cpu_user) - parseFloat(prev.cpu_user);
-          const cpuKernelDelta = parseFloat(curr.cpu_kernel) - parseFloat(prev.cpu_kernel);
-          const cpuIdleDelta = parseFloat(curr.cpu_idle) - parseFloat(prev.cpu_idle);
-          const cpuIowaitDelta = parseFloat(curr.cpu_iowait) - parseFloat(prev.cpu_iowait);
-
-          const totalDelta = cpuUserDelta + cpuKernelDelta + cpuIdleDelta + cpuIowaitDelta;
-          cpuUsage = totalDelta > 0 ? (cpuUserDelta / totalDelta) * 100 : null;
-        }
+        // 2. CPU % (null on the first sample: no delta yet)
+        const cpuUsage = cpuUsagePercent(hostData.prevHostStat, hostStat);
         hostData.prevHostStat = hostStat;
 
         // 3. Calculate Memory %

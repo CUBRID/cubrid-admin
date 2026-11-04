@@ -8,6 +8,7 @@ import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 import { useRefreshWhenShown } from './useRefreshWhenShown';
+import { isCasBusy, isCasIdle } from '../../casMetrics';
 
 export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProps, onViewSQLLog, onViewSlowQueryLog, onRestartCAS }) {
   const CM = useCM();
@@ -29,8 +30,8 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
     return () => clearInterval(interval);
   }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname]);
 
-  const readyCount = brokersCAS.filter(c => c.status === 'READY').length;
-  const busyCount  = brokersCAS.length - readyCount;
+  const readyCount = brokersCAS.filter(c => isCasIdle(c.status)).length;
+  const busyCount  = brokersCAS.filter(c => isCasBusy(c.status)).length;
 
   const columns = useMemo(() => [
     {
@@ -40,13 +41,13 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
     },
     { header: 'CAS', accessor: 'id',  sortAccessor: '_idNum',  render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
     { header: 'PID', accessor: 'pid', sortAccessor: '_pidNum', render: (val) => <span className="font-mono text-14 text-slate-400">{val}</span> },
-    { header: CM.qps, accessor: 'qps', sortAccessor: '_qpsNum', render: (val) => <span className="font-mono text-14 text-amber-600 dark:text-amber-400 font-semibold">{val ?? '—'}</span> },
+    { header: CM.qps, accessor: 'qps', sortAccessor: '_qpsNum', render: (val) => <span className="font-mono text-14 text-amber-600 dark:text-amber-400 font-semibold">{val === null || val === undefined ? '—' : val.toFixed(1)}</span> },
     { header: 'LQS', accessor: 'lqs', sortAccessor: '_lqsNum', render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
     {
       header: CM.status,
       accessor: 'status',
       render: (val) => {
-        const ready = val === 'READY';
+        const ready = isCasIdle(val);
         return (
           <StatusBadge 
             label={val} 

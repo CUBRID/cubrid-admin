@@ -13,6 +13,7 @@ import CASLogModal from './CASLogModal';
 import { isDatabaseInHa } from '../../host/haPeerUtils';
 import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
+import { totalCasQps } from '../casMetrics';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -104,7 +105,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     return acc;
   }, { cpu: 0, memKB: 0, activeCount: 0 });
 
-  const totalQps = brokersCAS.reduce((a, c) => a + parseInt(c.qps || 0), 0);
+  const totalQps = totalCasQps(brokersCAS);
   const totalMemMB = (casStats.memKB / 1024).toFixed(1);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.
@@ -115,10 +116,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     cpu: casCpuNotCollected ? '-' : casStats.cpu.toFixed(1) + '%',
     cpuPct: casCpuNotCollected ? 0 : Math.min(casStats.cpu, 100),
     cpuNote: casCpuNotCollected ? CM.casCpuNotCollectedLinux : undefined,
-    memory: totalMemMB + 'MiB', 
+    memory: totalMemMB + ' MiB', 
     memPct: Math.min((casStats.memKB / 1024) / 4, 100),
     tps: formatRate(rates.tps),
-    qps: totalQps.toLocaleString(), 
+    qps: formatRate(totalQps), 
     hitRatio: (perf.data_page_buffer_hit_ratio || '0.00') + '%',
     hitPct: parseFloat(perf.data_page_buffer_hit_ratio || '0'),
     fetch: formatRate(rates.fetchPerSec),
@@ -127,7 +128,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     ioWrites: formatRate(rates.ioWritePerSec)
   }];
   
-  const mappedBrokers = brokersCAS.map(c => ({ broker: c.broker, id: c.id, pid: c.pid, qps: c.qps, lqs: c.lqs, status: c.status, lastConn: c.lastConn, dbname: c.dbname }));
+  const mappedBrokers = brokersCAS.map(c => ({ broker: c.broker, id: c.id, pid: c.pid, qps: c.qps, lqs: c.lqs, status: c.status, lastConn: c.lastConn, dbname: c.dbname, _idNum: c._idNum, _pidNum: c._pidNum, _qpsNum: c._qpsNum, _lqsNum: c._lqsNum }));
   const handleExport = () => {
     const headers = [CM.sectionLabel, CM.keyLabel, CM.value];
     const rows = [

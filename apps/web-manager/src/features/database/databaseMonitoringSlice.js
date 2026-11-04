@@ -129,7 +129,7 @@ export const fetchDashboardCAS = createAsyncThunk(
               broker: brokerName,
               id: cas.as_id,
               pid: cas.as_pid,
-              qps: qps === null ? null : qps.toFixed(1),
+              qps,
               lqs: cas.as_long_query,
               status: cas.as_status,
               lastConn: cas.as_lct,

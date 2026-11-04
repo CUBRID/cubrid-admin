@@ -36,6 +36,9 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [rowMenu, setRowMenu] = useState(null);
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
+  // Each row groups the locks one transaction holds in one mode on one kind
+  // of object, so the badge adds up the rows' lock counts.
+  const lockTotal = (locks || []).reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
 
   const refresh = () => {
     if (hostUid && dbname) dispatch(fetchDashboardLocks({ hostUid, dbname }));
@@ -130,9 +133,9 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
           <div className="flex items-center gap-2">
             <Icon name="lock" size="sm" weight={300} className="text-amber-500" />
             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{CM.lockAndTransaction}</span>
-            {locks.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-sm bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 text-12 font-bold">
-                {locks.length}
+            {lockTotal > 0 && (
+              <span data-testid="db-dashboard-lock-total" className="ml-1 px-1.5 py-0.5 rounded-sm bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 text-12 font-bold">
+                {lockTotal.toLocaleString()}
               </span>
             )}
           </div>

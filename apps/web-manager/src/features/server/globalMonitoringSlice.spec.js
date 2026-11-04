@@ -86,3 +86,28 @@ describe('fetchHostSummary volumes', () => {
     expect(summary(store)).toMatchObject({ permUsed: 75, dbOn: 2, dbOff: 1 });
   });
 });
+
+describe('fetchHostSummary host figures', () => {
+  it('counts kernel time in CPU use and gives memory use in percent for the bar', async () => {
+    const store = makeStore();
+    brokerApi.getBrokerList.mockResolvedValue(brokerList(0, 0));
+    monitoringApi.getHostStat.mockResolvedValueOnce({ cpu_user: '100', cpu_kernel: '100', cpu_idle: '700', cpu_iowait: '100', mem_phy_total: '1000', mem_phy_free: '250' });
+    await store.dispatch(fetchHostSummary('h1')).unwrap();
+    monitoringApi.getHostStat.mockResolvedValueOnce({ cpu_user: '150', cpu_kernel: '150', cpu_idle: '800', cpu_iowait: '100', mem_phy_total: '1000', mem_phy_free: '250' });
+    await store.dispatch(fetchHostSummary('h1')).unwrap();
+
+    expect(summary(store)).toMatchObject({ cpu: 50, memTotal: 1000, memUsed: 750, memory: 75 });
+  });
+
+  it('counts a running database missing from dblist as ON, not as a negative OFF', async () => {
+    brokerApi.getBrokerList.mockResolvedValue(brokerList(0, 0));
+    databaseApi.getStartInfo.mockResolvedValue({
+      dblist: { dbs: [{ dbname: 'a' }, { dbname: 'b' }] },
+      activelist: { active: [{ dbname: 'a' }, { dbname: 'elsewhere' }, { dbname: 'other' }] },
+    });
+    const store = makeStore();
+    await store.dispatch(fetchHostSummary('h1')).unwrap();
+
+    expect(summary(store)).toMatchObject({ dbOn: 3, dbOff: 1 });
+  });
+});

@@ -60,6 +60,14 @@ describe('fetchMonitoringData', () => {
     expect(hostData(store).currentStatus).toMatchObject({ cpu: 50, tps: 50, qps: 200 });
   });
 
+  it('counts kernel time in CPU use, not only user time', async () => {
+    const store = makeStore();
+    await poll(store, 100_000, { stat: { ...hostStat(100, 900), cpu_kernel: '100' }, brokers: brokerList(1000, 5000) });
+    await poll(store, 102_000, { stat: { ...hostStat(150, 1000), cpu_kernel: '150' }, brokers: brokerList(1000, 5000) });
+
+    expect(hostData(store).currentStatus.cpu).toBe(50);
+  });
+
   it('averages only real rates, not the first sample', async () => {
     const store = makeStore();
     await poll(store, 100_000, { stat: hostStat(100, 900), brokers: brokerList(1000, 5000) });

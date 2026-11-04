@@ -134,3 +134,18 @@ describe('DBJobAutomationSection empty state', () => {
     expect(container.textContent).toContain(CM.noQueryPlansTitle);
   });
 });
+
+describe('DBBrokersCASSection', () => {
+  const cas = (id, status, qps) => ({ broker: 'query_editor', id: String(id), pid: String(100 + id), qps, lqs: '0', status, lastConn: '-', _idNum: id, _pidNum: 100 + id, _qpsNum: qps ?? 0, _lqsNum: 0 });
+
+  it('counts IDLE CASes as ready and BUSY, CLIENT WAIT and CLOSE WAIT ones as busy', async () => {
+    const brokersCAS = [cas(1, 'IDLE', 1.25), cas(2, 'BUSY', 11.8), cas(3, 'CLIENT WAIT', null), cas(4, 'RESTART', 0)];
+    await render(<DBBrokersCASSection brokersCAS={brokersCAS} casStatus="loaded" pollingProps={pollingProps} />);
+
+    expect(container.textContent).toContain(CM.readyCount(1));
+    expect(container.textContent).toContain(CM.busyCount(2));
+    // Each CAS's rate with one decimal.
+    expect(container.textContent).toContain('11.8');
+    expect(container.textContent).toContain('1.3');
+  });
+});
