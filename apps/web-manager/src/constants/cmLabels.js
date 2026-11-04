@@ -142,7 +142,7 @@ export const CM = {
   dbaPassword: 'DBA password',
 
   manageDatabase: 'Manage Database',
-  usedParameterDump: 'Used Parameter Dump',
+  usedParameterDump: 'Parameter Dump',
 
   manageDatabaseMenu: {
     unload: 'Unload Database...',
@@ -158,7 +158,7 @@ export const CM = {
     backup: 'Backup Database',
     delete: 'Delete Database',
   },
-  manageDatabaseHaDisabledHint: 'Not available for a database in HA mode.',
+  manageDatabaseHaDisabledHint: 'Not available for an HA-configured database.',
 
   // Create Database (createdb wizard)
   createDatabaseMsg: 'Create a new database.',
@@ -191,7 +191,7 @@ export const CM = {
   logPageSize: 'Log page size (byte)',
   localeCharset: 'Charset',
   userDefined: 'User Defined',
-  volumeSize: 'Volume size (Mbyte)',
+  volumeSize: 'Volume size (MiB)',
   volumeSizePositiveError: 'Volume size must be greater than 0 MiB.',
   generalVolumeSizeMinError: 'General volume size must be at least 1 MiB.',
   generalVolumeSizeMaxError: 'General volume size must be 20 GiB (20,480 MiB) or less.',
@@ -376,7 +376,7 @@ export const CM = {
   cubridWebManager: 'Next CUBRID Admin',
   startService: 'Start Service',
   stopService: 'Stop Service',
-  editCubridConfig: 'Edit Cubrid Config',
+  editCubridConfig: 'Edit CUBRID Config',
   logout: 'Logout',
   switchToDarkMode: 'Switch to dark mode',
   switchToLightMode: 'Switch to light mode',
@@ -388,7 +388,7 @@ export const CM = {
   deleteHost: 'Delete Host',
   changePassword: 'Change Password',
   defaultCmsPasswordTitle: 'Default CMS password in use',
-  defaultCmsPasswordMsg: 'These hosts are connected with the CMS account admin and its installed password admin. Changing the password is recommended.',
+  defaultCmsPasswordMsg: 'These hosts use the CMS account admin with the default password (admin). Changing it is recommended.',
   userManagement: 'User Management',
   cmsAccountManagement: 'CMS Account Management',
   serverVersion: 'Host Engine Version',
@@ -408,7 +408,7 @@ export const CM = {
   showStatus: 'Show Status',
   startBroker: 'Start Broker',
   stopBroker: 'Stop Broker',
-  paramDump: 'Param Dump...',
+  paramDump: 'Parameter Dump...',
   planDump: 'Plan Dump...',
   properties: 'Properties',
   editCommonProperties: 'Edit Common Properties',
@@ -524,7 +524,7 @@ export const CM = {
   authorizeAccess: 'Login',
   createAccount: 'Create Account',
   registrationFailed: 'Registration failed. Please try again.',
-  loginFailedMsg: 'Login failed. Please check your credentials.',
+  loginFailedMsg: 'Login failed. Check your ID and password.',
   minChars3: 'At least 3 characters',
 
   // Broker UI
@@ -606,7 +606,7 @@ export const CM = {
   autoVolumeLog: 'Volume Auto Expansion Log',
   autoQueryLog: 'Auto Query Log',
   filterLogs: 'Filter logs…',
-  auditHistoryFor: (db) => `Audit history for: ${db}`,
+  auditHistoryFor: (db) => `History for: ${db}`,
   noLog: 'No log',
   noBackupLogsFoundMsg: 'No backup logs found for the current criteria.',
   noExecutionLogsFoundMsg: 'No execution logs found for the current criteria.',
@@ -627,7 +627,7 @@ export const CM = {
   leaveBlankNoPassword: 'Leave blank for no password',
 
   addVolume: 'Add Volume',
-  clickAddVolumeHint: 'Click "Add Volume" to add extra storage volumes.',
+  clickAddVolumeHint: 'Click "Add Volume" to add volumes.',
   identifier: 'Identifier',
   segment: 'Segment',
   sizeMb: 'Size MiB',
@@ -889,8 +889,8 @@ export const CM = {
     'Make sure the broker name is correct and the broker process is in the expected state.',
     'Check the broker configuration for conflicting ports or duplicate names.',
   ],
-  activeContext: 'Active Context',
-  offlineStatic: 'Offline Static',
+  activeContext: 'Running',
+  offlineStatic: 'Stopped',
   noConfigParameters: 'No configuration parameters found for this database.',
   parameterDumpSubtitle: 'Check out the parameter values',
   environmentReady: 'Ready',
@@ -996,7 +996,7 @@ export const CM = {
   confirmStartAllBrokersDesc: 'Start every stopped broker on this host?',
   confirmRestartAllBrokersTitle: 'Restart All Brokers',
   confirmRestartAllBrokersDesc: 'Restart every broker on this host? Active client connections will be disconnected.',
-  connectHostForMonitoring: 'Connect to a host server from the navigator to activate global resource monitoring.',
+  connectHostForMonitoring: 'Connect to a host from the navigator to activate global resource monitoring.',
   permanentTemp: 'Permanent Temp',
   tempTemp: 'Temporary Temp',
   // Service dashboard: percent of each volume group in use.
@@ -1050,8 +1050,8 @@ export const CM = {
   keyLabel: 'Key',
   summaryLabel: 'Summary',
   pagesCountLabel: (n) => `${n} pages`,
-  storageVolumes: 'Storage Volumes',
-  storageVolumesRequireOnlineDbMsg: 'Storage volume info is only shown for databases on this host that are running and that you are logged in to.',
+  storageVolumes: 'Database Volumes',
+  storageVolumesRequireOnlineDbMsg: 'Volume info is only shown for databases on this host that are running and that you are logged in to.',
   storageVolumesHiddenMsg: (n) => `${n} running database(s) you are not logged in to are not shown.`,
   volumeLabel: 'Volume',
   purpose: 'Purpose',
@@ -1378,7 +1378,7 @@ export const CM = {
 
   // CreateDatabaseModal
   removeVolume: 'Remove volume',
-  storage: 'Storage',
+  storage: 'Volumes',
 
   // CreateUserModal
   source: 'Source',
@@ -1470,7 +1470,7 @@ export const CM = {
   connectionFailed: 'Connection failed',
   hostLoginFailedMsg: 'Could not log in to the host.',
   hostLoginNoResponseMsg: 'No response from the CMS. Check that the CMS is running on the host and that the address and port are correct.',
-  hostLoginTlsErrorMsg: "Could not establish a trusted connection to the CMS. Check the CMS server's TLS certificate.",
+  hostLoginTlsErrorMsg: "Could not establish a trusted connection to the CMS. Check the TLS certificate of the host's CMS.",
   tryAgain: 'Try Again',
   allBrokers: 'All Brokers',
   brokerLogs: 'Broker Logs',
@@ -1623,7 +1623,7 @@ export const CM = {
   addPasswordsConfirmTitle: 'Add passwords for imported hosts?',
   addPasswordsConfirmDesc: 'You can add them now, or skip and edit each host individually later.',
   importFormatHelp: 'Next CUBRID Admin XML/JSON, CUBRID Admin hosts XML, or legacy desktop .prefs / .properties. Host groups are preserved where the format supports them. Encrypted passwords in .prefs are not imported.',
-  importGroupsHelp: 'Host groups from the .prefs file are preserved. Hosts not in any group use the name below.',
+  importGroupsHelp: 'Host groups in the file are kept. For .prefs files, hosts not in any group use the name below.',
   allHostsIntoGroupHelp: 'All selected hosts go into this group',
   fallbackGroupLabel: 'Fallback group',
   validationErrorRowsHelp: 'Rows with validation errors cannot be imported. Fix the source file or deselect them.',

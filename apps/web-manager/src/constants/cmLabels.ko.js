@@ -58,8 +58,8 @@ export const CM_KO = {
   maintenancePreview: '작업 요약',
   maintenanceOperation: '작업',
   maintenanceScope: '요청 범위',
-  maintenanceAllClasses: '모든 클래스',
-  maintenanceSelectedClass: '선택한 클래스',
+  maintenanceAllClasses: '모든 테이블',
+  maintenanceSelectedClass: '선택한 테이블',
   maintenanceEntireDatabase: '데이터베이스 전체',
   maintenanceStatisticsUpdate: '질의 최적화 통계 정보 갱신',
   maintenanceConsistencyCheck: '데이터베이스 일관성 검사',
@@ -132,11 +132,11 @@ export const CM_KO = {
   diskRootFilesystem: '루트 파일 시스템 (/)',
   casCpuNotCollectedLinux: 'Linux에서는 수집되지 않음: CUBRID 브로커는 CAS별 CPU를 Solaris/HP-UX에서만 제공합니다.',
   lockIndex: '인덱스',
-  pname: '프로세스명',
-  uid: '사용자 ID',
+  pname: '프로그램 이름',
+  uid: '사용자 이름',
   pid: '프로세스 ID',
   isolationLevel: '격리 수준',
-  timeOut: '타임아웃',
+  timeOut: '제한 시간',
   oid: 'OID',
   objectType: '객체 유형',
   mode: '모드',
@@ -178,7 +178,7 @@ export const CM_KO = {
   dbaPassword: 'DBA 비밀번호',
 
   manageDatabase: '데이터베이스 관리',
-  usedParameterDump: '사용 파라미터 덤프',
+  usedParameterDump: '파라미터 덤프',
 
   manageDatabaseMenu: {
     unload: '데이터베이스 언로드...',
@@ -226,7 +226,7 @@ export const CM_KO = {
   logPageSize: '로그 페이지 크기 (byte)',
   localeCharset: '문자 집합',
   userDefined: '사용자 정의',
-  volumeSize: '볼륨 크기 (Mbyte)',
+  volumeSize: '볼륨 크기 (MiB)',
   volumeSizePositiveError: '볼륨 크기는 0 MiB보다 커야 합니다.',
   generalVolumeSizeMinError: '일반 볼륨 크기는 1 MiB 이상이어야 합니다.',
   generalVolumeSizeMaxError: '일반 볼륨 크기는 20 GiB(20,480 MiB) 이하여야 합니다.',
@@ -273,7 +273,7 @@ export const CM_KO = {
   selectFromLocal: '로컬 시스템에서 언로드 파일 선택',
   loadOption: '로드 옵션',
   loadSchema: '스키마 로드',
-  loadObject: '객체 로드',
+  loadObject: '데이터 로드',
   loadIndex: '인덱스 로드',
   loadTrigger: '트리거 로드',
   checkSyntaxAndLoad: '구문 검사 후 로드',
@@ -354,7 +354,7 @@ export const CM_KO = {
   jobNotifyFailed: (op, db) => `${op} 실패 — ${db}`,
   jobTypeUnload: '언로드',
   jobTypeLoad: '로드',
-  jobTypeCreate: 'DB 생성',
+  jobTypeCreate: '데이터베이스 생성',
   jobTypeOptimize: '최적화',
   jobTypeCheck: '검사',
   jobTypeCompact: '공간 정리',
@@ -487,7 +487,7 @@ export const CM_KO = {
   activeConnectionsTerminated: '이 호스트에 대한 활성 연결이 종료됩니다.',
   changeManagerPasscode: '호스트 비밀번호 변경',
   newPasscode: '새 비밀번호',
-  verifyNewPasscode: '비밀번호 확인',
+  verifyNewPasscode: '새 비밀번호 확인',
   cubridVersion: 'CUBRID 버전',
   environmentDetails: '환경 정보',
   osPlatform: 'OS',
@@ -513,7 +513,7 @@ export const CM_KO = {
 
   serverDashboard: '호스트 대시보드',
   refreshDashboard: '대시보드 새로 고침',
-  syncedAt: (t) => `동기화: ${t}`,
+  syncedAt: (t) => `갱신: ${t}`,
   databases: '데이터베이스',
   autoStartup: '자동 시작',
   systemStatusError: '시스템 상태 오류',
@@ -536,7 +536,7 @@ export const CM_KO = {
   freeStorage: '여유 공간',
   refreshBrokersList: '브로커 목록 새로 고침',
   stopAllServices: '모든 서비스 중지',
-  sensorsOffline: '센서 오프라인',
+  sensorsOffline: '연결 안 됨',
   groupHost: '그룹/호스트',
   dbStatus: 'DB 상태',
   saveChanges: '변경 저장',
@@ -551,7 +551,7 @@ export const CM_KO = {
   authorizeAccess: '로그인',
   createAccount: '계정 만들기',
   registrationFailed: '등록에 실패했습니다. 다시 시도하세요.',
-  loginFailedMsg: '로그인에 실패했습니다. 자격 증명을 확인하세요.',
+  loginFailedMsg: '로그인에 실패했습니다. 아이디와 비밀번호를 확인하세요.',
   minChars3: '3자 이상',
 
   brokerProperties: '브로커 속성',
@@ -603,9 +603,9 @@ export const CM_KO = {
   deleteArchivedLogs: '불필요한 보관(archive)로그 파일을 지움',
   compressBackupVolume: '압축 백업 사용',
   parallelThreads: '병렬 스레드',
-  dynamicCompaction: '동적 공간 정리',
+  dynamicCompaction: '데이터베이스 공간 정리',
   compactDatabaseName: '데이터베이스 이름',
-  compactDatabaseMessage: '데이터베이스 최적화를 수행합니다.',
+  compactDatabaseMessage: '데이터베이스 공간을 정리합니다.',
   compactDescriptionInformation: '설명',
   compactDatabaseDescription: '이 기능은 두 가지 방법으로 데이터베이스 볼륨 공간을 정리합니다.\n\n  -지워진 객체의 OID 제거\n  -스키마가 변경된(ALTER TABLE) 데이터의 변경 내용 반영',
   compactionComplete: '공간 정리 완료',
@@ -634,7 +634,7 @@ export const CM_KO = {
   noBackupLogsFoundMsg: '현재 조건에 해당하는 백업 로그가 없습니다.',
   noExecutionLogsFoundMsg: '현재 조건에 해당하는 수행 로그가 없습니다.',
   noAutomationLogsFoundMsg: '자동화 로그가 없습니다.',
-  auditHistoryFor: (db) => `감사 기록: ${db}`,
+  auditHistoryFor: (db) => `기록: ${db}`,
   noLog: '로그 없음',
 
   yes: '예',
@@ -649,10 +649,10 @@ export const CM_KO = {
   noActiveTransactions: '활성 트랜잭션이 없습니다.',
   noHeldObjectLocks: '보유된 객체 잠금이 없습니다.',
   failedToGetLockInfo: '잠금 정보를 가져오지 못했습니다.',
-  leaveBlankNoPassword: '비밀번호 없음은 비워 두세요',
+  leaveBlankNoPassword: '비밀번호가 없으면 비워 두세요',
 
   addVolume: '볼륨 추가',
-  clickAddVolumeHint: '"볼륨 추가"를 클릭하여 스토리지 볼륨을 추가하세요.',
+  clickAddVolumeHint: '"볼륨 추가"를 클릭하여 볼륨을 추가하세요.',
   identifier: '식별자',
   segment: '세그먼트',
   sizeMb: '크기(MiB)',
@@ -672,10 +672,10 @@ export const CM_KO = {
   snapshotSecured: '백업 완료',
   backupDirectory: '백업 디렉터리',
   backupDirFetchError: '기본 백업 디렉터리를 조회하지 못했습니다. 경로를 직접 입력하세요.',
-  levelNumberLabel: (level) => `레벨${level}`,
+  levelNumberLabel: (level) => `${level}수준`,
   backupDirRequiredMsg: '백업 디렉터리는 필수 입력 항목입니다.',
   existingBackupWarningMsg: (level) =>
-    `이 디렉터리에는 이미 레벨 ${level} 백업이 있습니다. 다시 백업하면 기존 백업을 덮어씁니다.`,
+    `이 디렉터리에는 이미 ${level}수준 백업이 있습니다. 다시 백업하면 기존 백업을 덮어씁니다.`,
   backupPlanIdRequiredMsg: 'Plan ID는 필수 입력 항목입니다.',
   backupWrittenMsg: (kind, db, dir) => `"${db}"의 ${kind}을 "${dir}"에 저장했습니다.`,
   backupStartFailedMsg: '백업을 시작하지 못했습니다. 다시 시도하세요.',
@@ -687,7 +687,7 @@ export const CM_KO = {
   databaseMustBeStopped: '복구 전에 데이터베이스를 중지해야 합니다',
 
   renamingDatabase: '데이터베이스 이름 변경 중',
-  updatingIdentity: '식별자 업데이트 중',
+  updatingIdentity: '이름 변경 중',
   renameComplete: '이름 변경 완료',
   renameSuccessful: '이름 변경 성공',
   renameFailed: '이름 변경 실패',
@@ -728,7 +728,7 @@ export const CM_KO = {
   retryOptimization: '최적화 재시도',
   verboseMonitoring: '상세 모니터링',
   applyChanges: '변경 적용',
-  updateSuccessful: '갱신 성공',
+  updateSuccessful: '수정 완료',
   loadingLabel: '불러오는 중',
   navigation: '탐색',
   context: '대상 데이터베이스',
@@ -759,7 +759,7 @@ export const CM_KO = {
   autoStartHaDisabledHint: 'CUBRID는 HA로 설정된 데이터베이스를 일반 서비스 자동시작 목록으로는 시작을 거부합니다 — HA heartbeat start를 사용해야 합니다.',
   generalParamsTab: '일반 설정',
   advancedParamsTab: '고급 설정',
-  kernelParamsTitle: '파라미터',
+  kernelParamsTitle: '서버 파라미터',
   registrySubtitle: (db) => `${db} · 설정`,
   commonPropertiesScopeDescDb: '이 호스트의 모든 데이터베이스에 공통으로 적용되는 속성입니다. ([common] 섹션)',
   instancePropertiesScopeDescDb: (dbname) => `현재 선택한 데이터베이스 "${dbname}"의 속성입니다. ([@${dbname}] 섹션)`,
@@ -777,13 +777,13 @@ export const CM_KO = {
   scheduleCommitted: '저장됨',
   executionError: '실행 오류',
   planIdLabel: '계획 ID',
-  rotationLabel: '로테이션',
-  targetTime: '대상 시간',
+  rotationLabel: '실행 주기',
+  targetTime: '실행 시각',
   daily24hCycleLabel: '매일 (24시간 주기)',
   everyDayPreset: '전체 선택',
   clearAllPreset: '전체 해제',
-  weekdaysPreset: '평일 패턴',
-  weekendsPreset: '주말 패턴',
+  weekdaysPreset: '평일',
+  weekendsPreset: '주말',
   dailyScheduleInfoBanner: (time) => `매일 ${time}에 실행됩니다.`,
   optimizationSectionTitle: '최적화',
   retentionLabel: '보관할 백업 수',
@@ -917,8 +917,8 @@ export const CM_KO = {
     '브로커 이름이 올바르고, 브로커 프로세스가 예상 상태인지 확인하세요.',
     '브로커 설정에 포트 충돌이나 이름 중복이 없는지 확인하세요.',
   ],
-  activeContext: '활성 컨텍스트',
-  offlineStatic: '오프라인 정적',
+  activeContext: '실행 중',
+  offlineStatic: '중지됨',
   noConfigParameters: '이 데이터베이스에 대한 설정 파라미터가 없습니다.',
   parameterDumpSubtitle: '파라미터 값을 확인합니다',
   environmentReady: '준비됨',
@@ -959,7 +959,7 @@ export const CM_KO = {
 
   extendDiskCapacity: (db) => `${db} 볼륨 추가`,
   historyForDatabase: (db) => `데이터베이스 기록: ${db}`,
-  globalBackupHistory: '전역 백업 기록',
+  globalBackupHistory: '전체 백업 기록',
   dumpingPlanCache: '수행 계획 캐시 덤프 중',
   displayQueryPlan: '질의 수행 계획 표시',
   dumpingPlanCacheSubtitle: '서버에서 XASL 수행 계획 캐시 읽는 중...',
@@ -969,7 +969,7 @@ export const CM_KO = {
   description: '설명',
 
   configParam: '설정 파일 편집',
-  editCmConfig: 'CM 설정 편집',
+  editCmConfig: 'CMS 설정(cm.conf) 편집',
   reportBug: '버그 보고',
   cubridOnlineForum: 'CUBRID 온라인 포럼',
   cubridToolsDevelopment: 'CUBRID 도구 개발',
@@ -991,7 +991,7 @@ export const CM_KO = {
   updateCheckReasonParseError: '업데이트 정보를 해석할 수 없습니다.',
   updateCheckRequestFailed: '서버에서 업데이트 정보를 가져오지 못했습니다.',
 
-  globalHealthOverview: '전역 상태 개요',
+  globalHealthOverview: '전체 상태',
   hostsLabel: '호스트',
   activeLabel: '활성',
   unknownHost: '알 수 없는 호스트',
@@ -1022,7 +1022,7 @@ export const CM_KO = {
   confirmStartAllBrokersDesc: '이 호스트에서 중지된 모든 브로커를 시작하시겠습니까?',
   confirmRestartAllBrokersTitle: '전체 브로커 재시작',
   confirmRestartAllBrokersDesc: '이 호스트의 모든 브로커를 재시작하시겠습니까? 연결된 클라이언트가 모두 끊깁니다.',
-  connectHostForMonitoring: '탐색기에서 호스트 서버에 연결하면 전역 리소스 모니터링이 활성화됩니다.',
+  connectHostForMonitoring: '탐색기에서 호스트에 연결하면 전체 리소스 모니터링이 활성화됩니다.',
   // Kept in English even in Korean — same "don't translate Permanent/Temp"
   // rule as CM.permanent/CM.temporary above.
   permanentTemp: 'Permanent Temp',
@@ -1074,7 +1074,7 @@ export const CM_KO = {
   keyLabel: '키',
   summaryLabel: '요약',
   pagesCountLabel: (n) => `${n} 페이지`,
-  storageVolumes: '스토리지 볼륨',
+  storageVolumes: '데이터베이스 볼륨 정보',
   storageVolumesRequireOnlineDbMsg: '이 호스트에서 가동 중이면서 로그인한 데이터베이스의 볼륨 정보만 표시됩니다.',
   storageVolumesHiddenMsg: (n) => `로그인하지 않은 실행 중 DB ${n}개는 표시하지 않습니다.`,
   volumeLabel: '볼륨',
@@ -1225,7 +1225,7 @@ export const CM_KO = {
   backupLevelFullLongDesc: '모든 데이터, 스키마, 볼륨의 전체 스냅샷입니다.',
   backupLevelIncrL1LongDesc: '마지막 L0 백업 이후 변경 내용입니다. 복구 시 L0이 필요합니다.',
   backupLevelIncrL2LongDesc: '마지막 L1 백업 이후 변경 내용입니다. 복구 시 L0 + L1이 필요합니다.',
-  grpDbName: '복구 대상',
+  grpDbName: '데이터베이스 이름',
   lblDbNameRestore: '데이터베이스 이름:',
   grpRestoredData: '복구 데이터',
   grpDbPath: '복구 경로',
@@ -1236,14 +1236,14 @@ export const CM_KO = {
   backupTimeLabel: '백업 시점으로 복구(backuptime)',
   specifyRestoreDate: '특정 시점으로 복구',
   selectBackupInfoLabel: '가용한 백업 정보를 선택',
-  level0FileLabel: '0 레벨 파일:',
-  level1FileLabel: '1 레벨 파일:',
-  level2FileLabel: '2 레벨 파일:',
+  level0FileLabel: '0수준 파일:',
+  level1FileLabel: '1수준 파일:',
+  level2FileLabel: '2수준 파일:',
   changeRestorePathLabel: '복구 경로',
   performPartialRecovery: '보관(archive)로그가 존재하지 않으면 강제로 부분 복구 수행',
-  errLevel0File: '0 레벨 파일이 유효하지 않습니다.',
-  errLevel1File: '1 레벨 파일이 유효하지 않습니다.',
-  errLevel2File: '2 레벨 파일이 유효하지 않습니다.',
+  errLevel0File: '0수준 파일이 유효하지 않습니다.',
+  errLevel1File: '1수준 파일이 유효하지 않습니다.',
+  errLevel2File: '2수준 파일이 유효하지 않습니다.',
   errRecoveryPath: '사용자가 지정한 복구 경로가 유효하지 않습니다.',
   errLoadSchema: '로드한 스키마 파일이 유효하지 않습니다.',
   errLoadObjects: '로드한 데이터 파일이 유효하지 않습니다.',
@@ -1274,7 +1274,7 @@ export const CM_KO = {
   searchHostsPlaceholder: '호스트 검색…',
   ungroupedHosts: '미분류',
   viewAllLogs: '전체 로그 보기',
-  viewDatabase: '데이터베이스 보기',
+  viewDatabase: '데이터베이스 공간 정보',
 
   // Host modals
   loginIdLabel: '로그인 ID',
@@ -1327,13 +1327,13 @@ export const CM_KO = {
   loadingVolumeInfoSub: '볼륨 할당 데이터를 가져오는 중...',
   volumeNotFound: '볼륨을 찾을 수 없음',
   location: '위치',
-  totalPages: '전체 페이지',
+  totalPages: '총 페이지 수',
   freePages: '여유 페이지',
 
   // Log modals
   filterLogsById: 'ID 또는 설명으로 필터',
   buffering: '버퍼링 중',
-  synchronizedStatus: '동기화됨',
+  synchronizedStatus: '최신 상태',
   logAllLevels: '전체 레벨',
   infoLog: '정보',
   statusNotice: '알림',
@@ -1351,7 +1351,7 @@ export const CM_KO = {
   accountInformation: '계정 정보',
 
   // CreateUserModal
-  createUser: '사용자 생성',
+  createUser: '사용자 추가',
   dbUserPasswordChanged: '비밀번호 변경됨',
   dbUserPasswordKept: '비밀번호 유지됨',
   userCreated: '사용자 생성됨',
@@ -1359,7 +1359,7 @@ export const CM_KO = {
   // UserProfileModal
   accountDetails: '계정 정보',
   accountProfile: '계정 프로필',
-  updatePasswordBtn: '비밀번호 업데이트',
+  updatePasswordBtn: '비밀번호 변경',
   securitySettings: '보안 설정',
 
   // HaPeerMergeModal / HostGroupNameModal
@@ -1384,8 +1384,8 @@ export const CM_KO = {
 
   outcomeLabel: '결과',
   executionTime: '실행 시간',
-  globalAutomationHistory: '전역 볼륨 자동 확장 이력',
-  globalQueryHistory: '전역 질의 실행 이력',
+  globalAutomationHistory: '전체 볼륨 자동 확장 이력',
+  globalQueryHistory: '전체 질의 실행 이력',
   casSqlLog: 'CAS SQL 로그',
   casSlowQueryLog: 'CAS 느린 질의 로그',
 
@@ -1398,11 +1398,11 @@ export const CM_KO = {
   permanentData: 'Permanent 데이터',
 
   // DatabaseSpaceMonitor
-  storageAnalysisError: '스토리지 분석 오류',
+  storageAnalysisError: '공간 정보 오류',
 
   // CreateDatabaseModal
   removeVolume: '볼륨 제거',
-  storage: '스토리지',
+  storage: '볼륨',
 
   // ConfigSourceEditor
   source: '소스',
@@ -1450,7 +1450,7 @@ export const CM_KO = {
 
   // Broker Config
   fetchFailed: '가져오기 실패',
-  brokerConfigRetrieveError: '브로커 구성을 가져올 수 없습니다.',
+  brokerConfigRetrieveError: '브로커 설정을 가져올 수 없습니다.',
   configSaved: '설정 저장됨',
   brokerConfigSaveSuccess: '브로커 설정을 저장했습니다.',
   brokerConfigRestartRequiredNotice: '이 변경 사항을 적용하려면 브로커를 재시작해야 합니다.',
@@ -1462,7 +1462,7 @@ export const CM_KO = {
   confChangedOnHostDesc: '파일을 연 뒤에 변경되어 저장하지 않았습니다. 현재 파일을 다시 불러올까요? 편집한 내용은 사라집니다.',
   reloadFileBtn: '다시 불러오기',
   initializingEditor: '편집기 초기화 중...',
-  brokerConfig: '브로커 구성',
+  brokerConfig: '브로커 설정',
   brokerConfiguration: '브로커 설정',
   modified: '수정됨',
   commentsPreserved: '소스 보기에서 주석이 보존됩니다',
@@ -1488,13 +1488,13 @@ export const CM_KO = {
 
   // 사이드바 — 호스트 트리 비어있는 상태 / 로그인 상태
   addFirstHostTitle: '첫 번째 호스트 추가',
-  addFirstHostMsg: 'CUBRID 서버에 연결',
+  addFirstHostMsg: 'CUBRID 호스트에 연결',
   hostLoginTitle: '호스트 로그인',
   establishingSession: '보안 세션을 설정하는 중...',
   connectionFailed: '연결 실패',
   hostLoginFailedMsg: '호스트에 로그인하지 못했습니다.',
   hostLoginNoResponseMsg: 'CMS가 응답하지 않습니다. 호스트에서 CMS가 실행 중인지, 주소와 포트가 올바른지 확인하세요.',
-  hostLoginTlsErrorMsg: 'CMS와 신뢰할 수 있는 연결을 설정하지 못했습니다. CMS 서버의 TLS 인증서를 확인하세요.',
+  hostLoginTlsErrorMsg: 'CMS와 신뢰할 수 있는 연결을 설정하지 못했습니다. 호스트 CMS의 TLS 인증서를 확인하세요.',
   tryAgain: '다시 시도',
   allBrokers: '모든 브로커',
   brokerLogs: '브로커 로그',
@@ -1545,7 +1545,7 @@ export const CM_KO = {
   // 트랜잭션 정보 모달
   queryTime: '질의 시간',
   tranTime: '트랜잭션 시간',
-  waitHolder: '대기 홀더',
+  waitHolder: '기다리는 잠금 소유자',
   dbUserRequiredWhileOnlineMsg: '데이터베이스가 온라인 상태일 때는 데이터베이스 사용자(dbuser)가 필요합니다.',
   emptyAllowedPlaceholder: '(비워둘 수 있음)',
   alreadyLoggedInPlaceholder: '(이미 로그인됨 — 비워두면 기존 인증 재사용)',
@@ -1584,7 +1584,7 @@ export const CM_KO = {
   fullSystemAuthorization: '전체 시스템 권한',
 
   // 호스트 비밀번호 변경 모달
-  passcodeUpdated: '비밀번호 업데이트됨',
+  passcodeUpdated: '비밀번호 변경됨',
   targetHost: '대상 호스트',
 
   // 호스트 삭제 모달
@@ -1647,7 +1647,7 @@ export const CM_KO = {
   addPasswordsConfirmTitle: '가져온 호스트에 비밀번호를 추가하시겠습니까?',
   addPasswordsConfirmDesc: '지금 추가하거나, 건너뛰고 나중에 각 호스트를 개별적으로 수정할 수 있습니다.',
   importFormatHelp: 'Next CUBRID Admin XML/JSON, CUBRID Admin 호스트 XML, 또는 레거시 데스크톱 .prefs / .properties 파일입니다. 형식이 지원하는 경우 호스트 그룹도 보존됩니다. .prefs의 암호화된 비밀번호는 가져오지 않습니다.',
-  importGroupsHelp: '.prefs 파일의 호스트 그룹은 그대로 유지됩니다. 그룹에 속하지 않은 호스트는 아래 이름을 사용합니다.',
+  importGroupsHelp: '파일의 호스트 그룹은 그대로 유지됩니다. .prefs 파일에서 그룹에 속하지 않은 호스트는 아래 이름을 사용합니다.',
   allHostsIntoGroupHelp: '선택한 모든 호스트가 이 그룹에 추가됩니다',
   fallbackGroupLabel: '대체 그룹',
   validationErrorRowsHelp: '유효성 검사 오류가 있는 행은 가져올 수 없습니다. 원본 파일을 수정하거나 선택을 해제하세요.',
@@ -1894,8 +1894,8 @@ export const CM_KO = {
 
   // 브로커 상태
   basicInformation: '기본 정보',
-  applicationServers: '응용 프로그램 서버 (AS)',
-  jobQueue: '작업 대기열',
+  applicationServers: '응용 서버 (AS)',
+  jobQueue: '작업 큐',
 
   // CMS 로그 뷰어
   loadingManagerLogs: 'CMS 로그 불러오는 중...',
@@ -1994,7 +1994,7 @@ export const CM_KO = {
   hostColonLabel: (host) => `호스트: ${host}`,
 
   // BrokerStatus
-  noAppServersActiveMsg: '현재 활성화된 응용프로그램 서버가 없습니다.',
+  noAppServersActiveMsg: '실행 중인 응용 서버가 없습니다.',
   jobQueueEmptyMsg: '작업 큐가 비어 있습니다.',
   idLabel: 'ID',
 
@@ -2073,7 +2073,7 @@ export const CM_KO = {
     stop: `브로커 ${count}개를 중지했습니다.`,
     restart: `브로커 ${count}개를 재시작했습니다.`,
   })[action],
-  someBrokersSkippedMsg: (count) => `${count}개의 브로커를 건너뛰었습니다.`,
+  someBrokersSkippedMsg: (count) => `브로커 ${count}개를 건너뛰었습니다.`,
   multiBrokerNotApplicableReason: '이 브로커에는 해당하지 않음',
   logoutAllDatabases: '모든 데이터베이스 로그아웃',
   selectDatabasesTitle: '데이터베이스 선택',
@@ -2089,12 +2089,12 @@ export const CM_KO = {
   multiDbConfirmDesc: (action, names) => `${action} (${names.length}개): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`,
   loginSkipWarning: (loggedOut, notLoggedIn) => {
     const list = (names) => `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`;
-    return `로그인하지 않은 DB는 건너뜁니다 — ${[
+    return `로그인하지 않은 데이터베이스는 건너뜁니다. ${[
       loggedOut.length > 0 ? `로그아웃함: ${list(loggedOut)}` : '',
       notLoggedIn.length > 0 ? `로그인 안 함: ${list(notLoggedIn)}` : '',
     ].filter(Boolean).join(' / ')}`;
   },
-  noDatabasesToRunMsg: '실행할 DB가 없습니다. 대상 DB에 모두 로그인되어 있지 않습니다.',
+  noDatabasesToRunMsg: '선택한 데이터베이스에 모두 로그인되어 있지 않아 실행할 대상이 없습니다.',
   databaseListReadFailedMsg: '데이터베이스 목록을 읽지 못해 실행하지 않았습니다. 다시 시도하세요.',
   noTargetDatabasesMsg: '이 작업을 할 데이터베이스가 없습니다.',
   bulkSkipReasonLabel: (reason) => ({
@@ -2124,7 +2124,7 @@ export const CM_KO = {
     logout: `데이터베이스 ${count}개에서 로그아웃했습니다.`,
     forgetCredentials: `데이터베이스 ${count}개의 저장된 로그인 정보를 삭제했습니다.`,
   })[action],
-  noSavedCredentialsReason: '저장된 로그인 정보도 입력한 계정도 없음',
+  noSavedCredentialsReason: '저장된 로그인 정보가 없고 계정도 입력하지 않음',
   multiDbNotApplicableReason: '이 데이터베이스에는 해당하지 않음',
   multiDbSelectedCount: (count) => `${count}개 선택`,
   multiDbStatusRunning: '실행 중',
@@ -2133,7 +2133,7 @@ export const CM_KO = {
   multiDbStatusSavedLogin: '로그인 정보 저장됨',
   multiDbColumnHa: 'HA',
   multiDbCredentialsTitle: '저장된 로그인 정보가 없는 데이터베이스의 계정',
-  multiDbApplyFirstToAll: '첫 줄 값을 모두에 적용',
+  multiDbApplyFirstToAll: '첫 줄 값을 모든 줄에 적용',
   failureTableFailedTitle: '실패',
   failureTableSkippedTitle: '건너뜀',
   failureTablePhase: '단계',

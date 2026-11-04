@@ -20,6 +20,10 @@ const AVOIDED = [
   [/매니저/, 'CMS'],
   [/마스터|슬레이브|레플리카/, 'Master / Slave / Replica'],
   [/(?<!자동화 )(?:질의|쿼리|백업) 계획/, '질의 자동화 계획 / 백업 자동화 계획'],
+  [/스토리지/, '볼륨'],
+  [/(?<!전체 )레벨/, '수준 (백업 수준)'],
+  [/Mbyte/i, 'MiB'],
+  [/전역/, '전체'],
 ];
 const text = (value) => (typeof value === 'function' ? value.toString() : JSON.stringify(value, (k, v) => (
   v instanceof RegExp || typeof v === 'function' ? String(v) : v
