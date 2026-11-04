@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeCopyDatabaseModal, fetchDatabaseStartInfo } from '../databaseSlice';
 import { databaseJobApi } from '../databaseJobApi';
@@ -81,9 +81,20 @@ export default function CopyDatabaseModal() {
   const [volumes, setVolumes] = useState([]);
   const [volInfoLoading, setVolInfoLoading] = useState(false);
 
+  // Read by the setup effect below, which must not re-run on them.
+  const busyRef = useRef(false);
+  useEffect(() => { busyRef.current = isLoading || isSuccess; }, [isLoading, isSuccess]);
+  const wasOpenRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
-    if (isCopyDatabaseModalOpen) {
+    // Set up when the modal opens, and again if the source changes on the
+    // form. A copy that deletes its source drops it from the list while the
+    // job runs and after it succeeds, which changes currentDb; that re-run
+    // must not throw the job's progress or result back to an empty form.
+    const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
+    wasOpenRef.current = isCopyDatabaseModalOpen;
+    if (isCopyDatabaseModalOpen && (justOpened || !busyRef.current)) {
       resetAction();
       setWarnings([]);
       if (selectedHostUid && !currentDb) {

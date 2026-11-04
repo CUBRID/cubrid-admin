@@ -2,13 +2,13 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CopyDatabaseModal from './CopyDatabaseModal';
 import uiReducer from '../databaseUISlice';
-import databaseCoreReducer from '../databaseCoreSlice';
+import databaseCoreReducer, { fetchDatabaseStartInfo } from '../databaseCoreSlice';
 import { CmsJobProvider } from '../../../infrastructure/context/CmsJobContext';
 
-const mocks = vi.hoisted(() => ({ submitCopy: vi.fn(), run: vi.fn(), getStartInfo: vi.fn(), getVolumeInfo: vi.fn() }));
+const mocks = vi.hoisted(() => ({ submitCopy: vi.fn(), run: vi.fn(), getStartInfo: vi.fn(), readStartInfo: vi.fn(), getVolumeInfo: vi.fn() }));
 vi.mock('../../../api/apiClient', () => ({ default: { defaults: { headers: { common: {} } } } }));
 vi.mock('../databaseJobApi', async importOriginal => ({
   ...await importOriginal(),
@@ -18,7 +18,7 @@ vi.mock('../../../infrastructure/services/cmsJobRunner', () => ({
   runCmsJobInBackground: mocks.run, isCmsJobPolling: () => false,
   cancelAllCmsJobPolls: vi.fn(), cancelCmsJobPoll: vi.fn(),
 }));
-vi.mock('../databaseApi', () => ({ databaseApi: { getStartInfo: mocks.getStartInfo, getVolumeInfo: mocks.getVolumeInfo } }));
+vi.mock('../databaseApi', () => ({ databaseApi: { getStartInfo: mocks.getStartInfo, readStartInfo: mocks.readStartInfo, getVolumeInfo: mocks.getVolumeInfo } }));
 // The tray's shared result popup isn't under test here.
 vi.mock('../../../infrastructure/cmsJob/JobResultModal', () => ({ JobResultModal: () => null }));
 
@@ -179,4 +179,43 @@ it.each([false, true])('blocks the source name before submission (individual cop
   await typeNewName('clone');
   expect(input.getAttribute('aria-invalid')).toBeNull();
   expect(execute().disabled).toBe(false);
+});
+
+describe('a copy that deletes its source', () => {
+  // The source leaves the list (the copy moved it) while the job runs and
+  // after it succeeds, which used to reset the modal to an empty form.
+  const sourceGone = { ok: true, seq: 50, value: { dblist: { dbs: [{ dbname: 'clone', dbdir: '/db/clone' }] }, activelist: { active: [] } } };
+  const deleteSource = () => [...container.querySelectorAll('label')]
+    .find((label) => label.textContent.includes('Delete a source database')).querySelector('input');
+  const nameInput = () => container.querySelector('[data-testid="copy-database-dest-name-input"]');
+
+  it('keeps the progress view while the source leaves the list', async () => {
+    let finish;
+    mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    mocks.readStartInfo.mockResolvedValue(sourceGone);
+    await render();
+    await typeNewName('clone');
+    await click(deleteSource());
+    await click(execute());
+    expect(mocks.submitCopy.mock.calls[0][1]).toMatchObject({ move: 'y' });
+
+    await act(async () => store.dispatch(fetchDatabaseStartInfo('host-1')));
+    expect(store.getState().database.databasesByHost['host-1'].map((db) => db.dbname)).toEqual(['clone']);
+    expect(nameInput()).toBeNull();
+
+    await act(async () => finish(job));
+    expect(container.textContent).toContain('Copy completed: clone');
+  });
+
+  it('keeps the success view, with the new name, after the source leaves the list', async () => {
+    mocks.readStartInfo.mockResolvedValue(sourceGone);
+    await render();
+    await typeNewName('clone');
+    await click(deleteSource());
+    await click(execute());
+
+    expect(store.getState().database.databasesByHost['host-1'].map((db) => db.dbname)).toEqual(['clone']);
+    expect(nameInput()).toBeNull();
+    expect(container.textContent).toContain('Copy completed: clone');
+  });
 });
