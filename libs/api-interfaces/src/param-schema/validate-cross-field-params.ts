@@ -46,7 +46,7 @@ export function checkCrossFieldParams(
     if (Number.isNaN(selfValue) || Number.isNaN(otherValue)) continue;
     const ok = entry.crossField.rule === 'gte' ? selfValue >= otherValue : selfValue <= otherValue;
     if (!ok) {
-      const op = entry.crossField.rule === 'gte' ? '>=' : '<=';
+      const op = entry.crossField.rule === 'gte' ? '≥' : '≤';
       errors[entry.key] = {
         code: 'CROSS_FIELD',
         message: `Must be ${op} ${entry.crossField.comparedToKey} (currently ${otherValue})`,
