@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
-import { brokerApi } from '../broker/brokerApi';
-import { fetchBrokerStatusMap } from '../broker/fetchBrokerStatusMap';
+import { readSharedBrokerStatus } from '../broker/brokerSlice';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
 import { isDbLoginGone, dbOfLoginGone } from './dbLoginGone';
@@ -103,15 +102,15 @@ export const fetchDashboardPerformance = createAsyncThunk(
 
 export const fetchDashboardCAS = createAsyncThunk(
   'database/fetchDashboardCAS',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
+  async ({ hostUid, dbname, isBackground }, { rejectWithValue }) => {
     try {
-      const brokerList = await brokerApi.getBrokerList(hostUid);
-      const actualBrokerList = brokerList?.[0]?.broker || [];
+      // The sidebar's broker poll reads the same list and status at the same
+      // moment, so a poll joins that read; a user refresh reads anew.
+      const { brokers: actualBrokerList, statusByName } = await readSharedBrokerStatus(hostUid, { fresh: !isBackground });
       const brokersCAS = [];
 
-      // One bulk status request; brokerDetails stays index-aligned with
-      // actualBrokerList (null = no status for that broker).
-      const statusByName = await fetchBrokerStatusMap(hostUid, actualBrokerList.map(b => b?.name));
+      // brokerDetails stays index-aligned with actualBrokerList (null = no
+      // status for that broker).
       const brokerDetails = actualBrokerList.map(b => statusByName.get(b?.name) ?? null);
 
       brokerDetails.forEach((status, idx) => {
@@ -154,14 +153,14 @@ export const fetchDashboardCAS = createAsyncThunk(
 
 export const fetchDashboardData = createAsyncThunk(
   'database/fetchDashboardData',
-  async ({ hostUid, dbname }, { rejectWithValue, dispatch }) => {
+  async ({ hostUid, dbname, isBackground }, { rejectWithValue, dispatch }) => {
     if (!hostUid || !dbname) return rejectWithValue('Missing hostUid or dbname');
 
     const settled = await Promise.allSettled([
       dispatch(fetchDashboardVolumes({ hostUid, dbname })).unwrap(),
       dispatch(fetchDashboardLocks({ hostUid, dbname })).unwrap(),
       dispatch(fetchDashboardPerformance({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardCAS({ hostUid, dbname })).unwrap(),
+      dispatch(fetchDashboardCAS({ hostUid, dbname, isBackground })).unwrap(),
       dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
     ]);
 

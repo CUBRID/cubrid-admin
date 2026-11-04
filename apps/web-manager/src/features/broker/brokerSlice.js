@@ -17,11 +17,18 @@ const brokerRateTracker = createRateTracker();
 // leave the second at zero.
 const brokerListReads = createSharedReads();
 
+// Do not share a read across login sessions.
+const brokerListKey = (hostUid, skipStatusEnrichment) =>
+  JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, skipStatusEnrichment]);
+
+// Resolves to { brokers, statusByName }: the list, and the bulk status
+// (broker name -> getbrokerstatus entry) it was enriched with, empty when
+// skipped.
 const readBrokerList = async (hostUid, skipStatusEnrichment) => {
   const response = await brokerApi.getBrokerList(hostUid);
   const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
 
-  if (!brokerList) return [];
+  if (!brokerList) return { brokers: [], statusByName: new Map() };
 
   const formattedBrokers = brokerList.map(item => ({
     ...item,
@@ -39,7 +46,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
     error_query: item.error_query || '0',
   }));
 
-  if (skipStatusEnrichment) return formattedBrokers;
+  if (skipStatusEnrichment) return { brokers: formattedBrokers, statusByName: new Map() };
 
   // One bulk request for every broker's status. A broker missing from
   // the response (or a failed request) counts as a failed status fetch.
@@ -51,7 +58,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
   ));
 
   // A broker whose status could not be read stays listed, without rates.
-  return responses.map((r) => {
+  const brokers = responses.map((r) => {
     if (!r.success) return r.b;
     const asList = r.statusRes?.asinfo;
     if (!asList?.length) return r.b;
@@ -71,6 +78,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
       tps: tps === null ? null : tps.toFixed(1),
     };
   });
+  return { brokers, statusByName };
 };
 
 /**
@@ -80,10 +88,22 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
  * `{ result: [...] }` shape of the raw response; rejects like the read.
  */
 export const readSharedBrokerList = async (hostUid) => {
-  const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, false]);
-  const result = await brokerListReads(key, () => readBrokerList(hostUid, false));
+  const result = await brokerListReads(brokerListKey(hostUid, false), () => readBrokerList(hostUid, false));
   if (!result.ok) throw result.error;
-  return { result: result.value };
+  return { result: result.value.brokers };
+};
+
+/**
+ * Every broker's status from the same shared read, for the DB dashboard's
+ * CAS table: its poll fires with the sidebar's broker poll, and sending its
+ * own list and status requests sent each of them twice. Resolves to
+ * `{ brokers, statusByName }`; rejects when the list cannot be read. `fresh`
+ * (a user refresh) waits for a read sent after it was asked for.
+ */
+export const readSharedBrokerStatus = async (hostUid, { fresh = false } = {}) => {
+  const result = await brokerListReads(brokerListKey(hostUid, false), () => readBrokerList(hostUid, false), { fresh });
+  if (!result.ok) throw result.error;
+  return result.value;
 };
 
 export const fetchBrokerList = createAsyncThunk(
@@ -95,15 +115,17 @@ export const fetchBrokerList = createAsyncThunk(
     // Information" panel) can skip the bulk broker status request, which is
     // only needed to compute qps/tps.
     const skipStatusEnrichment = typeof arg === 'object' && !!arg.skipStatusEnrichment;
-    // Do not share a read across login sessions.
-    const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, skipStatusEnrichment]);
     // Only a background poll may take a read already in flight; anything
     // else was asked for by the user or follows an action.
-    const result = await brokerListReads(key, () => readBrokerList(hostUid, skipStatusEnrichment), { fresh: !arg?.isBackground });
+    const result = await brokerListReads(
+      brokerListKey(hostUid, skipStatusEnrichment),
+      () => readBrokerList(hostUid, skipStatusEnrichment),
+      { fresh: !arg?.isBackground }
+    );
     if (!result.ok) {
       return rejectWithValue(result.error.response?.data?.message || 'Failed to fetch broker list', { seq: result.seq });
     }
-    return fulfillWithValue(result.value, { seq: result.seq });
+    return fulfillWithValue(result.value.brokers, { seq: result.seq });
   }
 );
 
