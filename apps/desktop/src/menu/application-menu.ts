@@ -304,6 +304,9 @@ function rebuild(): void {
  * renderer reports its language on every startup and preference load, so an
  * unchanged language does not rebuild.
  */
+/** The UI language the renderer last reported, for the app's own dialogs. */
+export const getMenuLanguage = (): MenuLanguage => currentLanguage;
+
 export function installApplicationMenu(language: unknown = currentLanguage): void {
   const next = normalizeMenuLanguage(language);
   if (installed && next === currentLanguage) return;

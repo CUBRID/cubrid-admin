@@ -2362,4 +2362,11 @@ export const CM = {
   serviceStepDatabases: 'databases',
   haNodeStepName: 'HA databases (heartbeat)',
   confLinePrefix: (lineNo) => `Line ${lineNo}: `,
+  // Desktop app errors by code (desktopErrorText).
+  desktopErrors: {
+    WORKSPACE_PATH_REQUIRED: 'Workspace path is required.',
+    WORKSPACE_IN_APP_BUNDLE: 'Workspace cannot be inside the application bundle.',
+    WORKSPACE_NOT_WRITABLE: 'The workspace folder cannot be written to.',
+  },
+  desktopFailedWithDetail: (fallback, detail) => detail,
 };

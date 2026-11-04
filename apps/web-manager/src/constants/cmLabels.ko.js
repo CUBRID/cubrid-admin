@@ -2526,6 +2526,12 @@ export const CM_KO = {
   serviceStepDatabases: '데이터베이스',
   haNodeStepName: 'HA 데이터베이스(heartbeat)',
   confLinePrefix: (lineNo) => `${lineNo}번째 줄: `,
+  desktopErrors: {
+    WORKSPACE_PATH_REQUIRED: '워크스페이스 경로를 입력하세요.',
+    WORKSPACE_IN_APP_BUNDLE: '워크스페이스는 앱 번들 안에 둘 수 없습니다.',
+    WORKSPACE_NOT_WRITABLE: '워크스페이스 폴더에 쓸 수 없습니다.',
+  },
+  desktopFailedWithDetail: (fallback, detail) => `${fallback} (${detail})`,
   // Parameter value checks by code (paramIssueText). Bounds in words, not ≥/≤.
   paramIssues: {
     NOT_ONE_OF: (p) => `다음 중 하나여야 합니다: ${(p.options ?? []).join(', ')}`,

@@ -12,7 +12,7 @@ import {
   setWorkspaceRoot,
 } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
-import { installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
+import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import {
   assertWorkspaceWritable,
@@ -26,6 +26,17 @@ import {
   getUpdateStatus,
   openUpdateDownload,
 } from '../update/check-for-update';
+
+const WORKSPACE_DIALOG_LABELS = {
+  en: {
+    title: 'Select workspace folder',
+    message: 'Choose one folder. The app will create data/ and ssl/ inside it automatically.',
+  },
+  ko: {
+    title: '워크스페이스 폴더 선택',
+    message: '폴더 하나를 고르세요. 앱이 그 안에 data/와 ssl/을 자동으로 만듭니다.',
+  },
+};
 
 async function applyWorkspaceChange(): Promise<{ ok: true }> {
   if (getApiProcess()) {
@@ -81,11 +92,11 @@ export function registerDesktopIpcHandlers(): void {
   });
 
   ipcMain.handle('desktop:pick-workspace-directory', async () => {
+    const L = WORKSPACE_DIALOG_LABELS[getMenuLanguage()];
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
-      title: 'Select workspace folder',
-      message:
-        'Choose one folder. The app will create data/ and ssl/ inside it automatically.',
+      title: L.title,
+      message: L.message,
     });
 
     if (result.canceled || result.filePaths.length === 0) {
@@ -97,7 +108,8 @@ export function registerDesktopIpcHandlers(): void {
 
   ipcMain.handle('desktop:set-workspace-root', async (_event, workspaceRoot: string) => {
     if (!workspaceRoot?.trim()) {
-      throw new Error('Workspace path is required');
+      // Codes the settings page words in the UI language.
+      throw new Error('WORKSPACE_PATH_REQUIRED');
     }
 
     const resolved = workspaceRoot.trim();

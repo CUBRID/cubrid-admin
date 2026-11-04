@@ -68,7 +68,12 @@ export function removeStaleUnixSocket(socketPath: string): void {
   }
 }
 
+/** Throws WORKSPACE_NOT_WRITABLE (see DesktopWorkspaceSettingsPage) with the OS reason. */
 export function assertWorkspaceWritable(workspaceRoot: string): void {
-  fs.mkdirSync(workspaceRoot, { recursive: true });
-  fs.accessSync(workspaceRoot, fs.constants.W_OK);
+  try {
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+    fs.accessSync(workspaceRoot, fs.constants.W_OK);
+  } catch (error) {
+    throw new Error(`WORKSPACE_NOT_WRITABLE: ${(error as Error).message}`);
+  }
 }

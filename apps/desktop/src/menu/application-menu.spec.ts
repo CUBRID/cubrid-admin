@@ -14,6 +14,7 @@ jest.mock('../window/window-registry', () => ({
 import { Menu } from 'electron';
 import {
   buildApplicationMenuTemplate,
+  getMenuLanguage,
   installApplicationMenu,
   MENU_ACTION_IDS,
   normalizeMenuActionState,
@@ -123,4 +124,11 @@ it('normalizes reported state and rebuilds only on change', () => {
   setApplicationMenuState({ 'add-host': true });
   setApplicationMenuState({ 'add-host': true });
   expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(3);
+});
+
+it('keeps the reported language for the app\'s own dialogs', () => {
+  installApplicationMenu('ko');
+  expect(getMenuLanguage()).toBe('ko');
+  installApplicationMenu('en');
+  expect(getMenuLanguage()).toBe('en');
 });
