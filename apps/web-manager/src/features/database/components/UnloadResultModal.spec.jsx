@@ -9,7 +9,8 @@ vi.hoisted(() => {
   window.matchMedia ??= () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined });
 });
 vi.mock('../../../api/apiClient', () => ({ default: { defaults: { headers: { common: {} } } } }));
-import UnloadResultModal, { isPartialUnloadRow, unloadRowCount } from './UnloadResultModal';
+import UnloadResultModal from './UnloadResultModal';
+import { isPartialUnloadRow, unloadRowCount } from '../unloadResultRows';
 import uiReducer from '../databaseUISlice';
 
 let container;
