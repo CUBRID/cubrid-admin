@@ -638,15 +638,10 @@ export default function DatabasePropertyModal() {
       <div className="flex h-[min(720px,calc(90vh-146px))] min-h-[360px] -m-5 overflow-hidden">
 
         {/* ─── Sidebar ─── */}
-        {/* Deliberately dark in both themes (nav items below use light-on-dark
-            text/hover colors with no `dark:` variants of their own). Must be
-            opaque in light mode — a translucent bg-slate-900/60 blends toward
-            a medium gray against this panel's white background, landing
-            close enough to the inactive label's text-slate-500 to be
-            unreadable until hover. dark:bg-black/40 stays translucent since
-            it only ever blends with the panel's own dark background. */}
-        <div className="w-[180px] bg-slate-900 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
-          <div className="px-4 py-4 border-b border-white/5">
+        {/* Light in light mode like the rest of the dialog; dark:bg-black/40
+            only ever blends with the panel's own dark background. */}
+        <div className="w-[180px] bg-slate-50 dark:bg-black/40 border-r border-slate-200 dark:border-white/6 flex flex-col shrink-0">
+          <div className="px-4 py-4 border-b border-slate-200 dark:border-white/5">
             <p className="text-11 font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
           </div>
           <div className="py-2 flex-1">
@@ -656,8 +651,8 @@ export default function DatabasePropertyModal() {
                 onClick={() => setActiveSidebar(id)}
                 className={`relative w-full flex items-center gap-3 px-4 py-3.5 text-left group ${
                   activeSidebar === id
-                    ? 'bg-amber-500/10 text-amber-500'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/4'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-white/4'
                 }`}
               >
                 {activeSidebar === id && (
@@ -667,7 +662,7 @@ export default function DatabasePropertyModal() {
                   name={icon}
                   size="16px"
                   weight={activeSidebar === id ? 500 : 300}
-                  className={activeSidebar === id ? 'text-amber-500' : 'text-slate-600 group-hover:text-slate-400'}
+                  className={activeSidebar === id ? 'text-amber-500' : 'text-slate-400 group-hover:text-slate-600 dark:text-slate-600 dark:group-hover:text-slate-400'}
                 />
                 <span className="text-12 font-black uppercase tracking-widest">{label}</span>
               </button>
@@ -675,9 +670,9 @@ export default function DatabasePropertyModal() {
           </div>
           {/* Bottom context info */}
           {selectedDatabase && (
-            <div className="px-4 py-3 border-t border-white/5">
-              <p className="text-10 uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
-              <p title={selectedDatabase} className="text-12 font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-white/5">
+              <p className="text-10 uppercase tracking-widest text-slate-400 dark:text-slate-600 font-bold mb-1">{CM.context}</p>
+              <p title={selectedDatabase} className="text-12 font-mono font-black text-amber-600 dark:text-amber-500/80 truncate">{selectedDatabase}</p>
             </div>
           )}
         </div>

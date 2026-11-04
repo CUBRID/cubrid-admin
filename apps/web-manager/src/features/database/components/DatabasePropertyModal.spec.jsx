@@ -78,6 +78,14 @@ it('shows the loaded values as read-only text — no inputs or selects in the Se
   expect(container.querySelector('[role="combobox"]')).toBeNull();
 });
 
+it('draws the navigation sidebar light in light mode and dark only in dark mode', async () => {
+  const sidebar = [...document.querySelectorAll('div')].find((el) => el.className.includes?.('w-[180px]'));
+  const classes = sidebar.className.split(/\s+/);
+  expect(classes).toContain('bg-slate-50');
+  expect(classes).toContain('dark:bg-black/40');
+  expect(classes).not.toContain('bg-slate-900');
+});
+
 it('shows a notice directing edits to the text editor instead of an Apply button', async () => {
   expect(control('open-editor-inline-btn')).not.toBeNull();
   expect(control('apply-btn')).toBeNull();
