@@ -1771,6 +1771,7 @@ export const CM = {
   resultLabel: 'Result',
   unloadTableNameLabel: 'Table',
   unloadRowCountLabel: 'Rows',
+  unloadPartialMsg: 'Some objects were not unloaded.',
   noResultsLabel: 'No results',
 
   // SetAutomationVolumeModal

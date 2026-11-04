@@ -1727,6 +1727,7 @@ export const CM_KO = {
   resultLabel: '결과',
   unloadTableNameLabel: '테이블 이름',
   unloadRowCountLabel: '행 수',
+  unloadPartialMsg: '일부 객체만 언로드되었습니다.',
   noResultsLabel: '결과 없음',
 
   // 자동화 볼륨 설정 모달

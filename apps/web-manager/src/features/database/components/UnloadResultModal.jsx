@@ -15,6 +15,16 @@ export function unloadRowCount(stats) {
   return match ? match[1] : stats;
 }
 
+// When some objects fail, unloaddb ends with "Only N out of M objects dumped
+// successfully." (utils.msg set 13, 46). CMS reads its log lines as
+// "name x count pct x pct", so that sentence arrives as a row of its own:
+// Only: "out of/objects", or with the Korean catalog N: "객체가 (전체/객체)".
+export function isPartialUnloadRow(name, stats) {
+  const value = String(stats ?? '');
+  return (name === 'Only' && value.startsWith('out of/'))
+    || (/^\d+$/.test(name) && value.startsWith('객체가 (전체/'));
+}
+
 export default function UnloadResultModal() {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -23,10 +33,12 @@ export default function UnloadResultModal() {
   if (!isUnloadResultModalOpen) return null;
 
   const resultData = unloadResultData?.[0] || {};
-  const rows = Object.entries(resultData).map(([tableName, stats]) => ({
-    tableName,
-    rowCount: unloadRowCount(stats),
-  }));
+  const entries = Object.entries(resultData);
+  const partial = entries.some(([name, stats]) => isPartialUnloadRow(name, stats));
+  // A table's line starts with its row count; any other line is not a table.
+  const rows = entries
+    .filter(([, stats]) => /^\s*\d/.test(String(stats ?? '')))
+    .map(([tableName, stats]) => ({ tableName, rowCount: unloadRowCount(stats) }));
   const close = () => dispatch(closeUnloadResultModal());
   const columns = [
     { accessor: 'tableName', header: CM.unloadTableNameLabel },
@@ -43,6 +55,9 @@ export default function UnloadResultModal() {
       maxWidth="500px"
       footer={<Button variant="primary" onClick={close}>{CM.close}</Button>}
     >
+      {partial && (
+        <p data-testid="unload-result-partial" className="mb-3 text-13 text-amber-600 dark:text-amber-400">{CM.unloadPartialMsg}</p>
+      )}
       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
         <Table columns={columns} data={rows} emptyMessage={CM.noResultsLabel} showEmptyStateAsRow bordered selectable />
       </div>
