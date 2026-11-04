@@ -424,6 +424,8 @@ export const CM = {
   connectionLost: 'Connection Lost',
   reconnect: 'Reconnect',
   reconnectPrompt: 'Your session was disconnected, possibly because the token expired or another user logged into this host. Click Reconnect to try again.',
+  reconnectNewPasswordTitle: 'Enter the New Password',
+  reconnectNewPasswordPrompt: 'The password of the CMS account this host connects with was changed. Enter the new password to connect again.',
   editHost: 'Edit Host',
   deleteHost: 'Delete Host',
   changePassword: 'Change Password',
