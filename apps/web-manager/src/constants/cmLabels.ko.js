@@ -210,7 +210,7 @@ export const CM_KO = {
   criticalBadge: '중요',
   startAfterCreationLabel: '생성 후 데이터베이스 시작',
   startAfterCreationDesc: '생성이 완료되면 데이터베이스를 자동으로 시작합니다',
-  extraVolumesDesc: '필요한 경우 데이터베이스에 추가 데이터 볼륨이나 임시 볼륨을 추가하세요.',
+  extraVolumesDesc: '필요한 경우 데이터베이스에 추가 데이터 볼륨이나 Temp 볼륨을 추가하세요.',
   noAdditionalVolumesMsg: '추가 볼륨 없음',
   volumeNumberLabel: (idx) => `볼륨 ${idx}`,
   autoVolumeExpansionTitle: '볼륨 자동 확장',
@@ -575,7 +575,7 @@ export const CM_KO = {
   // Kept in English intentionally, even in the Korean locale — PM request:
   // "Permanent"/"Temp" are the terms of art here, not to be translated.
   permanent: 'Permanent',
-  temporary: '임시',
+  temporary: 'Temp',
   freeStorage: '여유 공간',
   refreshBrokersList: '브로커 목록 새로 고침',
   startServices: '서비스 시작',
@@ -1164,14 +1164,14 @@ export const CM_KO = {
   connectHostForMonitoring: '탐색기에서 호스트 서버에 연결하면 전역 리소스 모니터링이 활성화됩니다.',
   // Kept in English even in Korean — same "don't translate Permanent/Temp"
   // rule as CM.permanent/CM.temporary above.
-  permanentTemp: '영구(임시)',
-  tempTemp: '임시',
-  permanentUsedLabel: '영구 볼륨 사용률',
-  permanentTempUsedLabel: '영구(임시) 볼륨 사용률',
-  temporaryUsedLabel: '임시 볼륨 사용률',
-  permanentVolumeUtf: '영구 볼륨 (U/T/F)',
-  permanentTempVolumeUtf: '영구(임시) 볼륨 (U/T/F)',
-  temporaryVolumeUtf: '임시 볼륨 (U/T/F)',
+  permanentTemp: 'Permanent Temp',
+  tempTemp: 'Temporary Temp',
+  permanentUsedLabel: 'Permanent 볼륨 사용률',
+  permanentTempUsedLabel: 'Permanent (Temp) 볼륨 사용률',
+  temporaryUsedLabel: 'Temporary 볼륨 사용률',
+  permanentVolumeUtf: 'Permanent 볼륨 (U/T/F)',
+  permanentTempVolumeUtf: 'Permanent (Temp) 볼륨 (U/T/F)',
+  temporaryVolumeUtf: 'Temporary 볼륨 (U/T/F)',
   volumeUtfHint: '사용 / 전체 / 여유',
 
   haMaster: '마스터',
@@ -1618,10 +1618,10 @@ export const CM_KO = {
   addBackupPlanSubtitle: (db) => `${db} 데이터베이스의 자동 백업 일정을 설정합니다`,
   editBackupPlanSubtitle: (db) => `${db} 데이터베이스의 자동 백업 일정을 수정합니다`,
   setAutomationVolumeSubtitle: (db) => `"${db}" 볼륨 자동 확장 정책을 설정합니다`,
-  permanentDataVolDesc: '영구 데이터 볼륨',
+  permanentDataVolDesc: 'Permanent 데이터 볼륨',
   indexSearchVolDesc: '인덱스 볼륨',
-  permanentData: '영구 데이터',
-  temporaryData: '임시 데이터',
+  permanentData: 'Permanent 데이터',
+  temporaryData: 'Temporary 데이터',
 
   // DatabaseSpaceMonitor
   storageAnalysisError: '스토리지 분석 오류',
@@ -1775,8 +1775,8 @@ export const CM_KO = {
   // 볼륨 카테고리 모니터
   capacityLabel: '용량',
   overallUtilization: '전체 사용률',
-  permanentDataLabel: '영구 데이터',
-  temporaryDataLabel: '임시 데이터',
+  permanentDataLabel: 'Permanent 데이터',
+  temporaryDataLabel: 'Temporary 데이터',
 
   // 트랜잭션 정보 모달
   queryTime: '쿼리 시간',
