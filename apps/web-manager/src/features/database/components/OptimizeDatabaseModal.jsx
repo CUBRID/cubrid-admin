@@ -313,7 +313,7 @@ export default function OptimizeDatabaseModal() {
           return;
         }
         setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
-        endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
+        endError(typeof err === 'string' ? err : (err.message || CM.optimizeInterruptedMsg));
       }
     }
   };

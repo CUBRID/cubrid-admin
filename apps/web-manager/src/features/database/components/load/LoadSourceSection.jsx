@@ -150,7 +150,7 @@ export default function LoadSourceSection({
             {radio === 0 && dataSource.length > 0 && (
               <p className="text-12 text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1.5 mt-2 pl-1">
                 <Icon name="check_box_outline_blank" size="12px" className="text-amber-500/60" />
-                {dataSource.filter(d => d.checked).length} of {dataSource.length} volumes selected
+                {CM.volumesSelectedCount(dataSource.filter(d => d.checked).length, dataSource.length)}
               </p>
             )}
           </div>

@@ -215,7 +215,7 @@ export default function RenameDatabaseModal() {
         {/* New Database Name Row */}
         <div className="grid grid-cols-[170px_1fr] items-center gap-4">
           <label className="font-medium text-slate-700 dark:text-slate-200">
-            {CM.newDatabaseName || 'New database name:'}
+            {CM.newDatabaseName}
           </label>
           <Input
             data-testid="rename-database-new-name-input"
@@ -224,7 +224,7 @@ export default function RenameDatabaseModal() {
             placeholder={`${selectedDatabase}_v2`}
             className="w-full"
             autoFocus
-            error={newDbName && !validateDbName(newDbName) ? "Name must be 1-17 alphanumeric, underscore or hyphen characters" : undefined}
+            error={newDbName && !validateDbName(newDbName) ? CM.dbNameRuleMsg : undefined}
           />
         </div>
 

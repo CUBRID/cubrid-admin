@@ -292,28 +292,28 @@ export default function LoadDatabaseModal() {
   const getValidationError = () => {
     if (radio === 0) {
       if (!selectedUnload) {
-        return CM.errLoadFileFromList || 'Please select the unloaded file from the list.';
+        return CM.errLoadFileFromList;
       }
       const hasChecked = dataSource.some((row) => row.checked);
       if (!hasChecked) {
-        return CM.errNoSelectedPath || 'Please check the unloaded files of the selected database from the following list.';
+        return CM.errNoSelectedPath;
       }
     } else if (radio === 1) {
       const { schema, object, index, trigger } = formData.checkBoxes;
       if (!schema && !object && !index && !trigger) {
-        return CM.errLoadFileFromSys || 'Please select the unloaded file from the file system';
+        return CM.errLoadFileFromSys;
       }
       if (schema && !formData.unloadFiles.schema?.trim()) {
-        return CM.errLoadSchema || 'Loaded schema file is not valid.';
+        return CM.errLoadSchema;
       }
       if (object && !formData.unloadFiles.object?.trim()) {
-        return CM.errLoadOjbects || 'Loaded objects file is not valid.';
+        return CM.errLoadObjects;
       }
       if (index && !formData.unloadFiles.index?.trim()) {
-        return CM.errLoadIndex || 'Loaded index file is not valid.';
+        return CM.errLoadIndex;
       }
       if (trigger && !formData.unloadFiles.trigger?.trim()) {
-        return CM.errLoadTrigger || 'Loaded trigger file is not valid.';
+        return CM.errLoadTrigger;
       }
     }
 
@@ -333,13 +333,13 @@ export default function LoadDatabaseModal() {
 
     if (formData.checkBoxes.errorcontrolfile) {
       if (!formData.values.errorcontrolfile?.trim()) {
-        return CM.errControlFile || 'The error control file is not valid.';
+        return CM.errControlFile;
       }
     }
 
     if (formData.checkBoxes.ignoreclassfile) {
       if (!formData.values.ignoreclassfile?.trim()) {
-        return CM.errClassFile || 'The ignored table file is not valid.';
+        return CM.errClassFile;
       }
     }
 

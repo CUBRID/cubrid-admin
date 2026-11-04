@@ -98,7 +98,7 @@ export default function CMSUserManagementModal() {
     // CMS often uses @id or targetid for the username in the response
     const username = typeof user === 'string' 
       ? user 
-      : (user.name || user.id || user['@id'] || user.targetid || 'Unknown');
+      : (user.name || user.id || user['@id'] || user.targetid || CM.unknownFallback);
     const isAdmin = username.toLowerCase() === 'admin';
     const casauth = user?.casauth || user?.['@casauth'] || 'none';
     const dbcreate = user?.dbcreate || user?.['@dbcreate'] || 'none';

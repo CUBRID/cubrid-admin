@@ -236,7 +236,7 @@ export default function DatabaseTree({
           <Icon name="database" size="sm" className="text-slate-400 dark:text-slate-500" weight={300} />
         </div>
         <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-12">
-          No databases found
+          {CM.noDatabasesFound}
         </Typography>
       </div>
     );

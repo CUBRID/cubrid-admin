@@ -447,10 +447,10 @@ const Component = function ServiceDashboard() {
           {/* HA Role Filter Segmented Control */}
           <div className="flex items-center bg-slate-100/80 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200/50 dark:border-white/5 mr-2 shrink-0">
             {[
-              { id: 'all', label: CM.all || 'All' },
-              { id: 'master', label: CM.haMaster || 'Master' },
-              { id: 'slave', label: CM.haSlave || 'Slave' },
-              { id: 'replica', label: CM.haReplica || 'Replica' },
+              { id: 'all', label: CM.all },
+              { id: 'master', label: CM.haMaster },
+              { id: 'slave', label: CM.haSlave },
+              { id: 'replica', label: CM.haReplica },
             ].map((tab) => {
               const isActive = roleFilter === tab.id;
               return (

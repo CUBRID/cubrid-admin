@@ -45,7 +45,7 @@ export default function ImportExportHostModal() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [fileName, setFileName] = useState('export_hosts');
   const [exportFormat, setExportFormat] = useState('nativeXml');
-  const [importGroupName, setImportGroupName] = useState('Imported');
+  const [importGroupName, setImportGroupName] = useState(CM.importedPlaceholder);
 
   useEffect(() => {
     if (isImportExportModalOpen) {
@@ -63,7 +63,7 @@ export default function ImportExportHostModal() {
         setPendingPasswordHosts([]);
         setPasswordDrafts({});
         setShowPasswordPrompt(false);
-        setImportGroupName('Imported');
+        setImportGroupName(CM.importedPlaceholder);
       }
     }
   }, [isImportExportModalOpen, importExportMode, hosts]);
@@ -89,7 +89,7 @@ export default function ImportExportHostModal() {
     const base = String(filename || '')
       .replace(/\.(xml|prefs|properties|txt)$/i, '')
       .trim();
-    return base || 'Imported';
+    return base || CM.importedPlaceholder;
   };
 
   const handleFileChange = async (e) => {
@@ -223,7 +223,7 @@ export default function ImportExportHostModal() {
           }
 
           if (unassignedHosts.length > 0) {
-            const fallbackName = importGroupName.trim() || 'Imported';
+            const fallbackName = importGroupName.trim() || CM.importedPlaceholder;
             const groupId = await createImportGroup(fallbackName);
             createdGroupIds.push(groupId);
             importedGroupNames.push(fallbackName);

@@ -56,7 +56,7 @@ export default function ServerVersionModal() {
     >
       <div className="flex flex-col items-center space-y-6 pt-2">
         <div className="w-24 h-24 p-3 bg-white dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10 shadow-xs flex items-center justify-center animate-in zoom-in duration-300">
-          <img src="/cubrid-logo.png" alt="CUBRID logo" className="w-full h-auto object-contain" />
+          <img src="/cubrid-logo.png" alt={CM.cubridLogoAlt} className="w-full h-auto object-contain" />
         </div>
 
         <div className="w-full space-y-5">

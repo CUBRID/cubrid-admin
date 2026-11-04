@@ -225,7 +225,7 @@ export default function CopyDatabaseModal() {
 
   const volumeColumns = [
     {
-      header: CM.tblColumnCurrentVolName || 'Current volume name',
+      header: CM.tblColumnCurrentVolName,
       accessor: 'fullPath',
       width: '40%',
       className: 'font-semibold!',
@@ -233,7 +233,7 @@ export default function CopyDatabaseModal() {
       render: (fullPath) => <span title={fullPath}>{fullPath}</span>,
     },
     {
-      header: CM.tblColumnCopyNewVolName || 'New volume name',
+      header: CM.tblColumnCopyNewVolName,
       accessor: 'newVolumeName',
       width: '30%',
       className: 'font-semibold!',
@@ -243,13 +243,13 @@ export default function CopyDatabaseModal() {
           size="sm"
           disabled={!formData.copyIndividual}
           value={value}
-          aria-label={`${CM.tblColumnCopyNewVolName || 'New volume name'}: ${volume.fullPath}`}
+          aria-label={`${CM.tblColumnCopyNewVolName}: ${volume.fullPath}`}
           onChange={event => handleVolumeChange(volume.volumeIndex, 'newVolumeName', event.target.value)}
         />
       ),
     },
     {
-      header: CM.tblColumnCopyNewDirPath || 'New directory path',
+      header: CM.tblColumnCopyNewDirPath,
       accessor: 'newLocation',
       width: '30%',
       className: 'font-semibold!',
@@ -259,7 +259,7 @@ export default function CopyDatabaseModal() {
           size="sm"
           disabled={!formData.copyIndividual}
           value={value}
-          aria-label={`${CM.tblColumnCopyNewDirPath || 'New directory path'}: ${volume.fullPath}`}
+          aria-label={`${CM.tblColumnCopyNewDirPath}: ${volume.fullPath}`}
           inputClassName="font-mono"
           onChange={event => handleVolumeChange(volume.volumeIndex, 'newLocation', event.target.value)}
         />
@@ -363,8 +363,8 @@ export default function CopyDatabaseModal() {
     <Modal
       isOpen={isCopyDatabaseModalOpen}
       onClose={handleClose}
-      title={CM.copyDatabase || 'Copy Database'}
-      subtitle={CM.msgCopyDbDialog || 'Please enter the database information.'}
+      title={CM.copyDatabase}
+      subtitle={CM.msgCopyDbDialog}
       icon="content_copy"
       maxWidth="820px"
       testId="copy-database"
@@ -389,11 +389,11 @@ export default function CopyDatabaseModal() {
       <div className="space-y-5">
         {/* Source Database Group */}
         <div>
-          <SectionHeader title={CM.grpDbSourceName || 'Source database'} icon="database" />
+          <SectionHeader title={CM.grpDbSourceName} icon="database" />
           <div className="bg-slate-50 dark:bg-white/4 border border-slate-200 dark:border-white/8 rounded-xl p-3.5 space-y-3">
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblSrcDbName || 'Database name:'}
+                {CM.lblSrcDbName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -407,7 +407,7 @@ export default function CopyDatabaseModal() {
 
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblSrcDbPathName || 'Database path:'}
+                {CM.lblSrcDbPathName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -421,7 +421,7 @@ export default function CopyDatabaseModal() {
 
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblSrcLogPathName || 'Log file path:'}
+                {CM.lblSrcLogPathName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -437,11 +437,11 @@ export default function CopyDatabaseModal() {
 
         {/* Destination Database Group */}
         <div>
-          <SectionHeader title={CM.grpDbDestName || 'Destination database'} icon="move_to_inbox" />
+          <SectionHeader title={CM.grpDbDestName} icon="move_to_inbox" />
           <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/8 rounded-xl p-3.5 space-y-3">
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblDescDbName || 'Database name:'}
+                {CM.lblDescDbName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -449,7 +449,7 @@ export default function CopyDatabaseModal() {
                   value={formData.destName}
                   error={isDestinationSameAsSource ? CM.copyDestinationSameAsSource : undefined}
                   onChange={e => handleInputChange('destName', e.target.value)}
-                  placeholder="e.g. demodb_copy"
+                  placeholder={CM.examplePlaceholder('demodb_copy')}
                   autoFocus
                   size="md"
                 />
@@ -458,7 +458,7 @@ export default function CopyDatabaseModal() {
 
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblDescDbPathName || 'Database path:'}
+                {CM.lblDescDbPathName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -473,7 +473,7 @@ export default function CopyDatabaseModal() {
 
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblVolumePathName || 'Extend volume path:'}
+                {CM.lblVolumePathName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -488,7 +488,7 @@ export default function CopyDatabaseModal() {
 
             <div className="grid grid-cols-3 gap-3 items-center">
               <label className="text-14 font-medium text-slate-600 dark:text-slate-400">
-                {CM.lblDescLogPathName || 'Log file path:'}
+                {CM.lblDescLogPathName}
               </label>
               <div className="col-span-2">
                 <Input
@@ -513,7 +513,7 @@ export default function CopyDatabaseModal() {
           <div className="flex items-center justify-between mb-2">
             <Checkbox
               data-testid="copy-database-individual-toggle"
-              label={CM.btnCopyVolume || 'Copy individual volumes'}
+              label={CM.btnCopyVolume}
               checked={formData.copyIndividual}
               onChange={e => handleInputChange('copyIndividual', e.target.checked)}
               disabled={!formData.destName.trim()}
@@ -546,12 +546,12 @@ export default function CopyDatabaseModal() {
         {/* Options */}
         <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-white/5">
           <Checkbox
-            label={CM.btnReplaceDb || 'Replace an existing database'}
+            label={CM.btnReplaceDb}
             checked={formData.replaceExisting}
             onChange={e => handleInputChange('replaceExisting', e.target.checked)}
           />
           <Checkbox
-            label={CM.btnDeleteSrcDb || 'Delete a source database'}
+            label={CM.btnDeleteSrcDb}
             checked={formData.deleteSource && !isSourceHa}
             disabled={isSourceHa}
             onChange={e => handleInputChange('deleteSource', e.target.checked)}

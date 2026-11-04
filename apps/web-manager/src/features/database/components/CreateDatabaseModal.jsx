@@ -582,7 +582,7 @@ export default function CreateDatabaseModal() {
                   label={CM.databaseName}
                   value={formData.dbName}
                   onChange={(e) => handleInputChange('dbName', e.target.value)}
-                  placeholder="e.g. production_db"
+                  placeholder={CM.examplePlaceholder('production_db')}
                   icon="database"
                 />
                 <Select
@@ -608,7 +608,7 @@ export default function CreateDatabaseModal() {
                     label={CM.userDefined}
                     value={formData.userDefinedLocale}
                     onChange={(e) => handleInputChange('userDefinedLocale', e.target.value)}
-                    placeholder="e.g. de_DE.utf8"
+                    placeholder={CM.examplePlaceholder('de_DE.utf8')}
                   />
                 </div>
               )}
@@ -825,7 +825,7 @@ export default function CreateDatabaseModal() {
                     <Input
                       value={formData.autoAddVol.warn}
                       onChange={(e) => handleAutoAddVolChange('warn', e.target.value)}
-                      placeholder="e.g. 0.15"
+                      placeholder={CM.examplePlaceholder('0.15')}
                     />
                     <p className="text-11 text-slate-400">{CM.ratioHintText}</p>
                   </div>
@@ -838,7 +838,7 @@ export default function CreateDatabaseModal() {
                         type="number"
                         value={formData.autoAddVol.extSize}
                         onChange={(e) => handleAutoAddVolChange('extSize', e.target.value)}
-                        placeholder="e.g. 512"
+                        placeholder={CM.examplePlaceholder('512')}
                         className="flex-1"
                       />
                       <div className="w-[80px] shrink-0">

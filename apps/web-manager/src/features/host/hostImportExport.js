@@ -69,7 +69,7 @@ export function buildGroupedExportPayload(hostGroups, selectedUids) {
     groups.push({
       // The no-group bucket is written without a name, so a user group may
       // itself be called "Ungrouped".
-      ...(groupId === UNGROUPED_GROUP_ID ? {} : { name: group.name || 'Imported' }),
+      ...(groupId === UNGROUPED_GROUP_ID ? {} : { name: group.name || labels().importedPlaceholder }),
       hosts: hostsInGroup.map((host) => ({
         alias: host.alias || '',
         address: host.address || '',
@@ -522,7 +522,7 @@ function parseHostsFromXmlString(xmlString) {
   }
 
   if (parsedHosts.length === 0) {
-    throw new Error(labels().importNoValidHostsMsg);
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
 
   return parsedHosts;
@@ -610,7 +610,7 @@ function tryParseNativeJson(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(data.groups);
   if (parsed.hosts.length === 0) {
-    throw new Error(labels().importNoValidHostsMsg);
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
   return parsed;
 }
@@ -643,7 +643,7 @@ function tryParseNativeXml(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(groupList);
   if (parsed.hosts.length === 0) {
-    throw new Error(labels().importNoValidHostsMsg);
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
   return parsed;
 }

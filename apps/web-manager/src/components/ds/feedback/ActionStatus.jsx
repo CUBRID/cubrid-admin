@@ -141,7 +141,7 @@ export const ModalStatusError = ({
           {showDetail && (
             <div className="mt-2 bg-rose-500/5 border border-rose-500/15 rounded-xl px-5 py-4 animate-in fade-in slide-in-from-top-1 duration-200">
               <Typography variant="caption" className="text-12 font-semibold uppercase tracking-wide text-rose-400 mb-1 block">
-                {CM.message || 'Message'}
+                {CM.message}
               </Typography>
               <Typography variant="caption" className="text-rose-600/90 dark:text-rose-400/90 font-mono leading-relaxed block break-words text-13">
                 {rawDetail}

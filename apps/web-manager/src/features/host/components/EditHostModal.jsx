@@ -21,7 +21,8 @@ export default function EditHostModal() {
   // Opened from an HA follow-up of a bulk-login result dialog, which stays
   // open (z-[2100]) underneath — stack above it like the HA modals do.
   const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
-  const isCredentialError = /password/i.test(apiError || '');
+  // A failure that mentions the password is shown under the password field.
+  const isCredentialError = !!apiError && String(apiError).toLowerCase().includes(CM.password.toLowerCase());
 
   const [formData, setFormData] = useState({
     id: '',

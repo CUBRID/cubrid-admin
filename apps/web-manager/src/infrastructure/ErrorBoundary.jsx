@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component {
             description={this.state.error?.message || getCM(getStoredLocale()).reloadPageHint}
             action={
               <Button variant="outline" onClick={this.handleReload} icon="refresh">
-                Reload Application
+                {getCM(getStoredLocale()).reloadApplication}
               </Button>
             }
           />

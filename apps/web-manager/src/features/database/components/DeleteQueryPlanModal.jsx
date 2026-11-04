@@ -122,7 +122,10 @@ export default function DeleteQueryPlanModal() {
         <div className="space-y-2">
           <Typography variant="h4" className="text-18 font-black text-slate-900 dark:text-white tracking-tight">{CM.deleteQueryPlanPrompt}</Typography>
           <Typography variant="p" className="text-13 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[320px] mx-auto">
-            You are about to permanently remove the query plan <span className="text-rose-500 font-black uppercase tracking-tight">"{selectedQueryPlanId}"</span>. Automated capture for <span className="font-bold text-slate-900 dark:text-white">"{selectedDatabase}"</span> will cease immediately.
+            {CM.deleteQueryPlanBody(
+              <span key="plan" className="text-rose-500 font-black uppercase tracking-tight">"{selectedQueryPlanId}"</span>,
+              <span key="db" className="font-bold text-slate-900 dark:text-white">"{selectedDatabase}"</span>,
+            )}
           </Typography>
         </div>
 

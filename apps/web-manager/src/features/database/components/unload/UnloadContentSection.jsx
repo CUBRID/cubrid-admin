@@ -107,7 +107,7 @@ export default function UnloadContentSection({
         )}
         {dynamicTables.length === 0 && !isTablesLoading && (
           <Typography variant="caption" className="text-slate-500">
-            No tables available.
+            {CM.noTablesAvailableMsg}
           </Typography>
         )}
       </div>

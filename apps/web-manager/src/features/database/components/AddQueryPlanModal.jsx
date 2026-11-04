@@ -219,7 +219,7 @@ export default function AddQueryPlanModal() {
             <SectionHeader title={CM.objectIdentification} icon="fingerprint" />
             <Input
               label={CM.queryIdentifierLabel}
-              placeholder="e.g. hourly_purge_logs"
+              placeholder={CM.examplePlaceholder('hourly_purge_logs')}
               value={formData.queryId}
               onChange={e => handleInputChange('queryId', e.target.value)}
               icon="tag"

@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { setAuthToken } from '../../api/apiClient';
 import { authApi } from './authApi';
+import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 const token = localStorage.getItem('token');
 const refreshToken = localStorage.getItem('refreshToken');
@@ -12,7 +13,7 @@ export const fetchUser = createAsyncThunk(
       const response = await authApi.getUserInfo();
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch user info');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -24,7 +25,7 @@ export const updateAccount = createAsyncThunk(
       const response = await authApi.updateUserAccount(data);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update account');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
