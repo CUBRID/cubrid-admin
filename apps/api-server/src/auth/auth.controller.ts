@@ -6,9 +6,11 @@ import {
   LogoutRequest,
   RefreshTokenRequest,
 } from '@api-interfaces';
-import { Public } from '@common';
+import { NotOnDesktop, Public } from '@common';
 import { ValidationError } from '@error/validation/validation-error';
 
+// The desktop app has no app login (DesktopUserGuard).
+@NotOnDesktop()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

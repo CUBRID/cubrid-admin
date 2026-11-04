@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import 'module-alias/register';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as net from 'net';
 import * as express from 'express';
 import { getHttpsOptions, logStartupBanner, createWinstonLogger, startLogConfigWatcher } from '@util';
 import { GlobalExceptionFilter } from '@error/global-filter';
@@ -34,7 +35,7 @@ async function bootstrap() {
   const port: string = configService.getPort();
   const listenHost = configService.getListenHost();
   const allowedOrigins = configService.getAllowedOrigins();
-  const desktopMode = (process.env.CWM_DESKTOP ?? '').trim() === '1';
+  const desktopMode = configService.isDesktopMode();
 
   if (allowedOrigins.includes('*')) {
     // Development mode: allow all origins.
@@ -122,14 +123,27 @@ async function bootstrap() {
 
   const unixSocket = configService.getListenUnixSocket();
   if (unixSocket) {
-    removeStaleUnixSocket(unixSocket);
-    await app.listen(unixSocket);
+    await removeStaleUnixSocket(unixSocket);
+    // Desktop mode has no app login: the socket is made owner-only as it is
+    // created (umask), so no other OS user can reach it, with no gap before
+    // a chmod.
+    const previousUmask = desktopMode ? process.umask(0o077) : null;
+    try {
+      await app.listen(unixSocket);
+    } finally {
+      if (previousUmask !== null) process.umask(previousUmask);
+    }
     logStartupBanner(configService, { kind: 'unixSocket', socketPath: unixSocket }, appLogger);
     // bootConfig (not configService) — winston-logger.ts tracks the
     // instance it was actually built from, so reloads must go through that
     // same object.
     startLogConfigWatcher(bootConfig, appLogger);
     return;
+  }
+
+  // ConfigService requires the socket in desktop mode; never fall to TCP.
+  if (desktopMode) {
+    throw new Error('Desktop mode listens only on LISTEN_UNIX_SOCKET.');
   }
 
   const boundHost = listenHost ?? '0.0.0.0';
@@ -143,16 +157,44 @@ async function bootstrap() {
 }
 bootstrap();
 
-function removeStaleUnixSocket(socketPath: string): void {
+/**
+ * Removes a socket file a server that is gone left behind. A socket that
+ * another server still answers on is not taken over, and a path that is not
+ * a socket (e.g. a symlink) is not removed: both stop the start.
+ */
+async function removeStaleUnixSocket(socketPath: string): Promise<void> {
   if (process.platform === 'win32') {
     return;
   }
 
+  let stat: fs.Stats;
   try {
-    fs.unlinkSync(socketPath);
+    stat = fs.lstatSync(socketPath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw error;
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
     }
+    throw error;
   }
+  if (!stat.isSocket()) {
+    throw new Error(`${socketPath} exists and is not a socket.`);
+  }
+  if (await socketAnswers(socketPath)) {
+    throw new Error(`Another server is already listening on ${socketPath}.`);
+  }
+  fs.unlinkSync(socketPath);
+}
+
+function socketAnswers(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ path: socketPath }, () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.setTimeout(2000, () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on('error', () => resolve(false));
+  });
 }
