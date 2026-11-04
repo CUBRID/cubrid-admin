@@ -51,7 +51,7 @@ export default function EditCMSUserModal() {
   const username = isEditMode ? (editUser?.id || editUser?.name || editUser['@id'] || editUser.targetid || '') : '';
   const isAdmin = isEditMode && username === 'admin';
   // The CMS account this app logs in to the host with.
-  const hostLoginId = useSelector((state) => state.host.hosts.find((h) => h.uid === hostUid)?.id);
+  const hostLoginId = useSelector((state) => state.host.hosts?.find((h) => h.uid === hostUid)?.id);
   const [askPasswordOnClose, setAskPasswordOnClose] = useState(false);
 
   const {
