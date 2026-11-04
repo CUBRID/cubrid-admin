@@ -253,7 +253,11 @@ function DashboardLayout() {
           <div className="h-full min-w-fit flex flex-col">
 
             <Header theme={theme} toggleTheme={() => dispatch(toggleTheme())} />
-          <div className="shrink-0 bg-slate-50 dark:bg-bk-main">
+          {/* w-0 min-w-full: the tab bar takes the width the header set and
+              adds nothing to the wrapper's min-w-fit above. With its own
+              width counted, every open tab widened main instead of the tab
+              list scrolling (and showing its previous/next buttons). */}
+          <div className="shrink-0 w-0 min-w-full bg-slate-50 dark:bg-bk-main">
 
             <Breadcrumb
               activeTab={activeMainTab}
