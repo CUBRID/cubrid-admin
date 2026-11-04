@@ -642,6 +642,7 @@ export const CM = {
   compactDescriptionInformation: 'Description',
   compactDatabaseDescription: 'This utility reclaims space from two sources\n\n-OIDs of deleted objects\n-multiple table representations',
   maintenanceTarget: 'Maintenance Target',
+  compactionComplete: 'Compaction Complete',
   compactionFailed: 'Compaction Failed',
   performanceTuning: 'Performance Tuning',
   noMatches: 'No Matches',

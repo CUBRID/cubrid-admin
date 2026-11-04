@@ -599,6 +599,7 @@ export const CM_KO = {
   compactDescriptionInformation: '설명',
   compactDatabaseDescription: '이 기능은 두 가지 방법으로 데이터베이스 볼륨 공간을 정리합니다.\n\n  -지워진 객체의 OID 제거\n  -스키마가 변경된(ALTER TABLE) 데이터의 변경 내용 반영',
   maintenanceTarget: '대상 데이터베이스',
+  compactionComplete: '공간 정리 완료',
   compactionFailed: '공간 정리 실패',
   performanceTuning: '성능 튜닝',
   noMatches: '일치 항목 없음',

@@ -67,7 +67,7 @@ export default function CompactDatabaseModal() {
       );
       if (!wasBackgrounded()) {
         const log = job?.result?.log;
-        endSuccess(log || CM.optimizationComplete);
+        endSuccess(log || CM.compactionComplete);
       }
     } catch (err) {
       if (!wasBackgrounded()) endError(typeof err === 'string' ? err : err.message || CM.compactionFailed);
@@ -95,7 +95,7 @@ export default function CompactDatabaseModal() {
     return (
       <Modal isOpen title={CM.dynamicCompaction} icon="compress" iconVariant="success" onClose={handleClose} maxWidth="480px">
         <ModalStatusSuccess 
-          title={CM.optimizationComplete}
+          title={CM.compactionComplete}
           message={selectedDatabase}
           onConfirm={handleClose}
           confirmText={CM.ok}
