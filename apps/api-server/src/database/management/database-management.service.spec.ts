@@ -1024,7 +1024,12 @@ describe('DatabaseManagementService', () => {
 
       const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
 
-      expect(warnings).toEqual([expect.stringContaining('could not be updated')]);
+      expect(warnings).toEqual([expect.objectContaining({
+        code: 'RENAME_AUTOSTART_NOT_UPDATED',
+        oldName: 'srcdb',
+        newName: 'newdb',
+        message: expect.stringContaining('could not be updated'),
+      })]);
     });
   });
 
@@ -1113,7 +1118,7 @@ describe('DatabaseManagementService', () => {
 
     it('passes on the warnings of the cubrid.conf rename (e.g. a [@new] section already there)', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      databaseConfigService.renameAutoStart.mockResolvedValueOnce(['kept [@old]']);
+      databaseConfigService.renameAutoStart.mockResolvedValueOnce([{ code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new', message: 'kept [@old]' }]);
 
       const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
         rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
@@ -1121,6 +1126,7 @@ describe('DatabaseManagementService', () => {
 
       expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'renamed_db');
       expect(result.warnings).toEqual(['kept [@old]']);
+      expect(result.warningDetails).toEqual([{ code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new' }]);
     });
 
     it('leaves cubrid.conf alone when nothing in it names the database', async () => {

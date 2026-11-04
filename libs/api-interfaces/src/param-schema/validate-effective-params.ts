@@ -1,6 +1,6 @@
 import { ParamSchemaEntry } from './param-schema-entry';
-import { validateParamValue } from './validate-param-value';
-import { validateCrossFieldParams } from './validate-cross-field-params';
+import { ParamValueIssue, checkParamValue } from './validate-param-value';
+import { checkCrossFieldParams } from './validate-cross-field-params';
 
 const NUMERIC_KINDS = ['int', 'float', 'bigint', 'size', 'time'];
 
@@ -92,8 +92,25 @@ export function validateEffectiveParams(
   params: Record<string, unknown>,
   options: ValidateEffectiveParamsOptions
 ): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(checkEffectiveParams(schema, params, options)).map(([key, issue]) => [key, issue.message])
+  );
+}
+
+/**
+ * validateEffectiveParams as ParamValueIssues. Besides checkParamValue's and
+ * checkCrossFieldParams' codes: COMMON_SECTION_ONLY {section},
+ * NOT_IN_COMMON_SECTION {section}, EMPTY_READS_AS_ZERO {cause, ...the
+ * cause's params} (cause: the code of what 0 fails), EMPTY_VALUE, REQUIRED,
+ * MIN_MAX_NOT_NUMERIC.
+ */
+export function checkEffectiveParams(
+  schema: ParamSchemaEntry[],
+  params: Record<string, unknown>,
+  options: ValidateEffectiveParamsOptions
+): Record<string, ParamValueIssue> {
   const { isCommonSection, commonSectionLabel, emptyValueIsError, emptyIntIsZero, sysprmKeywords, skipSectionPlacement } = options;
-  const errors: Record<string, string> = {};
+  const errors: Record<string, ParamValueIssue> = {};
   const isValueBlank = (value: unknown) => value === undefined || value === null || String(value).trim() === '';
 
   for (const entry of schema) {
@@ -107,24 +124,30 @@ export function validateEffectiveParams(
       // a section it was never meant to be in.
       if (!isBlank) {
         errors[entry.key] = entry.commonOnly
-          ? `Can only be set in [${commonSectionLabel}], not per-instance.`
-          : `Cannot be set in [${commonSectionLabel}], only per-instance.`;
+          ? { code: 'COMMON_SECTION_ONLY', message: `Can only be set in [${commonSectionLabel}], not per-instance.`, params: { section: commonSectionLabel } }
+          : { code: 'NOT_IN_COMMON_SECTION', message: `Cannot be set in [${commonSectionLabel}], only per-instance.`, params: { section: commonSectionLabel } };
       }
       continue;
     }
 
     if (emptyIntIsZero && isBlank && raw !== undefined && raw !== null && entry.guard.kind === 'int') {
-      const reason = validateParamValue(entry.guard, '0');
-      if (reason) errors[entry.key] = `Empty value reads as 0 — ${reason}`;
+      const cause = checkParamValue(entry.guard, '0');
+      if (cause) {
+        errors[entry.key] = {
+          code: 'EMPTY_READS_AS_ZERO',
+          message: `Empty value reads as 0 — ${cause.message}`,
+          params: { cause: cause.code, ...cause.params },
+        };
+      }
       continue;
     }
     if (emptyValueIsError && isBlank && raw !== undefined && raw !== null && (entry.guard.kind !== 'string' || entry.guard.nonEmpty)) {
-      errors[entry.key] = 'Empty value — the engine rejects it and fails to load the file.';
+      errors[entry.key] = { code: 'EMPTY_VALUE', message: 'Empty value — the engine rejects it and fails to load the file.' };
       continue;
     }
 
     if (entry.required && isBlank) {
-      errors[entry.key] = 'This parameter is required and cannot be left blank.';
+      errors[entry.key] = { code: 'REQUIRED', message: 'This parameter is required and cannot be left blank.' };
       continue;
     }
     if (isBlank) continue; // nothing else to check for an absent/blank optional key
@@ -132,13 +155,16 @@ export function validateEffectiveParams(
     if (sysprmKeywords && /^default$/i.test(String(raw).trim())) continue;
     if (sysprmKeywords && /^(min|max)$/i.test(String(raw).trim())) {
       if (!NUMERIC_KINDS.includes(entry.guard.kind)) {
-        errors[entry.key] = 'MIN/MAX only apply to numeric parameters — the engine refuses it here and fails to load the file.';
+        errors[entry.key] = {
+          code: 'MIN_MAX_NOT_NUMERIC',
+          message: 'MIN/MAX only apply to numeric parameters — the engine refuses it here and fails to load the file.',
+        };
       }
       continue;
     }
 
-    const reason = validateParamValue(entry.guard, raw);
-    if (reason) errors[entry.key] = reason;
+    const issue = checkParamValue(entry.guard, raw);
+    if (issue) errors[entry.key] = issue;
   }
 
   // Defaulted view, built fresh here (not by the caller) — only
@@ -148,8 +174,8 @@ export function validateEffectiveParams(
     const raw = params[entry.key];
     defaultedParams[entry.key] = isValueBlank(raw) ? entry.default : raw;
   }
-  for (const [key, reason] of Object.entries(validateCrossFieldParams(schema, defaultedParams))) {
-    if (!errors[key]) errors[key] = reason;
+  for (const [key, issue] of Object.entries(checkCrossFieldParams(schema, defaultedParams))) {
+    if (!errors[key]) errors[key] = issue;
   }
 
   return errors;

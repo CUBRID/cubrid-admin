@@ -11,11 +11,11 @@ import { GetCreatedbInfoClientResponse } from '@api-interfaces/response/get-crea
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
-import { BaseService, HandleCmsErrors } from '@common';
+import { BaseService, HandleCmsErrors, Warning } from '@common';
 import { ConfigError } from '@error/config/config-error';
 import { ConfigErrorCode } from '@error/config/config-error-code';
 import { DatabaseError } from '@error/database/database-error';
-import { CmsError, CmsErrorCode, HostError } from '@error/index';
+import { CmsError, CmsErrorCode, FailureDetails, HostError, failureDetails } from '@error/index';
 import { getHost } from '@host/host-group.util';
 import { ValidationError } from '@error/validation/validation-error';
 import { ValidationErrorCode } from '@error/validation/validation-error-code';
@@ -68,8 +68,11 @@ const NON_HA_BULK_ACTION_CONCURRENCY = 4;
 /** Outcome of startAllDatabases/stopAllDatabases, per database. */
 export type BulkDatabaseActionResult = {
   succeeded: string[];
-  /** `phase` is set only by a restart, for the step that failed. */
-  failed: Array<{ dbname: string; error: string; phase?: 'stop' | 'start' }>;
+  /**
+   * `error` and the fields a client maps it by (failureDetails). `phase` is
+   * set only by a restart, for the step that failed.
+   */
+  failed: Array<FailureDetails & { dbname: string; phase?: 'stop' | 'start' }>;
   skipped: Array<{ dbname: string; reason: string }>;
 };
 
@@ -79,13 +82,13 @@ export type SelectedDatabasesAction = 'start' | 'stop' | 'restart';
 function activeDbnamesOf(info: { activelist?: { active?: unknown } } | null | undefined): Set<string> {
   const active = info?.activelist?.active;
   if (!Array.isArray(active)) {
-    throw new Error('Could not read which databases are running');
+    throw DatabaseError.GetStartInfoFailed({ reason: 'ACTIVE_LIST_MISSING' });
   }
   return new Set(active.map((a: { dbname: string } | string) => (typeof a === 'string' ? a : a?.dbname)));
 }
 
-/** A broker or database step of a whole-service start/stop that failed. */
-export type ServiceFailure = { name: string; error: string };
+/** A broker or database step of a whole-service start/stop that failed (failureDetails). */
+export type ServiceFailure = FailureDetails & { name: string };
 
 /**
  * A database a whole-service step left alone because the user isn't logged
@@ -110,6 +113,22 @@ export type ServiceRestartResult = {
  * per-database outcome.
  */
 export const HA_NODE_STEP = 'HA databases (heartbeat)';
+
+/**
+ * A create-database step's error: `message` is what the API would send for it
+ * (for an AppError, its message rather than its bare code), with the fields a
+ * client maps it by (failureDetails).
+ */
+function stepError(error: unknown, fallback: string, code: string, details: unknown) {
+  const { error: message, ...fields } = failureDetails(error);
+  return { ...fields, message: message || fallback, code, details };
+}
+
+/**
+ * `code` and `type` of an HA step outcome that is not an error the request
+ * threw, shaped like an error's so a client maps it the same way.
+ */
+const haResultCode = (code: string) => ({ code, type: `/errors/database/${code.toLowerCase()}` });
 
 export const BULK_SKIP_REASON = {
   notFound: 'Not a database on this host',
@@ -139,7 +158,7 @@ function addOutcome(out: BulkDatabaseActionResult, dbname: string, result: Promi
   if (reason) {
     out.skipped.push({ dbname, reason });
   } else {
-    out.failed.push({ dbname, error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
+    out.failed.push({ dbname, ...failureDetails(result.reason) });
   }
 }
 
@@ -471,8 +490,8 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       running = knownRunning ?? (await this.readActiveDbnames(userId, hostUid));
     } catch (err: unknown) {
-      const error = err instanceof Error ? err.message : String(err);
-      haDbNames.forEach((dbname) => out.failed.push({ dbname, error }));
+      const failure = failureDetails(err);
+      haDbNames.forEach((dbname) => out.failed.push({ dbname, ...failure }));
       return;
     }
 
@@ -512,8 +531,9 @@ export class DatabaseLifecycleService extends BaseService {
     out: BulkDatabaseActionResult
   ): Promise<void> {
     if (haDbNames.length === 0) return;
-    const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
-    let sendError: string | null = null;
+    // A failed ha_start/ha_stop request itself, kept whole (failureDetails) so
+    // the entry carries CMS's own text as `sendFailure`.
+    let sendFailure: FailureDetails | null = null;
     try {
       if (action === 'start') {
         await this.haService.haStartNode(userId, hostUid);
@@ -521,8 +541,10 @@ export class DatabaseLifecycleService extends BaseService {
         await this.haService.haStopNode(userId, hostUid);
       }
     } catch (err: unknown) {
-      sendError = message(err);
+      sendFailure = failureDetails(err);
     }
+    const sendError = sendFailure?.error ?? null;
+    const sent = sendFailure ? { sendFailure } : {};
 
     let running: Set<string>;
     try {
@@ -531,11 +553,16 @@ export class DatabaseLifecycleService extends BaseService {
       if (action === 'stop' && sendError === null) {
         out.succeeded.push(HA_NODE_STEP);
       } else {
+        const readFailure = failureDetails(err);
+        const readError = readFailure.error;
         out.failed.push({
           dbname: HA_NODE_STEP,
+          ...haResultCode(action === 'start' ? 'HA_START_NOT_CHECKED' : 'HA_STOP_NOT_CHECKED'),
           error: action === 'start'
-            ? `Could not check whether the HA databases started: ${message(err)}${sendError ? ` (${sendError})` : ''}`
-            : `${sendError} (could not read which databases are running: ${message(err)})`,
+            ? `Could not check whether the HA databases started: ${readError}${sendError ? ` (${sendError})` : ''}`
+            : `${sendError} (could not read which databases are running: ${readError})`,
+          readFailure,
+          ...sent,
         });
       }
       return;
@@ -548,7 +575,10 @@ export class DatabaseLifecycleService extends BaseService {
     }
     out.failed.push({
       dbname: HA_NODE_STEP,
+      ...haResultCode(action === 'start' ? 'HA_NOT_RUNNING_AFTER_START' : 'HA_STILL_RUNNING_AFTER_STOP'),
       error: `${action === 'start' ? 'Not running after the HA start' : 'Still running after the HA stop'}: ${wrong.join(', ')}${sendError ? ` (${sendError})` : ''}`,
+      dbnames: wrong,
+      ...sent,
     });
   }
 
@@ -857,7 +887,7 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       await this.brokerService.startAllBrokers(userId, hostUid);
     } catch (err: unknown) {
-      failed.push({ name: 'brokers', error: err instanceof Error ? err.message : String(err) });
+      failed.push({ name: 'brokers', ...failureDetails(err) });
     }
 
     const cubridConf = await this.cmsConfigService.getAllSystemParam(
@@ -885,11 +915,11 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       const { succeeded: dbSucceeded, failed: dbFailed, skipped: dbSkipped } = await startDatabases(serviceEnabled ? autoStartServers : []);
       haNodeSent = dbSucceeded.includes(HA_NODE_STEP) || dbFailed.some((f) => f.dbname === HA_NODE_STEP);
-      failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+      failed.push(...dbFailed.map(({ dbname, ...failure }) => ({ name: dbname, ...failure })));
       // Not logged in: left stopped, nothing sent to it.
       skipped.push(...dbSkipped.map(({ dbname, reason }) => ({ name: dbname, reason })));
     } catch (err: unknown) {
-      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+      failed.push({ name: 'databases', ...failureDetails(err) });
     }
 
     return { failed, skipped, haNodeSent };
@@ -937,7 +967,7 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       await this.brokerService.stopAllBrokers(userId, hostUid);
     } catch (err: unknown) {
-      failed.push({ name: 'brokers', error: err instanceof Error ? err.message : String(err) });
+      failed.push({ name: 'brokers', ...failureDetails(err) });
     }
 
     // Brokers may already be stopped above regardless of what happens next —
@@ -960,7 +990,7 @@ export class DatabaseLifecycleService extends BaseService {
         ]),
       ];
     } catch (err: unknown) {
-      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+      failed.push({ name: 'databases', ...failureDetails(err) });
       return { failed, skipped };
     }
 
@@ -971,12 +1001,12 @@ export class DatabaseLifecycleService extends BaseService {
     // failure already collected.
     try {
       const { failed: dbFailed, skipped: dbSkipped } = await stopDatabases(dbnames);
-      failed.push(...dbFailed.map(({ dbname, error }) => ({ name: dbname, error })));
+      failed.push(...dbFailed.map(({ dbname, ...failure }) => ({ name: dbname, ...failure })));
       // Not logged in: databases are stopped one by one here (no whole-host
       // `cubrid service stop`), so a skipped one keeps running.
       skipped.push(...dbSkipped.map(({ dbname, reason }) => ({ name: dbname, reason })));
     } catch (err: unknown) {
-      failed.push({ name: 'databases', error: err instanceof Error ? err.message : String(err) });
+      failed.push({ name: 'databases', ...failureDetails(err) });
     }
 
     return { failed, skipped };
@@ -1219,6 +1249,7 @@ export class DatabaseLifecycleService extends BaseService {
           throw DatabaseError.DuplicatedFile(checkFileResponse.existfile, undefined, {
             message: `File already exists: ${checkFileResponse.existfile}`,
             existfile: checkFileResponse.existfile,
+            path: checkFileResponse.existfile,
           });
         }
       }
@@ -1233,17 +1264,20 @@ export class DatabaseLifecycleService extends BaseService {
     const logpagesizeBytes = Number(request.logpagesize);
     if (!Number.isFinite(logsizeMb) || logsizeMb <= 0) {
       throw DatabaseError.InvalidVolumeSize('Log size must be a positive number in MB', {
+        reason: 'LOG_SIZE_NOT_POSITIVE',
         logsize: request.logsize,
       });
     }
     if (!Number.isFinite(logpagesizeBytes) || logpagesizeBytes <= 0) {
       throw DatabaseError.InvalidVolumeSize('Log page size must be a positive number in bytes', {
+        reason: 'LOG_PAGE_SIZE_NOT_POSITIVE',
         logpagesize: request.logpagesize,
       });
     }
     const logsizeInPages = Math.floor((logsizeMb * 1024 * 1024) / logpagesizeBytes);
     if (logsizeInPages <= 0) {
       throw DatabaseError.InvalidVolumeSize('Log size is too small after MB->pages conversion', {
+        reason: 'LOG_SIZE_TOO_SMALL',
         logsizeMb: request.logsize,
         logpagesizeBytes: request.logpagesize,
         logsizeInPages,
@@ -1351,11 +1385,7 @@ export class DatabaseLifecycleService extends BaseService {
         this.logger.error(`Failed to configure ha_mode=off for new database: ${errorMessage}`, errorStack);
         response.haModeConfig = {
           success: false,
-          error: {
-            message: errorMessage || 'Failed to configure ha_mode=off for new database',
-            code: errorCode,
-            details: errorDetails,
-          },
+          error: stepError(error, 'Failed to configure ha_mode=off for new database', errorCode, errorDetails),
         };
       }
     }
@@ -1402,11 +1432,7 @@ export class DatabaseLifecycleService extends BaseService {
         this.logger.error(`Failed to start database: ${errorMessage}`, errorStack);
         response.startDatabase = {
           success: false,
-          error: {
-            message: errorMessage || 'Failed to start database',
-            code: errorCode,
-            details: errorDetails,
-          },
+          error: stepError(error, 'Failed to start database', errorCode, errorDetails),
         };
       }
     }
@@ -1451,11 +1477,7 @@ export class DatabaseLifecycleService extends BaseService {
         this.logger.error(`Failed to update user: ${errorMessage}`, errorStack);
         response.updateUser = {
           success: false,
-          error: {
-            message: errorMessage || 'Failed to update user',
-            code: errorCode,
-            details: errorDetails,
-          },
+          error: stepError(error, 'Failed to update user', errorCode, errorDetails),
         };
       }
     }
@@ -1496,11 +1518,7 @@ export class DatabaseLifecycleService extends BaseService {
         this.logger.error(`Failed to set auto-add volume: ${errorMessage}`, errorStack);
         response.setAutoAddVol = {
           success: false,
-          error: {
-            message: errorMessage || 'Failed to set auto-add volume',
-            code: errorCode,
-            details: errorDetails,
-          },
+          error: stepError(error, 'Failed to set auto-add volume', errorCode, errorDetails),
         };
       }
     }
@@ -1525,11 +1543,7 @@ export class DatabaseLifecycleService extends BaseService {
         this.logger.error(`Failed to set auto-start: ${errorMessage}`, errorStack);
         response.setAutoStart = {
           success: false,
-          error: {
-            message: errorMessage || 'Failed to set auto-start',
-            code: errorCode,
-            details: errorDetails,
-          },
+          error: stepError(error, 'Failed to set auto-start', errorCode, errorDetails),
         };
       }
     }
@@ -1604,8 +1618,8 @@ export class DatabaseLifecycleService extends BaseService {
    * removes it from cubrid.conf. The database is already gone, so nothing
    * here throws; what could not be done comes back as warnings for the user.
    */
-  async forgetDeletedDatabase(userId: string, hostUid: string, dbname: string): Promise<string[]> {
-    const warnings: string[] = [];
+  async forgetDeletedDatabase(userId: string, hostUid: string, dbname: string): Promise<Warning[]> {
+    const warnings: Warning[] = [];
     // Forget this dbname's stored login profile and ensureDbLogin cache
     // entry — both are keyed by dbname alone (see DatabaseUserService), so
     // without this a database later created or renamed to reuse this exact
@@ -1614,7 +1628,7 @@ export class DatabaseLifecycleService extends BaseService {
     try {
       await this.databaseUserService.deleteDbProfile(userId, hostUid, dbname);
     } catch (error: unknown) {
-      warnings.push(`Database "${dbname}" was deleted, but its saved login could not be removed. Remove it from the database's login settings if "${dbname}" is created again.`);
+      warnings.push({ code: 'DELETE_LOGIN_NOT_REMOVED', dbname, message: `Database "${dbname}" was deleted, but its saved login could not be removed. Remove it from the database's login settings if "${dbname}" is created again.` });
       this.logger.warn(
         `Failed to clear stored login profile/cache for deleted database ${dbname}: ` +
         `${error instanceof Error ? error.message : String(error)}`,
@@ -1642,7 +1656,7 @@ export class DatabaseLifecycleService extends BaseService {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const errorStack = error instanceof Error ? error.stack : undefined;
         const errorCode = error instanceof ConfigError ? error.code : 'UNKNOWN';
-        warnings.push(`Database "${dbname}" was deleted, but cubrid.conf could not be updated. Remove "${dbname}" from [service] server and drop its [@${dbname}] section by hand.`);
+        warnings.push({ code: 'DELETE_CONF_NOT_UPDATED', dbname, message: `Database "${dbname}" was deleted, but cubrid.conf could not be updated. Remove "${dbname}" from [service] server and drop its [@${dbname}] section by hand.` });
         this.logger.warn(
           `Failed to remove dbname from server parameter during database deletion: ${errorMessage}`,
           {
