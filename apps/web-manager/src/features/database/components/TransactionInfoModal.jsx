@@ -57,7 +57,7 @@ export default function TransactionInfoModal() {
     if (!selectedHostUid || !selectedDatabase) return;
     const requestId = ++requestIdRef.current;
     if (!isActive) {
-      setErrorMsg('Database is stopped. Transaction information is only available when the database is running.');
+      setErrorMsg(CM.txInfoDbStoppedMsg);
       setLoading(false);
       return;
     }

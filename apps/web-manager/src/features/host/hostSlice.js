@@ -229,10 +229,10 @@ export const startService = createAsyncThunk(
   'host/startService',
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
-      dispatch(hostSlice.actions.setServiceProgressMessage('Starting service...'));
+      dispatch(hostSlice.actions.setServiceProgressMessage(getCM(getStoredLocale()).serviceStartingProgress));
       const { failed = [], skipped = [] } = await databaseApi.startWholeService(hostUid);
 
-      dispatch(hostSlice.actions.setServiceProgressMessage('Refreshing status...'));
+      dispatch(hostSlice.actions.setServiceProgressMessage(getCM(getStoredLocale()).refreshingStatusProgress));
       dispatch(fetchDatabaseStartInfo(hostUid));
       dispatch(fetchBrokerList(hostUid));
       dispatch(refreshHaInfo(hostUid));
@@ -256,10 +256,10 @@ export const stopService = createAsyncThunk(
   'host/stopService',
   async (hostUid, { dispatch, rejectWithValue }) => {
     try {
-      dispatch(hostSlice.actions.setServiceProgressMessage('Stopping service...'));
+      dispatch(hostSlice.actions.setServiceProgressMessage(getCM(getStoredLocale()).serviceStoppingProgress));
       const { failed = [], skipped = [] } = await databaseApi.stopWholeService(hostUid);
 
-      dispatch(hostSlice.actions.setServiceProgressMessage('Refreshing status...'));
+      dispatch(hostSlice.actions.setServiceProgressMessage(getCM(getStoredLocale()).refreshingStatusProgress));
       dispatch(fetchDatabaseStartInfo(hostUid));
       dispatch(fetchBrokerList(hostUid));
       dispatch(refreshHaInfo(hostUid));

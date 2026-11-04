@@ -326,12 +326,12 @@ export function parseImportPort(value, defaultPort = DEFAULT_IMPORT_PORT) {
   }
 
   if (!/^\d+$/.test(raw)) {
-    return { valid: false, error: 'Port must be an integer' };
+    return { valid: false, error: labels().importPortNotIntegerMsg };
   }
 
   const port = Number(raw);
   if (!Number.isInteger(port) || port < MIN_IMPORT_PORT || port > MAX_IMPORT_PORT) {
-    return { valid: false, error: `Port must be ${MIN_IMPORT_PORT}-${MAX_IMPORT_PORT}` };
+    return { valid: false, error: labels().importPortRangeMsg(MIN_IMPORT_PORT, MAX_IMPORT_PORT) };
   }
 
   return { valid: true, port };
@@ -361,29 +361,29 @@ export function validateImportHostEntry(entry, { existingHosts = [], batchPeers 
     ? { valid: true, port: entry.portNumber }
     : parseImportPort(entry.port);
 
-  if (!alias) return 'Name (alias) is required';
-  if (!address) return 'Address is required';
-  if (!id) return 'Username is required';
+  if (!alias) return labels().importAliasRequiredMsg;
+  if (!address) return labels().addressRequired;
+  if (!id) return labels().usernameRequired;
   if (!portResult.valid) return portResult.error;
 
   const normalized = { alias, address, id, port: portResult.port };
 
   for (const existing of existingHosts) {
     if (sameConnection(normalized, existing)) {
-      return 'Already registered (address + port)';
+      return labels().importAlreadyRegisteredMsg;
     }
     if (sameAlias(normalized, existing)) {
-      return 'Alias already in use';
+      return labels().importAliasInUseMsg;
     }
   }
 
   for (const peer of batchPeers) {
     if (peer.rowId != null && peer.rowId === entry.rowId) continue;
     if (sameConnection(normalized, peer)) {
-      return 'Duplicate address + port in import file';
+      return labels().importDuplicateConnectionMsg;
     }
     if (sameAlias(normalized, peer)) {
-      return 'Duplicate alias in import file';
+      return labels().importDuplicateAliasMsg;
     }
   }
 

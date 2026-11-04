@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { setAuthToken } from '../../api/apiClient';
 import { authApi } from './authApi';
 import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 const token = localStorage.getItem('token');
 const refreshToken = localStorage.getItem('refreshToken');
@@ -69,7 +70,7 @@ const authSlice = createSlice({
         state.token = null;
         state.refreshToken = null;
         state.user = null;
-        state.error = 'Login response missing required tokens';
+        state.error = getCM(getStoredLocale()).loginTokenMissingMsg;
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         setAuthToken(null);

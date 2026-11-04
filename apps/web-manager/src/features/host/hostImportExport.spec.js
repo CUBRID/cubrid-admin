@@ -5,7 +5,9 @@ import {
   exportHostGroupsToNativeXml,
   parseHostsImportFile,
   partitionImportRows,
+  validateImportHostEntry,
 } from './hostImportExport';
+import { LOCALE_STORAGE_KEY } from '../../constants/useCM';
 import { UNGROUPED_GROUP_ID } from './hostGroupUtils';
 
 const host = (uid, address) => ({ uid, alias: uid, address, port: 8001, id: 'admin' });
@@ -72,5 +74,18 @@ describe('importing an exported file', () => {
     });
 
     expect(buildImportPreviewList(parseHostsImportFile(json), [])[0].hasPrefsGroups).toBe(true);
+  });
+});
+
+describe('validateImportHostEntry', () => {
+  afterEach(() => localStorage.removeItem(LOCALE_STORAGE_KEY));
+  const entry = { alias: 'web1', address: '10.0.0.9', port: '8001', id: 'admin' };
+
+  it('says what is wrong with a row in the UI language', () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
+    expect(validateImportHostEntry({ ...entry, alias: '' })).toBe('이름(별칭)을 입력하세요.');
+    expect(validateImportHostEntry({ ...entry, port: '80a' })).toBe('포트는 정수여야 합니다.');
+    expect(validateImportHostEntry(entry, { existingHosts: [{ alias: 'web1', address: '10.0.0.1', port: 8001 }] })).toBe('이미 쓰고 있는 이름입니다.');
+    expect(validateImportHostEntry(entry)).toBeNull();
   });
 });

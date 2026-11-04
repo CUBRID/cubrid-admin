@@ -1,4 +1,5 @@
 import apiClient from '../../api/apiClient';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 const ACCEPTED = (status) => status === 202 || (status >= 200 && status < 300);
 
@@ -27,7 +28,7 @@ export function resolveCmsJobStatus(job) {
 
 export function formatCmsJobError(job) {
   if (job?.error?.message) return job.error.message;
-  return 'Job failed';
+  return getCM(getStoredLocale()).jobFailedMsg;
 }
 
 /** Align with api-server CMS long job timeout (default 12h). */
