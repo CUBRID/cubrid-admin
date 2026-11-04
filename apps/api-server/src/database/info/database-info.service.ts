@@ -3,7 +3,7 @@ import { GetCreatedbInfoClientResponse } from '@api-interfaces/response/get-crea
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { BaseService, HandleCmsErrors } from '@common';
-import { AppError } from '@error/app-error';
+import { FailureDetails, failureDetails } from '@error/index';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
 import { BaseCmsRequest, BaseCmsResponse } from '@type';
@@ -22,13 +22,14 @@ import { DatabaseUserService } from '../user/database-user.service';
  */
 /**
  * Whether a host is an HA node and which databases are its HA ones
- * (getHaNodeState). `haDbListError` is set, and `haDbNames` empty, when the
- * host is an HA node but cubrid_ha.conf could not be read.
+ * (getHaNodeState). `haConfFailure` (failureDetails) is set, and
+ * `haDbNames` empty, when the host is an HA node but cubrid_ha.conf could not
+ * be read.
  */
 export type HaNodeState = {
   haNode: boolean;
   haDbNames: Set<string>;
-  haDbListError: string | null;
+  haConfFailure: FailureDetails | null;
 };
 
 @Injectable()
@@ -116,21 +117,19 @@ export class DatabaseInfoService extends BaseService {
    * What a whole-service start, stop or restart needs to know: whether the
    * host is an HA node (it then always sends the node-wide `ha_start` or
    * `ha_stop`) and its `ha_db_list` databases, to check the outcome with.
-   * A cubrid_ha.conf read failure is kept in `haDbListError` instead of
+   * A cubrid_ha.conf read failure is kept in `haConfFailure` instead of
    * thrown, since the node-wide request goes out without the list; a
    * cubrid.conf read failure is thrown (ha_mode unknown).
    */
   @HandleCmsErrors()
   async getHaNodeState(userId: string, hostUid: string): Promise<HaNodeState> {
     if (!(await this.isHaNode(userId, hostUid))) {
-      return { haNode: false, haDbNames: new Set<string>(), haDbListError: null };
+      return { haNode: false, haDbNames: new Set<string>(), haConfFailure: null };
     }
     try {
-      return { haNode: true, haDbNames: await this.getListedHaDbNames(userId, hostUid), haDbListError: null };
+      return { haNode: true, haDbNames: await this.getListedHaDbNames(userId, hostUid), haConfFailure: null };
     } catch (err: unknown) {
-      // CMS's own text when it answered with a failure, else the error's.
-      const haDbListError = err instanceof AppError ? String(err.additionalData?.message ?? err.message) : String(err);
-      return { haNode: true, haDbNames: new Set<string>(), haDbListError };
+      return { haNode: true, haDbNames: new Set<string>(), haConfFailure: failureDetails(err) };
     }
   }
 

@@ -566,14 +566,20 @@ export class DatabaseLifecycleService extends BaseService {
     const sendError = sendFailure?.error ?? null;
     const sent = sendFailure ? { sendFailure } : {};
 
-    const notChecked = () => {
+    // Without the ha_db_list names: why (`reason`, and `haConfFailure` when
+    // cubrid_ha.conf could not be read), and `readFailure` when the running
+    // list could not be read either.
+    const notChecked = (readFailure?: FailureDetails) => {
       const code = action === 'start' ? 'HA_START_NOT_CHECKED' : 'HA_STOP_NOT_CHECKED';
-      const why = ha.haDbListError === null ? 'ha_db_list in cubrid_ha.conf is empty' : `cubrid_ha.conf could not be read: ${ha.haDbListError}`;
+      const haConfFailure = ha.haConfFailure;
+      const why = haConfFailure ? `cubrid_ha.conf could not be read: ${haConfFailure.error}` : 'ha_db_list in cubrid_ha.conf is empty';
       return {
         dbname: HA_NODE_STEP,
         ...haResultCode(code),
-        reason: ha.haDbListError === null ? 'HA_DB_LIST_EMPTY' : 'HA_DB_LIST_UNREADABLE',
+        reason: haConfFailure ? 'HA_DB_LIST_UNREADABLE' : 'HA_DB_LIST_EMPTY',
         error: `Could not check the HA ${action}, since ${why}${sendError ? ` (${sendError})` : ''}`,
+        ...(haConfFailure ? { haConfFailure } : {}),
+        ...(readFailure ? { readFailure } : {}),
         ...sent,
       };
     };
@@ -583,7 +589,7 @@ export class DatabaseLifecycleService extends BaseService {
       running = await this.readActiveDbnames(userId, hostUid);
     } catch (err: unknown) {
       if (haDbNames.length === 0) {
-        out.failed.push(notChecked());
+        out.failed.push(notChecked(failureDetails(err)));
       } else if (action === 'stop' && sendError === null) {
         out.succeeded.push(HA_NODE_STEP);
       } else {

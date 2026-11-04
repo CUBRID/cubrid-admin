@@ -6,6 +6,7 @@ import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { CmsError } from '@error/cms/cms-error';
+import { failureDetails } from '@error/index';
 import { DatabaseUserService } from '../user/database-user.service';
 
 // Real GetEnv values (e.g. BROKERVER, CUBRIDVER) vary by host; tests use fixed mock data only.
@@ -206,14 +207,14 @@ describe('DatabaseInfoService', () => {
       expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({
         haNode: true,
         haDbNames: new Set(['hadb1', 'hadb2']),
-        haDbListError: null,
+        haConfFailure: null,
       });
     });
 
     it.each(['off', 'no', '', null])('are none when ha_mode is %j, since the engine refuses heartbeat then', async (haMode) => {
       cmsConfigService.getAllSystemParam.mockImplementation(confs(haMode));
       expect([...(await service.getHaDbNames(mockUserId, mockHostUid))]).toEqual([]);
-      expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({ haNode: false, haDbNames: new Set(), haDbListError: null });
+      expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({ haNode: false, haDbNames: new Set(), haConfFailure: null });
       expect(await service.effectiveHaDbForDbname(mockUserId, mockHostUid, 'hadb1')).toBe(false);
       expect(cmsConfigService.getAllSystemParam).not.toHaveBeenCalledWith(mockUserId, mockHostUid, CMS_CONFNAME_HACONF);
     });
@@ -223,12 +224,13 @@ describe('DatabaseInfoService', () => {
       expect([...(await service.getHaDbNames(mockUserId, mockHostUid))].sort()).toEqual(['hadb1', 'hadb2', 'hadb3', 'hadb4']);
     });
 
-    it('keep an unreadable cubrid_ha.conf on an HA node as haDbListError, so the node-wide request still goes out', async () => {
-      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', CmsError.RequestFailed({ message: 'cannot open cubrid_ha.conf' })));
+    it('keep an unreadable cubrid_ha.conf on an HA node as haConfFailure, so the node-wide request still goes out', async () => {
+      const readError = CmsError.RequestFailed({ message: 'cannot open cubrid_ha.conf' });
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', readError));
       expect(await service.getHaNodeState(mockUserId, mockHostUid)).toEqual({
         haNode: true,
         haDbNames: new Set(),
-        haDbListError: 'cannot open cubrid_ha.conf',
+        haConfFailure: failureDetails(readError),
       });
     });
 

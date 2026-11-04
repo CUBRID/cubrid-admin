@@ -1038,9 +1038,30 @@ describe('DatabaseLifecycleService', () => {
       expect(haTasks().map((c) => c.task)).toEqual(['ha_start']);
       expect(haTasks()[0]).not.toHaveProperty('dbname');
       expect(calls().filter((c) => c.task === 'startdb').map((c) => c.dbname)).toEqual(['db1']);
-      expect(result.failed).toEqual([
-        notChecked('start', 'HA_DB_LIST_UNREADABLE', 'cubrid_ha.conf could not be read: cannot open cubrid_ha.conf'),
-      ]);
+      expect(result.failed).toEqual([{
+        ...notChecked('start', 'HA_DB_LIST_UNREADABLE', 'cubrid_ha.conf could not be read: cannot open cubrid_ha.conf'),
+        haConfFailure: { code: 'REQUEST_FAILED', type: '/errors/cms/request_failed', error: 'cannot open cubrid_ha.conf' },
+      }]);
+    });
+
+    it('carries the failed request with the not-checked code when an empty ha_db_list makes heartbeat fail', async () => {
+      haDbList = '';
+      running = new Set();
+      const base = cmsClient.postAuthenticated.getMockImplementation()!;
+      cmsClient.postAuthenticated.mockImplementation(async (url, body) =>
+        (body as { task: string }).task === 'ha_start'
+          ? ({ status: 'failure', task: 'ha_start', note: 'heartbeat start: fail' } as any)
+          : base(url, body)
+      );
+
+      const result = await service.startWholeService(mockUserId, mockHostUid);
+
+      expect(haTasks().map((c) => c.task)).toEqual(['ha_start']);
+      expect(result.failed).toEqual([{
+        ...notChecked('start', 'HA_DB_LIST_EMPTY', 'ha_db_list in cubrid_ha.conf is empty'),
+        error: expect.stringMatching(/^Could not check the HA start, since ha_db_list in cubrid_ha\.conf is empty \(.+\)$/),
+        sendFailure: expect.objectContaining({ cmsTask: 'ha_start', cmsNote: 'heartbeat start: fail' }),
+      }]);
     });
 
     it('reports a stop without the ha_db_list names as done only when nothing is running afterwards', async () => {
