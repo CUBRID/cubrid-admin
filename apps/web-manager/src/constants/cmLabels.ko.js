@@ -1153,6 +1153,7 @@ export const CM_KO = {
   pagesCountLabel: (n) => `${n} 페이지`,
   storageVolumes: '스토리지 볼륨',
   storageVolumesRequireOnlineDbMsg: '이 호스트에서 가동 중이면서 로그인한 데이터베이스의 볼륨 정보만 표시됩니다.',
+  storageVolumesHiddenMsg: (n) => `로그인하지 않은 실행 중 DB ${n}개는 표시하지 않습니다.`,
   volumeLabel: '볼륨',
   purpose: '용도',
   spaceUsage: '공간 사용량',

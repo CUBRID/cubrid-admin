@@ -1197,6 +1197,7 @@ export const CM = {
   pagesCountLabel: (n) => `${n} pages`,
   storageVolumes: 'Storage Volumes',
   storageVolumesRequireOnlineDbMsg: 'Storage volume info is only shown for databases on this host that are running and that you are logged in to.',
+  storageVolumesHiddenMsg: (n) => `${n} running database(s) you are not logged in to are not shown.`,
   volumeLabel: 'Volume',
   purpose: 'Purpose',
   spaceUsage: 'Space Usage',
