@@ -86,8 +86,20 @@ it('keeps the Edit roles and binds no accelerator', () => {
     'selectAll',
   ]);
   const items = flatten(template);
-  expect(items.some((item) => 'accelerator' in item)).toBe(false);
+  // Only View > Reload shows one (CmdOrCtrl+R); none takes CmdOrCtrl+W.
+  expect(items.filter((item) => 'accelerator' in item).map((item) => item.accelerator)).toEqual(['CmdOrCtrl+R']);
   expect(items.some((item) => item.role === 'close')).toBe(false);
+});
+
+it('refreshes the view on View > Reload and leaves the whole-window reload to Shift+CmdOrCtrl+R', () => {
+  const view = top(buildApplicationMenuTemplate('en', false, allEnabled), 'View');
+  expect(view.some((item) => item.role === 'reload')).toBe(false);
+  expect(view.map((item) => item.role)).toContain('forceReload');
+
+  const reload = view.find((item) => item.accelerator === 'CmdOrCtrl+R') as Item;
+  expect(reload.registerAccelerator).toBe(false);
+  (reload.click as () => void)();
+  expect(send).toHaveBeenCalledWith('desktop:refresh-view');
 });
 
 it('disables in-app actions from the reported state', () => {

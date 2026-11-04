@@ -27,6 +27,13 @@ const desktopBridge: DesktopBridge = {
       ipcRenderer.removeListener('desktop:menu-action', subscription);
     };
   },
+  onRefreshView: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('desktop:refresh-view', subscription);
+    return () => {
+      ipcRenderer.removeListener('desktop:refresh-view', subscription);
+    };
+  },
   onCloseActiveTab: (callback) => {
     const subscription = () => callback();
     ipcRenderer.on('desktop:close-active-tab', subscription);

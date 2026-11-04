@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { toggleTheme, toggleSidebar, setIsResizing, setActiveMainTab, closeTab, closeOtherTabs, closeAllTabs, triggerRefreshActiveTab } from '../features/layout/layoutSlice';
-import { openAddHostModal, closeAddHostModal, setSelectedHost } from '../features/host/hostSlice';
+import { openAddHostModal, closeAddHostModal, setSelectedHost, refreshServerList } from '../features/host/hostSlice';
 import { setSelectedDatabase } from '../features/database/databaseSlice';
 import { closeCreateUserModal, closeEditUserModal } from '../features/user/userSlice';
 import Sidebar from '../features/layout/components/Sidebar';
@@ -201,16 +201,28 @@ function DashboardLayout() {
     }
   }, [activeMainTab, dispatch]);
 
+  // F5 and Ctrl/Cmd+R re-read the active tab and the host list, not the
+  // whole page (Shift+Ctrl/Cmd+R still reloads it). The desktop app's
+  // View > Reload sends the same (onRefreshView).
+  const refreshView = useCallback(() => {
+    void handleReloadTab();
+    dispatch(refreshServerList());
+  }, [dispatch, handleReloadTab]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R'))) {
+      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'r' || e.key === 'R'))) {
         e.preventDefault();
-        void handleReloadTab();
+        refreshView();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleReloadTab]);
+    const unsubscribe = window.desktopBridge?.onRefreshView?.(refreshView);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      unsubscribe?.();
+    };
+  }, [refreshView]);
 
   // Construct dynamic loading message
   const getLoadingSubtitle = () => {

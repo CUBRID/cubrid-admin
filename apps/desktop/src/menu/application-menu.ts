@@ -140,6 +140,14 @@ export function normalizeMenuActionState(value: unknown): MenuActionState {
   ) as MenuActionState;
 }
 
+// Re-reads what the window shows (its tab, the host list), not the whole page.
+function sendRefreshView(): void {
+  const window = getMainWindow();
+  if (window && !window.isDestroyed()) {
+    window.webContents.send('desktop:refresh-view');
+  }
+}
+
 function sendMenuAction(id: MenuActionId): void {
   const window = getMainWindow();
   if (window && !window.isDestroyed()) {
@@ -246,7 +254,10 @@ export function buildApplicationMenuTemplate(
     {
       label: L.view,
       submenu: [
-        { role: 'reload', label: L.reload },
+        // CmdOrCtrl+R (and F5) refresh the view; the page's own key handler
+        // does it on Windows and Linux, where the accelerator is only shown.
+        // Shift+CmdOrCtrl+R (forceReload) reloads the whole window.
+        { label: L.reload, accelerator: 'CmdOrCtrl+R', registerAccelerator: false, click: sendRefreshView },
         { role: 'forceReload', label: L.forceReload },
         { role: 'toggleDevTools', label: L.toggleDevTools },
         { type: 'separator' },
