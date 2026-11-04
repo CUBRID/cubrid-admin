@@ -318,3 +318,20 @@ it('takes a deprecated key and its replacement from [@db] whole when it sets eit
   expect(rowOf('lock_timeout').textContent).toContain('5s');
   expect(container.textContent).not.toContain('lock_timeout_in_secs');
 });
+
+it('stops showing the loading view when the config read fails', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  hostApi.getHostConfig.mockRejectedValue(new Error('connect ECONNREFUSED'));
+  const state = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase: 'demodb' },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  await act(async () => root.render(
+    <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+  expect(container.querySelector('.animate-spin')).toBeNull();
+});

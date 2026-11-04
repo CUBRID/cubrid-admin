@@ -286,6 +286,8 @@ export default function DatabasePropertyModal() {
   // Tracks which (host, database) the Server Parameter config has already
   // been fetched for, so switching tabs and back doesn't needlessly re-fetch.
   const fetchedConfigKeyRef = useRef(null);
+  // Numbers each config read; only the latest one ends the spinner.
+  const fetchSeqRef = useRef(0);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
@@ -332,6 +334,7 @@ export default function DatabasePropertyModal() {
       fetchedConfigKeyRef.current !== configKey
     ) {
       fetchedConfigKeyRef.current = configKey;
+      const fetchSeq = ++fetchSeqRef.current;
       const fetchParams = async () => {
         setFetching(true);
         try {
@@ -400,7 +403,7 @@ export default function DatabasePropertyModal() {
         }
         finally {
           // An earlier read's late end must not end the current one's spinner.
-          if (fetchedConfigKeyRef.current === configKey) setFetching(false);
+          if (fetchSeqRef.current === fetchSeq) setFetching(false);
         }
       };
       fetchParams();
