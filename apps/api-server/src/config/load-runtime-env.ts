@@ -174,7 +174,21 @@ export function loadRuntimeEnv(): void {
   if ((process.env.CWM_DESKTOP ?? '').trim() === '1') {
     return;
   }
+  // Desktop mode drops the app login, so only the environment the desktop
+  // app starts the server with may turn it on — never .env or cwm.conf.
+  const desktopFlag = process.env.CWM_DESKTOP;
+  try {
+    loadRuntimeEnvFiles();
+  } finally {
+    if (desktopFlag === undefined) {
+      delete process.env.CWM_DESKTOP;
+    } else {
+      process.env.CWM_DESKTOP = desktopFlag;
+    }
+  }
+}
 
+function loadRuntimeEnvFiles(): void {
   const args = parseCliArgs(process.argv.slice(2));
   const rawMode = (
     args.ENV ??
