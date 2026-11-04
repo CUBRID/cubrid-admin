@@ -26,4 +26,6 @@ export type CmsHostLoginClientResponse = (
 ) & {
   /** Login only: the CMS account is still admin with the installed password admin. */
   usesDefaultPassword?: boolean;
+  /** Connect only: logged in and saved, but the HA details could not be read in time. */
+  haInfoUnavailable?: boolean;
 };

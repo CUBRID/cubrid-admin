@@ -19,6 +19,10 @@ export const hostApi = {
   loginToHost: (hostUid) => {
     return apiClient.post(`/${hostUid}/cms-auth/login`);
   },
+  // Logs in with changed settings; the server saves them only if it succeeds.
+  connectHost: (hostUid, changes) => {
+    return apiClient.post(`/${hostUid}/cms-auth/connect`, changes);
+  },
   // Tells the server the user closed this host's session, so a reload
   // no longer restores it as connected.
   disconnectHost: (hostUid) => {

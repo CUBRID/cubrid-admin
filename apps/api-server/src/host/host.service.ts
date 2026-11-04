@@ -30,6 +30,52 @@ import {
 
 export type AddHostPayload = AddHostRequest & { groupId?: string };
 
+/**
+ * updateHost's checks: the host exists, the alias is valid and unused, and no
+ * other host has the same server and CMS account. Throws what updateHost
+ * would; resolves to the host and the alias to save.
+ */
+function checkHostUpdate(user: User, hostUid: string, hostInfo: UpdateHostRequest) {
+  const ref = findHostRef(user, hostUid);
+  if (!ref) {
+    throw HostError.NoSuchHost({ hostUid });
+  }
+
+  const existingHost = ref.host;
+  let proposedAlias = existingHost.alias;
+  if (hostInfo.alias !== undefined) {
+    const trimmed = String(hostInfo.alias).trim();
+    if (!trimmed) {
+      throw HostError.InvalidFormat({ field: 'alias', reason: 'BLANK_ALIAS_NOT_ALLOWED', message: 'The alias cannot be blank.' });
+    }
+    if (trimmed.length > MAX_HOST_ALIAS_LENGTH) {
+      throw HostError.InvalidFormat({ field: 'alias', reason: 'ALIAS_TOO_LONG', max: MAX_HOST_ALIAS_LENGTH });
+    }
+    proposedAlias = trimmed;
+  }
+
+  const duplicate = findDuplicateHost(
+    user,
+    {
+      address: hostInfo.address ?? existingHost.address,
+      port: hostInfo.port ?? existingHost.port,
+      id: hostInfo.id ?? existingHost.id,
+      alias: proposedAlias,
+    },
+    hostUid
+  );
+  if (duplicate) {
+    throw HostError.DuplicatedHost({ duplicatedHostId: duplicate.uid });
+  }
+
+  const duplicateAlias = findDuplicateAlias(user, proposedAlias, hostUid);
+  if (duplicateAlias) {
+    throw HostError.DuplicatedAlias({ duplicatedHostId: duplicateAlias.uid, alias: proposedAlias });
+  }
+
+  return { ref, proposedAlias };
+}
+
 @Injectable()
 export class HostService {
   private readonly logger = new Logger(HostService.name);
@@ -171,6 +217,16 @@ export class HostService {
     return sanitizeHostGroups(updatedUser);
   }
 
+  /**
+   * Runs updateHost's checks without saving anything, for a caller that does
+   * something first that a refused save would waste (cms-auth connect logs
+   * in with the changes before saving them).
+   */
+  @HandleHostErrors()
+  async checkHostUpdate(userId: string, hostUid: string, hostInfo: UpdateHostRequest): Promise<void> {
+    checkHostUpdate(await this.repository.loadUserById(userId), hostUid, hostInfo);
+  }
+
   @HandleHostErrors()
   async updateHost(
     userId: string,
@@ -178,42 +234,8 @@ export class HostService {
     hostInfo: UpdateHostRequest
   ): Promise<SafeHostGroupsMap> {
     const updatedUser = await this.repository.atomicUpdateUser(userId, async (user: User) => {
-      const ref = findHostRef(user, hostUid);
-      if (!ref) {
-        throw HostError.NoSuchHost({ hostUid });
-      }
-
+      const { ref, proposedAlias } = checkHostUpdate(user, hostUid, hostInfo);
       const existingHost = ref.host;
-      let proposedAlias = existingHost.alias;
-      if (hostInfo.alias !== undefined) {
-        const trimmed = String(hostInfo.alias).trim();
-        if (!trimmed) {
-          throw HostError.InvalidFormat({ field: 'alias', reason: 'BLANK_ALIAS_NOT_ALLOWED', message: 'The alias cannot be blank.' });
-        }
-        if (trimmed.length > MAX_HOST_ALIAS_LENGTH) {
-          throw HostError.InvalidFormat({ field: 'alias', reason: 'ALIAS_TOO_LONG', max: MAX_HOST_ALIAS_LENGTH });
-        }
-        proposedAlias = trimmed;
-      }
-
-      const duplicate = findDuplicateHost(
-        user,
-        {
-          address: hostInfo.address ?? existingHost.address,
-          port: hostInfo.port ?? existingHost.port,
-          id: hostInfo.id ?? existingHost.id,
-          alias: proposedAlias,
-        },
-        hostUid
-      );
-      if (duplicate) {
-        throw HostError.DuplicatedHost({ duplicatedHostId: duplicate.uid });
-      }
-
-      const duplicateAlias = findDuplicateAlias(user, proposedAlias, hostUid);
-      if (duplicateAlias) {
-        throw HostError.DuplicatedAlias({ duplicatedHostId: duplicateAlias.uid, alias: proposedAlias });
-      }
 
       // A different server or CMS account makes the stored session meaningless.
       const nextTarget = [
@@ -224,7 +246,9 @@ export class HostService {
       ];
       const sameTarget = [existingHost.address, existingHost.port, existingHost.id, existingHost.password]
         .every((value, i) => String(value) === String(nextTarget[i]));
-      if (!sameTarget) forgetCmsToken(existingHost.token);
+      // A new session (a login that saves these settings) replaces the old one.
+      const newToken = hostInfo.token !== undefined && hostInfo.token !== existingHost.token;
+      if (!sameTarget || newToken) forgetCmsToken(existingHost.token);
 
       ref.group.hosts[hostUid] = {
         uid: hostUid,

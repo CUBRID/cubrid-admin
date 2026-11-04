@@ -9,15 +9,40 @@ import { UserRepositoryService } from '@repository';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
-import type { CmsHostLoginClientResponse } from '@api-interfaces';
+import type { CmsHostLoginClientResponse, UpdateHostRequest } from '@api-interfaces';
 import { CMS_CONFNAME_CM, CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import { closeCmsToken, forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
+import { HostService } from '@host';
 import {
   flattenHanodelist,
   formatAuditLog,
   isHostHaModeOnFromCubridConf,
   resolveCurrentNodeRole,
 } from '@util';
+
+// The browser gives up on a request after 60s (apiClient.js). `connect` saves
+// only when the CMS login succeeded by CONNECT_LOGIN_DEADLINE_MS, and answers
+// by CONNECT_ANSWER_DEADLINE_MS, so the screen never shows a failure for
+// settings that were saved. Both count from the request, host queue included.
+export const CONNECT_LOGIN_DEADLINE_MS = 40_000;
+export const CONNECT_ANSWER_DEADLINE_MS = 50_000;
+
+/** Rejects with `late()` when `promise` has not settled by `deadlineAt`. */
+async function settleBy<T>(promise: Promise<T>, deadlineAt: number, late: () => Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(late()), Math.max(0, deadlineAt - Date.now()));
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// CMS installs with admin/admin; the client suggests changing it.
+const defaultPasswordFlag = (host: HostInfo) =>
+  host.id === 'admin' && host.password === 'admin' ? { usesDefaultPassword: true } : {};
 
 /**
  * Service for handling authentication with the CMS (Central Management System).
@@ -36,7 +61,8 @@ export class CmsAuthService {
     private readonly repository: UserRepositoryService,
     private readonly cmsConfigService: CmsConfigService,
     private readonly haService: HaService,
-    private readonly databaseUserService: DatabaseUserService
+    private readonly databaseUserService: DatabaseUserService,
+    private readonly hostService: HostService
   ) {}
 
   /**
@@ -50,13 +76,81 @@ export class CmsAuthService {
    * @throws HostError.NoSuchHost if the specified host is not found for the user.
    */
   public async login(userId: string, uid: string): Promise<CmsHostLoginClientResponse> {
+    const host = await this.loadHost(userId, uid);
+    const token = await this.requestToken(userId, uid, host);
+    await this.adoptToken(userId, uid, token);
+    this.restoreDbLogins(userId, uid, token);
+    return this.finishLogin(userId, uid, host, token);
+  }
+
+  /**
+   * Logs in with changed connection settings and saves them (with the new
+   * session) only once that login succeeds, so a failed attempt leaves the
+   * stored settings as they were.
+   *
+   * Answers within CONNECT_ANSWER_DEADLINE_MS, before the browser gives up on
+   * the request: a CMS that has not let the login through by
+   * CONNECT_LOGIN_DEADLINE_MS fails it without saving, even if the CMS answers
+   * later. After saving it always reports success; HA details that cannot be
+   * read by the deadline come back as `haInfoUnavailable` for the client to
+   * read again.
+   */
+  public async connect(
+    userId: string,
+    uid: string,
+    changes: UpdateHostRequest
+  ): Promise<CmsHostLoginClientResponse> {
+    const startedAt = Date.now();
+    const loginBy = startedAt + CONNECT_LOGIN_DEADLINE_MS;
+    const stored = await this.loadHost(userId, uid);
+    // The save's own checks first: a login that the save then refuses would
+    // only start a CMS session for nothing.
+    await this.hostService.checkHostUpdate(userId, uid, changes);
+    const host: HostInfo = {
+      ...stored,
+      address: changes.address ?? stored.address,
+      port: changes.port ?? stored.port,
+      id: changes.id ?? stored.id,
+      password: changes.password ?? stored.password,
+    };
+
+    const token = await settleBy(
+      this.requestToken(userId, uid, host, { notAfter: loginBy }),
+      loginBy,
+      () => CmsError.NoResponse({ hostUid: uid, deadlineMs: CONNECT_LOGIN_DEADLINE_MS })
+    );
+
+    await this.hostService.updateHost(userId, uid, { ...changes, token });
+    this.restoreDbLogins(userId, uid, token);
+    await this.adoptToken(userId, uid, token);
+    try {
+      return await settleBy(
+        this.finishLogin(userId, uid, host, token),
+        startedAt + CONNECT_ANSWER_DEADLINE_MS,
+        () => new Error(`not finished within ${CONNECT_ANSWER_DEADLINE_MS}ms`)
+      );
+    } catch (err) {
+      this.logger.warn(`Connected to host ${uid} and saved its settings, but could not read its HA details: ${err}`);
+      return { success: true, isHA: false, haInfoUnavailable: true, ...defaultPasswordFlag(host) };
+    }
+  }
+
+  private async loadHost(userId: string, uid: string): Promise<HostInfo> {
     const user = await this.repository.loadUserById(userId);
-    Logger.log(uid);
     const host: HostInfo | null = getHost(user, uid);
     if (!host) {
       throw HostError.NoSuchHost({ uid: uid });
     }
+    return host;
+  }
 
+  /** Sends the CMS login for `host` and resolves to the token it returns. */
+  private async requestToken(
+    userId: string,
+    uid: string,
+    host: HostInfo,
+    options?: { notAfter?: number }
+  ): Promise<string> {
     const url = `https://${host.address}:${host.port}/cm_api`;
     const request: LoginCmsRequest = {
       task: 'login',
@@ -78,7 +172,7 @@ export class CmsAuthService {
       })
     );
 
-    const response = await this.client.postPublic<LoginCmsRequest, LoginCmsResponse>(url, request);
+    const response = await this.client.postPublic<LoginCmsRequest, LoginCmsResponse>(url, request, options);
 
     this.logger.log(
       formatAuditLog('cms_response', {
@@ -96,12 +190,16 @@ export class CmsAuthService {
     checkCmsStatusError(response, 'CMS login failed');
     if (!response.token) {
       throw CmsError.RequestFailed({
+        reason: 'NO_TOKEN',
         message: 'CMS login did not return a token',
         response,
       });
     }
+    return response.token;
+  }
 
-    const token = response.token;
+  /** Stores `token` as the host's CMS session. */
+  private async adoptToken(userId: string, uid: string, token: string): Promise<void> {
     await this.repository.atomicUpdateUser(userId, async (user: User) => {
       const persisted = getHost(user, uid);
       if (!persisted) {
@@ -114,14 +212,28 @@ export class CmsAuthService {
       delete persisted.cmsTokenActiveTimeSec;
       return user;
     });
-    // The new token ended every DB login CMS held for the old one. Started
-    // before anything else awaits, so a DB request in between waits for it.
+  }
+
+  /**
+   * The new token ended every DB login CMS held for the old one. Called right
+   * after the token is stored, before anything else awaits, so a DB request
+   * in between waits for the re-login instead of finding no login.
+   */
+  private restoreDbLogins(userId: string, uid: string, token: string): void {
     this.databaseUserService.restoreDbLoginsAfterHostLogin(userId, uid, token);
+  }
+
+  /** What follows a stored login and its DB logins: the token lifetime, HA details. */
+  private async finishLogin(
+    userId: string,
+    uid: string,
+    host: HostInfo,
+    token: string
+  ): Promise<CmsHostLoginClientResponse> {
     await this.rememberTokenActiveTime(userId, uid, token);
 
     const haInfo = await this.getHaInfo(userId, uid);
-    // CMS installs with admin/admin; the client suggests changing it.
-    return host.id === 'admin' && host.password === 'admin' ? { ...haInfo, usesDefaultPassword: true } : haInfo;
+    return { ...haInfo, ...defaultPasswordFlag(host) };
   }
 
   /**
@@ -243,6 +355,7 @@ export class CmsAuthService {
     checkCmsStatusError(response, 'CMS login failed');
     if (!response.token) {
       throw CmsError.RequestFailed({
+        reason: 'NO_TOKEN',
         message: 'CMS login did not return a token',
         response,
       });
