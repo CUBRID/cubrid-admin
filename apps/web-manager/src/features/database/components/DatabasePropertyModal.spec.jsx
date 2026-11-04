@@ -274,3 +274,40 @@ it('leaves the [common] view as it was: no badge', async () => {
   expect(rowOf('checkpoint_interval').textContent).toContain('10min');
   expect(container.querySelector('[data-testid="param-from-common-badge"]')).toBeNull();
 });
+
+it('takes a buffer pair from [@db] whole when it sets either key, as the engine reads it', async () => {
+  await renderConf(['[common]', 'data_buffer_pages=40000', '[@demodb]', 'data_buffer_size=1G']);
+  expect(container.textContent).toContain('1G');
+  expect(container.textContent).not.toContain('40000');
+  expect(container.textContent).not.toContain('data_buffer_pages');
+});
+
+it('still checks the [@db] side of a buffer pair when [common] sets the other key', async () => {
+  await renderConf(['[common]', 'data_buffer_pages=40000', '[@demodb]', 'data_buffer_size=abc']);
+  expect(container.textContent).toMatch(/1 invalid/);
+});
+
+it('keeps the newer database\'s values when an earlier database\'s config answers late', async () => {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  let answerFirst;
+  hostApi.getHostConfig
+    .mockReturnValueOnce(new Promise((resolve) => { answerFirst = resolve; }))
+    .mockResolvedValueOnce({ conflist: [{ confdata: ['[@otherdb]', 'max_clients=456'] }] });
+  const base = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase: 'demodb' },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  const store = configureStore({ reducer: (state = base, action) => (action.type === 'test/select' ? { ...state, database: { selectedDatabase: action.payload } } : state) });
+  await act(async () => root.render(
+    <Provider store={store}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+  await act(async () => store.dispatch({ type: 'test/select', payload: 'otherdb' }));
+  expect(rowOf('max_clients').textContent).toContain('456');
+
+  await act(async () => answerFirst({ conflist: [{ confdata: ['[@demodb]', 'max_clients=123'] }] }));
+  expect(rowOf('max_clients').textContent).toContain('456');
+  expect(rowOf('max_clients').textContent).not.toContain('123');
+});

@@ -355,7 +355,19 @@ export default function DatabasePropertyModal() {
           // A database runs with [common] and its own [@db] over it, key by
           // key, so a database view shows both: the values in effect.
           const inherited = selectedDatabase ? read('common') : {};
+          // A buffer's pages and size keys are one setting to the engine,
+          // the later one read winning (system_parameter.c), and [@db] is
+          // read after [common]: a pair [@db] sets at all hides [common]'s.
+          bufferGroups.forEach(({ pagesKey, sizeKey }) => {
+            if (pagesKey in own || sizeKey in own) {
+              delete inherited[pagesKey];
+              delete inherited[sizeKey];
+            }
+          });
           const newParams = { ...inherited, ...own };
+          // A response for an earlier (host, database), the modal having been
+          // reopened for another since, must not replace the newer one's.
+          if (fetchedConfigKeyRef.current !== configKey) return;
           setSectionParams(own);
           setCommonKeys(new Set(Object.keys(inherited).filter(key => !(key in own))));
 
