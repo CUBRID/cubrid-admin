@@ -91,7 +91,17 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
               }
             }}
             onDoubleClick={() => dispatch(openTab(`broker_status:${hostUid}:${broker.name}`))}
-            onContextMenu={(e) => onContextMenu(e, broker.name, broker.state)}
+            onContextMenu={(e) => {
+              // As in a file explorer: right-clicking a broker outside the
+              // selection selects just that one; inside a multi-selection
+              // the selection stays, for the menu to act on all of it.
+              if (!(selectedBrokerNames?.size > 1 && selectedBrokerNames.has(broker.name))) {
+                if (selectedBrokerNames?.size > 0) onSelectedBrokerNamesChange?.(new Set());
+                dispatch(setSelectedBroker(broker.name));
+                dispatch(setSelectedBrokerSubItem(null));
+              }
+              onContextMenu(e, broker.name, broker.state);
+            }}
           >
             <TreeNode
               label={CM.sqlLog}

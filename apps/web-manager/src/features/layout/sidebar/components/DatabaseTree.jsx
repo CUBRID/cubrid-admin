@@ -306,7 +306,17 @@ export default function DatabaseTree({
               dispatch(setSelectedDatabaseSubItem(null));
             }}
             onDoubleClick={() => handleDbActivate(db, isLoggedIn)}
-            onContextMenu={(e) => onContextMenu(e, db.dbname, isActive, isLoggedIn)}
+            onContextMenu={(e) => {
+              // As in a file explorer: right-clicking a database outside the
+              // selection selects just that one; inside a multi-selection
+              // the selection stays, for the menu to act on all of it.
+              if (!(selectedDbNames?.size > 1 && selectedDbNames.has(db.dbname))) {
+                if (selectedDbNames?.size > 0) onSelectedDbNamesChange?.(new Set());
+                dispatch(setSelectedDatabase(db.dbname));
+                dispatch(setSelectedDatabaseSubItem(null));
+              }
+              onContextMenu(e, db.dbname, isActive, isLoggedIn);
+            }}
           >
             {/* Level 2 items — only for a logged-in database: every folder
                 below lists or opens per-db data the server refuses without a
