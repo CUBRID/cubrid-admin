@@ -233,5 +233,8 @@ describe('HA steps with no ha_db_list to check against', () => {
     expect(failureText(step('start', 'HA_DB_LIST_UNREADABLE', { haConfFailure: conf }), KO))
       .toBe('cubrid_ha.conf를 읽지 못해 HA 시작 결과를 확인하지 못했습니다: CMS 작업이 실패했습니다. (cannot open cubrid_ha.conf)');
     expect(failureText(step('stop', 'HA_DB_LIST_UNREADABLE', {}), KO)).toBe('cubrid_ha.conf를 읽지 못해 HA 중지 결과를 확인하지 못했습니다');
+    const bare = { error: 'cannot open cubrid_ha.conf', code: 'REQUEST_FAILED', type: '/errors/cms/request_failed' };
+    expect(failureText(step('start', 'HA_DB_LIST_UNREADABLE', { haConfFailure: bare }), KO))
+      .toBe('cubrid_ha.conf를 읽지 못해 HA 시작 결과를 확인하지 못했습니다: CMS 작업이 실패했습니다. (cannot open cubrid_ha.conf)');
   });
 });
