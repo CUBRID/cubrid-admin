@@ -8,6 +8,7 @@ import {
   AUTO_ADD_WARN_RATIO,
   AUTO_ADD_PAGES_MIN,
   checkNumberInRange,
+  checkNewDbName,
 } from '@api-interfaces';
 import { inputIssueText } from '../inputIssueText';
 import { closeCreateDatabaseModal,
@@ -286,13 +287,15 @@ export default function CreateDatabaseModal() {
   const autoAddOn = formData.autoAddVol.permanent === 'ON';
   const extSizeMin = Math.ceil((AUTO_ADD_PAGES_MIN * formData.pageSize / UNIT_BYTES[formData.autoAddVol.extUnit]) * 100) / 100;
   const createIssues = {
+    // An empty name only keeps Next off; it is not shown as an error.
+    dbName: formData.dbName ? checkNewDbName(formData.dbName) : null,
     logVolSize: checkNumberInRange(formData.logVolSize, LOG_VOLUME_SIZE_MIB.min, LOG_VOLUME_SIZE_MIB.max),
     volumes: formData.volumes.map((vol) => checkNumberInRange(vol.size, formData.pageSize / UNIT_BYTES.MiB)),
     warn: autoAddOn ? checkNumberInRange(formData.autoAddVol.warn, AUTO_ADD_WARN_RATIO.min, AUTO_ADD_WARN_RATIO.max) : null,
     extSize: autoAddOn ? checkNumberInRange(formData.autoAddVol.extSize, extSizeMin) : null,
   };
   const issuesByStep = {
-    1: [createIssues.logVolSize],
+    1: [createIssues.dbName, createIssues.logVolSize],
     2: createIssues.volumes,
     3: [createIssues.warn, createIssues.extSize],
   };
@@ -614,6 +617,7 @@ export default function CreateDatabaseModal() {
                   onChange={(e) => handleInputChange('dbName', e.target.value)}
                   placeholder="e.g. production_db"
                   icon="database"
+                  error={inputIssueText(createIssues.dbName, CM)}
                 />
                 <Select
                   label={CM.pageSize}

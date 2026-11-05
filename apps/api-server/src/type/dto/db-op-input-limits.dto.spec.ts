@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { UnloadDatabaseDto, AddVolDbDto } from './database-management-request.dto';
+import { UnloadDatabaseDto, AddVolDbDto, CopyDbDto, RenameDatabaseDto } from './database-management-request.dto';
+import { checkNewDbName } from '@api-interfaces';
 import { BackupDbDto, BackupScheduleDto, RestoreDbDto } from './database-backup-request.dto';
 import { CreateDatabaseWithConfigDto } from './database-lifecycle-request.dto';
 import { SetAutoAddVolDto } from './database-config-request.dto';
@@ -121,5 +122,32 @@ describe('restoredb', () => {
   it('refuses a year before 1900 and a level over 2', () => {
     expect(failedFields(RestoreDbDto, { ...base, date: '31-12-1899:23:59:00' })).toContain('date');
     expect(failedFields(RestoreDbDto, { ...base, date: 'backuptime', level: '3' })).toContain('level');
+  });
+});
+
+describe('a new database name (create, copy, rename)', () => {
+  const create = {
+    numpage: '32768', pagesize: 16384, logsize: 512, logpagesize: 16384,
+    genvolpath: '/d', logvolpath: '/l', charset: 'en_US', overwrite_config_file: 'YES',
+  };
+  const copy = { srcdbname: 'demodb', destdbpath: '/d', exvolpath: '/d', logpath: '/d', overwrite: 'n', move: 'n', advanced: 'n' };
+  const rename = { exvolpath: 'none', advanced: 'off' };
+
+  it.each(['a', 'demodb', 'db_2026-11', 'a'.repeat(17)])('takes %p', (name) => {
+    expect(checkNewDbName(name)).toBeNull();
+    expect(failedFields(CreateDatabaseWithConfigDto, { ...create, dbname: name })).not.toContain('dbname');
+    expect(failedFields(CopyDbDto, { ...copy, destdbname: name })).not.toContain('destdbname');
+    expect(failedFields(RenameDatabaseDto, { ...rename, rename: name })).not.toContain('rename');
+  });
+
+  it.each([
+    ['a'.repeat(18), 'DB_NAME_TOO_LONG'], // createdb aborts from 18 characters on
+    ['#demo', 'DB_NAME_START'], ['1demo', 'DB_NAME_START'], ['-demo', 'DB_NAME_START'],
+    ['my db', 'DB_NAME_CHARS'], ['a/b', 'DB_NAME_CHARS'], ['a@b', 'DB_NAME_CHARS'], ['a.b', 'DB_NAME_CHARS'], ['데모', 'DB_NAME_START'],
+  ])('refuses %p (%s)', (name, code) => {
+    expect(checkNewDbName(name)?.code).toBe(code);
+    expect(failedFields(CreateDatabaseWithConfigDto, { ...create, dbname: name })).toContain('dbname');
+    expect(failedFields(CopyDbDto, { ...copy, destdbname: name })).toContain('destdbname');
+    expect(failedFields(RenameDatabaseDto, { ...rename, rename: name })).toContain('rename');
   });
 });

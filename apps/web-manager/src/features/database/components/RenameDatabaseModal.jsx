@@ -17,16 +17,12 @@ import {
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { checkNewDbName } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 
-const validateDbName = (name) => {
-  if (!name) return false;
-  if (name.includes(' ')) return false;
-  if (name.startsWith('#') || name.startsWith('-')) return false;
-  if (name === '.' || name === '..') return false;
-  if (name.length > 17) return false;
-  return /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name);
-};
+// The shared new-name rule (also used by create and copy, and the server).
+const validateDbName = (name) => checkNewDbName(name) === null;
 
 export default function RenameDatabaseModal() {
   const CM = useCM();
@@ -224,7 +220,7 @@ export default function RenameDatabaseModal() {
             placeholder={`${selectedDatabase}_v2`}
             className="w-full"
             autoFocus
-            error={newDbName && !validateDbName(newDbName) ? "Name must be 1-17 alphanumeric, underscore or hyphen characters" : undefined}
+            error={newDbName ? inputIssueText(checkNewDbName(newDbName), CM) : undefined}
           />
         </div>
 

@@ -18,6 +18,7 @@ import {
   checkPositiveNumber,
   UNLOAD_CACHED_PAGES_MIN,
   UNLOAD_ESTIMATED_SIZE_MIN,
+  checkNewDbName,
 } from '@api-interfaces';
 import { PassesCheck } from './passes-check.decorator';
 
@@ -51,6 +52,7 @@ export class CopyDbDto {
 
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('newDbName', checkNewDbName)
   destdbname: string;
 
   @IsString()
@@ -247,6 +249,7 @@ export class CompactDatabaseDto {
 export class RenameDatabaseDto {
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('newDbName', checkNewDbName)
   rename: string;
 
   @IsString()

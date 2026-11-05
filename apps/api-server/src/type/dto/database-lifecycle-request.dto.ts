@@ -18,6 +18,7 @@ import {
   LOG_VOLUME_SIZE_MIB,
   ParamValueIssue,
   checkNumberInRange,
+  checkNewDbName,
 } from '@api-interfaces';
 import { MaxUtf8Bytes } from './max-utf8-bytes.decorator';
 import { PassesCheck } from './passes-check.decorator';
@@ -94,6 +95,7 @@ class UpdateUserOnCreateDto {
 export class CreateDatabaseWithConfigDto {
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('newDbName', checkNewDbName)
   dbname: string;
 
   // string | number per CMS — @IsDefined() matches the original

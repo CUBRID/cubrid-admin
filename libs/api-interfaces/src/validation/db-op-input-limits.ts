@@ -84,3 +84,26 @@ export function checkMonthDays(value: unknown): ParamValueIssue | null {
     ? null
     : issue('NOT_MONTH_DAY', 'Days must be 1-31');
 }
+
+/**
+ * A new database's name (createdb, and the new name of copydb and renamedb):
+ * a letter, then letters, digits, '_' or '-', at most 17 characters, the
+ * rule the rename dialog already had (#122, as the CA desktop app).
+ * The engine's own limits are within it: createdb aborts with a FATAL error
+ * from 18 characters on, since the log prefix must be shorter than
+ * MAXLOGNAME 18 (log_storage.hpp, log_page_buffer.c logpb_verify_length),
+ * and it refuses a name starting with '#' or with a space, '/', '\', '@' or
+ * a non-printable character (util_common.c check_database_name_local).
+ */
+export const DB_NAME_MAX_LENGTH = 17;
+
+export function checkNewDbName(value: unknown): ParamValueIssue | null {
+  const name = typeof value === 'string' ? value : '';
+  if (name === '') return issue('DB_NAME_EMPTY', 'Enter a database name');
+  if (name.length > DB_NAME_MAX_LENGTH) {
+    return issue('DB_NAME_TOO_LONG', `At most ${DB_NAME_MAX_LENGTH} characters`, { max: DB_NAME_MAX_LENGTH });
+  }
+  if (!/^[A-Za-z]/.test(name)) return issue('DB_NAME_START', 'Must start with a letter');
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) return issue('DB_NAME_CHARS', 'Use only letters, digits, _ and -');
+  return null;
+}
