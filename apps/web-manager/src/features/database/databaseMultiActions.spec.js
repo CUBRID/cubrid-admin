@@ -7,6 +7,7 @@ vi.mock('./databaseApi', () => ({
     loginDatabaseWithProfile: vi.fn(),
     logoutDatabase: vi.fn(),
     deleteDatabaseProfile: vi.fn(),
+    registerDatabase: vi.fn(),
   },
 }));
 import { databaseApi } from './databaseApi';
@@ -99,6 +100,36 @@ describe('runMultiDatabaseAction', () => {
       succeeded: ['saved'], failed: [{ dbname: 'typed', error: 'bad password' }], skipped: [],
     });
     expect(withoutCreds.skipped).toEqual([{ dbname: 'typed', reason: CM.noSavedCredentialsReason }]);
+  });
+
+  it('saves the entered credentials as the profile only when asked, after the login', async () => {
+    databaseApi.loginDatabase.mockResolvedValue({});
+    databaseApi.registerDatabase.mockResolvedValue({});
+    const store = storeWith({});
+    const rows = [{ dbname: 'typed', hasProfile: false }];
+
+    await runMultiDatabaseAction(store.dispatch, CM, {
+      hostUid: 'h1', action: 'login', rows, credentials: { typed: { id: 'dba', password: 'pw', save: false } },
+    });
+    expect(databaseApi.registerDatabase).not.toHaveBeenCalled();
+
+    const saved = await runMultiDatabaseAction(store.dispatch, CM, {
+      hostUid: 'h1', action: 'login', rows, credentials: { typed: { id: 'dba', password: 'pw', save: true } },
+    });
+    expect(databaseApi.registerDatabase).toHaveBeenCalledWith('h1', 'typed', { id: 'dba', password: 'pw' });
+    expect(saved.succeeded).toEqual(['typed']);
+  });
+
+  it('reports a login whose credentials could not be saved', async () => {
+    databaseApi.loginDatabase.mockResolvedValue({});
+    databaseApi.registerDatabase.mockRejectedValue({ response: { data: { message: 'disk full' } } });
+    const store = storeWith({});
+
+    const result = await runMultiDatabaseAction(store.dispatch, CM, {
+      hostUid: 'h1', action: 'login', rows: [{ dbname: 'typed', hasProfile: false }],
+      credentials: { typed: { id: 'dba', password: 'pw', save: true } },
+    });
+    expect(result.failed).toEqual([{ dbname: 'typed', error: CM.credentialsNotSavedMessage }]);
   });
 
   it('keeps going after one logout fails', async () => {
