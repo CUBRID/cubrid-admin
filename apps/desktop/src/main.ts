@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import { startApiForWorkspace, stopDesktopApi } from './api/api-runtime';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
@@ -11,6 +11,7 @@ import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
 import { waitForWorkspaceSetupComplete } from './workspace/workspace-setup';
 import { createAppWindow, toAppRouteUrl } from './window/app-window';
 import { setMainWindow } from './window/window-registry';
+import { installDownloadDialogDefaults } from './window/dialog-paths';
 
 registerPrivilegedAppScheme();
 
@@ -59,6 +60,7 @@ async function startApiOrAskForWorkspace(window: BrowserWindow): Promise<void> {
 async function bootstrap(): Promise<void> {
   installApplicationMenu();
   registerDesktopIpcHandlers();
+  installDownloadDialogDefaults(session.defaultSession, () => app.getPath('documents'));
 
   console.log('[desktop] install dir (beside .app / exe):', getPortableAppRoot());
   console.log('[desktop] settings file:', getDesktopSettingsPath());

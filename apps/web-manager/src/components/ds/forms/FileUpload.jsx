@@ -14,8 +14,21 @@ export const FileUpload = ({
   const resolvedLabel = label ?? CM.chooseFileLabel;
   const fileInputRef = useRef(null);
 
-  const handleClick = () => {
-    if (!disabled && fileInputRef.current) {
+  const handleClick = async () => {
+    if (disabled) return;
+    // In the desktop app the window's own file chooser can't be told where to
+    // open; the app's dialog opens where the last file dialog was used (or in
+    // Documents), like every other file dialog there.
+    const pickOpenFile = typeof window !== 'undefined' ? window.desktopBridge?.pickOpenFile : undefined;
+    if (pickOpenFile) {
+      const picked = await pickOpenFile(accept);
+      if (picked) {
+        const bytes = Uint8Array.from(atob(picked.base64), (c) => c.charCodeAt(0));
+        onFileSelect(new File([bytes], picked.name));
+      }
+      return;
+    }
+    if (fileInputRef.current) {
       fileInputRef.current.click();
     }
   };

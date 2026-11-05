@@ -9,6 +9,8 @@ export type DesktopSettings = {
   lastUpdateCheckAt?: string;
   lastKnownLatestVersion?: string;
   dismissedUpdateVersion?: string;
+  /** The folder of the last file or folder chosen in a file dialog (see window/dialog-paths.ts). */
+  lastDialogDirectory?: string;
 };
 
 const SETTINGS_FILE = 'desktop-settings.json';

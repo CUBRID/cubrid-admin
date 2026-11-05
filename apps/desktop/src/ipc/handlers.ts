@@ -1,5 +1,6 @@
 import { app, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
+import * as path from 'path';
 import { listActiveJobs } from '../api/active-jobs';
 import { getRunningWorkspacePaths, startApiForWorkspace, stopDesktopApi } from '../api/api-runtime';
 import {
@@ -18,6 +19,7 @@ import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
 import { getDefaultWorkspaceRoot, resolveWorkspacePaths } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
+import { dialogDefaultDirectory, rememberDialogPath } from '../window/dialog-paths';
 import { toAppRouteUrl } from '../window/app-window';
 import { getMainWindow } from '../window/window-registry';
 import {
@@ -120,6 +122,7 @@ export function registerDesktopIpcHandlers(): void {
 
   ipcMain.handle('desktop:pick-workspace-directory', async () => {
     const result = await dialog.showOpenDialog({
+      defaultPath: dialogDefaultDirectory(app.getPath('documents')),
       properties: ['openDirectory', 'createDirectory'],
       title: 'Select workspace folder',
       message:
@@ -130,7 +133,30 @@ export function registerDesktopIpcHandlers(): void {
       return null;
     }
 
+    rememberDialogPath(result.filePaths[0], true);
     return result.filePaths[0];
+  });
+
+  // A file to read in the window (importing hosts): the window's own file
+  // chooser can't be told where to open, so the app's dialog is used, with
+  // the same default folder as every other dialog. `accept` is the input's
+  // accept list, e.g. ".json,.xml".
+  ipcMain.handle('desktop:pick-open-file', async (_event, accept?: string) => {
+    const extensions = (accept ?? '')
+      .split(',')
+      .map((item) => item.trim().replace(/^\./, ''))
+      .filter((item) => item && item !== '*' && !item.includes('/'));
+    const result = await dialog.showOpenDialog({
+      defaultPath: dialogDefaultDirectory(app.getPath('documents')),
+      properties: ['openFile'],
+      filters: extensions.length > 0 ? [{ name: extensions.join(', '), extensions }] : undefined,
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    const filePath = result.filePaths[0];
+    rememberDialogPath(filePath, false);
+    return { name: path.basename(filePath), base64: (await fs.promises.readFile(filePath)).toString('base64') };
   });
 
   ipcMain.handle('desktop:set-workspace-root', (_event, workspaceRoot: string) =>

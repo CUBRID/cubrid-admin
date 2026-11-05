@@ -19,6 +19,8 @@ export type DesktopBridge = {
   getWorkspaceStartupError: () => Promise<string | null>;
   getWorkspaceInfo: () => Promise<WorkspaceInfo>;
   pickWorkspaceDirectory: () => Promise<string | null>;
+  /** A file chosen in the app's open dialog (with its default folder), as base64; null if cancelled. */
+  pickOpenFile: (accept?: string) => Promise<{ name: string; base64: string } | null>;
   setWorkspaceRoot: (workspaceRoot: string) => Promise<{ ok: true }>;
   resetWorkspaceRoot: () => Promise<{ ok: true }>;
   finishWorkspaceSetup: (workspaceRoot: string) => Promise<{ ok: boolean }>;

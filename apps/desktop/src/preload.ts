@@ -13,6 +13,7 @@ const desktopBridge: DesktopBridge = {
   getWorkspaceStartupError: () => ipcRenderer.invoke('desktop:get-workspace-startup-error'),
   getWorkspaceInfo: () => ipcRenderer.invoke('desktop:get-workspace-info'),
   pickWorkspaceDirectory: () => ipcRenderer.invoke('desktop:pick-workspace-directory'),
+  pickOpenFile: (accept) => ipcRenderer.invoke('desktop:pick-open-file', accept),
   setWorkspaceRoot: (workspaceRoot) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot),
   resetWorkspaceRoot: () => ipcRenderer.invoke('desktop:reset-workspace-root'),
   finishWorkspaceSetup: (workspaceRoot) =>
