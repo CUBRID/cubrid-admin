@@ -89,7 +89,11 @@ async function bootstrap() {
   // Both pkg (snapshot filesystem) and node use __dirname/public.
   // pkg embeds public/ as assets so __dirname resolves inside the snapshot.
   const publicDir = path.join(__dirname, 'public');
-  if (fs.existsSync(publicDir)) {
+  // Not in the desktop app: its screens come from the Electron bundle, and
+  // with no /api prefix there the SPA fallback below would answer every GET
+  // (host list, conf files, ...) with index.html, so a public/ folder left
+  // next to the server by a web build made the desktop screens come up empty.
+  if (!desktopMode && fs.existsSync(publicDir)) {
     const expressApp = app.getHttpAdapter().getInstance();
 
     // PWA Service Worker registration requires a trusted SSL cert.
