@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import process from 'node:process';
 import { expect, it } from 'vitest';
 import { CM } from './cmLabels';
 
