@@ -95,7 +95,8 @@ it('runs a refresh button click that lands during a background fetch once that f
   await render({ pollingIntervalSeconds: 0, onFetch: hangingFetch(pending) });
   expect(fetchCalls.length).toBe(1);
 
-  await act(async () => { void handleRefresh(); });
+  // As a button wired onClick={handleRefresh} calls it: with its click event.
+  await act(async () => { void handleRefresh({ type: 'click' }); });
   expect(fetchCalls.length).toBe(1);
 
   await act(async () => {

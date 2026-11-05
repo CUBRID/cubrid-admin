@@ -54,7 +54,11 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  const handleRefresh = useCallback(async (silent = false) => {
+  // Only an explicit `true` is a background refresh: a button wired as
+  // onClick={handleRefresh} passes its click event here, and that click is
+  // a refresh the user asked for.
+  const handleRefresh = useCallback(async (silentArg = false) => {
+    const silent = silentArg === true;
     // Only attempt to fetch if the host is authorized, or if it's the global dashboard
     const isAuthorized = hostUid === 'global' || (hostUid && authorizedHosts.includes(hostUid));
     if (!isAuthorized) return;
