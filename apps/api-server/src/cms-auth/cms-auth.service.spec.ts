@@ -17,7 +17,7 @@ describe('CMSAuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CmsAuthService,
-        { provide: CmsHttpsClientService, useValue: { postPublic: jest.fn() } },
+        { provide: CmsHttpsClientService, useValue: { postPublic: jest.fn(), postAuthenticated: jest.fn() } },
         {
           provide: UserRepositoryService,
           useValue: { loadUserById: jest.fn(), atomicUpdateUser: jest.fn() },
@@ -217,6 +217,43 @@ describe('CMSAuthService', () => {
         });
         expect(saved()).toMatchObject({ port: 8002, token: 'new-token' });
       });
+    });
+  });
+  describe('testConnection', () => {
+    const target = { address: '10.0.0.9', port: 8001, id: 'admin', password: 'pw' };
+    let client: { postPublic: jest.Mock; postAuthenticated: jest.Mock };
+    let repository: { atomicUpdateUser: jest.Mock };
+
+    beforeEach(() => {
+      client = moduleRef.get(CmsHttpsClientService);
+      repository = moduleRef.get(UserRepositoryService);
+    });
+
+    it('logs in with the given settings, logs the test session out, and saves nothing', async () => {
+      client.postPublic.mockResolvedValue({ status: 'success', token: 'test-token' });
+      client.postAuthenticated.mockResolvedValue({ status: 'success' });
+
+      await expect(service.testConnection(target)).resolves.toEqual({ success: true });
+      expect(client.postPublic).toHaveBeenCalledWith(
+        'https://10.0.0.9:8001/cm_api',
+        expect.objectContaining({ task: 'login', id: 'admin', password: 'pw' })
+      );
+      expect(client.postAuthenticated).toHaveBeenCalledWith('https://10.0.0.9:8001/cm_api', { task: 'logout', token: 'test-token' });
+      expect(repository.atomicUpdateUser).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed login and sends no logout', async () => {
+      client.postPublic.mockResolvedValue({ status: 'failure', note: 'Incorrect password' });
+
+      await expect(service.testConnection(target)).rejects.toThrow();
+      expect(client.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('still reports the login as working when the logout fails', async () => {
+      client.postPublic.mockResolvedValue({ status: 'success', token: 'test-token' });
+      client.postAuthenticated.mockRejectedValue(new Error('socket hang up'));
+
+      await expect(service.testConnection(target)).resolves.toEqual({ success: true });
     });
   });
 });
