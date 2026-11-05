@@ -2211,6 +2211,7 @@ export const CM_KO = {
     'Already running': '이미 실행 중',
     'Not running': '실행 중 아님',
     'Not a database on this host': '이 호스트의 DB가 아님',
+    'A job is running on it': '작업 실행 중',
   }[reason] ?? reason),
   skippedStillRunning: '계속 실행 중',
   skippedNotStarted: '시작 안 함',
