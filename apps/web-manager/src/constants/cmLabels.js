@@ -566,6 +566,7 @@ export const CM = {
   testConnection: 'Test Connection',
   connectionTestSucceededMsg: 'Connected. Nothing was saved.',
   connectionTestFailedMsg: (reason) => `Could not connect: ${reason}`,
+  testConnectionConnectedHint: "Can't test a connected host (it could end the current connection).",
   reloadConfig: 'Reload config',
 
   sourceEditor: 'Source Editor',

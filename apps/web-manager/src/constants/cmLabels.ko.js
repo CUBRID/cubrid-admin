@@ -526,6 +526,7 @@ export const CM_KO = {
   testConnection: '연결 테스트',
   connectionTestSucceededMsg: '연결되었습니다. 저장하지는 않았습니다.',
   connectionTestFailedMsg: (reason) => `연결하지 못했습니다: ${reason}`,
+  testConnectionConnectedHint: '연결된 호스트에서는 테스트할 수 없습니다(현재 연결이 끊길 수 있음).',
   reloadConfig: '설정 다시 불러오기',
 
   sourceEditor: '소스 편집기',

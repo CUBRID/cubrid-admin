@@ -49,6 +49,23 @@ export class CmsAuthController {
   }
 
   /**
+   * Logs in with the host's settings and the dialog's changes and out again,
+   * saving nothing (the host edit dialog's Test Connection).
+   *
+   * @route POST /:hostUid/cms-auth/test
+   * @param changes - The settings changed in the dialog, as PUT /host/:hostUid takes them.
+   */
+  @Post('test')
+  async test(
+    @Request() request: any,
+    @Param('hostUid') hostUid: string,
+    @Body() changes: UpdateHostClientDto
+  ) {
+    const userId = request.user.sub;
+    return await this.cmsAuthService.testConnectionFor(userId, hostUid, changes);
+  }
+
+  /**
    * Marks the host's CMS session as closed by the user, so a reload no longer
    * restores it as connected.
    *
