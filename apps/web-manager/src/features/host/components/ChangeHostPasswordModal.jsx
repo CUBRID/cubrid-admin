@@ -85,7 +85,7 @@ export default function ChangeHostPasswordModal() {
       await dispatch(editHost({ hostUid: changePasswordHostUid, payload: localPayload })).unwrap();
 
       // 3. Finally revalidate host login so the session picks up the new credentials
-      await dispatch(loginToHostWithSideEffects(changePasswordHostUid)).unwrap().catch(() => {});
+      await dispatch(loginToHostWithSideEffects(changePasswordHostUid)).unwrap().catch(() => undefined);
 
       setIsSuccess(true);
     } catch (err) {

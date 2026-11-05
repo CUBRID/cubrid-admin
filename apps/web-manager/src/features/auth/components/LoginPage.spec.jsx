@@ -29,7 +29,6 @@ vi.hoisted(() => {
 });
 vi.mock('../authApi', () => ({ authApi: { login: vi.fn() } }));
 
-import { version as rootVersion } from '../../../../../../package.json';
 import LoginPage from './LoginPage';
 import { authApi } from '../authApi';
 
@@ -60,6 +59,9 @@ it('shows the product version from the root package.json in the footer', async (
     );
   });
 
+  // vite.config.mjs injects the root package.json's version.
+  const rootVersion = import.meta.env.VITE_APP_VERSION;
+  expect(rootVersion).toMatch(/^\d+\.\d+\.\d+/);
   expect(container.querySelector('[data-testid="login-app-version"]').textContent).toBe(`v${rootVersion}`);
   expect(container.textContent).not.toContain('12.4.0');
 });

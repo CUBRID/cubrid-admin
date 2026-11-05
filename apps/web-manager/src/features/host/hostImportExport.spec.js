@@ -56,8 +56,8 @@ describe('importing an exported file', () => {
   it('puts the no-group hosts back without a group and keeps a group named "Ungrouped", in XML', async () => {
     let blob;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => { blob = b; return 'blob:x'; });
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     exportHostGroupsToNativeXml(hostGroups, null);
     const xml = await readBlob(blob);
     const { ungrouped, byGroup } = importRows(xml);
