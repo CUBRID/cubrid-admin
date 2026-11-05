@@ -174,7 +174,7 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
           x={rowMenu.mouseX}
           y={rowMenu.mouseY}
           onClose={() => setRowMenu(null)}
-          width="w-52"
+          minWidth="min-w-52"
         >
           <MenuItem icon="swap_horiz" label={`${CM.transactionInformation}…`} onClick={openTransactionInfo} />
           <MenuItem icon="cancel" label={`${CM.killTransaction}…`} onClick={openKillForRow} />

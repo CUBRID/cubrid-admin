@@ -256,4 +256,36 @@ describe('CMSAuthService', () => {
       await expect(service.testConnection(target)).resolves.toEqual({ success: true });
     });
   });
+  describe('testConnectionFor', () => {
+    let client: { postPublic: jest.Mock; postAuthenticated: jest.Mock };
+    let repository: { loadUserById: jest.Mock; atomicUpdateUser: jest.Mock };
+
+    beforeEach(() => {
+      client = moduleRef.get(CmsHttpsClientService);
+      repository = moduleRef.get(UserRepositoryService);
+      repository.loadUserById.mockResolvedValue({
+        id: 'u1',
+        host_groups: { ungrouped: { name: '', hosts: { h1: {
+          uid: 'h1', id: 'admin', address: '10.0.0.1', port: 8001, password: 'stored-pw', alias: 'h1', dbProfiles: {},
+        } } } },
+      });
+      client.postPublic.mockResolvedValue({ status: 'success', token: 'test-token' });
+      client.postAuthenticated.mockResolvedValue({ status: 'success' });
+    });
+
+    it('tests the saved settings with the changes, keeping the stored password when it is not changed', async () => {
+      await expect(service.testConnectionFor('u1', 'h1', { address: '10.0.0.2' })).resolves.toEqual({ success: true });
+      expect(client.postPublic).toHaveBeenCalledWith(
+        'https://10.0.0.2:8001/cm_api',
+        expect.objectContaining({ task: 'login', id: 'admin', password: 'stored-pw' })
+      );
+      expect(client.postAuthenticated).toHaveBeenCalledWith('https://10.0.0.2:8001/cm_api', { task: 'logout', token: 'test-token' });
+      expect(repository.atomicUpdateUser).not.toHaveBeenCalled();
+    });
+
+    it('uses a changed password', async () => {
+      await service.testConnectionFor('u1', 'h1', { password: 'new-pw' });
+      expect(client.postPublic).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ password: 'new-pw' }));
+    });
+  });
 });

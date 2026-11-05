@@ -23,6 +23,10 @@ export const hostApi = {
   testConnection: ({ address, port, id, password }) => {
     return apiClient.post('/cms-auth/test', { address, port, id, password });
   },
+  // A saved host's Test Connection: its settings with these changes, nothing saved.
+  testSavedHostConnection: (hostUid, changes) => {
+    return apiClient.post(`/${hostUid}/cms-auth/test`, changes);
+  },
   // Logs in with changed settings; the server saves them only if it succeeds.
   connectHost: (hostUid, changes) => {
     return apiClient.post(`/${hostUid}/cms-auth/connect`, changes);

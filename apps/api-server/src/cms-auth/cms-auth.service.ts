@@ -383,4 +383,19 @@ export class CmsAuthService {
     }
     return { success: true };
   }
+
+  /**
+   * Test Connection for a saved host (Edit Host): its stored settings with
+   * the dialog's changes, the password only when it was changed. Nothing is
+   * saved.
+   */
+  public async testConnectionFor(userId: string, uid: string, changes: UpdateHostRequest): Promise<{ success: true }> {
+    const stored = await this.loadHost(userId, uid);
+    return this.testConnection({
+      address: changes.address ?? stored.address,
+      port: changes.port ?? stored.port,
+      id: changes.id ?? stored.id,
+      password: changes.password ?? stored.password,
+    });
+  }
 }
