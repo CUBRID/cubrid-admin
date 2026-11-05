@@ -105,6 +105,7 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
         sortable
         emptyState={<FetchEmptyState status={casStatus} title={CM.casBrokers} />}
         maxRows={15}
+        paginate
       />
     </Card>
   );

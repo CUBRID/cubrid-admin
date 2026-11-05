@@ -111,3 +111,60 @@ describe('Table maxRows', () => {
     expect(thead.closest('table').parentElement.className).toContain('max-h-[180px]');
   });
 });
+
+describe('Table paginate', () => {
+  const shown = () => [...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent);
+  const position = () => container.querySelector('[data-testid="table-pager-position"]')?.textContent;
+  const click = (testId) => act(async () => {
+    container.querySelector(`[data-testid="${testId}"]`).click();
+  });
+
+  it('shows every row and no pager when they fit in maxRows', async () => {
+    await render({ data: rows(15), maxRows: 15, paginate: true });
+    expect(shown()).toHaveLength(15);
+    expect(container.querySelector('[data-testid="table-pager"]')).toBeNull();
+  });
+
+  it('splits longer tables into pages of maxRows - 1 rows instead of scrolling', async () => {
+    await render({ data: rows(40), maxRows: 15, paginate: true });
+    expect(shown()).toEqual(rows(14).map((r) => r.name));
+    expect(position()).toBe('1 / 3');
+    expect(scrollArea()).toBeNull();
+    expect(grip()).toBeNull();
+    expect(container.querySelector('[data-testid="table-pager-prev"]').disabled).toBe(true);
+
+    await click('table-pager-next');
+    await click('table-pager-next');
+    expect(position()).toBe('3 / 3');
+    expect(shown()).toEqual(rows(40).slice(28).map((r) => r.name));
+    expect(container.querySelector('[data-testid="table-pager-next"]').disabled).toBe(true);
+  });
+
+  it('keeps the page and the sort across a refresh, and moves to the last page when it is gone', async () => {
+    const numbered = (n) => Array.from({ length: n }, (_, i) => ({ name: `row-${String(i).padStart(2, '0')}` }));
+    await render({ data: numbered(40), maxRows: 15, paginate: true, sortable: true });
+    await click('table-pager-next'); // the first click on a header would go back to page 1
+    await act(async () => container.querySelector('th').click()); // asc
+    await act(async () => container.querySelector('th').click()); // desc
+    await click('table-pager-next');
+    expect(position()).toBe('2 / 3');
+    expect(shown()[0]).toBe('row-25');
+
+    await render({ data: numbered(40), maxRows: 15, paginate: true, sortable: true });
+    expect(position()).toBe('2 / 3');
+    expect(shown()[0]).toBe('row-25');
+
+    await render({ data: numbered(20), maxRows: 15, paginate: true, sortable: true });
+    expect(position()).toBe('2 / 2');
+    expect(shown()).toEqual(['row-05', 'row-04', 'row-03', 'row-02', 'row-01', 'row-00']);
+  });
+
+  it('sorts every row, not just the page, and goes back to page 1', async () => {
+    await render({ data: rows(40), maxRows: 15, paginate: true, sortable: true });
+    await click('table-pager-next');
+    await act(async () => container.querySelector('th').click());
+    await act(async () => container.querySelector('th').click());
+    expect(position()).toBe('1 / 3');
+    expect(shown()[0]).toBe('row-9');
+  });
+});
