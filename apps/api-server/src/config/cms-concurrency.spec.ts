@@ -49,16 +49,16 @@ describe('cwm.conf settings applied live (CMS_MAX_CONCURRENT_REQUESTS_PER_HOST, 
     const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
     const stop = startLogConfigWatcher({ reloadLogSettingsFromEnv: jest.fn() } as unknown as ConfigService, logger);
 
-    fs.writeFileSync(confPath, JSON.stringify({ [KEY]: '6', TOPSQL_MAX_LOG_LINES: '1000000', TOPSQL_MAX_LOG_MB: '128' }));
+    fs.writeFileSync(confPath, JSON.stringify({ [KEY]: '6', TOPSQL_MAX_LOG_LINES: '500000', TOPSQL_MAX_LOG_MB: '48' }));
     jest.advanceTimersByTime(5000);
     expect(cmsMaxConcurrentFromEnv()).toBe(6);
-    expect(topSqlLimitsFromEnv()).toMatchObject({ maxLines: 1_000_000, maxMiB: 128, timeoutMs: 240_000 });
+    expect(topSqlLimitsFromEnv()).toMatchObject({ maxLines: 500_000, maxMiB: 48, timeoutMs: 90_000 });
 
     fs.writeFileSync(confPath, JSON.stringify({}));
     jest.advanceTimersByTime(5000);
     expect(process.env[KEY]).toBeUndefined();
     expect(cmsMaxConcurrentFromEnv()).toBe(4);
-    expect(topSqlLimitsFromEnv()).toMatchObject({ maxLines: 500_000, maxMiB: 64 });
+    expect(topSqlLimitsFromEnv()).toMatchObject({ maxLines: 200_000, maxMiB: 16 });
     stop();
   });
 });

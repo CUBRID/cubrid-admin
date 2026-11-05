@@ -36,8 +36,8 @@ unreadable.
 | `CMS_JOB_STALE_RUNNING_HOURS` | How long a job can run before it's treated as stalled | `CMS_JOB_LONG_TIMEOUT_HOURS + 1` |
 | `CMS_JOB_LONG_TIMEOUT_HOURS` | Max wait for long-running jobs (unload/load) | `12` |
 | `CMS_MAX_CONCURRENT_REQUESTS_PER_HOST` | How many requests are sent to one CMS host at the same time; the rest wait in order. `1` sends them one by one. A value outside 1–16 uses the default. Applies without a restart. In the desktop app, put it in `conf/cwm.conf` inside the workspace folder. | `4` |
-| `TOPSQL_MAX_LOG_LINES` | Largest log, in lines, that Top SQL analyzes; a longer one is refused with this limit in the message. 1,000–2,000,000; another value uses the default. Applies without a restart. | `500000` |
-| `TOPSQL_MAX_LOG_MB` | Largest log, in MiB, that Top SQL analyzes. The whole log is read from CMS at once, so CMS and this server hold it in memory while it is read; the read may take 30 s for every 16 MiB of this limit. 1–256; another value uses the default. Applies without a restart. | `64` |
+| `TOPSQL_MAX_LOG_LINES` | Largest log, in lines, that Top SQL analyzes; a longer one is refused with this limit in the message. 1,000–700,000; another value uses the default. Applies without a restart. | `200000` |
+| `TOPSQL_MAX_LOG_MB` | Largest log, in MiB, that Top SQL analyzes. CMS reads the whole log at once and needs about 30 times its size in memory, which it keeps afterwards (a 63 MB log took CMS to 1.9 GiB), and CMS runs on the database machine, so raise this with care. The read may take 30 s for every 16 MiB of this limit. 1–64; another value uses the default. Applies without a restart. | `16` |
 | `CMS_JOB_RECOVER_ON_STARTUP` | Resume tracking jobs that were still running when the server restarted | `true` |
 | `SERVER_IP` | IP to include in the auto-generated self-signed certificate (avoids browser warnings when accessed by IP) | detected from network interfaces |
 | `CWM_SSL_DIR` | Directory to read/write the self-signed cert from | `ssl/` next to the executable |

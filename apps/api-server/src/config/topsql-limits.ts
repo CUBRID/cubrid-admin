@@ -7,8 +7,13 @@
  */
 export const TOPSQL_MAX_LOG_LINES = 'TOPSQL_MAX_LOG_LINES';
 export const TOPSQL_MAX_LOG_MB = 'TOPSQL_MAX_LOG_MB';
-export const TOPSQL_LINES = { default: 500_000, min: 1_000, max: 2_000_000 } as const;
-export const TOPSQL_MB = { default: 64, min: 1, max: 256 } as const;
+// Measured on a CMS container (one viewlog read of a broker SQL log, CMS
+// started fresh): 13.5 MB -> CMS peak 425 MiB, 27 MB -> 835 MiB, 63 MB ->
+// 1.9 GiB, and CMS keeps that memory after the read; a 90 MB log made
+// cub_manager exit. CMS runs on the database machine, so the default stays
+// near the old 16 MiB and the maximum stays below what CMS survived.
+export const TOPSQL_LINES = { default: 200_000, min: 1_000, max: 700_000 } as const;
+export const TOPSQL_MB = { default: 16, min: 1, max: 64 } as const;
 /** 30 s for every 16 MiB of the size limit, at least 30 s. */
 const TIMEOUT_MS_PER_16_MIB = 30_000;
 
