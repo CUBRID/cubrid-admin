@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useDispatch } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
-import { logout } from '../../auth/authSlice';
+import { Link } from 'react-router-dom';
+import { isDesktopApp } from '../isDesktopApp';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Input } from '../../../components/ds/forms/Input';
@@ -18,21 +17,8 @@ function SettingsShell({ children }) {
   );
 }
 
-function isDesktopApp() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return (
-    window.location.protocol === 'app:' ||
-    window.desktopConfig?.isDesktop === true ||
-    Boolean(window.desktopBridge)
-  );
-}
-
 export default function DesktopWorkspaceSettingsPage() {
   const CM = useCM();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
   const bridge = window.desktopBridge;
   const inDesktopApp = isDesktopApp();
   const [loading, setLoading] = useState(true);
@@ -52,13 +38,16 @@ export default function DesktopWorkspaceSettingsPage() {
     setLoading(true);
     setError('');
     try {
-      const [next, setupRequired] = await Promise.all([
+      const [next, setupRequired, startupError] = await Promise.all([
         bridge.getWorkspaceInfo(),
         bridge.isWorkspaceSetupRequired(),
+        bridge.getWorkspaceStartupError?.() ?? null,
       ]);
       setInfo(next);
       setWorkspaceRoot(next.workspaceRoot);
       setSetupMode(setupRequired);
+      // The configured workspace failed at launch: say why (a WORKSPACE_* code).
+      if (startupError) setError(startupError);
     } catch (err) {
       setError(err?.message || CM.workspaceSettingsLoadFailedMsg);
     } finally {
@@ -93,11 +82,9 @@ export default function DesktopWorkspaceSettingsPage() {
     }
   };
 
+  // The app reloads on the new workspace by itself; the buttons stay off until then.
   const afterWorkspaceApplied = () => {
-    dispatch(logout());
-    setMessage(CM.workspaceAppliedRelogMsg);
-    setSaving(false);
-    navigate('/login', { replace: true });
+    setMessage(CM.applyingWorkspaceMsg);
   };
 
   const handleSave = async () => {

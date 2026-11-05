@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { getDesktopSettingsPath } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
 import { getMainWindow } from '../window/window-registry';
+import { applyZoom, type ZoomAction } from '../window/zoom';
 
 const PRODUCT_NAME = 'Next CUBRID Admin';
 
@@ -33,7 +34,7 @@ export type MenuActionState = Record<MenuActionId, boolean>;
 
 // Item keys match the renderer's cmLabels keys where the header has the same
 // item, so both menus read the same; the rest are native-only.
-const MENU_LABELS = {
+export const MENU_LABELS = {
   en: {
     file: 'File',
     addHost: 'Add Host',
@@ -59,6 +60,7 @@ const MENU_LABELS = {
     reload: 'Reload',
     forceReload: 'Force Reload',
     toggleDevTools: 'Developer Tools',
+    fullScreen: 'Full Screen',
     resetZoom: 'Actual Size',
     zoomIn: 'Zoom In',
     zoomOut: 'Zoom Out',
@@ -100,6 +102,7 @@ const MENU_LABELS = {
     reload: '새로고침',
     forceReload: '강력 새로고침',
     toggleDevTools: '개발자 도구',
+    fullScreen: '전체 화면',
     resetZoom: '실제 크기',
     zoomIn: '확대',
     zoomOut: '축소',
@@ -128,6 +131,11 @@ let currentLanguage: MenuLanguage = 'en';
 let currentState: MenuActionState = ALL_ACTIONS_DISABLED;
 let installed = false;
 
+/** The language the menus are shown in (the renderer's UI language). */
+export function getMenuLanguage(): MenuLanguage {
+  return currentLanguage;
+}
+
 export function normalizeMenuLanguage(value: unknown): MenuLanguage {
   return value === 'ko' ? 'ko' : 'en';
 }
@@ -140,10 +148,25 @@ export function normalizeMenuActionState(value: unknown): MenuActionState {
   ) as MenuActionState;
 }
 
+// Re-reads what the window shows (its tab, the host list), not the whole page.
+function sendRefreshView(): void {
+  const window = getMainWindow();
+  if (window && !window.isDestroyed()) {
+    window.webContents.send('desktop:refresh-view');
+  }
+}
+
 function sendMenuAction(id: MenuActionId): void {
   const window = getMainWindow();
   if (window && !window.isDestroyed()) {
     window.webContents.send('desktop:menu-action', id);
+  }
+}
+
+function zoomWindow(action: ZoomAction): void {
+  const window = getMainWindow();
+  if (window && !window.isDestroyed()) {
+    applyZoom(window.webContents, action);
   }
 }
 
@@ -240,27 +263,27 @@ export function buildApplicationMenuTemplate(
         { role: 'cut', label: L.cut },
         { role: 'copy', label: L.copy },
         { role: 'paste', label: L.paste },
-        { role: 'selectAll', label: L.selectAll },
+        // Not shown, but kept: on macOS Cmd+A in a text field needs it.
+        { role: 'selectAll', label: L.selectAll, visible: false },
       ],
     },
     {
       label: L.view,
       submenu: [
-        { role: 'reload', label: L.reload },
+        // CmdOrCtrl+R (and F5) refresh the view; the page's own key handler
+        // does it on Windows and Linux, where the accelerator is only shown.
+        // Shift+CmdOrCtrl+R (forceReload) reloads the whole window.
+        { label: L.reload, accelerator: 'CmdOrCtrl+R', registerAccelerator: false, click: sendRefreshView },
         { role: 'forceReload', label: L.forceReload },
-        { role: 'toggleDevTools', label: L.toggleDevTools },
         { type: 'separator' },
-        { role: 'resetZoom', label: L.resetZoom },
-        { role: 'zoomIn', label: L.zoomIn },
-        { role: 'zoomOut', label: L.zoomOut },
-      ],
-    },
-    {
-      label: L.window,
-      submenu: [
-        { role: 'minimize', label: L.minimize },
-        { role: 'zoom', label: L.zoom },
-        ...(isMac ? [{ type: 'separator' as const }, { role: 'front' as const, label: L.front }] : []),
+        { role: 'togglefullscreen', label: L.fullScreen },
+        { type: 'separator' },
+        // The keys are handled before the page and the menu see them
+        // (window/zoom.ts), which also covers `+` and the numeric keypad;
+        // the accelerators here are what the menu shows.
+        { label: L.resetZoom, accelerator: 'CmdOrCtrl+0', registerAccelerator: false, click: () => zoomWindow('reset') },
+        { label: L.zoomIn, accelerator: 'CmdOrCtrl+=', registerAccelerator: false, click: () => zoomWindow('in') },
+        { label: L.zoomOut, accelerator: 'CmdOrCtrl+-', registerAccelerator: false, click: () => zoomWindow('out') },
       ],
     },
     {

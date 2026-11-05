@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { setAuthToken } from '../../api/apiClient';
 import { authApi } from './authApi';
+import { isDesktopApp } from '../desktop/isDesktopApp';
 
 const token = localStorage.getItem('token');
 const refreshToken = localStorage.getItem('refreshToken');
@@ -45,7 +46,8 @@ export const logoutUser = createAsyncThunk(
 );
 
 const initialState = {
-  isAuthenticated: !!token,
+  // The desktop app has no app login (isDesktopApp).
+  isAuthenticated: isDesktopApp() || !!token,
   token: token || null,
   refreshToken: refreshToken || null,
   user: null,
