@@ -330,7 +330,7 @@ export default function Breadcrumb({
           x={overflowMenu.x}
           y={overflowMenu.y}
           onClose={() => setOverflowMenu(null)}
-          minWidth="min-w-72"
+          width="w-72"
         >
           <div data-testid="all-tabs-menu-list" className="max-h-80 overflow-y-auto custom-scrollbar">
             {openTabs.map((tabId) => {
