@@ -5,6 +5,7 @@ import { resolveCwmConfPath, readCwmConfSafe } from '@config/load-runtime-env';
 import { reloadLogSettings } from './winston-logger';
 import { LoggerService } from '@nestjs/common';
 import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from '@config/cms-concurrency';
+import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from '@config/topsql-limits';
 
 const LOG_KEYS = [
   'LOG_TO_FILE',
@@ -17,7 +18,7 @@ const LOG_KEYS = [
 
 // Read from process.env on every use, so updating the env is all a change
 // needs. Removing the key from cwm.conf goes back to the default.
-const LIVE_KEYS = [CMS_MAX_CONCURRENT_REQUESTS_PER_HOST] as const;
+const LIVE_KEYS = [CMS_MAX_CONCURRENT_REQUESTS_PER_HOST, TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB] as const;
 
 // Editors commonly save via a temp-file-then-rename sequence, which can fire
 // several rapid 'change'/'rename' events for one actual edit — debounce so a

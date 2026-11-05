@@ -210,7 +210,7 @@ export class CmsHttpsClientService {
             throw CmsError.RequestFailed({
               reason: 'RESPONSE_TOO_LARGE',
               maxBytes: options.maxResponseBytes,
-              message: `CMS response exceeds the analysis size limit (${options.maxResponseBytes} bytes). Select a smaller archived log.`,
+              message: `CMS response exceeds the analysis size limit (${Math.round(options.maxResponseBytes / (1024 * 1024))} MiB). Select a smaller archived log.`,
             }, error);
           }
           throw error;

@@ -4,6 +4,7 @@ import { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import { getStoragePath } from '../resolve-storage-path';
 import { cmsMaxConcurrentFromEnv } from '@config/cms-concurrency';
+import { topSqlLimitsFromEnv } from '@config/topsql-limits';
 
 export type StartupListenInfo =
   | { kind: 'unixSocket'; socketPath: string }
@@ -77,6 +78,7 @@ export function logStartupBanner(
     `  Registration open : ${configService.isAuthRegistrationEnabled()}`,
     `  CMS TLS verify    : ${configService.getCmsRejectUnauthorized()}`,
     `  CMS requests/host : ${cmsMaxConcurrentFromEnv()} at a time`,
+    `  Top SQL log limit : ${topSqlLimitsFromEnv().maxLines} lines / ${topSqlLimitsFromEnv().maxMiB} MiB`,
     '========================================',
   ];
   logger.log(lines.join('\n'), 'Bootstrap');

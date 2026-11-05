@@ -54,19 +54,59 @@ describe('LogService', () => {
     });
     expect(postAuthenticated).toHaveBeenCalledTimes(1);
     expect(postAuthenticated).toHaveBeenCalledWith('https://localhost:8001/cm_api', {
-      task: 'viewlog', path: '/broker.sql.log', start: '1', end: '100000', token: 'cms-token',
-    }, { timeoutMs: 30_000, maxResponseBytes: 16 * 1024 * 1024 });
+      task: 'viewlog', path: '/broker.sql.log', start: '1', end: '500000', token: 'cms-token',
+    }, { timeoutMs: 120_000, maxResponseBytes: 64 * 1024 * 1024 });
   });
 
-  it.each([100001, 200000])('rejects logs with %i lines without reading another range', async total => {
+  it.each([500001, 2000000])('rejects logs with %i lines without reading another range, saying the limits', async total => {
     postAuthenticated.mockResolvedValue({ status: 'success', total: String(total), log: [] });
-    await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).rejects.toMatchObject({ status: 413 });
+    const refused = service.captureLogSnapshot('user', 'host', '/broker.sql.log');
+    await expect(refused).rejects.toMatchObject({ status: 413 });
+    await expect(refused).rejects.toMatchObject({ response: expect.objectContaining({
+      code: 'LOG_TOO_LARGE', maxLines: 500_000, maxBytes: 64 * 1024 * 1024,
+      message: 'Log exceeds the analysis limit (500,000 lines or 64 MiB). Select a smaller archived log.',
+    }) });
     expect(postAuthenticated).toHaveBeenCalledTimes(1);
   });
 
   it('rejects an oversized byte payload', async () => {
-    postAuthenticated.mockResolvedValue({ status: 'success', total: '1', log: [{ line: ['x'.repeat(16 * 1024 * 1024)] }] });
+    postAuthenticated.mockResolvedValue({ status: 'success', total: '1', log: [{ line: ['x'.repeat(64 * 1024 * 1024)] }] });
     await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).rejects.toMatchObject({ status: 413 });
+  });
+
+  describe('cwm.conf TOPSQL_MAX_LOG_LINES / TOPSQL_MAX_LOG_MB', () => {
+    afterEach(() => {
+      delete process.env.TOPSQL_MAX_LOG_LINES;
+      delete process.env.TOPSQL_MAX_LOG_MB;
+    });
+
+    it('reads up to the set limits, with a time limit that grows with the size', async () => {
+      process.env.TOPSQL_MAX_LOG_LINES = '2000000';
+      process.env.TOPSQL_MAX_LOG_MB = '256';
+      postAuthenticated.mockResolvedValue({ status: 'success', total: '0', log: [] });
+      await service.captureLogSnapshot('user', 'host', '/broker.sql.log');
+      expect(postAuthenticated).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ end: '2000000' }),
+        { timeoutMs: 480_000, maxResponseBytes: 256 * 1024 * 1024 });
+    });
+
+    it('says the set limits when refusing', async () => {
+      process.env.TOPSQL_MAX_LOG_LINES = '100000';
+      process.env.TOPSQL_MAX_LOG_MB = '16';
+      postAuthenticated.mockResolvedValue({ status: 'success', total: '100001', log: [] });
+      await expect(service.captureLogSnapshot('user', 'host', '/broker.sql.log')).rejects.toMatchObject({
+        response: expect.objectContaining({ maxLines: 100_000, maxBytes: 16 * 1024 * 1024,
+          message: 'Log exceeds the analysis limit (100,000 lines or 16 MiB). Select a smaller archived log.' }),
+      });
+    });
+
+    it.each([['0', '0'], ['3000000', '300'], ['many', '-1']])('uses the defaults for %p lines / %p MiB', async (lines, mb) => {
+      process.env.TOPSQL_MAX_LOG_LINES = lines;
+      process.env.TOPSQL_MAX_LOG_MB = mb;
+      postAuthenticated.mockResolvedValue({ status: 'success', total: '0', log: [] });
+      await service.captureLogSnapshot('user', 'host', '/broker.sql.log');
+      expect(postAuthenticated).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ end: '500000' }),
+        { timeoutMs: 120_000, maxResponseBytes: 64 * 1024 * 1024 });
+    });
   });
 
   it('rejects an incomplete capture', async () => {

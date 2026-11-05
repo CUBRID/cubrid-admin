@@ -5,6 +5,7 @@ import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST as KEY, cmsMaxConcurrentFromEnv, p
 import { loadRuntimeEnv } from './load-runtime-env';
 import { startLogConfigWatcher } from '../util/logging/watch-log-config';
 import type { ConfigService } from './config.service';
+import { topSqlLimitsFromEnv } from './topsql-limits';
 
 const saved = { ...process.env };
 afterEach(() => {
@@ -21,7 +22,7 @@ describe('parseCmsMaxConcurrent', () => {
   });
 });
 
-describe('cwm.conf CMS_MAX_CONCURRENT_REQUESTS_PER_HOST', () => {
+describe('cwm.conf settings applied live (CMS_MAX_CONCURRENT_REQUESTS_PER_HOST, TOPSQL_MAX_LOG_*)', () => {
   const writeConf = (dir: string, conf: Record<string, string>) => {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'cwm.conf'), JSON.stringify(conf));
@@ -48,14 +49,16 @@ describe('cwm.conf CMS_MAX_CONCURRENT_REQUESTS_PER_HOST', () => {
     const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
     const stop = startLogConfigWatcher({ reloadLogSettingsFromEnv: jest.fn() } as unknown as ConfigService, logger);
 
-    fs.writeFileSync(confPath, JSON.stringify({ [KEY]: '6' }));
+    fs.writeFileSync(confPath, JSON.stringify({ [KEY]: '6', TOPSQL_MAX_LOG_LINES: '1000000', TOPSQL_MAX_LOG_MB: '128' }));
     jest.advanceTimersByTime(5000);
     expect(cmsMaxConcurrentFromEnv()).toBe(6);
+    expect(topSqlLimitsFromEnv()).toMatchObject({ maxLines: 1_000_000, maxMiB: 128, timeoutMs: 240_000 });
 
     fs.writeFileSync(confPath, JSON.stringify({}));
     jest.advanceTimersByTime(5000);
     expect(process.env[KEY]).toBeUndefined();
     expect(cmsMaxConcurrentFromEnv()).toBe(4);
+    expect(topSqlLimitsFromEnv()).toMatchObject({ maxLines: 500_000, maxMiB: 64 });
     stop();
   });
 });
