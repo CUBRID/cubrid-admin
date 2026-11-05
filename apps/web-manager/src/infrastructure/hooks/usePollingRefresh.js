@@ -66,10 +66,16 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
     // blocked on, for no benefit; resume automatically once the queue clears.
     if (hostUid && hostUid !== 'global' && reconnectQueue?.includes(hostUid)) return;
     // If a fetch triggered by ANY path (initial load, a poll tick, tab
-    // resume, global refresh, network recovery) is still in flight, skip —
-    // see the Polling Timer effect below for why letting fetches overlap is
-    // actively harmful, not just wasteful.
-    if (isFetchingRef.current) return;
+    // resume, global refresh, network recovery) is still in flight, don't
+    // start another — see the Polling Timer effect below for why letting
+    // fetches overlap is actively harmful, not just wasteful. A refresh the
+    // user asked for (the button) runs once that fetch settles: on a slow
+    // host a background fetch is nearly always in flight, and dropping the
+    // click left the screen unrefreshed.
+    if (isFetchingRef.current) {
+      if (!silent) pendingRefreshRef.current = true;
+      return;
+    }
     isFetchingRef.current = true;
     if (!silent) setIsManualRefreshing(true);
     try {

@@ -17,8 +17,11 @@ let root;
 let store;
 let fetchCalls;
 
+// The latest handleRefresh, as a refresh button calls it.
+let handleRefresh;
+
 function Harness({ pollingIntervalSeconds = 1, onFetch }) {
-  usePollingRefresh({ hostUid: 'host1', tabId: 'tab1', pollingIntervalSeconds, onFetch });
+  ({ handleRefresh } = usePollingRefresh({ hostUid: 'host1', tabId: 'tab1', pollingIntervalSeconds, onFetch }));
   return null;
 }
 
@@ -85,6 +88,22 @@ it('runs a refresh requested during an in-flight fetch once that fetch settles',
     await vi.advanceTimersByTimeAsync(0);
   });
   expect(fetchCalls.length).toBe(2);
+});
+
+it('runs a refresh button click that lands during a background fetch once that fetch settles', async () => {
+  const pending = [];
+  await render({ pollingIntervalSeconds: 0, onFetch: hangingFetch(pending) });
+  expect(fetchCalls.length).toBe(1);
+
+  await act(async () => { void handleRefresh(); });
+  expect(fetchCalls.length).toBe(1);
+
+  await act(async () => {
+    pending[0].resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  // The click's own refresh (not silent), not dropped.
+  expect(fetchCalls).toEqual([fetchCalls[0], false]);
 });
 
 it('runs a refresh requested while the browser window is hidden', async () => {
