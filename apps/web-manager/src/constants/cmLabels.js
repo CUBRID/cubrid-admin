@@ -98,7 +98,7 @@ export const CM = {
   casCpuNotCollectedLinux: "Not collected on Linux: CUBRID's broker reports per-CAS CPU only on Solaris/HP-UX.",
   // DB dashboard memory bar: host memory split into host / CAS / free.
   dbMemHostLabel: 'Host',
-  dbMemHostHint: "Host memory in use, not counting this database's CAS",
+  dbMemHostHint: "Host memory in use, without this database's CAS",
   dbMemCasLabel: 'CAS',
   dbMemFreeLabel: 'Free',
   dbMemTotalLabel: 'Total',
