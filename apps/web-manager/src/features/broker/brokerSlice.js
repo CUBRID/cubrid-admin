@@ -6,6 +6,7 @@ import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 import { dbKey } from '../database/dbKey';
+import { hostKey, deleteHostKeys } from '../host/hostKey';
 import { isDbLoginGone, dbOfLoginGone } from '../database/dbLoginGone';
 
 // Module-level so the previous-sample baseline survives across polls and
@@ -317,9 +318,11 @@ const initialState = {
   activeHostUid: null,
   selectedBroker: null,
   selectedBrokerSubItem: null,
-  detailedStatus: {}, // { brokerName: { data: {}, loading: false, error: null } }
-  logsByBroker: {}, // { brokerName: [logs] }
-  viewingLogs: {}, // { path: { data: {}, loading: false, error: null } }
+  // Keyed by hostKey(hostUid, name): two hosts can have a broker, and a log
+  // file path, of the same name.
+  detailedStatus: {}, // { [hostKey(hostUid, brokerName)]: { data: {}, loading: false, error: null } }
+  logsByBroker: {}, // { [hostKey(hostUid, brokerName)]: [logs] }
+  viewingLogs: {}, // { [hostKey(hostUid, path)]: { data: {}, loading: false, error: null } }
   adminLogsByHost: {}, // { hostUid: [logs] }
   loadingByHost: {}, // { hostUid: boolean } — fetchBrokerList's own loading, kept
   // per host like brokersByHost itself: a single shared flag meant closing
@@ -450,22 +453,24 @@ const brokerSlice = createSlice({
         }
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
-        const { brokerName } = action.meta.arg;
-        if (!state.detailedStatus[brokerName]) {
-          state.detailedStatus[brokerName] = { data: {}, loading: true, error: null };
+        const key = hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName);
+        if (!state.detailedStatus[key]) {
+          state.detailedStatus[key] = { data: {}, loading: true, error: null };
         }
-        state.detailedStatus[brokerName].loading = true;
-        state.detailedStatus[brokerName].error = null;
+        state.detailedStatus[key].loading = true;
+        state.detailedStatus[key].error = null;
       })
       .addCase(fetchDetailedBrokerStatus.fulfilled, (state, action) => {
-        const { brokerName, data } = action.payload;
-        state.detailedStatus[brokerName].loading = false;
-        state.detailedStatus[brokerName].data = data;
+        const entry = state.detailedStatus[hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName)];
+        if (!entry) return; // tab or host closed since
+        entry.loading = false;
+        entry.data = action.payload.data;
       })
       .addCase(fetchDetailedBrokerStatus.rejected, (state, action) => {
-        const { brokerName } = action.meta.arg;
-        state.detailedStatus[brokerName].loading = false;
-        state.detailedStatus[brokerName].error = action.payload;
+        const entry = state.detailedStatus[hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName)];
+        if (!entry) return;
+        entry.loading = false;
+        entry.error = action.payload;
       })
       .addCase(startBroker.pending, (state, action) => {
         state.actionLoading = true;
@@ -534,27 +539,29 @@ const brokerSlice = createSlice({
       .addCase(fetchBrokerLogs.fulfilled, (state, action) => {
         state.logsLoadingCount = Math.max(0, state.logsLoadingCount - 1);
         state.logsLoading = state.logsLoadingCount > 0;
-        state.logsByBroker[action.payload.brokerName] = action.payload.logs;
+        state.logsByBroker[hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName)] = action.payload.logs;
       })
       .addCase(fetchBrokerLogs.rejected, (state) => {
         state.logsLoadingCount = Math.max(0, state.logsLoadingCount - 1);
         state.logsLoading = state.logsLoadingCount > 0;
       })
       .addCase(fetchLogContent.pending, (state, action) => {
-        const path = action.meta.arg.path;
-        if (!state.viewingLogs[path]) state.viewingLogs[path] = {};
-        state.viewingLogs[path].loading = true;
-        state.viewingLogs[path].error = null;
+        const key = hostKey(action.meta.arg.hostUid, action.meta.arg.path);
+        if (!state.viewingLogs[key]) state.viewingLogs[key] = {};
+        state.viewingLogs[key].loading = true;
+        state.viewingLogs[key].error = null;
       })
       .addCase(fetchLogContent.fulfilled, (state, action) => {
-        const { path, data } = action.payload;
-        state.viewingLogs[path].loading = false;
-        state.viewingLogs[path].data = data;
+        const entry = state.viewingLogs[hostKey(action.meta.arg.hostUid, action.meta.arg.path)];
+        if (!entry) return; // tab or host closed since
+        entry.loading = false;
+        entry.data = action.payload.data;
       })
       .addCase(fetchLogContent.rejected, (state, action) => {
-        const path = action.meta.arg.path;
-        state.viewingLogs[path].loading = false;
-        state.viewingLogs[path].error = action.payload;
+        const entry = state.viewingLogs[hostKey(action.meta.arg.hostUid, action.meta.arg.path)];
+        if (!entry) return;
+        entry.loading = false;
+        entry.error = action.payload;
       })
       .addCase(fetchAdminLogs.pending, (state) => {
         state.adminLogsLoading = true;
@@ -627,25 +634,26 @@ const brokerSlice = createSlice({
         (action) => action.type === 'layout/closeTab',
         (state, action) => {
           const tabId = action.payload;
-          const statusMatch = tabId.match(/^broker_status:[^:]+:([^:]+)/);
-          const logMatch = tabId.match(/^log:[^:]+:(.+)/);
-          const allLogsMatch = tabId.match(/^all_logs:[^:]+:([^:]+)/);
+          const statusMatch = tabId.match(/^broker_status:([^:]+):([^:]+)/);
+          const logMatch = tabId.match(/^log:([^:]+):(.+)/);
+          const allLogsMatch = tabId.match(/^all_logs:([^:]+):([^:]+)/);
           const allDbLogsMatch = tabId.match(/^all_db_logs:([^:]+):([^:]+)/);
           
           if (statusMatch) {
-            delete state.detailedStatus[statusMatch[1]];
+            delete state.detailedStatus[hostKey(statusMatch[1], statusMatch[2])];
           } else if (logMatch) {
-            delete state.viewingLogs[logMatch[1]];
+            delete state.viewingLogs[hostKey(logMatch[1], logMatch[2])];
           } else if (allLogsMatch) {
-            const brokerName = allLogsMatch[1];
-            const logs = state.logsByBroker[brokerName] || [];
+            const hostUid = allLogsMatch[1];
+            const logs = state.logsByBroker[hostKey(hostUid, allLogsMatch[2])] || [];
             logs.forEach(log => {
-              delete state.viewingLogs[log.path];
+              delete state.viewingLogs[hostKey(hostUid, log.path)];
             });
           } else if (allDbLogsMatch) {
-            const logs = state.dbLogsByDb[dbKey(allDbLogsMatch[1], allDbLogsMatch[2])] || [];
+            const hostUid = allDbLogsMatch[1];
+            const logs = state.dbLogsByDb[dbKey(hostUid, allDbLogsMatch[2])] || [];
             logs.forEach(log => {
-              delete state.viewingLogs[log.path];
+              delete state.viewingLogs[hostKey(hostUid, log.path)];
             });
           }
         }
@@ -670,6 +678,9 @@ const brokerSlice = createSlice({
           // evicted, or it would sit in brokersByHost forever.
           delete state.adminLogsByHost[hostUid];
           delete state.cmsLogsByHost[hostUid];
+          deleteHostKeys(state.detailedStatus, hostUid);
+          deleteHostKeys(state.logsByBroker, hostUid);
+          deleteHostKeys(state.viewingLogs, hostUid);
           delete state.brokerConfig[hostUid];
           delete state.brokersByHost[hostUid];
           delete state.navigatorBrokersByHost[hostUid];

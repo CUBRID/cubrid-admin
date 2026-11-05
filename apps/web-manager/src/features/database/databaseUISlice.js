@@ -7,7 +7,7 @@ const initialState = {
   isCompactDatabaseModalOpen: false,
   isCopyDatabaseModalOpen: false,
   isBackupDatabaseModalOpen: false,
-  pendingBackupJob: null, // { jobId, dbname } — survives modal close for reconnect
+  pendingBackupJob: null, // { jobId, hostUid, dbname, payload } — survives modal close for reconnect
   isRestoreDatabaseModalOpen: false,
   isOptimizeDatabaseModalOpen: false,
   isAddBackupPlanModalOpen: false,

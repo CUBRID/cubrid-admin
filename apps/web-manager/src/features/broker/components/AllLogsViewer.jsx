@@ -10,6 +10,7 @@ import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuDivider, MenuItem } from '../../../components/common/DropdownMenu';
 import { useCM } from '../../../constants/useCM';
 import { dbKey } from '../../database/dbKey';
+import { hostKey } from '../../host/hostKey';
 
 // ─── Constants & Helpers (Reused from LogViewer.jsx) ─────────────────────────
 const HighlightedLine = ({ line }) => {
@@ -56,7 +57,7 @@ const HighlightedLine = ({ line }) => {
 const LogSection = ({ hostUid, path, isExpanded, onToggleExpanded, isDb }) => {
   const CM = useCM();
   const dispatch = useDispatch();
-  const logState = useSelector(s => s.broker.viewingLogs[path], shallowEqual);
+  const logState = useSelector(s => s.broker.viewingLogs[hostKey(hostUid, path)], shallowEqual);
   const loading = logState?.loading;
   const fileName = path.split('/').pop();
   const lines = logState?.data?.log?.[0]?.line || [];
@@ -187,7 +188,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
 
   // ─── Data Selectors & Resolvers ──────────────────────────────────────────
   const logsList = useSelector(s => 
-    isDb ? s.broker.dbLogsByDb[dbKey(hostUid, targetName)] : s.broker.logsByBroker[targetName], 
+    isDb ? s.broker.dbLogsByDb[dbKey(hostUid, targetName)] : s.broker.logsByBroker[hostKey(hostUid, targetName)], 
     shallowEqual
   );
   const logsLoading = useSelector(s => 
@@ -288,7 +289,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
 
     targetLogs.forEach(log => {
       const fileName = log.path.split('/').pop();
-      const logState = viewingLogs[log.path];
+      const logState = viewingLogs[hostKey(hostUid, log.path)];
       const lines = logState?.data?.log?.[0]?.line || [];
       
       content += `############################################################\n`;

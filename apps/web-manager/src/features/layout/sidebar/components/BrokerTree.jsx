@@ -1,6 +1,7 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
+import { hostKey } from '../../../host/hostKey';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { useTreeMultiSelect } from '../../../../components/domain/tree/useTreeMultiSelect';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
@@ -64,7 +65,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
     <div className="space-y-0.5 px-2 py-2">
       {brokers.map((broker) => {
         const isBrokerSelected = selectedBroker === broker.name;
-        const brokerLogs = (logsByBroker[broker.name] || []).filter(log => log.path.toLowerCase().endsWith('.log'));
+        const brokerLogs = (logsByBroker[hostKey(hostUid, broker.name)] || []).filter(log => log.path.toLowerCase().endsWith('.log'));
         
         return (
           <TreeNode
@@ -86,7 +87,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
               dispatch(setSelectedBrokerSubItem(null));
             }}
             onToggle={() => {
-              if (!logsByBroker[broker.name] && !logsLoading) {
+              if (!logsByBroker[hostKey(hostUid, broker.name)] && !logsLoading) {
                 dispatch(fetchBrokerLogs({ hostUid, brokerName: broker.name }));
               }
             }}
@@ -99,7 +100,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
               level={2}
               isActive={isBrokerSelected && selectedBrokerSubItem === 'SQL Log'}
               hasChildren={true}
-              isLoading={logsLoading && !logsByBroker[broker.name]}
+              isLoading={logsLoading && !logsByBroker[hostKey(hostUid, broker.name)]}
               onSelect={() => {
                 dispatch(setSelectedBroker(broker.name));
                 dispatch(setSelectedBrokerSubItem('SQL Log'));
