@@ -33,11 +33,7 @@ export function useHostActivation() {
     }
   }, [dispatch, haInfo]);
 
-  // `openDashboard: false` (a single click in the host list) switches the
-  // host the sidebar shows without bringing up its dashboard: the dashboard
-  // reads its databases' volumes as soon as it is on screen, and a focus
-  // change alone must not do that.
-  const activateHost = useCallback((uid, { openDashboard = true } = {}) => {
+  const activateHost = useCallback((uid) => {
     if (!uid) return;
     if (loginInProgressRef.current) return;
 
@@ -54,7 +50,7 @@ export function useHostActivation() {
         dispatch(resetDatabaseState(selectedHostUid));
         dispatch(resetBrokerState(selectedHostUid));
       }
-      if (openDashboard) dispatch(setActiveMainTab('host:' + uid));
+      dispatch(setActiveMainTab('host:' + uid));
       dispatch(fetchDatabaseStartInfo(uid));
       dispatch(fetchBrokerList(uid));
       dispatch(fetchHostEnv(uid));
