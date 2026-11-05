@@ -32,7 +32,7 @@ describe('DatabaseLifecycleService', () => {
   let databaseUserService: jest.Mocked<DatabaseUserService>;
   let databaseConfigService: jest.Mocked<DatabaseConfigService>;
   let databaseInfoService: DatabaseInfoService;
-  let cmsJobLockService: { hasActiveJobForHost: jest.Mock };
+  let cmsJobLockService: { hasActiveJobForHost: jest.Mock; activeJobDatabasesForHost: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -108,6 +108,7 @@ describe('DatabaseLifecycleService', () => {
 
     const mockCmsJobLockService = {
       hasActiveJobForHost: jest.fn().mockResolvedValue(null),
+      activeJobDatabasesForHost: jest.fn().mockResolvedValue(new Map()),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -318,12 +319,23 @@ describe('DatabaseLifecycleService', () => {
       );
     });
 
-    it('should throw when a CMS job is already running on this host', async () => {
+    it('starts it while a job runs on another database of the host', async () => {
       cmsJobLockService.hasActiveJobForHost.mockResolvedValue({ jobId: 'job-1', dbname: 'otherdb' });
+      cmsJobLockService.activeJobDatabasesForHost.mockResolvedValue(new Map([['otherdb', 'job-1']]));
 
-      await expect(service.startDatabase(mockUserId, mockHostUid, mockDbname)).rejects.toThrow(
-        DatabaseError
-      );
+      await service.startDatabase(mockUserId, mockHostUid, mockDbname);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(expect.any(String),
+        expect.objectContaining({ dbname: mockDbname }), expect.anything());
+    });
+
+    it('refuses while a job works on this database, naming it (e.g. the new database of a copy)', async () => {
+      cmsJobLockService.activeJobDatabasesForHost.mockResolvedValue(new Map([[mockDbname, 'copy-1']]));
+
+      await expect(service.startDatabase(mockUserId, mockHostUid, mockDbname)).rejects.toMatchObject({
+        code: DatabaseErrorCode.OPERATION_IN_PROGRESS,
+        additionalData: expect.objectContaining({ dbname: mockDbname, existingJobId: 'copy-1' }),
+      });
       expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
     });
 
@@ -340,6 +352,16 @@ describe('DatabaseLifecycleService', () => {
   });
 
   describe('stopDatabase', () => {
+    it('refuses to stop a database while a job works on it', async () => {
+      cmsJobLockService.activeJobDatabasesForHost.mockResolvedValue(new Map([['testdb', 'load-1']]));
+
+      await expect(service.stopDatabase('user-123', 'host-uid-1', 'testdb')).rejects.toMatchObject({
+        code: DatabaseErrorCode.OPERATION_IN_PROGRESS,
+        additionalData: expect.objectContaining({ dbname: 'testdb' }),
+      });
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
     const mockBaseResponse = {
       __EXEC_TIME: '10 ms',
       note: 'none',
@@ -647,6 +669,25 @@ describe('DatabaseLifecycleService', () => {
       expect(databaseUserService.ensureDbLogin).toHaveBeenCalledWith(mockUserId, mockHostUid, 'hadb1');
     });
 
+    it('leaves out the databases a job works on (HA ones too), reporting them as skipped', async () => {
+      jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1', 'hadb2']));
+      jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({
+        activelist: { active: [{ dbname: 'hadb1' }, { dbname: 'hadb2' }, { dbname: 'db1' }, { dbname: 'db2' }] },
+      });
+      cmsJobLockService.activeJobDatabasesForHost.mockResolvedValue(new Map([['hadb1', 'backup-1'], ['db1', 'load-1']]));
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => ({ ...successResponse, task: body.task }));
+
+      const result = await service.stopAllDatabases(mockUserId, mockHostUid, ['db1', 'db2']);
+
+      const sent = cmsClient.postAuthenticated.mock.calls.map(([, body]) => `${body.task}:${(body as { dbname?: string }).dbname}`);
+      expect(sent.sort()).toEqual(['ha_stop:hadb2', 'stopdb:db2']);
+      expect(result.succeeded.sort()).toEqual(['db2', 'hadb2']);
+      expect(result.skipped).toEqual(expect.arrayContaining([
+        { dbname: 'hadb1', reason: 'A job is running on it' },
+        { dbname: 'db1', reason: 'A job is running on it' },
+      ]));
+    });
+
     it('skips the databases the user is not logged in to, sending them nothing', async () => {
       jest.spyOn(databaseInfoService as any, 'getHaDbNames').mockResolvedValue(new Set(['hadb1']));
       jest.spyOn(databaseInfoService as any, 'startInfo').mockResolvedValue({
@@ -717,6 +758,18 @@ describe('DatabaseLifecycleService', () => {
         { dbname: 'nodb', reason: 'Not a database on this host' },
       ]);
       expect(result.failed).toEqual([]);
+    });
+
+    it('skips a database a job works on, with the reason, and acts on the others', async () => {
+      hostState(['db1', 'db2']);
+      cmsJobLockService.activeJobDatabasesForHost.mockResolvedValue(new Map([['db1', 'load-1']]));
+      cmsClient.postAuthenticated.mockImplementation(async (_url, body) => cmsApplies(body));
+
+      const result = await service.runSelectedDatabasesAction(mockUserId, mockHostUid, 'stop', ['db1', 'db2']);
+
+      expect(tasks()).toEqual([['stopdb', 'db2']]);
+      expect(result.succeeded).toEqual(['db2']);
+      expect(result.skipped).toEqual([{ dbname: 'db1', reason: 'A job is running on it' }]);
     });
 
     const noLogin = (reasons: Record<string, 'loggedOut' | 'notLoggedIn'>) =>
@@ -844,6 +897,17 @@ describe('DatabaseLifecycleService', () => {
   });
 
   describe('stopWholeService', () => {
+    it('is refused while a job runs on any database of the host, before anything is stopped', async () => {
+      cmsJobLockService.hasActiveJobForHost.mockResolvedValue({ jobId: 'load-1', dbname: 'db1' });
+      const mockBrokerService = (service as any).brokerService;
+
+      await expect(service.stopWholeService(mockUserId, mockHostUid)).rejects.toMatchObject({
+        code: DatabaseErrorCode.OPERATION_IN_PROGRESS,
+      });
+      expect(mockBrokerService.stopAllBrokers).not.toHaveBeenCalled();
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
     it('still stops databases and reports the broker failure when stopping brokers fails', async () => {
       const mockBrokerService = (service as any).brokerService;
       mockBrokerService.stopAllBrokers.mockRejectedValue(new Error('broker stop: fail'));
@@ -1790,6 +1854,7 @@ describe('DatabaseLifecycleService', () => {
         jobId: 'self-job',
         dbname: 'testdb',
       });
+      cmsJobLockService.activeJobDatabasesForHost.mockResolvedValue(new Map([['testdb', 'self-job']]));
 
       const request = {
         ...mockCreateDbRequest,

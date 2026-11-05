@@ -151,6 +151,7 @@ export const BULK_SKIP_REASON = {
   notRunning: 'Not running',
   loggedOut: 'Logged out',
   notLoggedIn: 'Not logged in',
+  jobRunning: 'A job is running on it',
 } as const;
 
 /**
@@ -203,11 +204,11 @@ export class DatabaseLifecycleService extends BaseService {
   }
 
   /**
-   * Deliberate policy, not a CMS/engine requirement: block every service/
-   * database start-stop-restart (individual, bulk, and HA alike) while any
-   * CMS job (load/unload/backup/etc.) is actively running anywhere on this
-   * host — restarting the engine underneath a job that's mid-write risks
-   * corrupting whatever it's in the middle of.
+   * Deliberate policy, not a CMS/engine requirement: a whole-service start,
+   * stop or restart (every database of the host, and the HA node itself) is
+   * refused while any CMS job (load/unload/backup/etc.) is actively running
+   * on this host — restarting the engine underneath a job that's mid-write
+   * risks corrupting whatever it's in the middle of.
    */
   private async assertNoActiveJob(userId: string, hostUid: string): Promise<void> {
     const active = await this.cmsJobLockService.hasActiveJobForHost(userId, hostUid);
@@ -217,6 +218,22 @@ export class DatabaseLifecycleService extends BaseService {
         dbname: active.dbname,
         existingJobId: active.jobId,
       });
+    }
+  }
+
+  /**
+   * A start, stop or restart of single databases is refused only when a job
+   * works on one of them (jobDatabases: for a copy the source and the new
+   * database, for a rename the old and the new name). Starting or stopping
+   * another database leaves the job's database alone: `startdb`/`stopdb` and
+   * `cubrid heartbeat start|stop <db>` act on that database's processes only
+   * (util_service.c us_hb_process_start/stop).
+   */
+  private async assertNoActiveJobOn(userId: string, hostUid: string, dbnames: string[]): Promise<void> {
+    const busy = await this.cmsJobLockService.activeJobDatabasesForHost(userId, hostUid);
+    const dbname = dbnames.find((name) => busy.has(name));
+    if (dbname !== undefined) {
+      throw DatabaseError.OperationInProgress({ hostUid, dbname, existingJobId: busy.get(dbname) });
     }
   }
 
@@ -300,7 +317,7 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<StartInfoClientResponse> {
-    await this.assertNoActiveJob(userId, hostUid);
+    await this.assertNoActiveJobOn(userId, hostUid, [dbname]);
 
     const useHa = await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname);
     if (useHa) {
@@ -354,7 +371,7 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<StartInfoClientResponse> {
-    await this.assertNoActiveJob(userId, hostUid);
+    await this.assertNoActiveJobOn(userId, hostUid, [dbname]);
 
     const useHa = await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname);
     if (useHa) {
@@ -459,7 +476,7 @@ export class DatabaseLifecycleService extends BaseService {
     hostUid: string,
     dbname: string
   ): Promise<StartInfoClientResponse> {
-    await this.assertNoActiveJob(userId, hostUid);
+    await this.assertNoActiveJobOn(userId, hostUid, [dbname]);
 
     const useHa = await this.databaseInfoService.effectiveHaDbForDbname(userId, hostUid, dbname);
 
@@ -648,7 +665,9 @@ export class DatabaseLifecycleService extends BaseService {
     action: SelectedDatabasesAction,
     dbnames: string[]
   ): Promise<BulkDatabaseActionResult> {
-    await this.assertNoActiveJob(userId, hostUid);
+    // A database a job works on is skipped with a reason, as a database
+    // that is not logged in is; the others go ahead.
+    const jobBusy = await this.cmsJobLockService.activeJobDatabasesForHost(userId, hostUid);
     const requested = [...new Set(dbnames)];
     return this.holdingDatabases(userId, hostUid, requested, `${action}SelectedDatabases`, async () => {
       const out: BulkDatabaseActionResult = { succeeded: [], failed: [], skipped: [] };
@@ -666,6 +685,8 @@ export class DatabaseLifecycleService extends BaseService {
       for (const dbname of requested) {
         if (!known.has(dbname)) {
           out.skipped.push({ dbname, reason: BULK_SKIP_REASON.notFound });
+        } else if (jobBusy.has(dbname)) {
+          out.skipped.push({ dbname, reason: BULK_SKIP_REASON.jobRunning });
         } else if (action === 'start' && running.has(dbname)) {
           out.skipped.push({ dbname, reason: BULK_SKIP_REASON.alreadyRunning });
         } else if (action !== 'start' && !running.has(dbname)) {
@@ -755,12 +776,13 @@ export class DatabaseLifecycleService extends BaseService {
    *   for individual failures
    */
   async startAllDatabases(userId: string, hostUid: string, dbnames: string[]): Promise<BulkDatabaseActionResult> {
-    await this.assertNoActiveJob(userId, hostUid);
-
-    const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
-    return this.holdingDatabases(userId, hostUid, [...haDbNames, ...dbnames], 'startAllDatabases', () =>
-      this.runAllDatabasesAction(userId, hostUid, dbnames, haDbNames, 'start')
+    const all = await this.withoutJobDatabases(userId, hostUid, dbnames,
+      await this.databaseInfoService.getHaDbNames(userId, hostUid));
+    const result = await this.holdingDatabases(userId, hostUid, [...all.haDbNames, ...all.dbnames], 'startAllDatabases', () =>
+      this.runAllDatabasesAction(userId, hostUid, all.dbnames, all.haDbNames, 'start')
     );
+    result.skipped.unshift(...all.skipped);
+    return result;
   }
 
   /**
@@ -776,12 +798,34 @@ export class DatabaseLifecycleService extends BaseService {
    * @returns Per-database outcome; never throws for individual failures
    */
   async stopAllDatabases(userId: string, hostUid: string, dbnames: string[]): Promise<BulkDatabaseActionResult> {
-    await this.assertNoActiveJob(userId, hostUid);
-
-    const haDbNames = await this.databaseInfoService.getHaDbNames(userId, hostUid);
-    return this.holdingDatabases(userId, hostUid, [...haDbNames, ...dbnames], 'stopAllDatabases', () =>
-      this.runAllDatabasesAction(userId, hostUid, dbnames, haDbNames, 'stop')
+    const all = await this.withoutJobDatabases(userId, hostUid, dbnames,
+      await this.databaseInfoService.getHaDbNames(userId, hostUid));
+    const result = await this.holdingDatabases(userId, hostUid, [...all.haDbNames, ...all.dbnames], 'stopAllDatabases', () =>
+      this.runAllDatabasesAction(userId, hostUid, all.dbnames, all.haDbNames, 'stop')
     );
+    result.skipped.unshift(...all.skipped);
+    return result;
+  }
+
+  /**
+   * Start All / Stop All leave out the databases a job works on, each
+   * reported as skipped with the reason; the rest go ahead.
+   */
+  private async withoutJobDatabases(
+    userId: string,
+    hostUid: string,
+    dbnames: string[],
+    haDbNames: Set<string>
+  ): Promise<{ dbnames: string[]; haDbNames: Set<string>; skipped: BulkDatabaseActionResult['skipped'] }> {
+    const busy = await this.cmsJobLockService.activeJobDatabasesForHost(userId, hostUid);
+    const skipped = [...new Set([...haDbNames, ...dbnames])]
+      .filter((dbname) => busy.has(dbname))
+      .map((dbname) => ({ dbname, reason: BULK_SKIP_REASON.jobRunning }));
+    return {
+      dbnames: dbnames.filter((dbname) => !busy.has(dbname)),
+      haDbNames: new Set([...haDbNames].filter((dbname) => !busy.has(dbname))),
+      skipped,
+    };
   }
 
   /** startAllDatabases/stopAllDatabases with the databases already held. */
@@ -1427,7 +1471,7 @@ export class DatabaseLifecycleService extends BaseService {
     // startDatabase() or startNonHaDatabase(): this whole createDatabase()
     // call already runs inside this job's own active-job lock (registered by
     // CmsJobService.createJob before executeCmsForJob invokes us), so
-    // startDatabase()'s assertNoActiveJob() would see that same still-running
+    // startDatabase()'s assertNoActiveJobOn() would see that same still-running
     // job and always throw OPERATION_IN_PROGRESS on itself. And
     // startNonHaDatabase() gates on ensureDbLogin(), which requires a live
     // DB login — a database this job just created has none yet, so it would
