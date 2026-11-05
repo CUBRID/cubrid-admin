@@ -7,7 +7,7 @@ const MenuContext = createContext({ closeMenu: () => undefined });
  * Reusable submenu component with hover delay.
  * Aligned with the "Technical Compact" design system.
  */
-export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56', gap: _gap = 'ml-1' }) {
+export function SubMenu({ icon, iconColor = '', label, children, minWidth = 'min-w-56', gap: _gap = 'ml-1' }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ x: 'right', top: 0, left: 0, maxHeight: 300 });
   const [isPositioned, setIsPositioned] = useState(false);
@@ -97,12 +97,15 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
     top: `${position.top}px`,
     left: `${position.left}px`,
     maxHeight: `${position.maxHeight}px`,
+    // As wide as its items, up to the window less the 20px kept on each side.
+    maxWidth: 'calc(100vw - 40px)',
     visibility: 'visible',
     position: 'fixed',
     zIndex: 100000
   } : {
     top: '-9999px',
     left: '-9999px',
+    maxWidth: 'calc(100vw - 40px)',
     visibility: 'hidden',
     position: 'fixed'
   };
@@ -111,7 +114,7 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
     <div 
       ref={menuRef}
       role="menu"
-      className={`${width} bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl 
+      className={`${minWidth} w-max bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl 
         shadow-[0_4px_20px_rgba(0,0,0,0.15)] p-1.5 animate-in fade-in transition duration-200 context-menu-container
         ${isPositioned ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
         ${position.x === 'right' ? 'origin-left' : 'origin-right'}
@@ -164,7 +167,7 @@ export function SubMenu({ icon, iconColor = '', label, children, width = 'w-56',
  * Reusable top-level dropdown menu with hover delay.
  * Adheres to the "Technical Compact" design language.
  */
-export function DropdownMenu({ label, children, width = 'w-52' }) {
+export function DropdownMenu({ label, children, minWidth = 'min-w-52' }) {
   const [open, setOpen] = useState(false);
   const [align, setAlign] = useState('left');
   const [isPositioned, setIsPositioned] = useState(false);
@@ -224,9 +227,10 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
             ref={menuRef}
             role="menu"
             className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full mt-2
-              ${width} bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl 
+              ${minWidth} w-max bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl 
               shadow-[0_4px_25px_rgba(0,0,0,0.2)] p-1.5 z-1000 animate-in fade-in transition duration-200
               ${isPositioned ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-95'}`}
+            style={{ maxWidth: 'calc(100vw - 16px)' }}
           >
             {/* Subtle Top Accent */}
             <div className="absolute top-0 left-4 right-4 h-[2px] bg-linear-to-r from-transparent via-bk-yellow/30 to-transparent"></div>

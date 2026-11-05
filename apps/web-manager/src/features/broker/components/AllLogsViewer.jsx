@@ -386,7 +386,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
       />
 
       {toolbarMenu && (
-        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} width="w-48" onClose={() => setToolbarMenu(null)}>
+        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} minWidth="min-w-48" onClose={() => setToolbarMenu(null)}>
           <MenuItem icon="unfold_more" label={CM.expandAllBtn} onClick={() => { handleExpandAll(); setToolbarMenu(null); }} />
           <MenuItem icon="unfold_less" label={CM.collapseAllBtn} onClick={() => { handleCollapseAll(); setToolbarMenu(null); }} />
           <MenuDivider />

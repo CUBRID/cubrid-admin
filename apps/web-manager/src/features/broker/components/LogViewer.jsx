@@ -373,7 +373,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
       />
 
       {toolbarMenu && (
-        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} width="w-48" onClose={() => setToolbarMenu(null)}>
+        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} minWidth="min-w-48" onClose={() => setToolbarMenu(null)}>
           <MenuItem
             icon={copying ? 'check' : 'content_copy'}
             label={copying ? CM.copiedLabel : CM.copyToClipboard}
