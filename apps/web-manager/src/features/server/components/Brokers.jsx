@@ -126,6 +126,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     >
       <Table
         maxRows={15}
+        paginate
         columns={columns}
         emptyState={<FetchEmptyState status={!hasLoadedOnce ? 'loading' : loadFailed ? 'error' : 'loaded'} title={CM.brokerStatus} />}
         data={brokers}

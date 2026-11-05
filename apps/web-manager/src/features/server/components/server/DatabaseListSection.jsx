@@ -78,6 +78,7 @@ export default function DatabaseListSection({ dbListDisplay, dbListStatus = 'loa
         data={dbListDisplay}
         emptyState={<FetchEmptyState status={dbListStatus} title={CM.databases} />}
         maxRows={15}
+        paginate
       />
     </Card>
   );

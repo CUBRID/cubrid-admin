@@ -527,6 +527,7 @@ const Component = function ServiceDashboard() {
         <Card testId="service-dashboard-table" noPadding className="overflow-hidden border-slate-200 dark:border-white/10 shadow-sm rounded-xl bg-white dark:bg-white/1">
           <Table
             maxRows={15}
+            paginate
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}

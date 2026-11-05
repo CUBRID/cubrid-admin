@@ -147,6 +147,7 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
       >
         <Table
           maxRows={15}
+          paginate
           columns={columns}
           data={locks}
           onRowContextMenu={handleRowContextMenu}

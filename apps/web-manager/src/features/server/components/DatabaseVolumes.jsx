@@ -239,6 +239,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     >
       <Table
         maxRows={15}
+        paginate
         columns={columns}
         data={volumeData}
         loading={!hasLoadedOnce && dbListStatus !== 'error'}

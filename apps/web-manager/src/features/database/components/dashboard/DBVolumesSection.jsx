@@ -124,6 +124,7 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
         data={volumes}
         emptyState={<FetchEmptyState status={volumesStatus} title={CM.storageVolumes} />}
         maxRows={15}
+        paginate
       />
     </Card>
   );
