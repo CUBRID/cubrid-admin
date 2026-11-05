@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAnyModalOpen } from './useAnyModalOpen';
+import { dbKey } from '../../features/database/dbKey';
 
 /**
  * A custom hook to manage background data polling, visibility-aware refresh,
@@ -11,14 +12,18 @@ import { useAnyModalOpen } from './useAnyModalOpen';
  * @param {string} options.tabId - The exact tab ID to check if this view is active (e.g., `brokers_status:${hostUid}`).
  * @param {number} options.pollingIntervalSeconds - The interval in seconds to poll for updates. Set to 0 to disable.
  * @param {Function} options.onFetch - A function that returns a thunk/promise to fetch the data.
+ * @param {string} [options.dbname] - For a database's own screen: nothing is read (no poll, refresh or
+ *   F5) while the user is not logged in to this database on this host; the first read follows the login.
  * 
- * @returns {Object} { isManualRefreshing, lastRefreshed, handleRefresh }
+ * @returns {Object} { isManualRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn }
  */
-export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFetch }) => {
+export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFetch, dbname }) => {
   const dispatch = useDispatch();
   
   // We use shallowEqual in your app, but for these simple primitive states, normal selector is fine.
   const { authorizedHosts, reconnectQueue } = useSelector((state) => state.host);
+  const isDbLoggedIn = useSelector((state) =>
+    !dbname || (state.database?.loggedInDatabases ?? []).includes(dbKey(hostUid, dbname)));
   const { refreshCounter, activeMainTab } = useSelector((state) => state.layout);
 
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -62,6 +67,8 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
     // Only attempt to fetch if the host is authorized, or if it's the global dashboard
     const isAuthorized = hostUid === 'global' || (hostUid && authorizedHosts.includes(hostUid));
     if (!isAuthorized) return;
+    // A database's screen reads nothing without that database's login.
+    if (!isDbLoggedIn) return;
     // A host sitting in reconnectQueue is waiting on the user to resolve a
     // CMS session takeover via ReconnectHostModal — authorizedHosts is left
     // untouched during that wait (see apiClient.js) so the UI state stays
@@ -99,7 +106,7 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
         handleRefreshRef.current?.();
       }
     }
-  }, [dispatch, hostUid, authorizedHosts, reconnectQueue, onFetch, tabId]);
+  }, [dispatch, hostUid, authorizedHosts, reconnectQueue, onFetch, tabId, isDbLoggedIn]);
 
   // Callers pass `onFetch` as an inline closure that's recreated every render,
   // so `handleRefresh` itself gets a new identity every render too. Effects
@@ -133,7 +140,7 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
   // 3. Initial Load & Recovery
   const wasAuthorizedRef = useRef(false);
   useEffect(() => {
-    const isAuthorized = hostUid === 'global' || (hostUid && authorizedHosts.includes(hostUid));
+    const isAuthorized = (hostUid === 'global' || (hostUid && authorizedHosts.includes(hostUid))) && isDbLoggedIn;
     
     // For the global dashboard, wait until at least one host is authorized before marking done.
     // Otherwise the fetch is skipped (no hosts yet) and never retried after hosts become available.
@@ -152,7 +159,7 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
       wasAuthorizedRef.current = true;
       handleRefresh();
     }
-  }, [hostUid, authorizedHosts, handleRefresh]);
+  }, [hostUid, authorizedHosts, handleRefresh, isDbLoggedIn]);
 
   // 4. On Tab Resume
   useEffect(() => {
@@ -203,5 +210,5 @@ export const usePollingRefresh = ({ hostUid, tabId, pollingIntervalSeconds, onFe
     return () => window.removeEventListener('online', handleOnline);
   }, [handleRefresh]);
 
-  return { isManualRefreshing, lastRefreshed, handleRefresh };
+  return { isManualRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn };
 };

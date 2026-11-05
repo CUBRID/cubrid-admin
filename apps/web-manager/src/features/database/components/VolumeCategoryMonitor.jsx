@@ -11,6 +11,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { Card } from '../../../components/ds/layout/Card';
 import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 // ── Helpers ──
 // Built as a function (not a plain object) because two of the labels are
@@ -205,8 +206,9 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
   const { preferences } = useSelector((state) => state.user, shallowEqual);
 
   const tabId = `vol_category:${hostUid}:${dbname}:${category}`;
-  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
+  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId,
     pollingIntervalSeconds: preferences?.dashboardInterval || 0,
     onFetch: () => (dispatch) => dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }))
@@ -253,6 +255,8 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
   }, [volumes]);
 
   const usageSeverity = summary.pct > 85 ? 'text-rose-500' : summary.pct > 60 ? 'text-amber-500' : 'text-emerald-500';
+
+  if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-none animate-in fade-in duration-300">

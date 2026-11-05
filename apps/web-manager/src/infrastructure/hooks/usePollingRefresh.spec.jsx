@@ -20,8 +20,8 @@ let fetchCalls;
 // The latest handleRefresh, as a refresh button calls it.
 let handleRefresh;
 
-function Harness({ pollingIntervalSeconds = 1, onFetch }) {
-  ({ handleRefresh } = usePollingRefresh({ hostUid: 'host1', tabId: 'tab1', pollingIntervalSeconds, onFetch }));
+function Harness({ pollingIntervalSeconds = 1, onFetch, dbname }) {
+  ({ handleRefresh } = usePollingRefresh({ hostUid: 'host1', tabId: 'tab1', pollingIntervalSeconds, onFetch, dbname }));
   return null;
 }
 
@@ -35,12 +35,16 @@ beforeEach(() => {
   const initialState = {
     host: { authorizedHosts: ['host1'] },
     layout: { refreshCounter: 0, activeMainTab: 'tab1' },
+    database: { loggedInDatabases: ['host1:demodb'] },
   };
-  // Stand-in for layoutSlice's triggerRefreshActiveTab.
+  // Stand-ins for layoutSlice's triggerRefreshActiveTab and a DB login/logout.
   store = configureStore({
-    reducer: (state = initialState, action) => (action.type === 'refresh'
-      ? { ...state, layout: { ...state.layout, refreshCounter: state.layout.refreshCounter + 1 } }
-      : state),
+    reducer: (state = initialState, action) => {
+      if (action.type === 'refresh') return { ...state, layout: { ...state.layout, refreshCounter: state.layout.refreshCounter + 1 } };
+      if (action.type === 'dbLogout') return { ...state, database: { loggedInDatabases: [] } };
+      if (action.type === 'dbLogin') return { ...state, database: { loggedInDatabases: ['host1:demodb'] } };
+      return state;
+    },
   });
 });
 
@@ -242,4 +246,21 @@ it('stops polling while a modal is open and refreshes once when it closes', asyn
 
   await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
   expect(fetchCalls.length).toBe(3);
+});
+
+it("reads nothing for a database's screen after its logout: no poll, refresh button or F5", async () => {
+  const onFetch = (silent) => () => { fetchCalls.push(silent); return Promise.resolve(); };
+  await render({ onFetch, dbname: 'demodb', pollingIntervalSeconds: 1 });
+  expect(fetchCalls).toHaveLength(1); // the first read, while logged in
+
+  await act(async () => store.dispatch({ type: 'dbLogout' }));
+  fetchCalls = [];
+  await act(async () => { vi.advanceTimersByTime(5000); });
+  await act(async () => { await handleRefresh(); });
+  await act(async () => store.dispatch({ type: 'refresh' }));
+  expect(fetchCalls).toEqual([]);
+
+  // Logging in again reads once.
+  await act(async () => store.dispatch({ type: 'dbLogin' }));
+  expect(fetchCalls).toHaveLength(1);
 });

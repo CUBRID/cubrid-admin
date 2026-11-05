@@ -11,8 +11,9 @@ vi.mock('../databaseSlice', () => ({
   fetchDashboardCAS: vi.fn(() => ({ type: 'test/fetchDashboardCAS' })),
 }));
 vi.mock('../useStatdumpWatcher', () => ({ useStatdumpWatcher: () => undefined }));
+const polling = vi.hoisted(() => ({ isDbLoggedIn: true }));
 vi.mock('../../../infrastructure/hooks/usePollingRefresh', () => ({
-  usePollingRefresh: () => ({ isManualRefreshing: false, lastRefreshed: new Date(0), handleRefresh: () => undefined }),
+  usePollingRefresh: () => ({ isManualRefreshing: false, lastRefreshed: new Date(0), handleRefresh: () => undefined, isDbLoggedIn: polling.isDbLoggedIn }),
 }));
 vi.mock('./dashboard/DBPerformanceSection', () => ({ default: () => null }));
 vi.mock('./dashboard/DBVolumesSection', () => ({ default: () => null }));
@@ -48,6 +49,7 @@ let root;
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  polling.isDbLoggedIn = true;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -71,4 +73,15 @@ it('sorts the CAS table by QPS as numbers', async () => {
 
   const casIds = [...casTable.querySelectorAll('tbody tr')].map((tr) => tr.querySelectorAll('td')[1].textContent);
   expect(casIds).toEqual(['3', '1', '2']);
+});
+
+it('shows the not-logged-in state, with no section mounted to read anything, after the database is logged out', async () => {
+  polling.isDbLoggedIn = false;
+  await act(async () => root.render(
+    <Provider store={makeStore([cas(1, 2.5)])}>
+      <DatabaseDashboard hostUid="h1" dbname="demodb" />
+    </Provider>
+  ));
+  expect(container.querySelector('[data-testid="db-login-required"]').textContent).toContain(CM.databaseNotLoggedIn);
+  expect(container.querySelector('[data-testid="db-dashboard-cas"]')).toBeNull();
 });

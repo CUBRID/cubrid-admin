@@ -11,6 +11,7 @@ import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { useCM } from '../../../constants/useCM';
 import { isLogVolume, pageCount, pagesToSize } from '../volumePages';
 import { formatSize } from '../../../infrastructure/utils/format';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 const parseNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -40,8 +41,9 @@ export default function VolumeInfoMonitor({ tabId }) {
     (state) => state.databaseMonitoring?.dashboardData?.[`${hostUid}:${dbname}`]?.spaceInfoStatus === 'error'
   );
 
-  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
+  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId,
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: () => () => dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }))
@@ -57,6 +59,8 @@ export default function VolumeInfoMonitor({ tabId }) {
   // database's (potentially different) log page size.
   const logVolume = isLogVolume(volume);
   const pageSize = parseNumber(logVolume ? dbSpace?.logpagesize : dbSpace?.pagesize) || parseNumber(dbSpace?.pagesize) || 4096;
+
+  if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
   if (!dbSpace && !spaceInfoFailed) {
     return (

@@ -13,6 +13,7 @@ import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
 import { isLogVolume, pageCount, pagesToSize, volumePageSize } from '../volumePages';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 // ── Helpers ──
 const TYPE_BADGE = (val = '') => {
@@ -463,8 +464,9 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
-  const { isManualRefreshing: loading, lastRefreshed, handleRefresh: fetchSpaceInfo } = usePollingRefresh({
+  const { isManualRefreshing: loading, lastRefreshed, handleRefresh: fetchSpaceInfo, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId: `db_space:${hostUid}:${dbname}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: () => async () => {
@@ -491,6 +493,8 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
     });
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
   }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
+
+  if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
   // Spinner until the first fetch settles (isManualRefreshing is still false
   // on the first render, before the initial fetch starts).

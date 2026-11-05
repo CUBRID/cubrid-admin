@@ -21,6 +21,7 @@ import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsP
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { useCM } from '../../../constants/useCM';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const CM = useCM();
@@ -57,8 +58,9 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   // Which sections are collapsed (useRefreshWhenShown); the refresh skips them.
   const collapsedSections = React.useRef({});
 
-  const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
+  const { isManualRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId: propHostUid ? `db:${hostUid}:${dbname}` : `db:${dbname}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent, collapsed: { ...collapsedSections.current } }))
@@ -250,7 +252,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 relative">
-        {isLoading && (!data.volumes || data.volumes.length === 0) ? (
+        {/* Without this database's login nothing is read: no section is mounted to poll. */}
+        {!isDbLoggedIn ? (
+          <DbLoginRequiredState />
+        ) : isLoading && (!data.volumes || data.volumes.length === 0) ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
