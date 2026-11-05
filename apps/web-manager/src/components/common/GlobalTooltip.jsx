@@ -131,7 +131,16 @@ export default function GlobalTooltip() {
       setPos(null);
       return;
     }
-    const { width, height } = tipRef.current.getBoundingClientRect();
+    // In the browser's top layer the tooltip is drawn over everything,
+    // whatever z-index a menu, flyout or dialog uses. Where popovers are not
+    // supported, the z-index below still puts it over the app's menus.
+    const el = tipRef.current;
+    try {
+      el.showPopover?.();
+    } catch {
+      // Already open (the text changed while shown).
+    }
+    const { width, height } = el.getBoundingClientRect();
     const { rect } = tip;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -148,15 +157,16 @@ export default function GlobalTooltip() {
 
   if (!tip) return null;
 
-  // Above every menu, submenus included (DropdownMenu's flyout is 100000);
-  // below it, a disabled item's reason was hidden behind its own submenu.
+  // popover="manual": shown in the top layer (see above). m-0, border-0 and
+  // inset: auto undo the browser's popover defaults (centered, bordered).
   return createPortal(
     <div
       ref={tipRef}
+      popover="manual"
       role="tooltip"
       data-testid="global-tooltip"
-      className="fixed z-[100010] pointer-events-none max-w-[480px] max-h-[calc(100vh-16px)] overflow-hidden px-2.5 py-1.5 rounded-sm shadow-lg bg-slate-800 dark:bg-slate-700 text-white text-13 leading-snug whitespace-pre-wrap break-words"
-      style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
+      className="fixed z-[100010] m-0 border-0 pointer-events-none max-w-[480px] max-h-[calc(100vh-16px)] overflow-hidden px-2.5 py-1.5 rounded-sm shadow-lg bg-slate-800 dark:bg-slate-700 text-white text-13 leading-snug whitespace-pre-wrap break-words"
+      style={pos ? { inset: 'auto', top: pos.top, left: pos.left } : { inset: 'auto', top: 0, left: 0, visibility: 'hidden' }}
     >
       {tip.text}
     </div>,

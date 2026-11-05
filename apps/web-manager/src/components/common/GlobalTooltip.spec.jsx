@@ -55,6 +55,20 @@ describe('GlobalTooltip', () => {
     expect(z).toBeGreaterThan(100000);
   });
 
+  it('opens in the top layer, over any z-index, where popovers are supported', async () => {
+    // jsdom has no popover support; stand in for the browser's.
+    const shown = [];
+    HTMLElement.prototype.showPopover = function showPopover() { shown.push(this); };
+    try {
+      await over(host.querySelector('#a'));
+      await wait(TOOLTIP_DELAY_MS);
+      expect(tooltip().getAttribute('popover')).toBe('manual');
+      expect(shown).toEqual([tooltip()]);
+    } finally {
+      delete HTMLElement.prototype.showPopover;
+    }
+  });
+
   it('puts the title back and hides when the pointer leaves', async () => {
     const a = host.querySelector('#a');
     await over(a);
