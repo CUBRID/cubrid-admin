@@ -286,7 +286,6 @@ export const CM_KO = {
   fileForHash: '해시 파일 이름',
   numCachedPages: '캐시 페이지 개수',
   estimatedInstances: '인스턴스의 대략적인 개수',
-  loFileCountPerDir: '하나의 디렉터리에 저장할 LO(Large Object)파일 개수',
   selectAtLeastOneScope: '스키마 또는 데이터 중 최소 하나 이상의 언로드 범위를 선택해야 합니다.',
   availableClasses: '사용 가능한 클래스',
 
@@ -1589,8 +1588,9 @@ export const CM_KO = {
   targetDatabase: '대상 데이터베이스',
   autoVolumePoliciesSavedMsg: (db) => `"${db}"의 볼륨 자동 확장 정책이 저장되었습니다.`,
   saveConfigFailedRetryMsg: '구성을 저장하지 못했습니다. 다시 시도하세요.',
-  pageSize16kLabel: '페이지 크기: 16K',
-  autoVolumeExpandDesc: '여유 공간이 임계값 이하로 떨어지면 볼륨이 자동으로 확장됩니다. 계산은 16K 페이지 크기를 기준으로 합니다.',
+  autoVolumePageSizeLabel: (kb) => `페이지 크기: ${kb}K`,
+  autoVolumePageSizeUnknownMsg: '데이터베이스의 페이지 크기를 아직 모릅니다. 대시보드를 한 번 연 뒤 다시 시도하세요.',
+  autoVolumeExpandDesc: '여유 공간이 임계값 이하로 떨어지면 볼륨이 자동으로 확장됩니다. 페이지 수는 데이터베이스의 페이지 크기로 셉니다.',
 
   // 데이터베이스 플랜 덤프 모달
   selectedInstance: '선택된 데이터베이스',
@@ -2333,6 +2333,12 @@ export const CM_KO = {
     NOT_TIME: '숫자여야 하고 뒤에 ms, s, min, h 단위를 붙일 수 있습니다(예: 500ms, 30s)',
     BAD_TIME_UNIT: '단위는 ms/msec, s/sec, min, h 중 하나여야 합니다',
     NOT_NUMBER: '숫자여야 합니다',
+    // DB 작업 창의 숫자 입력 검사(db-op-input-limits).
+    POSITIVE: '0보다 커야 합니다',
+    NO_DAY: '날짜를 하나 이상 고르세요',
+    NOT_MONTH_DAY: '날짜는 1~31이어야 합니다',
+    NOT_HHMM: '시각은 HHMM(0000~2359) 형식이어야 합니다',
+    NOT_RESTORE_DATE: '날짜는 dd-mm-yyyy:HH:MM:SS 형식이거나 backuptime이어야 합니다',
     NOT_MEGABYTES: 'MB 단위 정수여야 하고 뒤에 M을 붙일 수 있습니다(예: 4M)',
     TOO_LARGE: (p) => (p.max ? `${p.max}보다 작아야 합니다` : '값이 너무 큽니다'),
     MIN: (p) => `${p.min}${p.unit === 's' ? '초' : (p.unit ?? '')} 이상이어야 합니다`,
