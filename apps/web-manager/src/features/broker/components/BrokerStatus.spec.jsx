@@ -270,6 +270,26 @@ describe('BrokerStatus application server table', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows a time on the broker\'s current date as the time of day, the full value on hover', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({
+      ...statusResponse(),
+      time: '2026/11/05 07:40:00',
+      asinfo: [asRow({ as_lat: '2026/11/05 07:35:40', as_lct: '2026/11/04 23:00:00', as_dbhost: 'a-very-long-database-host-name' })],
+    });
+    await render();
+    await flush();
+
+    const row = container.querySelector('tbody tr');
+    const cellOf = (label) => row.querySelectorAll('td')[headers().indexOf(label)];
+    const access = cellOf(CM.lastAccess).querySelector('span');
+    expect(access.textContent).toBe('07:35:40');
+    expect(access.title).toBe('2026/11/05 07:35:40');
+    expect(cellOf(CM.asLastConnectCol).textContent).toBe('2026/11/04 23:00:00');
+    // Long text is cut on screen; the whole value is the tooltip.
+    expect(cellOf(CM.asDbHostCol).querySelector('span').title).toBe('a-very-long-database-host-name');
+  });
+
   it('shows the PORT column when CMS sends each server\'s port (Windows)', async () => {
     brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
     brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow({ as_port: '30001' })] });

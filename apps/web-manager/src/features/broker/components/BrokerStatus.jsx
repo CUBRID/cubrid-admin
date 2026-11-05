@@ -152,38 +152,57 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
 
   /* Table Columns Definitions */
   // The columns of `cubrid broker status -f` and CA's application server
-  // table, from what CMS getbrokerstatus sends for each AS.
-  const rate = (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span>;
+  // table, from what CMS getbrokerstatus sends for each AS. Kept narrow so
+  // the table fits the page at usual widths: tight padding, headers of two
+  // words may wrap, long text is cut with the full value on hover, and a
+  // time on the broker's current date shows only the time of day.
+  const tight = '!px-2';
+  // keep-all: Korean headers break between words, not inside one.
+  const wrapHeader = `${tight} [&>div>span:first-child]:!whitespace-normal [&>div>span:first-child]:break-keep`;
+  const mono = (v) => <span className="font-mono whitespace-nowrap">{v ?? '—'}</span>;
+  const rate = (v) => mono(v?.toFixed(1));
+  const cut = (maxWidth, extra = '') => (v) => (
+    <span className={`block truncate font-mono ${maxWidth} ${extra}`} title={v || undefined}>{v || '—'}</span>
+  );
+  // as_lat/as_lct and the status time are "YYYY/MM/DD hh:mm:ss".
+  const today = String(status.data?.time ?? '').slice(0, 10);
+  const when = (v) => {
+    if (!v) return <span className="text-slate-400 dark:text-slate-600">—</span>;
+    const short = today && String(v).startsWith(`${today} `) ? String(v).slice(11) : v;
+    return <span className="font-mono text-13 whitespace-nowrap text-slate-400 dark:text-slate-600" title={short !== v ? v : undefined}>{short}</span>;
+  };
   // CMS sends as_port on Windows only (each AS listens on its own port there);
   // elsewhere every AS takes connections through the broker's port.
   const hasAsPort = asInfoWithRates.some((as) => as.as_port != null && as.as_port !== '');
   const asColumns = [
-    { header: CM.idLabel,  accessor: 'as_id',        width: '60px',  render: (v) => <span className="font-mono text-amber-600 dark:text-amber-400">{v}</span> },
-    { header: CM.pid, accessor: 'as_pid',       width: '80px',  render: (v) => <span className="font-mono">{v}</span> },
-    { header: CM.asRequestsCol, accessor: 'as_c', width: '80px', render: (v) => <span className="font-mono">{v ?? '—'}</span> },
-    { header: CM.qps, accessor: 'qps', width: '60px', render: rate },
-    { header: CM.lqs, accessor: 'lqs', width: '60px', render: rate },
-    { header: CM.tps, accessor: 'tps', width: '60px', render: rate },
-    ...(hasAsPort ? [{ header: CM.port, accessor: 'as_port', width: '80px', render: (v) => <span className="font-mono">{v ?? '—'}</span> }] : []),
+    { header: CM.idLabel, accessor: 'as_id', className: tight, cellClassName: tight, render: (v) => <span className="font-mono text-amber-600 dark:text-amber-400">{v}</span> },
+    { header: CM.pid, accessor: 'as_pid', className: wrapHeader, cellClassName: tight, render: mono },
+    { header: CM.asRequestsCol, accessor: 'as_c', className: wrapHeader, cellClassName: tight, render: mono },
+    { header: CM.qps, accessor: 'qps', className: tight, cellClassName: tight, render: rate },
+    { header: CM.lqs, accessor: 'lqs', className: tight, cellClassName: tight, render: rate },
+    { header: CM.tps, accessor: 'tps', className: tight, cellClassName: tight, render: rate },
+    ...(hasAsPort ? [{ header: CM.port, accessor: 'as_port', className: tight, cellClassName: tight, render: mono }] : []),
     // as_psize is kilobytes (broker_process_size.c getsize: VmRSS + VmSwap); -1 when it could not be read.
-    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono whitespace-nowrap">{Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : '—'}</span> },
-    { 
-      header: CM.status, 
-      accessor: 'as_status', 
-      width: '100px', 
+    { header: CM.memory, accessor: 'as_psize', className: tight, cellClassName: tight, render: (v) => mono(Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : null) },
+    {
+      header: CM.status,
+      accessor: 'as_status',
+      className: tight,
+      cellClassName: tight,
       render: (v) => {
         const isActive = v && v !== 'IDLE' && v !== 'OFF';
-        return <StatusBadge label={v || 'IDLE'} variant={isActive ? 'emerald' : 'slate'} pulse={isActive} />;
+        return <span className="whitespace-nowrap"><StatusBadge label={v || 'IDLE'} variant={isActive ? 'emerald' : 'slate'} pulse={isActive} /></span>;
       }
     },
-    { header: CM.cpu, accessor: 'as_cpu', width: '70px', render: (v) => <span className="font-mono">{v != null && v !== '' ? `${v}%` : '—'}</span> },
-    { header: CM.asCpuTimeCol, accessor: 'as_ctime', width: '80px', render: (v) => <span className="font-mono">{v || '—'}</span> },
-    { header: CM.database, accessor: 'as_dbname', render: (v) => <span className="text-amber-600/80 dark:text-amber-500/70 font-mono">{v || '—'}</span> },
-    { header: CM.asDbHostCol, accessor: 'as_dbhost', render: (v) => <span className="font-mono">{v || '—'}</span> },
-    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13 whitespace-nowrap">{v || '—'}</span> },
-    { header: CM.asLastConnectCol, accessor: 'as_lct', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13 whitespace-nowrap">{v || '—'}</span> },
-    { header: CM.clientIp, accessor: 'as_client_ip', render: (v) => <span className="font-mono">{v || '—'}</span> },
-    { header: CM.asCurrentSqlCol, accessor: 'as_cur', render: (v) => <div className="max-w-xs truncate font-mono text-13 text-slate-500" title={v || undefined}>{v || '—'}</div> },
+    { header: CM.cpu, accessor: 'as_cpu', className: tight, cellClassName: tight, render: (v) => mono(v != null && v !== '' ? `${v}%` : null) },
+    { header: CM.asCpuTimeCol, accessor: 'as_ctime', className: wrapHeader, cellClassName: tight, render: (v) => mono(v || null) },
+    { header: CM.database, accessor: 'as_dbname', className: wrapHeader, cellClassName: tight, render: cut('max-w-[96px]', 'text-amber-600/80 dark:text-amber-500/70') },
+    { header: CM.asDbHostCol, accessor: 'as_dbhost', className: wrapHeader, cellClassName: tight, render: cut('max-w-[96px]') },
+    { header: CM.lastAccess, accessor: 'as_lat', className: wrapHeader, cellClassName: tight, render: when },
+    { header: CM.asLastConnectCol, accessor: 'as_lct', className: wrapHeader, cellClassName: tight, render: when },
+    { header: CM.clientIp, accessor: 'as_client_ip', className: wrapHeader, cellClassName: tight, render: cut('max-w-[112px]') },
+    // Takes the width that is left; max-w-0 keeps a long statement from widening the table.
+    { header: CM.asCurrentSqlCol, accessor: 'as_cur', width: '100%', className: wrapHeader, cellClassName: `${tight} max-w-0`, render: cut('w-full', 'text-13 text-slate-500') },
   ];
 
   const jobColumns = [
@@ -302,7 +321,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
           bodyClassName="p-0"
           collapsible
         >
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 text-left">
+          {/* Columns follow the card's own width (the sidebar takes part of the window). */}
+          <div className="@container">
+          <div className="grid grid-cols-2 @xl:grid-cols-4 @5xl:grid-cols-7 text-left">
             {[
               { label: CM.pid,           value: basicInfo.pid                           || '—',    accent: 'emerald' },
               { label: CM.port,          value: basicInfo.port                          || '—',    accent: 'amber'   },
@@ -330,8 +351,11 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
                   `}
                 >
                   <div className={`absolute top-0 left-4 right-4 h-[2px] rounded-b-full opacity-30 ${accentBar || 'bg-slate-300 dark:bg-slate-700'}`} />
-                  <span className="text-11 font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.12em] leading-none">
-                    {m.label}
+                  <span className="text-11 font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.12em] leading-tight">
+                    {/* Long parameter names break after an underscore, not over the next cell. */}
+                    {String(m.label).split('_').map((part, j, parts) => (
+                      <React.Fragment key={j}>{part}{j < parts.length - 1 && <>_<wbr /></>}</React.Fragment>
+                    ))}
                   </span>
                   {m.badge ? (
                     <span className={`inline-flex items-center gap-1.5 self-start px-2 py-1 rounded-md text-13 font-bold uppercase tracking-wide border
@@ -354,6 +378,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
                 </div>
               );
             })}
+          </div>
           </div>
         </Card>
 
