@@ -13,6 +13,7 @@ import { brokerApi } from './brokerApi';
 import brokerReducer from './brokerSlice';
 import layoutReducer from '../layout/layoutSlice';
 import { runMultiBrokerAction, splitBrokersByAction } from './brokerMultiActions';
+import { withRestartsShownOn } from './brokerRestartState';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -54,5 +55,32 @@ describe('runMultiBrokerAction', () => {
     expect(result.succeeded).toEqual(['b']);
     expect(result.failed.map((f) => f.dbname)).toEqual(['a']);
     expect(brokerApi.stopBroker).not.toHaveBeenCalled();
+  });
+});
+
+describe('a broker being restarted', () => {
+  it('shows ON until the restart ends, not the OFF it passes through', async () => {
+    const s = store();
+    const seen = [];
+    brokerApi.stopBroker.mockImplementation(async () => {
+      // What a poll between the stop and the start would show.
+      seen.push(withRestartsShownOn([{ name: 'a', state: 'OFF' }, { name: 'b', state: 'OFF' }], s.getState().broker.restartingBrokers, 'h1'));
+      return {};
+    });
+    brokerApi.startBroker.mockResolvedValue({});
+
+    await runMultiBrokerAction(s.dispatch, { hostUid: 'h1', action: 'restart', names: ['a'] });
+
+    expect(seen[0]).toEqual([{ name: 'a', state: 'ON' }, { name: 'b', state: 'OFF' }]);
+    expect(s.getState().broker.restartingBrokers).toEqual({});
+    expect(withRestartsShownOn([{ name: 'a', state: 'OFF' }], s.getState().broker.restartingBrokers, 'h1')).toEqual([{ name: 'a', state: 'OFF' }]);
+  });
+
+  it('is not marked by a plain stop', async () => {
+    const s = store();
+    let marks;
+    brokerApi.stopBroker.mockImplementation(async () => { marks = { ...s.getState().broker.restartingBrokers }; return {}; });
+    await runMultiBrokerAction(s.dispatch, { hostUid: 'h1', action: 'stop', names: ['a'] });
+    expect(marks).toEqual({});
   });
 });

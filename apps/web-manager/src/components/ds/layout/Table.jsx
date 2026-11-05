@@ -38,6 +38,8 @@ export const Table = ({
   const resolvedEmptyMessage = emptyMessage ?? CM.noDataAvailableMsg;
   const [sortConfig, setSortConfig] = useState(null);
   const [page, setPage] = useState(0);
+  // Rows a page, set with the grip (null: maxRows - 1).
+  const [pageRows, setPageRows] = useState(null);
   const scrollRef = useRef(null);
   const [capHeight, setCapHeight] = useState(null);
   const [userHeight, setUserHeight] = useState(null);
@@ -82,7 +84,9 @@ export const Table = ({
     });
   }, [data, sortConfig, columns]);
 
-  const pageSize = paginate && maxRows && sortedData.length > maxRows ? Math.max(1, maxRows - 1) : null;
+  const paged = Boolean(paginate && maxRows && sortedData.length > maxRows);
+  const defaultPageRows = Math.max(1, (maxRows ?? 1) - 1);
+  const pageSize = paged ? Math.min(sortedData.length, pageRows ?? defaultPageRows) : null;
   const pageCount = pageSize ? Math.ceil(sortedData.length / pageSize) : 1;
   const currentPage = Math.min(page, pageCount - 1);
   useEffect(() => {
@@ -147,6 +151,15 @@ export const Table = ({
   }, [followPage, shownData, capHeight, userHeight]);
 
   const scrolling = capHeight != null || userHeight != null;
+  // Paged, the grip sets how many rows a page shows, keeping the first row
+  // on screen in the page shown.
+  const setRowsPerPage = (rows) => {
+    const next = rows == null ? null : Math.max(1, Math.min(sortedData.length, rows));
+    const firstShown = currentPage * (pageSize ?? 1);
+    setPageRows(next);
+    setPage(Math.floor(firstShown / (next ?? defaultPageRows)));
+  };
+  const rowHeight = () => scrollRef.current?.querySelector('tbody > tr')?.offsetHeight || 36;
   const minHeight = capHeight != null ? Math.min(capHeight, 120) : 120;
   const resizeBy = (delta) => {
     const current = scrollRef.current?.getBoundingClientRect().height ?? capHeight ?? 0;
@@ -156,20 +169,24 @@ export const Table = ({
     if (event.button !== 0 || !scrollRef.current) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    dragRef.current = { y: event.clientY, height: scrollRef.current.getBoundingClientRect().height };
+    dragRef.current = paged
+      ? { y: event.clientY, rows: pageSize, rowHeight: rowHeight() }
+      : { y: event.clientY, height: scrollRef.current.getBoundingClientRect().height };
   };
   const onGripPointerMove = (event) => {
-    if (!dragRef.current) return;
-    setUserHeight(Math.max(minHeight, dragRef.current.height + event.clientY - dragRef.current.y));
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (drag.rows != null) setRowsPerPage(drag.rows + Math.round((event.clientY - drag.y) / drag.rowHeight));
+    else setUserHeight(Math.max(minHeight, drag.height + event.clientY - drag.y));
   };
   const onGripPointerUp = (event) => {
     dragRef.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
   const onGripKeyDown = (event) => {
-    if (event.key === 'ArrowDown') { event.preventDefault(); resizeBy(40); }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); resizeBy(-40); }
-    else if (event.key === 'Home') { event.preventDefault(); setUserHeight(null); }
+    if (event.key === 'ArrowDown') { event.preventDefault(); if (paged) setRowsPerPage(pageSize + 1); else resizeBy(40); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); if (paged) setRowsPerPage(pageSize - 1); else resizeBy(-40); }
+    else if (event.key === 'Home') { event.preventDefault(); if (paged) setRowsPerPage(null); else setUserHeight(null); }
   };
 
   if (loading && data.length === 0) {
@@ -334,25 +351,6 @@ export const Table = ({
   return (
     <div className="w-full">
       {tableBox}
-      {scrolling && (
-        <div
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label={CM.tableResizeHint}
-          title={CM.tableResizeHint}
-          tabIndex={0}
-          data-testid="table-resize-grip"
-          className="group/grip flex h-3 w-full cursor-row-resize touch-none items-center justify-center border-t border-slate-100 dark:border-white/[0.06] focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500"
-          onPointerDown={onGripPointerDown}
-          onPointerMove={onGripPointerMove}
-          onPointerUp={onGripPointerUp}
-          onPointerCancel={onGripPointerUp}
-          onDoubleClick={() => setUserHeight(null)}
-          onKeyDown={onGripKeyDown}
-        >
-          <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-white/20 group-hover/grip:bg-amber-500" />
-        </div>
-      )}
       {pageCount > 1 && (
         <div data-testid="table-pager" className="flex h-9 items-center justify-end gap-1.5 px-3 border-t border-slate-100 dark:border-white/[0.06]">
           <button
@@ -380,6 +378,25 @@ export const Table = ({
           >
             <Icon name="chevron_right" size="17px" weight={300} />
           </button>
+        </div>
+      )}
+      {(scrolling || paged) && (
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={CM.tableResizeHint}
+          title={CM.tableResizeHint}
+          tabIndex={0}
+          data-testid="table-resize-grip"
+          className="group/grip flex h-3 w-full cursor-row-resize touch-none items-center justify-center border-t border-slate-100 dark:border-white/[0.06] focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500"
+          onPointerDown={onGripPointerDown}
+          onPointerMove={onGripPointerMove}
+          onPointerUp={onGripPointerUp}
+          onPointerCancel={onGripPointerUp}
+          onDoubleClick={() => (paged ? setRowsPerPage(null) : setUserHeight(null))}
+          onKeyDown={onGripKeyDown}
+        >
+          <span className="h-1 w-10 rounded-full bg-slate-300 dark:bg-white/20 group-hover/grip:bg-amber-500" />
         </div>
       )}
     </div>

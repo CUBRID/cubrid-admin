@@ -37,4 +37,6 @@ export type SafeHostInfo = Omit<
   'password' | 'token' | 'dbProfiles' | 'cmsTokenIssuedAt' | 'cmsTokenActiveTimeSec'
 > & {
   cmsSessionExpiresAt: number | null;
+  /** Whether a password is saved for the host (a host imported from a file has none). */
+  hasPassword: boolean;
 };

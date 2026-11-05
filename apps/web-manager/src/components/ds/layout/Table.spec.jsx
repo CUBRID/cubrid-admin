@@ -130,7 +130,7 @@ describe('Table paginate', () => {
     expect(shown()).toEqual(rows(14).map((r) => r.name));
     expect(position()).toBe('1 / 3');
     expect(scrollArea()).toBeNull();
-    expect(grip()).toBeNull();
+    expect(grip()).not.toBeNull();
     expect(container.querySelector('[data-testid="table-pager-prev"]').disabled).toBe(true);
 
     await click('table-pager-next');
@@ -157,6 +157,31 @@ describe('Table paginate', () => {
     await render({ data: numbered(20), maxRows: 15, paginate: true, sortable: true });
     expect(position()).toBe('2 / 2');
     expect(shown()).toEqual(['row-05', 'row-04', 'row-03', 'row-02', 'row-01', 'row-00']);
+  });
+
+  it('lets the grip set the rows a page shows, keeping the first row shown, and resets it', async () => {
+    const key = (k) => act(async () => grip().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })));
+    await render({ data: rows(40), maxRows: 15, paginate: true });
+    await click('table-pager-next');
+    expect(shown()[0]).toBe('row-14');
+
+    await key('ArrowDown');
+    expect(shown()).toHaveLength(15);
+    expect(position()).toBe('1 / 3');
+    expect(shown()).toContain('row-14');
+
+    // A drag of 10 rows (ROW_PX each) down from 15 rows a page.
+    await act(async () => {
+      grip().dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientY: 100, bubbles: true }));
+      grip().dispatchEvent(new MouseEvent('pointermove', { clientY: 100 + ROW_PX * 10, bubbles: true }));
+      grip().dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+    });
+    expect(shown()).toHaveLength(25);
+    expect(position()).toBe('1 / 2');
+
+    await act(async () => grip().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(shown()).toHaveLength(14);
+    expect(grip()).not.toBeNull();
   });
 
   it('sorts every row, not just the page, and goes back to page 1', async () => {
