@@ -2,12 +2,15 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs } from '../../../broker/brokerSlice';
 import { openTab } from '../../layoutSlice';
 import { hostKey } from '../../../host/hostKey';
+import { useShownBrokers } from '../../../broker/brokerRestartState';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { useTreeMultiSelect } from '../../../../components/domain/tree/useTreeMultiSelect';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { useCM } from '../../../../constants/useCM';
+
+const EMPTY = [];
 
 export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu, selectedBrokerNames, onSelectedBrokerNamesChange }) {
   const CM = useCM();
@@ -23,7 +26,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
   // this tree only moves on an explicit user action, not every
   // MonitoringProvider interval poll tick — see brokerSlice.js's
   // fetchBrokerList.fulfilled.
-  const brokers = navigatorBrokersByHost[hostUid] || [];
+  const brokers = useShownBrokers(hostUid, navigatorBrokersByHost[hostUid] || EMPTY);
   const loading = loadingByHost[hostUid] || false;
   // Ctrl/Shift multi-selection; such a click neither selects nor toggles.
   const handleMultiSelect = useTreeMultiSelect(

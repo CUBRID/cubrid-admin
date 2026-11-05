@@ -1,4 +1,4 @@
-import { startBroker, stopBroker } from './brokerSlice';
+import { markBrokersRestarting, startBroker, stopBroker } from './brokerSlice';
 import { refreshAfterBrokerAction } from './brokerSidebarActions';
 
 export const MULTI_BROKER_ACTIONS = ['start', 'stop', 'restart'];
@@ -29,6 +29,7 @@ const errorText = (err) => (typeof err === 'string' ? err : err?.message || Stri
 export async function runMultiBrokerAction(dispatch, { hostUid, action, names }) {
   const succeeded = [];
   const failed = [];
+  if (action === 'restart') dispatch(markBrokersRestarting({ hostUid, names, restarting: true }));
   try {
     for (const brokerName of names) {
       const phase = action === 'restart' ? { stop: 'stop', start: 'start' } : {};
@@ -46,6 +47,7 @@ export async function runMultiBrokerAction(dispatch, { hostUid, action, names })
       }
     }
   } finally {
+    if (action === 'restart') dispatch(markBrokersRestarting({ hostUid, names, restarting: false }));
     dispatch(refreshAfterBrokerAction(hostUid));
   }
   return { succeeded, failed, skipped: [] };

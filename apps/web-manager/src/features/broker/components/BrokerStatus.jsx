@@ -4,6 +4,7 @@ import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
 import { createRateTracker } from '../rateTracker';
 import { hostKey } from '../../host/hostKey';
+import { withRestartsShownOn } from '../brokerRestartState';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Card } from '../../../components/ds/layout/Card';
@@ -25,6 +26,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
 
   const { detailedStatus } = useSelector((state) => state.broker, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  const restartingBrokers = useSelector((state) => state.broker.restartingBrokers);
   const status = detailedStatus[hostKey(hostUid, brokerName)] || { data: {}, loading: false, error: null };
 
   // Basic Information below is read from lastKnownBrokerFromList, fed only
@@ -132,7 +134,8 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // so basic broker info always comes from the broker list instead (kept
   // fresh by this tab's own onFetch above, which populates
   // lastKnownBrokerFromList directly from its own request's result).
-  const brokerFromList = lastKnownBrokerFromList || {};
+  // A broker being restarted shows as before (ON) until the restart ends.
+  const brokerFromList = withRestartsShownOn(lastKnownBrokerFromList ? [lastKnownBrokerFromList] : [], restartingBrokers, hostUid)[0] || {};
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,
