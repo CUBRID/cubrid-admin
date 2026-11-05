@@ -148,12 +148,14 @@ export default function GlobalTooltip() {
 
   if (!tip) return null;
 
+  // Above every menu, submenus included (DropdownMenu's flyout is 100000);
+  // below it, a disabled item's reason was hidden behind its own submenu.
   return createPortal(
     <div
       ref={tipRef}
       role="tooltip"
       data-testid="global-tooltip"
-      className="fixed z-[10000] pointer-events-none max-w-[480px] max-h-[calc(100vh-16px)] overflow-hidden px-2.5 py-1.5 rounded-sm shadow-lg bg-slate-800 dark:bg-slate-700 text-white text-13 leading-snug whitespace-pre-wrap break-words"
+      className="fixed z-[100010] pointer-events-none max-w-[480px] max-h-[calc(100vh-16px)] overflow-hidden px-2.5 py-1.5 rounded-sm shadow-lg bg-slate-800 dark:bg-slate-700 text-white text-13 leading-snug whitespace-pre-wrap break-words"
       style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
     >
       {tip.text}

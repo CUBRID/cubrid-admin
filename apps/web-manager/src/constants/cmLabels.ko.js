@@ -195,6 +195,8 @@ export const CM_KO = {
     delete: '데이터베이스 삭제',
   },
   manageDatabaseHaDisabledHint: 'HA 구성 DB에서는 사용할 수 없습니다.',
+  hostConnectRequiredHint: '호스트에 먼저 연결하세요.',
+  dbLoginRequiredHint: '데이터베이스에 먼저 로그인하세요.',
 
   createDatabaseMsg: '새 데이터베이스를 생성합니다.',
   createDbJobComplete: (job) => `${job} 작업이 완료되었습니다.`,

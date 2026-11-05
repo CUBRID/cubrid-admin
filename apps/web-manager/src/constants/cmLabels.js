@@ -159,6 +159,8 @@ export const CM = {
     delete: 'Delete Database',
   },
   manageDatabaseHaDisabledHint: 'Not available for an HA-configured database.',
+  hostConnectRequiredHint: 'Connect to the host first.',
+  dbLoginRequiredHint: 'Log in to the database first.',
 
   // Create Database (createdb wizard)
   createDatabaseMsg: 'Create a new database.',

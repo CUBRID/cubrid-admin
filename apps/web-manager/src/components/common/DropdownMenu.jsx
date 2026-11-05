@@ -241,6 +241,19 @@ export function DropdownMenu({ label, children, width = 'w-52' }) {
   );
 }
 
+// A label cut off with "…" shows its whole text on hover (GlobalTooltip),
+// unless the item already has a title of its own (e.g. why it is disabled).
+function MenuLabel({ label, titled }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || titled || typeof label !== 'string') return;
+    if (el.scrollWidth > el.clientWidth) el.setAttribute('title', label);
+    else el.removeAttribute('title');
+  }, [label, titled]);
+  return <span ref={ref} className="flex-1 truncate">{label}</span>;
+}
+
 /**
  * Enhanced menu item for the professional ecosystem.
  */
@@ -272,7 +285,7 @@ export function MenuItem({ icon, iconColor = '', label, onClick, href, disabled 
           {icon}
         </span>
       )}
-      <span className="flex-1 truncate">{label}</span>
+      <MenuLabel label={label} titled={!!title} />
     </>
   );
 
