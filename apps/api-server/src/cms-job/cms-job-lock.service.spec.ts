@@ -160,7 +160,7 @@ describe('CmsJobLockService', () => {
         [buildOperationKey(hostKey, 'donedb')]: { jobId: 'done', userKey: 'uk' },
         [buildOperationKey('other-host:9999', 'demodb')]: { jobId: 'other', userKey: 'uk' },
       });
-      store.getJob.mockResolvedValue(job('load', 'donedb', {}, 'success') as never);
+      store.getJob.mockResolvedValue(job('load', 'donedb', {}, 'succeeded') as never);
 
       expect((await service.activeJobDatabasesForHost(mockUserId, mockHostUid)).size).toBe(0);
     });
