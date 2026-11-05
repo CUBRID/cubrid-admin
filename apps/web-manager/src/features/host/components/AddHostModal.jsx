@@ -192,22 +192,12 @@ export default function AddHostModal({ isOpen, onClose }) {
       submitDisabled={loading}
       title={CM.newConnection}
       icon="add_link"
-      maxWidth="max-w-[500px]"
+      maxWidth="max-w-[580px]"
       loading={loading}
       testId="add-host"
       footer={
-        <>
-          <Button
-            data-testid="add-host-test-connection-btn"
-            variant="ghost"
-            onClick={handleTestConnection}
-            loading={!!connectionTest?.testing}
-            disabled={loading}
-            icon="network_check"
-            className="mr-auto"
-          >
-            {CM.testConnection}
-          </Button>
+        // Wraps instead of clipping when the window is narrow.
+        <div className="flex flex-wrap justify-end gap-3 w-full">
           <Button data-testid="add-host-cancel-btn" variant="secondary" onClick={handleClose} disabled={loading}>
             {CM.cancel}
           </Button>
@@ -231,24 +221,10 @@ export default function AddHostModal({ isOpen, onClose }) {
           >
             {CM.testConnectionAndSave}
           </Button>
-        </>
+        </div>
       }
     >
       <div className="space-y-4 p-1">
-
-        {connectionTest && !connectionTest.testing && (
-          <div
-            data-testid="add-host-test-result"
-            className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${connectionTest.ok
-              ? 'bg-emerald-500/5 border-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-              : 'bg-rose-500/5 border-rose-500/15 text-rose-500'}`}
-          >
-            <Icon name={connectionTest.ok ? 'check_circle' : 'error_outline'} size="sm" weight={300} className="shrink-0 mt-0.5" />
-            <p className="text-13 font-medium flex-1 leading-relaxed">
-              {connectionTest.ok ? CM.connectionTestSucceededMsg : CM.connectionTestFailedMsg(connectionTest.error)}
-            </p>
-          </div>
-        )}
 
         {/* API Error Banner */}
         {apiError && (
@@ -354,6 +330,35 @@ export default function AddHostModal({ isOpen, onClose }) {
               required
             />
           </div>
+        </div>
+
+        {/* Tests the connection fields above, so it sits under them. */}
+        <div className="px-1 space-y-3">
+          <div className="flex justify-end">
+            <Button
+              data-testid="add-host-test-connection-btn"
+              variant="secondary"
+              onClick={handleTestConnection}
+              loading={!!connectionTest?.testing}
+              disabled={loading}
+              icon="network_check"
+            >
+              {CM.testConnection}
+            </Button>
+          </div>
+          {connectionTest && !connectionTest.testing && (
+            <div
+              data-testid="add-host-test-result"
+              className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${connectionTest.ok
+                ? 'bg-emerald-500/5 border-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                : 'bg-rose-500/5 border-rose-500/15 text-rose-500'}`}
+            >
+              <Icon name={connectionTest.ok ? 'check_circle' : 'error_outline'} size="sm" weight={300} className="shrink-0 mt-0.5" />
+              <p className="text-13 font-medium flex-1 min-w-0 break-words leading-relaxed">
+                {connectionTest.ok ? CM.connectionTestSucceededMsg : CM.connectionTestFailedMsg(connectionTest.error)}
+              </p>
+            </div>
+          )}
         </div>
 
       </div>
