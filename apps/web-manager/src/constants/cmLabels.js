@@ -96,6 +96,12 @@ export const CM = {
   dataUnavailableMsg: 'Failed to load this information.',
   diskRootFilesystem: 'Root filesystem (/)',
   casCpuNotCollectedLinux: "Not collected on Linux: CUBRID's broker reports per-CAS CPU only on Solaris/HP-UX.",
+  // DB dashboard memory bar: host memory split into host / CAS / free.
+  dbMemHostLabel: 'Host',
+  dbMemHostHint: "Host memory in use, not counting this database's CAS",
+  dbMemCasLabel: 'CAS',
+  dbMemFreeLabel: 'Free',
+  dbMemTotalLabel: 'Total',
   lockIndex: 'Index',
   pname: 'Pname',
   uid: 'Uid',

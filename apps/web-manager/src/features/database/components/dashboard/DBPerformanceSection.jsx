@@ -8,6 +8,7 @@ import { Card } from '../../../../components/ds/layout/Card';
 import { ProgressBar } from '../../../../components/ds/foundation/ProgressBar';
 import { useCM } from '../../../../constants/useCM';
 import { useRefreshWhenShown } from './useRefreshWhenShown';
+import { formatBytes1 } from '../../dbMemorySegments';
 
 export default function DBPerformanceSection({ dbStats, pollingProps }) {
   const CM = useCM();
@@ -52,16 +53,24 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
     {
       header: CM.memory,
       accessor: 'memory',
-      render: (val, row) => (
-        <div className="min-w-[100px] pr-4">
-          <ProgressBar 
-            pct={row.memPct} 
-            showValue 
-            valueLabel={val} 
-            variant="auto"
-          />
-        </div>
-      )
+      // The CAS memory, over a bar of the host's memory: host use without
+      // this database's CAS, the CAS, and free (dbMemorySegments.js). No bar
+      // while the host's memory is unknown.
+      render: (val, row) => {
+        const seg = row.memSegments;
+        if (!seg) return <span className="font-mono text-14 text-slate-700 dark:text-slate-200">{val}</span>;
+        const summary = `${CM.dbMemHostLabel} ${formatBytes1(seg.host)} · ${CM.dbMemCasLabel} ${formatBytes1(seg.cas)} · ${CM.dbMemFreeLabel} ${formatBytes1(seg.free)} / ${CM.dbMemTotalLabel} ${formatBytes1(seg.total)}`;
+        return (
+          <div className="min-w-[100px] pr-4 space-y-1.5" title={summary} aria-label={summary} data-testid="db-mem-bar">
+            <div className="px-0.5 text-12 font-mono font-black text-slate-700 dark:text-slate-200">{val}</div>
+            <div className="w-full h-1.5 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden flex">
+              <div className="h-full bg-slate-400 dark:bg-slate-500" style={{ width: `${seg.hostPct}%` }} title={`${CM.dbMemHostHint}: ${formatBytes1(seg.host)}`} data-segment="host" />
+              <div className="h-full bg-sky-500" style={{ width: `${seg.casPct}%` }} title={`${CM.dbMemCasLabel}: ${formatBytes1(seg.cas)}`} data-segment="cas" />
+              <div className="h-full" style={{ width: `${seg.freePct}%` }} title={`${CM.dbMemFreeLabel}: ${formatBytes1(seg.free)}`} data-segment="free" />
+            </div>
+          </div>
+        );
+      }
     },
     {
       header: CM.tps,

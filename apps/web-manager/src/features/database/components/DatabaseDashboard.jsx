@@ -15,6 +15,7 @@ import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
 import { totalCasQps } from '../casMetrics';
 import { pagesToSize, volumePageSize } from '../volumePages';
+import { dbMemorySegments, formatBytes1 } from '../dbMemorySegments';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -30,6 +31,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const isHA = hostHaInfo.isHA;
 
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
+  // The host's memory as the host or service dashboard last read it
+  // (gethoststat); the DB dashboard does not read it itself.
+  const hostSummary = useSelector((state) => state.globalMonitoring?.summaries?.[hostUid]);
+  const hostMem = hostData.currentStatus?.memTotal > 0 ? hostData.currentStatus : hostSummary;
   // CMS getenv osinfo ("LINUX", "NT", ...). On Linux the broker never fills
   // per-CAS CPU (get_psinfo in broker_process_info.c is Solaris/HP-UX only),
   // so CMS as_cpu is always 0.00 there; unknown OS keeps the CAS sum.
@@ -114,7 +119,9 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const totalQps = totalCasQps(brokersCAS);
   const rawHitRatio = parseFloat(perf.data_page_buffer_hit_ratio);
   const hitRatio = Number.isFinite(rawHitRatio) ? rawHitRatio : null;
-  const totalMemMB = (casStats.memKB / 1024).toFixed(1);
+  // psize is in KiB.
+  const casMemBytes = casStats.memKB * 1024;
+  const memSegments = dbMemorySegments(casMemBytes, hostMem?.memTotal, hostMem?.memUsed);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.
   const rates = perf.calculatedRates || {};
@@ -124,8 +131,8 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     cpu: casCpuNotCollected ? '-' : casStats.cpu.toFixed(1) + '%',
     cpuPct: casCpuNotCollected ? 0 : Math.min(casStats.cpu, 100),
     cpuNote: casCpuNotCollected ? CM.casCpuNotCollectedLinux : undefined,
-    memory: totalMemMB + ' MiB', 
-    memPct: Math.min((casStats.memKB / 1024) / 4, 100),
+    memory: formatBytes1(casMemBytes),
+    memSegments,
     tps: formatRate(rates.tps),
     qps: formatRate(totalQps), 
     // CMS reads the engine's ratio as a whole number (cm_mem_cpu_stat.cpp).
@@ -142,6 +149,11 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     const rows = [
       [CM.summaryLabel, CM.database, dbname],
       [CM.summaryLabel, CM.host, `${activeHost?.address}:${activeHost?.port}`],
+      // Memory in the bar's order: host (without this db's CAS), CAS, free, total.
+      [CM.performance, `${CM.memory} (${CM.dbMemHostLabel})`, memSegments ? formatBytes1(memSegments.host) : '-'],
+      [CM.performance, `${CM.memory} (${CM.dbMemCasLabel})`, formatBytes1(casMemBytes)],
+      [CM.performance, `${CM.memory} (${CM.dbMemFreeLabel})`, memSegments ? formatBytes1(memSegments.free) : '-'],
+      [CM.performance, `${CM.memory} (${CM.dbMemTotalLabel})`, memSegments ? formatBytes1(memSegments.total) : '-'],
       [CM.performance, CM.tps, dbStats[0].tps],
       [CM.performance, CM.qps, dbStats[0].qps],
       [CM.performance, CM.hitRatioLabel, dbStats[0].hitRatio],
