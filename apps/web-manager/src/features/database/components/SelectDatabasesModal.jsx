@@ -54,7 +54,6 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
     setLoginPending(false);
     setCredentialsByDb({});
     setSaveCredentials(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, hostUid]);
 
   const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.dbname)), [rows, selected]);
