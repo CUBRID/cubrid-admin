@@ -7,12 +7,18 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
+import LanguageToggle from '../../layout/components/LanguageToggle';
 
 function SettingsShell({ children }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-[#070709] font-sans selection:bg-amber-500/20 relative overflow-hidden">
       <div className="w-full max-w-lg bg-white/90 dark:bg-[#121215]/90 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 rounded-2xl shadow-[0_24px_60px_-15px_rgba(0,0,0,0.08),0_0_40px_rgba(245,158,11,0.04)] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.6),0_0_50px_rgba(245,158,11,0.08)] relative z-10 overflow-hidden p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-500">
         <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500/40 via-amber-400 to-amber-500/40 shadow-[0_1px_8px_rgba(245,158,11,0.25)]" />
+        {/* The same language setting as the sign-in page and the app; the
+            desktop menu and folder dialog follow it (useDesktopMenuLanguage). */}
+        <div className="flex justify-end mb-4">
+          <LanguageToggle />
+        </div>
         {children}
       </div>
     </div>
