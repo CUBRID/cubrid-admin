@@ -51,10 +51,10 @@ const Component = function ServerContent({ hostUid }) {
 
   const [autoStartDBs, setAutoStartDBs] = useState([]);
   const [, setAutoStartReady] = useState(false);
-  // Bumped by a refresh the user asked for (the button, F5, the first load),
-  // never by a background tick: the storage volume table (DatabaseVolumes)
-  // reads volume-info for every logged-in running database, which is too
-  // costly to poll, so it re-reads only on these and when its list changes.
+  // Bumped on every refresh of this dashboard while it is open (the button,
+  // F5, the first load and its background ticks): the storage volume table
+  // (DatabaseVolumes) re-reads volume-info for the logged-in running
+  // databases then. Nothing reads it while no dashboard shows it.
   const [volumesRefreshKey, setVolumesRefreshKey] = useState(0);
   const autoStartReadVersion = useRef(0);
   const autoStartWritePending = useRef(false);
@@ -89,8 +89,9 @@ const Component = function ServerContent({ hostUid }) {
       setDatabases(newDatabases);
       setActiveDatabases(newActiveDatabases);
       // Same render as the list above, so the volume table reads once with
-      // the list it was asked to show.
-      if (!silent) setVolumesRefreshKey((key) => key + 1);
+      // the list it was asked to show, on every refresh of the open
+      // dashboard (background ticks too; a failed read keeps the last rows).
+      setVolumesRefreshKey((key) => key + 1);
 
       // 2. Then fetch other data, using the just-fetched active databases list.
       // fetchBrokerList goes first: the system status (fetchMonitoringData,

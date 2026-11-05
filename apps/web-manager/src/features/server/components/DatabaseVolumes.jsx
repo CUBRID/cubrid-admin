@@ -81,9 +81,9 @@ const BarCell = ({ val }) => {
 // dbListStatus: the host dashboard's database-list fetch state ('loading'
 // until it settles). activeDatabases is [] until then, which must not read as "no
 // running databases".
-// refreshKey: changes when the user refreshes the dashboard (see
-// ServerContent); the table re-reads then and when its database list changes,
-// never on the dashboard's background ticks.
+// refreshKey: changes on each refresh of the open dashboard (see
+// ServerContent); the table re-reads then, when its database list changes,
+// and when a volume was added on the host (volumesChanged).
 export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded', refreshKey = 0 }) {
   const CM = useCM();
   const dispatch = useDispatch();

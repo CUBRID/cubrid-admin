@@ -198,3 +198,13 @@ describe('refreshKey', () => {
     expect(fetchDatabaseVolumes).toHaveBeenCalledTimes(1);
   });
 });
+
+it('re-reads the volumes when a volume was added on the host (volumesChanged)', async () => {
+  mockFetchReturning(Promise.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+  const store = makeStore();
+  await render(store, ['demodb']);
+  const before = fetchDatabaseVolumes.mock.calls.length;
+
+  await act(async () => store.dispatch({ type: 'SET_STATE', payload: { ...baseState, databaseMonitoring: { volumesChangedSeq: { host1: 1 } } } }));
+  expect(fetchDatabaseVolumes).toHaveBeenCalledTimes(before + 1);
+});

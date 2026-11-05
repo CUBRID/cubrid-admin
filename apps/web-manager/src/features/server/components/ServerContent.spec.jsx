@@ -108,17 +108,16 @@ it('never reads volume-info itself: the storage volume table reads its own', asy
   expect(countOf('test/fetchDatabaseVolumes')).toBe(0);
 });
 
-it('asks the storage volume table to re-read on the refresh button, not on a background tick', async () => {
-  // The first load counts as a refresh the user asked for.
+it('asks the storage volume table to re-read on every refresh of the open dashboard, its background ticks too', async () => {
   expect(volumesRefreshKey()).toBe(1);
 
   await tick();
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-  expect(volumesRefreshKey()).toBe(1);
+  expect(volumesRefreshKey()).toBe(2);
 
   await act(async () => {
     container.querySelector('[data-testid="server-dashboard-refresh-btn"]').click();
   });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(3);
-  expect(volumesRefreshKey()).toBe(2);
+  expect(volumesRefreshKey()).toBe(3);
 });
