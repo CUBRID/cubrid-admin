@@ -164,6 +164,13 @@ function notifyAccessTokenRefreshFailed(err) {
   accessTokenRefreshWaiters = [];
 }
 
+// The refresh is a plain axios call (not apiClient, whose 401 handling would
+// loop back here), so it gets its own limit. Without one, a refresh that
+// never answers (a connection left half-open by a sleep or a network change)
+// kept isRefreshingAccessToken set for good: every later 401 then waited on
+// it forever and the screens stopped refreshing until the page was reloaded.
+export const ACCESS_TOKEN_REFRESH_TIMEOUT_MS = 15000;
+
 async function refreshAccessToken() {
   const refreshToken = localStorage.getItem('refreshToken');
   if (!refreshToken) {
@@ -174,6 +181,7 @@ async function refreshAccessToken() {
     `${resolveApiBaseUrl()}/auth/refresh`,
     { refreshToken },
     {
+      timeout: ACCESS_TOKEN_REFRESH_TIMEOUT_MS,
       headers: { 'Content-Type': 'application/json' },
       ...(isDesktopRuntime() ? { adapter: 'fetch' } : {}),
     }
