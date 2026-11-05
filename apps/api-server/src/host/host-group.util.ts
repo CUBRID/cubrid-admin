@@ -160,6 +160,7 @@ export function toSafeHost(host: HostInfo): SafeHostInfo {
     ...safe,
     initialLogin: host.initialLogin ?? true,
     cmsSessionExpiresAt: cmsSessionExpiresAt(host),
+    hasPassword: Boolean(host.password),
   };
 }
 
