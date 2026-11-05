@@ -7,7 +7,7 @@ import { setActiveMainTab } from '../../layout/layoutSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
-import { Toggle } from '../../../components/ds/forms/Toggle';
+import PasswordChangeLink from './PasswordChangeLink';
 import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
@@ -307,15 +307,14 @@ export default function EditHostModal() {
               error={errors.password || (isCredentialError ? apiError : undefined)}
               icon="key"
               disabled={loading || !changePassword}
-            />
-          </div>
-          <div>
-            <Toggle
-              testId="edit-host-change-password-toggle"
-              label={CM.changePassword}
-              checked={changePassword}
-              onChange={setChangePassword}
-              disabled={loading}
+              labelAction={(
+                <PasswordChangeLink
+                  testId="edit-host-change-password-toggle"
+                  active={changePassword}
+                  onChange={setChangePassword}
+                  disabled={loading}
+                />
+              )}
             />
           </div>
         </div>

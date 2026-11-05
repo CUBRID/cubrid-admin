@@ -408,6 +408,8 @@ export const CM = {
   editHost: 'Edit Host',
   deleteHost: 'Delete Host',
   changePassword: 'Change Password',
+  changeLink: 'Change',
+  keepCurrentPassword: 'Keep current',
   defaultCmsPasswordTitle: 'Default CMS password in use',
   defaultCmsPasswordMsg: 'These hosts use the CMS account admin with the default password (admin). Changing it is recommended.',
   userManagement: 'User Management',

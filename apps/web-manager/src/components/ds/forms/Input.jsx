@@ -5,6 +5,7 @@ import { Icon } from '../foundation/Icon';
 export const Input = forwardRef(({
   label,
   labelExtra,
+  labelAction,
   description,
   error,
   required,
@@ -39,6 +40,7 @@ export const Input = forwardRef(({
     <FormField 
       label={label} 
       labelExtra={labelExtra} 
+      labelAction={labelAction}
       description={description} 
       error={error} 
       required={required} 

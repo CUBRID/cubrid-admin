@@ -12,7 +12,7 @@ import {
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
-import { Toggle } from '../../../components/ds/forms/Toggle';
+import PasswordChangeLink from './PasswordChangeLink';
 import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
@@ -228,6 +228,13 @@ export default function EditCMSUserModal() {
                 required={settingPassword}
                 disabled={!settingPassword}
                 description={settingPassword ? CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES) : null}
+                labelAction={isEditMode ? (
+                  <PasswordChangeLink
+                    testId="edit-cms-user-change-password-toggle"
+                    active={changePassword}
+                    onChange={setChangePassword}
+                  />
+                ) : null}
                 error={passwordTooLong ? CM.cmsPasswordTooLongMsg(CMS_PASSWORD_MAX_BYTES) : (passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null)}
               />
               <Input
@@ -243,16 +250,6 @@ export default function EditCMSUserModal() {
                 error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
               />
             </div>
-            {isEditMode && (
-              <div>
-                <Toggle
-                  testId="edit-cms-user-change-password-toggle"
-                  label={CM.changePassword}
-                  checked={changePassword}
-                  onChange={setChangePassword}
-                />
-              </div>
-            )}
           </div>
         </section>
 

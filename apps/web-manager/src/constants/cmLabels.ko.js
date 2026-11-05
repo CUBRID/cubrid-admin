@@ -442,6 +442,8 @@ export const CM_KO = {
   editHost: '호스트 편집',
   deleteHost: '호스트 삭제',
   changePassword: '비밀번호 변경',
+  changeLink: '변경',
+  keepCurrentPassword: '그대로 두기',
   defaultCmsPasswordTitle: 'CMS 기본 비밀번호 사용 중',
   defaultCmsPasswordMsg: '아래 호스트는 CMS 계정 admin을 설치 기본 비밀번호(admin)로 쓰고 있습니다. 비밀번호를 바꾸는 것을 권장합니다.',
   userManagement: 'CMS 계정 관리',
