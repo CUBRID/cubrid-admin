@@ -772,6 +772,9 @@ export const CM = {
   scheduleCommitted: 'Saved',
   executionError: 'Execution Error',
   planIdLabel: 'Plan ID',
+  // Backup plan dialog's first section (CA jobauto basicGroupName).
+  destination: 'General',
+  scatteredBackupLevelsWarning: 'The backup levels are in different folders. Restoring above level 0 reads the lower levels from the same folder (-B), so put them in one folder first.',
   rotationLabel: 'Rotation',
   targetTime: 'Target Time',
   daily24hCycleLabel: 'Daily (24h cycle)',
@@ -1422,6 +1425,7 @@ export const CM = {
   workspaceAppliedRelogMsg: 'Workspace applied. Please log in again.',
   workspaceResetFailedMsg: 'Failed to reset workspace',
   workspaceDesktopOnlyDesc: 'Workspace settings are available in the CUBRID Admin desktop app.',
+  backToSignIn: 'Back to sign in',
   desktopConnectFailedMsg: 'Could not connect to the desktop app. Quit and run again with',
   selectWorkspaceTitle: 'Select Workspace',
   workspaceTitle: 'Workspace',
