@@ -8,6 +8,7 @@ import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { EmptyState } from '../../../components/ds/layout/EmptyState';
 import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuDivider, MenuItem } from '../../../components/common/DropdownMenu';
+import { menuOffReason } from '../../layout/menuOffReason';
 import { useCM } from '../../../constants/useCM';
 import { dbKey } from '../../database/dbKey';
 
@@ -390,7 +391,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
           <MenuItem icon="unfold_more" label={CM.expandAllBtn} onClick={() => { handleExpandAll(); setToolbarMenu(null); }} />
           <MenuItem icon="unfold_less" label={CM.collapseAllBtn} onClick={() => { handleCollapseAll(); setToolbarMenu(null); }} />
           <MenuDivider />
-          <MenuItem icon="download" label={CM.downloadAllBtn} disabled={targetLogs.length === 0} onClick={() => { handleDownloadAll(); setToolbarMenu(null); }} />
+          <MenuItem icon="download" label={CM.downloadAllBtn} disabled={targetLogs.length === 0} title={menuOffReason(CM, { noTarget: targetLogs.length === 0 && CM.noLogsToDownloadHint })} onClick={() => { handleDownloadAll(); setToolbarMenu(null); }} />
         </ContextMenuWrapper>
       )}
 

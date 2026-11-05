@@ -8,6 +8,7 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
+import { menuOffReason } from '../../layout/menuOffReason';
 import { useCM } from '../../../constants/useCM';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -378,6 +379,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
             icon={copying ? 'check' : 'content_copy'}
             label={copying ? CM.copiedLabel : CM.copyToClipboard}
             disabled={copyDisabled}
+            title={menuOffReason(CM, { noTarget: copyDisabled && (topLoading ? CM.stillLoadingHint : CM.nothingToCopyHint) })}
             onClick={() => {
               handleCopy();
               setToolbarMenu(null);
@@ -388,6 +390,7 @@ ${data.map(d => { const numCell = (v) => v === '-' ? `<Cell><Data ss:Type="Strin
               icon="download"
               label={CM.exportBtn}
               disabled={top.length === 0}
+              title={menuOffReason(CM, { noTarget: top.length === 0 && (topLoading ? CM.stillLoadingHint : CM.nothingToExportHint) })}
               onClick={() => {
                 handleExcel(top);
                 setToolbarMenu(null);

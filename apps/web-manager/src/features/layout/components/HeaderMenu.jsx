@@ -1,6 +1,7 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { MENU_ACTIONS, getMenuActionEnabled, runMenuAction } from '../menuActions';
+import { menuOffReason } from '../menuOffReason';
 import { useCM } from '../../../constants/useCM';
 
 export default function HeaderMenu() {
@@ -9,8 +10,14 @@ export default function HeaderMenu() {
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
 
   const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts });
+  // Only Edit Host, CMS Account Management and Host Engine Version are ever
+  // off, for want of a selected (and, for CMS accounts, connected) host.
   const action = (id) => ({
     disabled: !enabled[id],
+    title: enabled[id] ? undefined : menuOffReason(CM, {
+      hostSelected: Boolean(selectedHostUid),
+      hostConnected: (authorizedHosts ?? []).includes(selectedHostUid),
+    }),
     onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid }),
   });
 

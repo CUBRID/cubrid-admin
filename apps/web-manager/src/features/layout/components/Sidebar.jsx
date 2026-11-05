@@ -367,12 +367,22 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // re-enable exactly the operations that are dangerous in that state.
   const isSelectedDbInHa = haDbNames.includes(dbContextMenu?.db);
   // Why a menu item is off, shown on hover (menuOffReason).
-  const hostOffReason = (hostUid) => menuOffReason(CM, { hostConnected: authorizedHosts.includes(hostUid) });
-  const dbOffReason = (db, { ha = false } = {}) => menuOffReason(CM, {
+  const hostOffReason = (hostUid, { busy = false } = {}) => menuOffReason(CM, {
+    hostConnected: authorizedHosts.includes(hostUid),
+    busy: busy && CM.taskInProgressHint,
+  });
+  // `needs` 'stopped' or 'running': the state the item needs, `running` the database's.
+  const dbOffReason = (db, { ha = false, needs, running } = {}) => menuOffReason(CM, {
     dbLoggedIn: loggedInDatabases.includes(dbKey(selectedHostUid, db)),
     haBlocked: ha && isSelectedDbInHa,
+    needs,
+    dbRunning: running,
   });
-  const loginOffReason = (isLoggedIn) => menuOffReason(CM, { dbLoggedIn: isLoggedIn });
+  const loginOffReason = (isLoggedIn, { needs, running } = {}) => menuOffReason(CM, { dbLoggedIn: isLoggedIn, needs, dbRunning: running });
+  const loginAllOffReason = (noTarget) => menuOffReason(CM, {
+    noTarget,
+    busy: isLoggingIntoHost && CM.hostLoginInProgressHint,
+  });
 
 
   useEffect(() => {
@@ -416,6 +426,9 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
   const pendingLoginAllUids = getUnauthorizedHostUids(hostGroups, authorizedHosts, null);
   const pendingLoginCount = pendingLoginAllUids.length;
+  const groupPendingLoginCount = groupContextMenu?.groupId
+    ? getUnauthorizedHostUids(hostGroups, authorizedHosts, groupContextMenu.groupId).length
+    : 0;
 
   const handleLoginAll = useCallback((groupId = null) => {
     const uids = getUnauthorizedHostUids(hostGroups, authorizedHosts, groupId);
@@ -1264,6 +1277,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="login"
               label={CM.loginAll}
               disabled={isLoggingIntoHost || pendingLoginCount === 0}
+              title={loginAllOffReason(pendingLoginCount === 0 && CM.allHostsAlreadyConnectedMsg)}
               onClick={() => {
                 handleLoginAll(null);
                 setServerToolbarMenu(null);
@@ -1331,7 +1345,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="play_arrow"
             label={CM.startService}
             disabled={!authorizedHosts.includes(contextMenu.hostUid) || sidebarActionLoading}
-            title={hostOffReason(contextMenu.hostUid)}
+            title={hostOffReason(contextMenu.hostUid, { busy: sidebarActionLoading })}
             onClick={() => {
               const hostUid = contextMenu.hostUid;
               setContextMenu(null);
@@ -1342,7 +1356,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="stop"
             label={CM.stopService}
             disabled={!authorizedHosts.includes(contextMenu.hostUid) || sidebarActionLoading}
-            title={hostOffReason(contextMenu.hostUid)}
+            title={hostOffReason(contextMenu.hostUid, { busy: sidebarActionLoading })}
             onClick={() => {
               const hostUid = contextMenu.hostUid;
               const serverName = contextMenu.alias || contextMenu.server || hostUid;
@@ -1354,7 +1368,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="restart_alt"
             label={CM.restartService}
             disabled={!authorizedHosts.includes(contextMenu.hostUid) || sidebarActionLoading}
-            title={hostOffReason(contextMenu.hostUid)}
+            title={hostOffReason(contextMenu.hostUid, { busy: sidebarActionLoading })}
             onClick={() => {
               const hostUid = contextMenu.hostUid;
               const serverName = contextMenu.alias || contextMenu.server || hostUid;
@@ -1458,6 +1472,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 icon="login"
                 label={CM.loginAll}
                 disabled={isLoggingIntoHost || pendingLoginCount === 0}
+                title={loginAllOffReason(pendingLoginCount === 0 && CM.allHostsAlreadyConnectedMsg)}
                 onClick={() => {
                   handleLoginAll(null);
                   setGroupContextMenu(null);
@@ -1479,10 +1494,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             <MenuItem
               icon="login"
               label={CM.loginAll}
-              disabled={
-                isLoggingIntoHost
-                || getUnauthorizedHostUids(hostGroups, authorizedHosts, groupContextMenu.groupId).length === 0
-              }
+              disabled={isLoggingIntoHost || groupPendingLoginCount === 0}
+              title={loginAllOffReason(groupPendingLoginCount === 0 && CM.groupHostsAlreadyConnectedHint)}
               onClick={() => {
                 handleLoginAll(groupContextMenu.groupId);
                 setGroupContextMenu(null);
@@ -1722,7 +1735,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="download"
               label={CM.manageDatabaseMenu.load}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
-              title={dbOffReason(dbContextMenu.db, { ha: true })}
+              title={dbOffReason(dbContextMenu.db, { ha: true, needs: 'stopped', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openLoadDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1750,14 +1763,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="auto_fix_high"
               label={CM.manageDatabaseMenu.optimize}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
-              title={dbOffReason(dbContextMenu.db)}
+              title={dbOffReason(dbContextMenu.db, { needs: 'stopped', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openOptimizeDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="content_copy"
               label={CM.manageDatabaseMenu.copy}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
-              title={dbOffReason(dbContextMenu.db)}
+              title={dbOffReason(dbContextMenu.db, { needs: 'stopped', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openCopyDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuDivider />
@@ -1765,14 +1778,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="drive_file_rename_outline"
               label={CM.manageDatabaseMenu.rename}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
-              title={dbOffReason(dbContextMenu.db, { ha: true })}
+              title={dbOffReason(dbContextMenu.db, { ha: true, needs: 'stopped', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRenameDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="restore"
               label={CM.manageDatabaseMenu.restore}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
-              title={dbOffReason(dbContextMenu.db, { ha: true })}
+              title={dbOffReason(dbContextMenu.db, { ha: true, needs: 'stopped', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openRestoreDatabaseModal()); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1787,7 +1800,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="delete"
               label={CM.manageDatabaseMenu.delete}
               disabled={dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db)) || isSelectedDbInHa}
-              title={dbOffReason(dbContextMenu.db, { ha: true })}
+              title={dbOffReason(dbContextMenu.db, { ha: true, needs: 'stopped', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openDeleteDatabaseModal(dbContextMenu.db)); setDbContextMenu(null); }}
             />
           </SubMenu>
@@ -1797,14 +1810,14 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="lock_open"
               label={`${CM.lockingInformation}...`}
               disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
-              title={dbOffReason(dbContextMenu.db)}
+              title={dbOffReason(dbContextMenu.db, { needs: 'running', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openLockInformationModal()); setDbContextMenu(null); }}
             />
             <MenuItem
               icon="swap_horiz"
               label={`${CM.transactionInformation}...`}
               disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
-              title={dbOffReason(dbContextMenu.db)}
+              title={dbOffReason(dbContextMenu.db, { needs: 'running', running: dbContextMenu.isActive })}
               onClick={() => { dispatch(setSelectedDatabase(dbContextMenu.db)); dispatch(openTransactionInfoModal()); setDbContextMenu(null); }}
             />
             <MenuItem
@@ -1822,7 +1835,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               icon="schema"
               label={`${CM.planDump}`}
               disabled={!dbContextMenu.isActive || !loggedInDatabases.includes(dbKey(selectedHostUid, dbContextMenu.db))}
-              title={dbOffReason(dbContextMenu.db)}
+              title={dbOffReason(dbContextMenu.db, { needs: 'running', running: dbContextMenu.isActive })}
               onClick={() => {
                 dispatch(setSelectedDatabase(dbContextMenu.db));
                 dispatch(openPlanDumpModal());
@@ -1873,6 +1886,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   icon={MULTI_DB_ACTION_ICONS[action]}
                   label={`${CM.multiDbActions[action]} (${targets.length})`}
                   disabled={targets.length === 0}
+                  title={menuOffReason(CM, { noTarget: targets.length === 0 && CM.multiActionNoTargetHint[action] })}
                   onClick={() => {
                     close();
                     // Databases without saved credentials need a user and
@@ -1920,6 +1934,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   icon={MULTI_DB_ACTION_ICONS[action]}
                   label={`${CM.multiDbActions[action]} (${targets.length})`}
                   disabled={targets.length === 0}
+                  title={menuOffReason(CM, { noTarget: targets.length === 0 && CM.multiActionNoTargetHint[action] })}
                   onClick={() => {
                     close();
                     handleMultiBrokerAction(action, selectedBrokers);
@@ -2036,6 +2051,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   icon="login"
                   label={CM.loginAllDatabases}
                   disabled={loginTargets.length === 0}
+                  title={menuOffReason(CM, { noTarget: loginTargets.length === 0 && CM.multiActionNoTargetHint.login })}
                   onClick={() => {
                     setDbRootContextMenu(null);
                     // Databases without saved credentials need a user and password.
@@ -2050,6 +2066,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   icon="logout"
                   label={CM.logoutAllDatabases}
                   disabled={logoutTargets.length === 0}
+                  title={menuOffReason(CM, { noTarget: logoutTargets.length === 0 && CM.multiActionNoTargetHint.logout })}
                   onClick={() => {
                     setDbRootContextMenu(null);
                     handleMultiDatabaseAction('logout', logoutTargets);
@@ -2483,7 +2500,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="person_add"
             label={CM.addUser}
             disabled={!usersContextMenu.isActive || !usersContextMenu.isLoggedIn}
-            title={loginOffReason(usersContextMenu.isLoggedIn)}
+            title={loginOffReason(usersContextMenu.isLoggedIn, { needs: 'running', running: usersContextMenu.isActive })}
             onClick={() => {
               dispatch(openCreateUserModal(usersContextMenu.db));
               setUsersContextMenu(null);
@@ -2512,7 +2529,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="edit"
             label={CM.editUser}
             disabled={!userContextMenu.isActive || !userContextMenu.isLoggedIn}
-            title={loginOffReason(userContextMenu.isLoggedIn)}
+            title={loginOffReason(userContextMenu.isLoggedIn, { needs: 'running', running: userContextMenu.isActive })}
             onClick={() => {
               dispatch(openEditUserModal({ dbname: userContextMenu.db, userName: userContextMenu.user }));
               setUserContextMenu(null);
@@ -2522,7 +2539,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="person_remove"
             label={CM.deleteUser}
             disabled={!userContextMenu.isActive || !userContextMenu.isLoggedIn}
-            title={loginOffReason(userContextMenu.isLoggedIn)}
+            title={loginOffReason(userContextMenu.isLoggedIn, { needs: 'running', running: userContextMenu.isActive })}
             onClick={() => {
               dispatch(openDropUserModal({ dbname: userContextMenu.db, userName: userContextMenu.user }));
               setUserContextMenu(null);

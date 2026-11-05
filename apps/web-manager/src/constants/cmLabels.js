@@ -161,6 +161,25 @@ export const CM = {
   manageDatabaseHaDisabledHint: 'Not available for an HA-configured database.',
   hostConnectRequiredHint: 'Connect to the host first.',
   dbLoginRequiredHint: 'Log in to the database first.',
+  hostSelectRequiredHint: 'Select a host first.',
+  dbStopRequiredHint: 'Stop the database first.',
+  dbStartRequiredHint: 'Start the database first.',
+  taskInProgressHint: 'Another task is in progress.',
+  hostLoginInProgressHint: 'A host login is in progress.',
+  groupHostsAlreadyConnectedHint: 'All hosts in this group are already connected.',
+  // Why a multi-select or "all" action is off: none of the items needs it.
+  multiActionNoTargetHint: {
+    start: 'All of them are running.',
+    stop: 'All of them are stopped.',
+    restart: 'All of them are stopped.',
+    login: 'All of them are logged in.',
+    logout: 'None of them is logged in.',
+    forgetCredentials: 'None of them has a saved login.',
+  },
+  stillLoadingHint: 'Still loading.',
+  nothingToCopyHint: 'Nothing to copy.',
+  nothingToExportHint: 'Nothing to export.',
+  noLogsToDownloadHint: 'No logs to download.',
 
   // Create Database (createdb wizard)
   createDatabaseMsg: 'Create a new database.',

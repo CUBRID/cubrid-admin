@@ -1,10 +1,25 @@
 /**
- * Why a menu item is off, shown on hover: the host is not connected, or the
- * database is not logged in. An item HA cannot do says so once the database
- * is logged in. undefined when none of these is why.
+ * Why a menu item is off, shown on hover. With several reasons, the one to
+ * clear first: no host selected, host not connected, database not logged in,
+ * HA, the database's running state (`needs` 'stopped' or 'running', against
+ * `dbRunning`), nothing to act on (`noTarget`, the text to show), then a task
+ * in progress (`busy`, the text to show). undefined when none of these is why.
  */
-export function menuOffReason(CM, { hostConnected = true, dbLoggedIn = true, haBlocked = false } = {}) {
+export function menuOffReason(CM, {
+  hostSelected = true,
+  hostConnected = true,
+  dbLoggedIn = true,
+  haBlocked = false,
+  needs,
+  dbRunning,
+  noTarget,
+  busy,
+} = {}) {
+  if (!hostSelected) return CM.hostSelectRequiredHint;
   if (!hostConnected) return CM.hostConnectRequiredHint;
   if (!dbLoggedIn) return CM.dbLoginRequiredHint;
-  return haBlocked ? CM.manageDatabaseHaDisabledHint : undefined;
+  if (haBlocked) return CM.manageDatabaseHaDisabledHint;
+  if (needs === 'stopped' && dbRunning) return CM.dbStopRequiredHint;
+  if (needs === 'running' && !dbRunning) return CM.dbStartRequiredHint;
+  return noTarget || busy || undefined;
 }
