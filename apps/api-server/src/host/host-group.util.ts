@@ -97,6 +97,31 @@ export function findDuplicateHost(
   return found;
 }
 
+/**
+ * A host of `user` that is connected (its CMS session has not expired, as the
+ * client restores it) with the same address, port and CMS user as `target`:
+ * a test login there could end that session, since CMS can keep one session
+ * per account. `alsoUid` counts that host when it is connected whatever its
+ * settings (the host being edited).
+ */
+export function findConnectedHostFor(
+  user: User,
+  target: Pick<HostInfo, 'address' | 'port' | 'id'>,
+  alsoUid?: string,
+  now = Date.now()
+): HostInfo | undefined {
+  let found: HostInfo | undefined;
+  forEachHost(user, ({ host }) => {
+    if (found || (cmsSessionExpiresAt(host) ?? 0) <= now) return;
+    const sameConnection =
+      host.address?.trim().toLowerCase() === target.address?.trim().toLowerCase() &&
+      String(host.port) === String(target.port) &&
+      host.id === target.id;
+    if (sameConnection || host.uid === alsoUid) found = host;
+  });
+  return found;
+}
+
 function hasSameDefinedAlias(a: string | undefined, b: string | undefined): boolean {
   const left = a?.trim() ?? '';
   const right = b?.trim() ?? '';

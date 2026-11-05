@@ -757,6 +757,22 @@ describe('DatabaseUserService', () => {
       expect(loginCache().get(key('demodb'))).toEqual({ loggedInAt: loginAt, hostToken: 'new-token', dbUser: 'dba' });
     });
 
+    it("forgetDbLoginsOfHost drops the host's logins and a re-login still running sets nothing", async () => {
+      const answer = deferred<typeof ok>();
+      cmsClient.postAuthenticated.mockReturnValue(answer.promise);
+      loginCache().set(`${mockUserId}:other-host:demodb`, { loggedInAt: loginAt, hostToken: 'x', dbUser: 'dba' });
+
+      hostLogin('new-token');
+      await settle();
+      service.forgetDbLoginsOfHost(mockUserId, mockHostUid);
+      answer.resolve(ok);
+      await settle();
+
+      expect(loginCache().has(key('demodb'))).toBe(false);
+      expect(service.isDbLoginRestoring(mockUserId, mockHostUid, 'demodb')).toBe(false);
+      expect(loginCache().has(`${mockUserId}:other-host:demodb`)).toBe(true);
+    });
+
     it('leaves a database without a saved profile not logged in, sending nothing', async () => {
       loginCache().set(key('nosave'), { loggedInAt: loginAt, hostToken: 'test-token', dbUser: 'dba' });
       cmsClient.postAuthenticated.mockResolvedValue(ok);

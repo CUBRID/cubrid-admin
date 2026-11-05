@@ -205,6 +205,8 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'This host is already registered.';
       case HostErrorCode.DUPLICATED_ALIAS:
         return 'This name is already used by another host. Choose a different name.';
+      case HostErrorCode.HOST_CONNECTED:
+        return "Can't test the connection while a host with this address, port and CMS user is connected (the test could end that connection).";
       case HostErrorCode.INTERNAL_ERROR:
       case HostErrorCode.UNKNOWN:
         return 'A host operation failed.';

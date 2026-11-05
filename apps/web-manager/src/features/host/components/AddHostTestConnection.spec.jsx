@@ -14,6 +14,7 @@ vi.mock('../hostApi', () => ({
 import { hostApi } from '../hostApi';
 import AddHostModal from './AddHostModal';
 import { UNGROUPED_GROUP_ID } from '../hostGroupUtils';
+import { CM } from '../../../constants/cmLabels';
 
 let container;
 let root;
@@ -33,9 +34,9 @@ afterEach(async () => {
 });
 
 // Address, port, account and password filled in; no name yet.
-const render = () => {
+const render = ({ hosts = [], authorizedHosts = [] } = {}) => {
   const host = {
-    loading: false, error: null, hosts: [], hostGroups: { [UNGROUPED_GROUP_ID]: { name: '', hosts: {} } },
+    loading: false, error: null, hosts, authorizedHosts, hostGroups: { [UNGROUPED_GROUP_ID]: { name: '', hosts: {} } },
     initialHostData: { address: '10.0.0.9', port: 8001, id: 'admin', password: 'pw' },
   };
   const store = configureStore({
@@ -78,4 +79,19 @@ it('clears the result once a field changes', async () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   expect(q('add-host-test-result')).toBeNull();
+});
+
+it('is off, with the reason, while a connected host has the same address, port and CMS user', async () => {
+  const other = { uid: 'h1', address: '10.0.0.9', port: 8001, id: 'admin' };
+  await render({ hosts: [other], authorizedHosts: ['h1'] });
+
+  expect(q('add-host-test-connection-btn').disabled).toBe(true);
+  expect(q('add-host-test-connection-btn').parentElement.getAttribute('title')).toBe(CM.testConnectionSameServerConnectedHint);
+  await testConnection();
+  expect(hostApi.testConnection).not.toHaveBeenCalled();
+});
+
+it('stays on when that host is not connected', async () => {
+  await render({ hosts: [{ uid: 'h1', address: '10.0.0.9', port: 8001, id: 'admin' }], authorizedHosts: [] });
+  expect(q('add-host-test-connection-btn').disabled).toBe(false);
 });

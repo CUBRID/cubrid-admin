@@ -189,6 +189,7 @@ export class AppError extends Error {
           case HostErrorCode.INVALID_FORMAT:
             return 400;
           case HostErrorCode.DUPLICATED_HOST:
+          case HostErrorCode.HOST_CONNECTED:
             return 409; // Conflict - resource collision
           case HostErrorCode.INTERNAL_ERROR:
           case HostErrorCode.UNKNOWN:

@@ -31,10 +31,10 @@ afterEach(async () => {
 });
 
 const host = { uid: 'h1', alias: 'web1', address: '10.0.0.1', port: 8001, id: 'admin' };
-const render = (authorizedHosts) => {
+const render = (authorizedHosts, others = []) => {
   const state = {
     host: {
-      isEditHostModalOpen: true, hostToEditUid: 'h1', hosts: [host], loading: false, error: null, authorizedHosts,
+      isEditHostModalOpen: true, hostToEditUid: 'h1', hosts: [host, ...others], loading: false, error: null, authorizedHosts,
       hostGroups: { [UNGROUPED_GROUP_ID]: { name: '', hosts: { h1: host } } },
     },
     layout: { statusModal: { isOpen: false } },
@@ -59,4 +59,12 @@ it('does not test a connected host and says why', async () => {
   const button = q('edit-host-test-connection-btn');
   expect(button.disabled).toBe(true);
   expect(button.parentElement.getAttribute('title')).toBe("Can't test a connected host (it could end the current connection).");
+});
+
+it('does not test settings that a different connected host uses, and says why', async () => {
+  const twin = { uid: 'h2', alias: 'web1-copy', address: '10.0.0.1', port: 8001, id: 'admin' };
+  await render(['h2'], [twin]);
+  const button = q('edit-host-test-connection-btn');
+  expect(button.disabled).toBe(true);
+  expect(button.parentElement.getAttribute('title')).toBe("Can't test while a connected host uses this address, port and CMS user (it could end that connection).");
 });

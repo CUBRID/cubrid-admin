@@ -5,6 +5,7 @@ import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
 import { hostApi } from '../hostApi';
+import { connectedHostWithSameServer } from '../connectionTestGuard';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
@@ -109,6 +110,11 @@ export default function EditHostModal() {
   // keeps one session per account, so the test is only for a host that is
   // not connected.
   const isConnected = (authorizedHosts ?? []).includes(hostToEditUid);
+  // Another connected host with the address, port and CMS user typed here.
+  const sameServerConnected = Boolean(connectedHostWithSameServer(hosts, authorizedHosts, formData));
+  const testBlockedHint = isConnected
+    ? CM.testConnectionConnectedHint
+    : sameServerConnected ? CM.testConnectionSameServerConnectedHint : undefined;
 
   // Logs in to CMS with these settings (the stored password unless it is
   // being changed) and out again, saving nothing.
@@ -363,15 +369,15 @@ export default function EditHostModal() {
         <div className="px-1 space-y-3">
           <div className="flex justify-end">
             {/* A disabled button gets no hover, so the reason hangs off this wrapper. */}
-            <span title={isConnected ? CM.testConnectionConnectedHint : undefined}>
+            <span title={testBlockedHint}>
               <Button
                 data-testid="edit-host-test-connection-btn"
                 variant="secondary"
                 onClick={handleTestConnection}
                 loading={!!connectionTest?.testing}
-                disabled={loading || isConnected}
+                disabled={loading || Boolean(testBlockedHint)}
                 icon="network_check"
-                className={isConnected ? 'pointer-events-none' : ''}
+                className={testBlockedHint ? 'pointer-events-none' : ''}
               >
                 {CM.testConnection}
               </Button>

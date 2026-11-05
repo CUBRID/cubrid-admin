@@ -55,6 +55,15 @@ export class HostError extends AppError {
   }
 
   /**
+   * Creates an error indicating that a connection test was refused: a host
+   * with the same address, port and CMS account is connected, and the test
+   * login could end its CMS session.
+   */
+  static HostConnected(additionalData?: Record<string, any>, originalError?: Error) {
+    return new HostError('RESOURCE', HostErrorCode.HOST_CONNECTED, additionalData, originalError);
+  }
+
+  /**
    * Creates an error indicating an internal host-related server error.
    */
   static InternalError(additionalData?: Record<string, any>, originalError?: Error) {

@@ -24,7 +24,7 @@ describe('CMSAuthService', () => {
         },
         { provide: CmsConfigService, useValue: { getAllSystemParam: jest.fn() } },
         { provide: HaService, useValue: { heartbeatlistInternal: jest.fn() } },
-        { provide: DatabaseUserService, useValue: { restoreDbLoginsAfterHostLogin: jest.fn() } },
+        { provide: DatabaseUserService, useValue: { restoreDbLoginsAfterHostLogin: jest.fn(), forgetDbLoginsOfHost: jest.fn() } },
         { provide: HostService, useValue: { updateHost: jest.fn(), checkHostUpdate: jest.fn() } },
       ],
     }).compile();
@@ -164,14 +164,14 @@ describe('CMSAuthService', () => {
         expect(updateHost).not.toHaveBeenCalled();
       });
 
-      it('starts the DB re-login right after saving the new token, before anything else awaits', async () => {
+      it('starts the DB re-login right after saving the new token, before anything else awaits (same server, new password)', async () => {
         const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
         let finishAdopt!: () => void;
         repository.atomicUpdateUser.mockImplementationOnce(
           (_id, update) => new Promise((resolve) => { finishAdopt = () => resolve(update(user)); })
         );
 
-        const connect = service.connect('u1', 'h1', { port: 8002 });
+        const connect = service.connect('u1', 'h1', { password: 'new-pw' });
         await new Promise((r) => setImmediate(r));
         // updateHost stored the new token; adoptToken's write has not finished.
         expect(updateHost).toHaveBeenCalled();
@@ -180,6 +180,20 @@ describe('CMSAuthService', () => {
         finishAdopt();
         await connect;
         expect(restore).toHaveBeenCalledTimes(1);
+      });
+
+      it.each([
+        ['address', { address: '10.0.0.2' }],
+        ['port', { port: 8002 }],
+        ['CMS user', { id: 'other' }],
+      ])('drops the DB logins instead of logging back in when the %s changes', async (_what, changes) => {
+        const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
+        const forget = moduleRef.get(DatabaseUserService).forgetDbLoginsOfHost as jest.Mock;
+
+        await service.connect('u1', 'h1', changes);
+
+        expect(forget).toHaveBeenCalledWith('u1', 'h1');
+        expect(restore).not.toHaveBeenCalled();
       });
 
       it('saves nothing when the login with the changed settings fails', async () => {
@@ -222,18 +236,40 @@ describe('CMSAuthService', () => {
   describe('testConnection', () => {
     const target = { address: '10.0.0.9', port: 8001, id: 'admin', password: 'pw' };
     let client: { postPublic: jest.Mock; postAuthenticated: jest.Mock };
-    let repository: { atomicUpdateUser: jest.Mock };
+    let repository: { loadUserById: jest.Mock; atomicUpdateUser: jest.Mock };
+    const userWith = (host: Record<string, unknown>) => ({
+      id: 'u1',
+      host_groups: { ungrouped: { name: '', hosts: { h9: { uid: 'h9', alias: 'h9', password: 'x', dbProfiles: {}, ...host } } } },
+    });
 
     beforeEach(() => {
       client = moduleRef.get(CmsHttpsClientService);
       repository = moduleRef.get(UserRepositoryService);
+      repository.loadUserById.mockResolvedValue(userWith({ address: '10.0.0.1', port: 8001, id: 'admin' }));
+    });
+
+    it('refuses, without a login, while a host with the same address, port and CMS user is connected', async () => {
+      repository.loadUserById.mockResolvedValue(userWith({
+        address: '10.0.0.9', port: 8001, id: 'admin', token: 'live', cmsTokenIssuedAt: Date.now(),
+      }));
+
+      await expect(service.testConnection('u1', target)).rejects.toMatchObject({ code: 'HOST_CONNECTED' });
+      expect(client.postPublic).not.toHaveBeenCalled();
+    });
+
+    it('tests when that host is registered but not connected', async () => {
+      repository.loadUserById.mockResolvedValue(userWith({ address: '10.0.0.9', port: 8001, id: 'admin', token: 'old' }));
+      client.postPublic.mockResolvedValue({ status: 'success', token: 'test-token' });
+      client.postAuthenticated.mockResolvedValue({ status: 'success' });
+
+      await expect(service.testConnection('u1', target)).resolves.toEqual({ success: true });
     });
 
     it('logs in with the given settings, logs the test session out, and saves nothing', async () => {
       client.postPublic.mockResolvedValue({ status: 'success', token: 'test-token' });
       client.postAuthenticated.mockResolvedValue({ status: 'success' });
 
-      await expect(service.testConnection(target)).resolves.toEqual({ success: true });
+      await expect(service.testConnection('u1', target)).resolves.toEqual({ success: true });
       expect(client.postPublic).toHaveBeenCalledWith(
         'https://10.0.0.9:8001/cm_api',
         expect.objectContaining({ task: 'login', id: 'admin', password: 'pw' })
@@ -245,7 +281,7 @@ describe('CMSAuthService', () => {
     it('reports a failed login and sends no logout', async () => {
       client.postPublic.mockResolvedValue({ status: 'failure', note: 'Incorrect password' });
 
-      await expect(service.testConnection(target)).rejects.toThrow();
+      await expect(service.testConnection('u1', target)).rejects.toThrow();
       expect(client.postAuthenticated).not.toHaveBeenCalled();
     });
 
@@ -253,7 +289,7 @@ describe('CMSAuthService', () => {
       client.postPublic.mockResolvedValue({ status: 'success', token: 'test-token' });
       client.postAuthenticated.mockRejectedValue(new Error('socket hang up'));
 
-      await expect(service.testConnection(target)).resolves.toEqual({ success: true });
+      await expect(service.testConnection('u1', target)).resolves.toEqual({ success: true });
     });
   });
   describe('testConnectionFor', () => {
@@ -281,6 +317,15 @@ describe('CMSAuthService', () => {
       );
       expect(client.postAuthenticated).toHaveBeenCalledWith('https://10.0.0.2:8001/cm_api', { task: 'logout', token: 'test-token' });
       expect(repository.atomicUpdateUser).not.toHaveBeenCalled();
+    });
+
+    it('refuses while the host being edited is connected, even with another address', async () => {
+      const user = await repository.loadUserById();
+      Object.assign(user.host_groups.ungrouped.hosts.h1, { token: 'live', cmsTokenIssuedAt: Date.now() });
+      repository.loadUserById.mockResolvedValue(user);
+
+      await expect(service.testConnectionFor('u1', 'h1', { address: '10.0.0.2' })).rejects.toMatchObject({ code: 'HOST_CONNECTED' });
+      expect(client.postPublic).not.toHaveBeenCalled();
     });
 
     it('uses a changed password', async () => {

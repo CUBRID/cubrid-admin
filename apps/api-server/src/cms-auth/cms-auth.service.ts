@@ -4,7 +4,7 @@ import { CmsConfigService } from '@cms-config/cms-config.service';
 import { HaService } from '@ha';
 import { checkCmsStatusError } from '@common';
 import { BaseCmsRequest, HostInfo, LoginCmsRequest, LoginCmsResponse, User } from '@type/index';
-import { getHost } from '@host/host-group.util';
+import { findConnectedHostFor, getHost } from '@host/host-group.util';
 import { UserRepositoryService } from '@repository';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { HostError } from '@error/index';
@@ -113,6 +113,8 @@ export class CmsAuthService {
       id: changes.id ?? stored.id,
       password: changes.password ?? stored.password,
     };
+    // Before the save below, which may update `stored` in place.
+    const sameServer = isSameCmsServer(stored, host);
 
     const token = await settleBy(
       this.requestToken(userId, uid, host, { notAfter: loginBy }),
@@ -121,7 +123,13 @@ export class CmsAuthService {
     );
 
     await this.hostService.updateHost(userId, uid, { ...changes, token });
-    this.restoreDbLogins(userId, uid, token);
+    if (sameServer) {
+      this.restoreDbLogins(userId, uid, token);
+    } else {
+      // Another CMS server or account: the earlier DB logins were on the old
+      // one, and logging back in would send the saved DB passwords to the new.
+      this.databaseUserService.forgetDbLoginsOfHost(userId, uid);
+    }
     await this.adoptToken(userId, uid, token);
     try {
       return await settleBy(
@@ -370,7 +378,12 @@ export class CmsAuthService {
    * out at once: left open it would pile up in CMS, and where CMS keeps one
    * session per account a later login would end it anyway.
    */
-  public async testConnection(target: Pick<HostInfo, 'address' | 'port' | 'id' | 'password'>): Promise<{ success: true }> {
+  public async testConnection(
+    userId: string,
+    target: Pick<HostInfo, 'address' | 'port' | 'id' | 'password'>,
+    editedUid?: string
+  ): Promise<{ success: true }> {
+    await this.refuseTestOverConnectedHost(userId, target, editedUid);
     const token = await this.testLogin(target);
     const url = `https://${target.address}:${target.port}/cm_api`;
     try {
@@ -391,11 +404,37 @@ export class CmsAuthService {
    */
   public async testConnectionFor(userId: string, uid: string, changes: UpdateHostRequest): Promise<{ success: true }> {
     const stored = await this.loadHost(userId, uid);
-    return this.testConnection({
+    return this.testConnection(userId, {
       address: changes.address ?? stored.address,
       port: changes.port ?? stored.port,
       id: changes.id ?? stored.id,
       password: changes.password ?? stored.password,
-    });
+    }, uid);
   }
+
+  /**
+   * Refuses a test login that could end a connected host's CMS session: one
+   * with the same address, port and CMS user, or the host being edited while
+   * it is connected (the dialog's Test Connection is off then too).
+   */
+  private async refuseTestOverConnectedHost(
+    userId: string,
+    target: Pick<HostInfo, 'address' | 'port' | 'id'>,
+    editedUid?: string
+  ): Promise<void> {
+    const user = await this.repository.loadUserById(userId);
+    const connected = findConnectedHostFor(user, target, editedUid);
+    if (connected) {
+      throw HostError.HostConnected({ hostUid: connected.uid, alias: connected.alias, reason: 'HOST_CONNECTED' });
+    }
+  }
+}
+
+/** Whether two host settings point at the same CMS server and account. */
+function isSameCmsServer(a: Pick<HostInfo, 'address' | 'port' | 'id'>, b: Pick<HostInfo, 'address' | 'port' | 'id'>): boolean {
+  return (
+    a.address?.trim().toLowerCase() === b.address?.trim().toLowerCase() &&
+    String(a.port) === String(b.port) &&
+    a.id === b.id
+  );
 }

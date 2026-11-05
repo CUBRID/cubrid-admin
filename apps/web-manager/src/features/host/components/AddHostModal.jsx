@@ -12,6 +12,7 @@ import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
 import { hostApi } from '../hostApi';
+import { connectedHostWithSameServer } from '../connectionTestGuard';
 import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
@@ -35,7 +36,7 @@ export default function AddHostModal({ isOpen, onClose }) {
   // Test Connection's outcome: null, { testing }, { ok }, or { error }.
   const [connectionTest, setConnectionTest] = useState(null);
   const dispatch = useDispatch();
-  const { loading, error: apiError, initialHostData, hostGroups } = useSelector((state) => state.host, shallowEqual);
+  const { loading, error: apiError, initialHostData, hostGroups, hosts, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   // Opened from an HA follow-up of a bulk-login result dialog, which stays
   // open (z-[2100]) underneath — stack above it like the HA modals do.
   const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
@@ -97,6 +98,10 @@ export default function AddHostModal({ isOpen, onClose }) {
     ...formData,
     port: Number(formData.port),
   });
+
+  // Off while a connected host has the same address, port and CMS user: the
+  // test login could end its session (the server refuses it too).
+  const sameServerConnected = Boolean(connectedHostWithSameServer(hosts, authorizedHosts, formData));
 
   // Logs in to CMS with what is typed and out again, saving nothing. Only
   // the connection fields need to be filled in.
@@ -335,16 +340,20 @@ export default function AddHostModal({ isOpen, onClose }) {
         {/* Tests the connection fields above, so it sits under them. */}
         <div className="px-1 space-y-3">
           <div className="flex justify-end">
-            <Button
-              data-testid="add-host-test-connection-btn"
-              variant="secondary"
-              onClick={handleTestConnection}
-              loading={!!connectionTest?.testing}
-              disabled={loading}
-              icon="network_check"
-            >
-              {CM.testConnection}
-            </Button>
+            {/* A disabled button gets no hover, so the reason hangs off this wrapper. */}
+            <span title={sameServerConnected ? CM.testConnectionSameServerConnectedHint : undefined}>
+              <Button
+                data-testid="add-host-test-connection-btn"
+                variant="secondary"
+                onClick={handleTestConnection}
+                loading={!!connectionTest?.testing}
+                disabled={loading || sameServerConnected}
+                icon="network_check"
+                className={sameServerConnected ? 'pointer-events-none' : ''}
+              >
+                {CM.testConnection}
+              </Button>
+            </span>
           </div>
           {connectionTest && !connectionTest.testing && (
             <div

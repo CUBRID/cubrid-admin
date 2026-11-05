@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Request } from '@nestjs/common';
 import { TestHostConnectionDto } from '@type/index';
 import { CmsAuthService } from './cms-auth.service';
 
@@ -18,7 +18,7 @@ export class CmsConnectionTestController {
    * @route POST /cms-auth/test
    */
   @Post('test')
-  async test(@Body() target: TestHostConnectionDto) {
-    return this.cmsAuthService.testConnection(target);
+  async test(@Request() request: any, @Body() target: TestHostConnectionDto) {
+    return this.cmsAuthService.testConnection(request.user.sub, target);
   }
 }
