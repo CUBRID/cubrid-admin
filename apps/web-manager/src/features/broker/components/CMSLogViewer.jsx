@@ -184,7 +184,7 @@ function CMSLogViewer({ hostUid, type }) {
       />
 
       {toolbarMenu && (
-        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} minWidth="min-w-48" onClose={() => setToolbarMenu(null)}>
+        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} width="w-48" onClose={() => setToolbarMenu(null)}>
           <MenuItem icon="content_copy" label={CM.copyVisibleEntries} disabled={paginatedLogs.length === 0} onClick={() => { handleCopy(); setToolbarMenu(null); }} />
           <MenuDivider />
           <MenuItem icon={showAll ? 'view_list' : 'view_stream'} label={showAll ? CM.paginated : CM.viewAll} onClick={() => { setShowAll(!showAll); setToolbarMenu(null); }} />
