@@ -113,18 +113,34 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// An expired session (the app opened after the token ran out, or a request
+// right after waking) is refreshed before the request goes out, instead of
+// sending it to get a 401 first.
+apiClient.interceptors.request.use(async (config) => {
+  const url = config.url || '';
+  if (!sessionRefreshEnabled() || url.includes('/auth/')) return config;
+  const token = currentAccessToken();
+  const expiresAt = token ? accessTokenExpiresAt(token) : null;
+  if (expiresAt === null || expiresAt > Date.now()) return config;
+  try {
+    const fresh = await refreshSession();
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${fresh}`;
+  } catch (err) {
+    if (err?.response?.status === 401) await handleSystemSessionExpired();
+  }
+  return config;
+});
+
 export const setAuthToken = (token) => {
   if (token) {
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
   }
+  scheduleSessionRefresh(token);
 };
 
-const initialToken = localStorage.getItem('token');
-if (initialToken) {
-  setAuthToken(initialToken);
-}
 
 const refreshingHosts = new Map();
 // Circuit breaker for the silent "session expired -> revoke, re-login,
@@ -171,38 +187,174 @@ function notifyAccessTokenRefreshFailed(err) {
 // it forever and the screens stopped refreshing until the page was reloaded.
 export const ACCESS_TOKEN_REFRESH_TIMEOUT_MS = 15000;
 
-async function refreshAccessToken() {
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) {
-    throw new Error('No refresh token');
+// ── App session refresh ─────────────────────────────────────────────────
+// The server rotates the refresh token on every refresh and, if an old one
+// is used again, revokes the whole session. So one refresh path serves the
+// 401 handler, the timer before expiry, the window becoming visible again
+// (a laptop waking up) and the first request of an expired session; within
+// a tab one refresh runs at a time, and across tabs the Web Locks API lets
+// one tab refresh while the others take the tokens it stored.
+
+/** Refresh this long before the access token expires. */
+export const SESSION_REFRESH_LEAD_MS = 5 * 60 * 1000;
+
+const jwtClaims = (token) => {
+  try {
+    const part = String(token).split('.')[1];
+    return JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+  } catch {
+    return null;
   }
+};
 
-  const response = await axios.post(
-    `${resolveApiBaseUrl()}/auth/refresh`,
-    { refreshToken },
-    {
-      timeout: ACCESS_TOKEN_REFRESH_TIMEOUT_MS,
-      headers: { 'Content-Type': 'application/json' },
-      ...(isDesktopRuntime() ? { adapter: 'fetch' } : {}),
-    }
-  );
+/** The access token's expiry (epoch ms) from its JWT `exp`, or null. */
+export function accessTokenExpiresAt(token) {
+  const exp = jwtClaims(token)?.exp;
+  return Number.isFinite(exp) ? exp * 1000 : null;
+}
 
-  const tokens = unwrapAuthTokens(response.data);
-  if (!tokens?.token) {
-    throw new Error('Refresh response missing access token');
-  }
+// How long before expiry to refresh: SESSION_REFRESH_LEAD_MS, but at most
+// half the token's life, so a short-lived token isn't refreshed at once
+// again and again.
+const refreshLeadMs = (token) => {
+  const { exp, iat } = jwtClaims(token) ?? {};
+  return Number.isFinite(exp) && Number.isFinite(iat)
+    ? Math.min(SESSION_REFRESH_LEAD_MS, ((exp - iat) * 1000) / 2)
+    : SESSION_REFRESH_LEAD_MS;
+};
 
-  localStorage.setItem('token', tokens.token);
-  if (tokens.refreshToken) {
-    localStorage.setItem('refreshToken', tokens.refreshToken);
-  }
-  setAuthToken(tokens.token);
+const currentAccessToken = () => {
+  const header = apiClient.defaults.headers.common['Authorization'];
+  return typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : null;
+};
 
+const refreshesSoon = (token, now = Date.now()) => {
+  const expiresAt = accessTokenExpiresAt(token);
+  return expiresAt !== null && expiresAt - now <= refreshLeadMs(token);
+};
+
+// The desktop app has no app login (no token), so none of this runs there.
+const sessionRefreshEnabled = () => !isDesktopRuntime();
+
+// One tab at a time across the browser; without Web Locks, this tab only.
+const withSessionRefreshLock = (run) => (
+  typeof navigator !== 'undefined' && navigator.locks?.request
+    ? navigator.locks.request('cwm-session-refresh', run)
+    : run()
+);
+
+// Another tab's refresh (or login) stored new tokens: use them here too.
+async function adoptStoredTokens(token, refreshToken) {
+  setAuthToken(token);
   const { store } = await import('../app/store');
   const { sessionRefreshed } = await import('../features/auth/authSlice');
-  store.dispatch(sessionRefreshed(tokens));
+  store.dispatch(sessionRefreshed({ token, refreshToken }));
+  return token;
+}
 
-  return tokens.token;
+async function requestSessionRefresh(tokenInUse) {
+  return withSessionRefreshLock(async () => {
+    // Another tab refreshed while this one waited for the lock: its tokens
+    // are in storage, and the refresh token this tab knew is already spent.
+    const stored = localStorage.getItem('token');
+    const storedExpiresAt = stored ? accessTokenExpiresAt(stored) : null;
+    if (stored && stored !== tokenInUse && storedExpiresAt !== null && !refreshesSoon(stored)) {
+      return adoptStoredTokens(stored, localStorage.getItem('refreshToken'));
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token');
+    }
+
+    const response = await axios.post(
+      `${resolveApiBaseUrl()}/auth/refresh`,
+      { refreshToken },
+      {
+        timeout: ACCESS_TOKEN_REFRESH_TIMEOUT_MS,
+        headers: { 'Content-Type': 'application/json' },
+        ...(isDesktopRuntime() ? { adapter: 'fetch' } : {}),
+      }
+    );
+
+    const tokens = unwrapAuthTokens(response.data);
+    if (!tokens?.token) {
+      throw new Error('Refresh response missing access token');
+    }
+
+    localStorage.setItem('token', tokens.token);
+    if (tokens.refreshToken) {
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+    }
+    return adoptStoredTokens(tokens.token, tokens.refreshToken);
+  });
+}
+
+let sessionRefreshInFlight = null;
+
+/** Refreshes the app session once per tab at a time; resolves to the new access token. */
+export function refreshSession() {
+  if (!sessionRefreshInFlight) {
+    sessionRefreshInFlight = requestSessionRefresh(currentAccessToken())
+      .finally(() => { sessionRefreshInFlight = null; });
+  }
+  return sessionRefreshInFlight;
+}
+
+// Before expiry, on the visible window, or before a request: a refresh the
+// session can't get (refresh token expired or revoked) ends the session as
+// the 401 path does; one that only failed to answer leaves it to that path.
+async function refreshSessionAhead() {
+  try {
+    await refreshSession();
+  } catch (err) {
+    if (err?.response?.status === 401) await handleSystemSessionExpired();
+  }
+}
+
+let sessionRefreshTimer = null;
+
+function scheduleSessionRefresh(token) {
+  if (sessionRefreshTimer) {
+    clearTimeout(sessionRefreshTimer);
+    sessionRefreshTimer = null;
+  }
+  if (!token || !sessionRefreshEnabled()) return;
+  const expiresAt = accessTokenExpiresAt(token);
+  if (expiresAt === null) return;
+  // setTimeout's limit is about 24.8 days; a longer token is checked again then.
+  const delay = Math.min(Math.max(expiresAt - refreshLeadMs(token) - Date.now(), 0), 2_000_000_000);
+  sessionRefreshTimer = setTimeout(() => {
+    sessionRefreshTimer = null;
+    if (currentAccessToken() === token) void refreshSessionAhead();
+  }, delay);
+}
+
+// Timers stop while a laptop sleeps: check again when the window is back.
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const checkOnReturn = () => {
+    if (document.visibilityState !== 'visible' || !sessionRefreshEnabled()) return;
+    const token = currentAccessToken();
+    if (token && refreshesSoon(token)) void refreshSessionAhead();
+  };
+  document.addEventListener('visibilitychange', checkOnReturn);
+  window.addEventListener('focus', checkOnReturn);
+  // A token another tab stored (refresh or login) is used here at once.
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'token' || !event.newValue || event.newValue === currentAccessToken()) return;
+    void adoptStoredTokens(event.newValue, localStorage.getItem('refreshToken'));
+  });
+}
+
+async function refreshAccessToken() {
+  return refreshSession();
+}
+
+// After the session refresh above is set up: the token kept from the last
+// visit, with its refresh scheduled.
+const initialToken = localStorage.getItem('token');
+if (initialToken) {
+  setAuthToken(initialToken);
 }
 
 async function handleSystemSessionExpired() {
