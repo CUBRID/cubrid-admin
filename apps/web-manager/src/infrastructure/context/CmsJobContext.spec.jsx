@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CmsJobProvider } from './CmsJobContext';
 import { enqueueUniqueJobResult } from '../cmsJob/cmsJobUtils';
 import { useCmsJobs } from '../hooks/useCmsJobs';
+import { useCmsJob } from '../hooks/useCmsJob';
 
 const mocks = vi.hoisted(() => ({ getJob: vi.fn(), listRecent: vi.fn(), run: vi.fn() }));
 vi.mock('../../features/database/databaseJobApi', async importOriginal => ({
@@ -97,5 +98,65 @@ describe('background job outcome certainty', () => {
       expect(result.textContent).toContain('Result unconfirmed');
       expect(result.textContent).not.toContain('Command failed');
     }
+  });
+});
+
+describe('a job the dialog that ran it is still showing', () => {
+  let container;
+  let root;
+  let store;
+  const failed = { jobId: 'job-1', type: 'load', dbname: 'demodb', jobStatus: 'failed', error: { message: 'loaddb failed with exit status: 3' } };
+  const done = { jobId: 'job-1', type: 'load', dbname: 'demodb', jobStatus: 'succeeded', result: { success: true } };
+
+  function Dialog() {
+    const { runJob, background } = useCmsJob();
+    return <>
+      <button data-testid="run" onClick={() => runJob(async () => ({ jobId: 'job-1' })).catch(() => undefined)}>Run</button>
+      <button data-testid="background" onClick={background}>Background</button>
+    </>;
+  }
+  const render = () => act(async () => root.render(<Provider store={store}><CmsJobProvider><Dialog /></CmsJobProvider></Provider>));
+  const click = (id) => act(async () => container.querySelector(`[data-testid="${id}"]`).click());
+  const globalResult = () => container.querySelector('[data-testid="job-result-modal"]');
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    store = configureStore({ reducer: () => ({ auth: { isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } } }) });
+    mocks.listRecent.mockResolvedValue([]);
+    mocks.getJob.mockResolvedValue({ ...failed, jobStatus: 'running' });
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.clearAllMocks();
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  });
+
+  it('leaves its failure to the dialog, without the global result dialog on top', async () => {
+    mocks.run.mockRejectedValue(Object.assign(new Error(failed.error.message), { jobTerminalFailure: true, job: failed }));
+    await render();
+    await click('run');
+    expect(globalResult()).toBeNull();
+  });
+
+  it('leaves its success to the dialog as well', async () => {
+    mocks.run.mockResolvedValue(done);
+    await render();
+    await click('run');
+    expect(globalResult()).toBeNull();
+  });
+
+  it('still shows the global result for a job sent to the background', async () => {
+    let fail;
+    mocks.run.mockReturnValue(new Promise((_resolve, reject) => { fail = reject; }));
+    await render();
+    await click('run');
+    await click('background');
+    await act(async () => fail(Object.assign(new Error(failed.error.message), { jobTerminalFailure: true, job: failed })));
+    expect(globalResult()).not.toBeNull();
   });
 });
