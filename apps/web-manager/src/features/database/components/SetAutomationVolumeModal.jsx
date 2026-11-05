@@ -3,6 +3,8 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeSetAutomationVolumeModal, fetchAutoVolumeConfig, updateAutoVolumeConfig } from '../databaseSlice';
 import { dbKey } from '../dbKey';
 import { useCM } from '../../../constants/useCM';
+import { AUTO_ADD_PAGES_MIN, checkIntInRange } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -17,8 +19,15 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 
-const PAGE_SIZE_BYTES = 16384;
 const BYTES_TO_MB = 1024 * 1024;
+
+// CMS stores the expansion as a page count and adds that many pages of the
+// database's own page size (cm_autojob.cpp), so MiB and pages convert with
+// that size, not a fixed one.
+const mibToPages = (mib, pageSize) => Math.floor(mib * BYTES_TO_MB / pageSize);
+const pagesToMib = (pages, pageSize) => Math.round(pages * pageSize / BYTES_TO_MB);
+/** The smallest whole MiB that is at least AUTO_ADD_PAGES_MIN pages. */
+const minExpansionMib = (pageSize) => Math.ceil(AUTO_ADD_PAGES_MIN * pageSize / BYTES_TO_MB);
 
 // ── Slider Field ───────────────────────────────────────────────
 const SliderField = memo(({ label, value, min, max, step = 1, onChange, unit = '%', disabled }) => {
@@ -57,9 +66,9 @@ const SliderField = memo(({ label, value, min, max, step = 1, onChange, unit = '
 });
 
 // ── Policy Card ────────────────────────────────────────────────
-const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshold, onThresholdChange, addSize, onSizeChange }) => {
+const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshold, onThresholdChange, addSize, onSizeChange, pageSize, sizeIssue }) => {
   const CM = useCM();
-  const extensionUnits = Math.floor(addSize * BYTES_TO_MB / PAGE_SIZE_BYTES);
+  const extensionUnits = pageSize ? mibToPages(addSize, pageSize) : null;
   return (
     <div className={`rounded-sm border transition-all duration-300 overflow-hidden
       ${enabled
@@ -108,6 +117,9 @@ const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshol
               value={addSize}
               onChange={(e) => onSizeChange(parseInt(e.target.value) || 0)}
               placeholder="0"
+              min={pageSize ? minExpansionMib(pageSize) : undefined}
+              error={enabled ? inputIssueText(sizeIssue, CM) : undefined}
+              data-testid="auto-volume-size-input"
               size="sm"
               suffix={<span className="text-11 font-bold text-slate-400">MiB</span>}
             />
@@ -116,7 +128,7 @@ const PolicyCard = memo(({ title, icon, description, enabled, onToggle, threshol
               label={CM.extensionPages}
               size="sm"
               readOnly
-              value={extensionUnits.toLocaleString()}
+              value={extensionUnits === null ? '-' : extensionUnits.toLocaleString()}
               suffix="pages"
               inputClassName="font-mono font-bold text-slate-600 dark:text-slate-300"
             />
@@ -134,6 +146,14 @@ export default function SetAutomationVolumeModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { autoVolumeConfigs, autoVolumeLoading } = useSelector((state) => state.databaseConfiguration, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  // The database's page size from a space read this tab already made (the
+  // dashboard, the space screens); null when none was made.
+  const pageSize = useSelector((state) => {
+    const key = dbKey(selectedHostUid, selectedDatabase);
+    const monitoring = state.databaseMonitoring || {};
+    const size = Number(monitoring.spaceInfo?.[key]?.pagesize ?? monitoring.dashboardData?.[key]?.pagesize);
+    return Number.isFinite(size) && size > 0 ? size : null;
+  });
 
   const { 
     error: actionError, 
@@ -149,6 +169,8 @@ export default function SetAutomationVolumeModal() {
   const [combinedEnabled, setCombinedEnabled] = useState(false);
   const [combinedThreshold, setCombinedThreshold] = useState(15);
   const [combinedAddSize, setCombinedAddSize] = useState(2048);
+  // The stored expansion in pages, shown in MiB once the page size is known.
+  const [loadedExtPages, setLoadedExtPages] = useState(null);
 
   useEffect(() => {
     if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
@@ -170,15 +192,25 @@ export default function SetAutomationVolumeModal() {
 
       setCombinedEnabled(config.data === 'ON' || config.index === 'ON');
       setCombinedThreshold(warnOutOfSpace ? Math.max(5, Math.round(parseFloat(warnOutOfSpace) * 100)) : 15);
-      setCombinedAddSize(extensionPages ? Math.round(parseInt(extensionPages) * PAGE_SIZE_BYTES / BYTES_TO_MB) : 2048);
+      setLoadedExtPages(extensionPages ? parseInt(extensionPages) : null);
     }
   }, [autoVolumeConfigs, selectedHostUid, selectedDatabase]);
 
+  useEffect(() => {
+    if (pageSize && loadedExtPages) setCombinedAddSize(pagesToMib(loadedExtPages, pageSize));
+  }, [pageSize, loadedExtPages]);
+
+  // Below AUTO_ADD_PAGES_MIN pages CMS adds nothing (0 or less) or rounds up
+  // to that many, so the size starts there.
+  const sizeIssue = combinedEnabled && pageSize ? checkIntInRange(combinedAddSize, minExpansionMib(pageSize)) : null;
+  const saveBlockedReason = !pageSize ? CM.autoVolumePageSizeUnknownMsg : inputIssueText(sizeIssue, CM);
+
   const handleSave = useCallback(async () => {
+    if (saveBlockedReason) return;
     startAction();
     const enabledValue = combinedEnabled ? 'ON' : 'OFF';
     const thresholdValue = (combinedThreshold / 100).toFixed(2);
-    const extensionPageValue = Math.floor(combinedAddSize * BYTES_TO_MB / PAGE_SIZE_BYTES).toString();
+    const extensionPageValue = mibToPages(combinedAddSize, pageSize).toString();
     const payload = {
       data: enabledValue,
       data_warn_outofspace: thresholdValue,
@@ -193,7 +225,7 @@ export default function SetAutomationVolumeModal() {
     } catch (err) {
       endError(typeof err === 'string' ? err : (err?.message || CM.saveConfigFailedRetryMsg));
     }
-  }, [combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError]);
+  }, [saveBlockedReason, pageSize, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError]);
 
   const handleClose = () => dispatch(closeSetAutomationVolumeModal());
 
@@ -254,8 +286,8 @@ export default function SetAutomationVolumeModal() {
       onSubmit={handleSave}
       footer={
         <div className="flex items-center justify-between w-full">
-          <Typography variant="caption" className="text-11 text-slate-400 font-mono hidden sm:block">
-            {CM.pageSize16kLabel}
+          <Typography variant="caption" className="text-11 text-slate-400 font-mono hidden sm:block" data-testid="auto-volume-footer-note">
+            {pageSize ? CM.autoVolumePageSizeLabel(pageSize / 1024) : CM.autoVolumePageSizeUnknownMsg}
           </Typography>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -263,6 +295,9 @@ export default function SetAutomationVolumeModal() {
               variant="primary"
               onClick={handleSave}
               loading={autoVolumeLoading}
+              disabled={Boolean(saveBlockedReason)}
+              title={saveBlockedReason || undefined}
+              data-testid="auto-volume-save-btn"
               icon="save"
               className="min-w-[140px] shadow-sm shadow-amber-500/20"
             >
@@ -313,6 +348,8 @@ export default function SetAutomationVolumeModal() {
               onThresholdChange={setCombinedThreshold}
               addSize={combinedAddSize}
               onSizeChange={setCombinedAddSize}
+              pageSize={pageSize}
+              sizeIssue={sizeIssue}
             />
           </div>
         </div>

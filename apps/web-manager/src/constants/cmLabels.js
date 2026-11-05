@@ -250,7 +250,6 @@ export const CM = {
   fileForHash: 'File for hash',
   numCachedPages: 'Number of cached pages',
   estimatedInstances: 'Estimated number of instances',
-  loFileCountPerDir: 'Lo file count per a directory',
   selectAtLeastOneScope: 'Please select at least one target scope (Schema or Data) to unload.',
   availableClasses: 'Available Classes',
 
@@ -1783,8 +1782,9 @@ export const CM = {
   targetDatabase: 'Target database',
   autoVolumePoliciesSavedMsg: (db) => `Auto-volume policies for "${db}" were saved successfully.`,
   saveConfigFailedRetryMsg: 'Failed to save configuration. Please try again.',
-  pageSize16kLabel: 'Page size: 16K',
-  autoVolumeExpandDesc: 'Volumes expand automatically when free space falls below the trigger threshold. Calculations are based on a 16K page size.',
+  autoVolumePageSizeLabel: (kb) => `Page size: ${kb}K`,
+  autoVolumePageSizeUnknownMsg: "The database's page size isn't known yet. Open its dashboard once, then try again.",
+  autoVolumeExpandDesc: "Volumes expand automatically when free space falls below the trigger threshold. Pages are counted in the database's page size.",
 
   // DatabasePlanDumpModal
   selectedInstance: 'Selected Database',

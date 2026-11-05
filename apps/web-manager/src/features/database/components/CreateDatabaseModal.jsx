@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { checkDbPassword, DB_PASSWORD_MAX_BYTES } from '@api-interfaces';
+import {
+  checkDbPassword,
+  DB_PASSWORD_MAX_BYTES,
+  DB_PAGE_SIZES,
+  LOG_VOLUME_SIZE_MIB,
+  AUTO_ADD_WARN_RATIO,
+  AUTO_ADD_PAGES_MIN,
+  checkNumberInRange,
+} from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 import { closeCreateDatabaseModal,
   fetchCreateDatabaseInfo,
   fetchDatabaseStartInfo 
@@ -33,7 +42,9 @@ import {
   volumeSizeMbToPages,
 } from '../databaseVolumeValidation';
 
-const PAGE_SIZES = [4096, 8192, 16384, 32768];
+// The engine takes 4K-16K and turns any other size into one of them.
+const PAGE_SIZES = DB_PAGE_SIZES;
+const UNIT_BYTES = { MiB: 1024 * 1024, GiB: 1024 * 1024 * 1024 };
 const BASE_LOCALE_VALUES = ['en_US.iso88591', 'en_US.utf8', 'ko_KR.euckr', 'ko_KR.utf8'];
 // Fixed volume type: segment represents a permanent data volume.
 
@@ -269,8 +280,27 @@ export default function CreateDatabaseModal() {
     }));
   };
 
+  // The engine's and CMS's ranges (db-op-input-limits) of the sizes on
+  // steps 1-3. An extra volume needs at least one page; auto add volume
+  // adds nothing below AUTO_ADD_PAGES_MIN pages (CMS rounds 1-999 up).
+  const autoAddOn = formData.autoAddVol.permanent === 'ON';
+  const extSizeMin = Math.ceil((AUTO_ADD_PAGES_MIN * formData.pageSize / UNIT_BYTES[formData.autoAddVol.extUnit]) * 100) / 100;
+  const createIssues = {
+    logVolSize: checkNumberInRange(formData.logVolSize, LOG_VOLUME_SIZE_MIB.min, LOG_VOLUME_SIZE_MIB.max),
+    volumes: formData.volumes.map((vol) => checkNumberInRange(vol.size, formData.pageSize / UNIT_BYTES.MiB)),
+    warn: autoAddOn ? checkNumberInRange(formData.autoAddVol.warn, AUTO_ADD_WARN_RATIO.min, AUTO_ADD_WARN_RATIO.max) : null,
+    extSize: autoAddOn ? checkNumberInRange(formData.autoAddVol.extSize, extSizeMin) : null,
+  };
+  const issuesByStep = {
+    1: [createIssues.logVolSize],
+    2: createIssues.volumes,
+    3: [createIssues.warn, createIssues.extSize],
+  };
+
   const isFormValid = () => {
     if (!isValidGeneralVolumeSize(formData.genericVolSize)) return false;
+    const stepIssues = step === 5 ? Object.values(issuesByStep).flat() : (issuesByStep[step] ?? []);
+    if (stepIssues.some(Boolean)) return false;
     if (step === 1) return formData.dbName && formData.genericVolPath && formData.logVolPath;
     if (step === 4) return formData.dbaPassword === formData.confirmPassword && !checkDbPassword(formData.dbaPassword);
     return true;
@@ -648,7 +678,7 @@ export default function CreateDatabaseModal() {
                   </div>
                   <Input label={CM.logVolPath} value={formData.logVolPath} onChange={(e) => handleInputChange('logVolPath', e.target.value)} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <Input data-testid="create-database-log-size-input" label={CM.volumeSize} type="number" value={formData.logVolSize} onChange={(e) => handleInputChange('logVolSize', Number(e.target.value))} />
+                    <Input data-testid="create-database-log-size-input" label={CM.volumeSize} type="number" min={LOG_VOLUME_SIZE_MIB.min} max={LOG_VOLUME_SIZE_MIB.max} value={formData.logVolSize} onChange={(e) => handleInputChange('logVolSize', Number(e.target.value))} error={inputIssueText(createIssues.logVolSize, CM)} />
                     <Select label={CM.logPageSize} value={formData.logPageSize} onChange={(e) => handleInputChange('logPageSize', parseInt(e.target.value))} options={PAGE_SIZES.map(s => ({ value: s, label: `${s / 1024}K` }))} />
                   </div>
                 </div>
@@ -748,6 +778,8 @@ export default function CreateDatabaseModal() {
                         }}
                         size="sm"
                         min={0}
+                        error={inputIssueText(createIssues.volumes[idx], CM)}
+                        data-testid={`create-database-extra-volume-size-${idx}`}
                         placeholder={CM.sizeMb}
                         suffix={
                           <button
@@ -826,6 +858,8 @@ export default function CreateDatabaseModal() {
                       value={formData.autoAddVol.warn}
                       onChange={(e) => handleAutoAddVolChange('warn', e.target.value)}
                       placeholder="e.g. 0.15"
+                      error={inputIssueText(createIssues.warn, CM)}
+                      data-testid="create-database-autoadd-warn-input"
                     />
                     <p className="text-11 text-slate-400">{CM.ratioHintText}</p>
                   </div>
@@ -838,6 +872,9 @@ export default function CreateDatabaseModal() {
                         type="number"
                         value={formData.autoAddVol.extSize}
                         onChange={(e) => handleAutoAddVolChange('extSize', e.target.value)}
+                        min={extSizeMin}
+                        error={inputIssueText(createIssues.extSize, CM)}
+                        data-testid="create-database-autoadd-ext-input"
                         placeholder="e.g. 512"
                         className="flex-1"
                       />

@@ -333,7 +333,6 @@ export class DatabaseManagementService extends BaseService {
       estimate: request.estimate,
       prefix: request.prefix,
       cach: request.cach,
-      lofile: request.lofile,
     };
 
     return this.executeAsyncCmsJobRequest<UnloadDatabaseCmsRequest, UnloadDatabaseCmsResponse>(

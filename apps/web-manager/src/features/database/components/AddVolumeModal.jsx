@@ -20,6 +20,8 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { checkPositiveNumber } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 
 const PURPOSE_OPTIONS = [
   {
@@ -80,6 +82,8 @@ export default function AddVolumeModal() {
   };
 
   const numberOfPages = Math.floor(sizeMB * 1024 / 16);
+  // addvoldb refuses 0 or less (util_cs.c addvoldb); there is no upper limit.
+  const sizeIssue = checkPositiveNumber(sizeMB);
   useEffect(() => {
     if (isAddVolumeModalOpen && selectedHostUid && selectedDatabase) {
       resetAction();
@@ -195,7 +199,7 @@ export default function AddVolumeModal() {
       maxWidth="560px"
       testId="add-volume"
       onSubmit={handleAdd}
-      submitDisabled={!path || !sizeMB || fetchingStatus}
+      submitDisabled={!path || Boolean(sizeIssue) || fetchingStatus}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="add-volume-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -204,7 +208,7 @@ export default function AddVolumeModal() {
             variant="primary"
             onClick={handleAdd}
             icon="add_to_drive"
-            disabled={!path || !sizeMB || fetchingStatus}
+            disabled={!path || Boolean(sizeIssue) || fetchingStatus}
             className="min-w-[140px]"
           >
             {CM.addVolume}
@@ -287,6 +291,9 @@ export default function AddVolumeModal() {
               label={CM.customCapacity}
               value={displaySize}
               onChange={(e) => handleDisplaySizeChange(e.target.value)}
+              min={0}
+              error={inputIssueText(sizeIssue, CM)}
+              data-testid="add-volume-size-input"
               icon="memory"
               suffix={
                 <button

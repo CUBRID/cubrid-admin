@@ -7,6 +7,8 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { BACKUP_THREAD_COUNT_MIN, BACKUPS_TO_KEEP_MIN, checkIntInRange, checkMonthDays } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 import { Select } from '../../../components/ds/forms/Select';
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
@@ -64,7 +66,7 @@ export default function EditBackupPlanModal() {
     updateStatistics: false,
     useCompression: false,
     threads: 0,
-    backupsToKeep: 0,
+    backupsToKeep: 1,
     onlineType: 'offline'
   });
 
@@ -107,7 +109,9 @@ export default function EditBackupPlanModal() {
                 useCompression: info.zip === 'y',
                 checkConsistency: info.check === 'y',
                 threads: parseInt(info.mt) || 0,
-                backupsToKeep: parseInt(info.bknum) || 0,
+                // A plan saved with 0 (it deleted every older backup) shows
+                // CMS's default 1, and saving needs 1 or more.
+                backupsToKeep: Math.max(BACKUPS_TO_KEEP_MIN, parseInt(info.bknum) || 0),
                 onlineType: info.onoff === 'ON' ? 'online' : 'offline'
               });
             }
@@ -152,8 +156,19 @@ export default function EditBackupPlanModal() {
     handleInputChange('periodDetail', days);
   };
 
+  // CMS's and the engine's ranges (db-op-input-limits). backupsToKeep 0
+  // would make each run delete every older backup of the level.
+  const planIssues = {
+    threads: checkIntInRange(formData.threads, BACKUP_THREAD_COUNT_MIN),
+    backupsToKeep: checkIntInRange(formData.backupsToKeep, BACKUPS_TO_KEEP_MIN),
+    periodDetail: formData.periodType === 'Monthly'
+      ? checkMonthDays(Array.isArray(formData.periodDetail) ? formData.periodDetail.join(',') : '')
+      : null,
+  };
+  const hasPlanIssue = Object.values(planIssues).some(Boolean);
+
   const handleSave = async () => {
-    if (!selectedDatabase || !selectedHostUid) return;
+    if (!selectedDatabase || !selectedHostUid || hasPlanIssue) return;
 
     startAction();
 
@@ -261,7 +276,7 @@ export default function EditBackupPlanModal() {
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="edit-backup-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-          <Button data-testid="edit-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="save" disabled={!formLoaded} className="min-w-[140px]">{CM.saveChanges}</Button>
+          <Button data-testid="edit-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="save" disabled={!formLoaded || hasPlanIssue} className="min-w-[140px]">{CM.saveChanges}</Button>
         </div>
       }
     >
@@ -321,6 +336,9 @@ export default function EditBackupPlanModal() {
           <div className="animate-in fade-in duration-200">
             {formData.periodType === 'Monthly' && (
               <div className="space-y-3">
+                {planIssues.periodDetail && (
+                  <p role="alert" data-testid="backup-plan-days-error" className="text-12 text-rose-500">{inputIssueText(planIssues.periodDetail, CM)}</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {[
                     { id: 'all', label: CM.everyDayPreset },
@@ -476,8 +494,8 @@ export default function EditBackupPlanModal() {
             <Icon name="expand_more" size="18px" className="transition-transform group-open:rotate-180" />
           </summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 dark:border-white/10 px-4 py-4">
-            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" />
-            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" />
+            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" min={BACKUP_THREAD_COUNT_MIN} error={inputIssueText(planIssues.threads, CM)} data-testid="backup-plan-threads-input" />
+            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" min={BACKUPS_TO_KEEP_MIN} error={inputIssueText(planIssues.backupsToKeep, CM)} data-testid="backup-plan-keep-input" />
           </div>
         </details>
       </div>

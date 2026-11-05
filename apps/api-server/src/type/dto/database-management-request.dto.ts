@@ -9,7 +9,17 @@ import {
   ValidateIf,
   ValidateBy,
 } from 'class-validator';
-import { RenameInfo, isValidLoadCountOption, LOAD_COUNT_MIN, LOAD_COUNT_MAX } from '@api-interfaces';
+import {
+  RenameInfo,
+  isValidLoadCountOption,
+  LOAD_COUNT_MIN,
+  LOAD_COUNT_MAX,
+  checkIntInRange,
+  checkPositiveNumber,
+  UNLOAD_CACHED_PAGES_MIN,
+  UNLOAD_ESTIMATED_SIZE_MIN,
+} from '@api-interfaces';
+import { PassesCheck } from './passes-check.decorator';
 
 function IsLoadCountOption() {
   return ValidateBy({
@@ -128,21 +138,18 @@ export class UnloadDatabaseDto {
   @IsIn(['yes', 'no'])
   delimit?: 'yes' | 'no';
 
-  @IsOptional()
-  @IsString()
+  // '' leaves the option off (CMS reads an empty value as absent).
+  @ValidateIf((o) => o.estimate !== undefined && o.estimate !== '')
+  @PassesCheck('unloadEstimatedSize', (v) => checkIntInRange(v, UNLOAD_ESTIMATED_SIZE_MIN))
   estimate?: string;
 
   @IsOptional()
   @IsString()
   prefix?: string;
 
-  @IsOptional()
-  @IsString()
+  @ValidateIf((o) => o.cach !== undefined && o.cach !== '')
+  @PassesCheck('unloadCachedPages', (v) => checkIntInRange(v, UNLOAD_CACHED_PAGES_MIN))
   cach?: string;
-
-  @IsOptional()
-  @IsString()
-  lofile?: string;
 }
 
 export class LoadDatabaseDto {
@@ -276,8 +283,10 @@ export class AddVolDbDto {
   @IsNotEmpty()
   numberofpages: string;
 
+  // "<MiB>(MB)"; addvoldb refuses 0 or less (util_cs.c addvoldb).
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('addVolumeSize', (v) => checkPositiveNumber(typeof v === 'string' ? v.replace(/\(MB\)$/, '') : v))
   size_need_mb: string;
 }
 

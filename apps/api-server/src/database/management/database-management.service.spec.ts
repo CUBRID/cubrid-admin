@@ -321,7 +321,6 @@ describe('DatabaseManagementService', () => {
         estimate: '1000',
         prefix: 'backup',
         cach: '100',
-        lofile: '10',
       };
 
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
@@ -343,7 +342,6 @@ describe('DatabaseManagementService', () => {
           estimate: '1000',
           prefix: 'backup',
           cach: '100',
-          lofile: '10',
         }),
           expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
