@@ -9,12 +9,9 @@ import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
-import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import { Button } from '../../../components/ds/foundation/Button';
 import { TabGroup } from '../../../components/ds/layout/TabGroup';
 import { Table } from '../../../components/ds/layout/Table';
-import { Input } from '../../../components/ds/forms/Input';
-import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
@@ -248,7 +245,7 @@ export default function DatabasePropertyModal() {
   const dispatch = useDispatch();
   const { isDatabasePropertyModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
-  const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { selectedHostUid, authorizedHosts, hosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
   // Resolved per this host's actual engine version by the server (see
   // CmsConfigService.getEnv) — populated into `hostEnvs` by whatever
@@ -265,7 +262,6 @@ export default function DatabasePropertyModal() {
   // Read-only display state — loaded once per (host, database) and never
   // mutated by the user; actual edits happen only in the raw text editor
   // (see the "Edit in Text Editor" banner below).
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [params, setParams] = useState({});
   // What this view's own section sets: [@db] for a database, [common]
   // otherwise. Validated on its own, since the section rules (a [common]-only
@@ -275,15 +271,13 @@ export default function DatabasePropertyModal() {
   const [commonKeys, setCommonKeys] = useState(() => new Set());
   const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [brokers, setBrokers] = useState([]);
-  const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
-  // Connection Information is the only editable part of this modal, so it is
-  // also the only thing the "discard changes?" confirmation guards. The
-  // Server Parameter tables are read-only and have nothing to discard.
-  const [connectionDirty, setConnectionDirty] = useState(false);
-  const updateConnectionInfo = patch => {
-    setConnectionInfo(prev => ({ ...prev, ...patch }));
-    setConnectionDirty(true);
-  };
+  // Connection Information is shown, not edited: nothing in this web manager
+  // reads it (it came from CA, whose query editor connected through a
+  // broker). The brokers run on the host itself, so its address and their
+  // ports are what there is to show; the character set has no source here
+  // and stays the value it always showed.
+  const brokerHostAddress = hosts?.find((h) => h.uid === selectedHostUid)?.address;
+  const CONNECTION_CHARSET = 'UTF-8';
   // Tracks which (host, database) the Server Parameter config has already
   // been fetched for, so switching tabs and back doesn't needlessly re-fetch.
   const fetchedConfigKeyRef = useRef(null);
@@ -292,8 +286,6 @@ export default function DatabasePropertyModal() {
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
-      setShowDiscardConfirm(false);
-      setConnectionDirty(false);
       setParams({});
       setSectionParams({});
       setCommonKeys(new Set());
@@ -318,7 +310,6 @@ export default function DatabasePropertyModal() {
           if (brokerList && Array.isArray(brokerList)) {
             const list = brokerList.map(b => ({ label: `${b.name} [${b.port}/${b.status || b.state}]`, port: b.port }));
             setBrokers(list);
-            setConnectionInfo(prev => (!prev.brokerPort && list.length > 0) ? { ...prev, brokerPort: list[0].label } : prev);
           }
         } catch (err) { console.error('Failed to fetch brokers:', err); }
       };
@@ -411,23 +402,14 @@ export default function DatabasePropertyModal() {
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized, databaseParamSchema, bufferGroups]);
 
-  // Connection Information is the only thing this modal can still write —
-  // it's local-only (how this web manager instance reaches the broker),
-  // never a cubrid.conf value, so it was never part of the read-only pivot.
-  // Server Parameter values are edited exclusively through the raw text
-  // editor now (see handleOpenTextEditor below).
-  const handleApply = () => {
-    closeModal();
-  };
-
+  // Server Parameter values are edited only through the raw text editor
+  // (see handleOpenTextEditor below); nothing in this modal is editable.
   const handleOpenTextEditor = () => {
     dispatch(openTab(`edit_config:${selectedHostUid}:cubridconf`));
     dispatch(closeDatabasePropertyModal());
   };
 
   const closeModal = () => {
-    setShowDiscardConfirm(false);
-    setConnectionDirty(false);
     dispatch(closeDatabasePropertyModal());
     setParams({});
     setSectionParams({});
@@ -462,13 +444,7 @@ export default function DatabasePropertyModal() {
   );
   const guardErrorCount = Object.keys(guardErrors).length;
 
-  const handleClose = () => {
-    if (connectionDirty) {
-      setShowDiscardConfirm(true);
-      return;
-    }
-    closeModal();
-  };
+  const handleClose = closeModal;
 
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
@@ -610,28 +586,16 @@ export default function DatabasePropertyModal() {
       testId="database-property"
       footer={
         <div className="flex justify-end items-center w-full gap-2.5">
-          <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-          {activeSidebar === 'Server Parameter' ? (
-            <Button
-              data-testid="database-property-open-editor-btn"
-              variant="primary"
-              onClick={handleOpenTextEditor}
-              icon="edit"
-              className="min-w-[140px]"
-            >
-              {CM.openInTextEditorBtn}
-            </Button>
-          ) : (
-            <Button
-              data-testid="database-property-apply-btn"
-              variant="primary"
-              onClick={handleApply}
-              icon="save"
-              className="min-w-[140px]"
-            >
-              {CM.applyChanges}
-            </Button>
-          )}
+          <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.close}</Button>
+          <Button
+            data-testid="database-property-open-editor-btn"
+            variant="primary"
+            onClick={handleOpenTextEditor}
+            icon="edit"
+            className="min-w-[140px]"
+          >
+            {CM.openInTextEditorBtn}
+          </Button>
         </div>
       }
     >
@@ -725,14 +689,7 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.brokerIp}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.publicAddress}</p>
                     </div>
-                    <div className="flex-1">
-                      <Input
-                        value={connectionInfo.brokerIp}
-                        onChange={e => updateConnectionInfo({ brokerIp: e.target.value })}
-                        size="sm"
-                        icon="dns"
-                      />
-                    </div>
+                    <p data-testid="database-property-broker-ip" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200">{brokerHostAddress || '—'}</p>
                   </div>
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
@@ -740,14 +697,9 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.servicePort}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.activeBroker}</p>
                     </div>
-                    <div className="flex-1">
-                      <Select
-                        value={connectionInfo.brokerPort}
-                        options={brokers.map(b => ({ value: b.label, label: b.label }))}
-                        onChange={e => updateConnectionInfo({ brokerPort: e.target.value })}
-                        size="sm"
-                      />
-                    </div>
+                    <ul data-testid="database-property-broker-ports" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200 space-y-0.5">
+                      {brokers.length > 0 ? brokers.map(b => <li key={b.label}>{b.label}</li>) : <li>—</li>}
+                    </ul>
                   </div>
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
@@ -755,14 +707,7 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
                     </div>
-                    <div className="flex-1">
-                      <Select
-                        value={connectionInfo.charset}
-                        options={['UTF-8', 'EUC-KR', 'ISO-8859-1', 'UHC'].map(o => ({ value: o, label: o }))}
-                        onChange={e => updateConnectionInfo({ charset: e.target.value })}
-                        size="sm"
-                      />
-                    </div>
+                    <p data-testid="database-property-charset" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200">{CONNECTION_CHARSET}</p>
                   </div>
                 </div>
 
@@ -828,17 +773,6 @@ export default function DatabasePropertyModal() {
         </div>
       </div>
     </Modal>
-    <ConfirmDialog
-      isOpen={isDatabasePropertyModalOpen && showDiscardConfirm}
-      title={CM.discardChangesTitle}
-      description={CM.discardChangesDesc}
-      confirmLabel={CM.discardChangesBtn}
-      cancelLabel={CM.keepEditingBtn}
-      variant="warning"
-      onConfirm={closeModal}
-      onCancel={() => setShowDiscardConfirm(false)}
-      testId="database-property-discard"
-    />
     </>
   );
 }

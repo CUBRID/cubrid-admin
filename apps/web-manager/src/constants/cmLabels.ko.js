@@ -806,7 +806,6 @@ export const CM_KO = {
   consolidatingBlocks: '공간 정리 중',
   retryOptimization: '최적화 재시도',
   verboseMonitoring: '상세 모니터링',
-  applyChanges: '변경 적용',
   updateSuccessful: '수정 완료',
   loadingLabel: '불러오는 중',
   navigation: '탐색',
@@ -2111,12 +2110,6 @@ export const CM_KO = {
   cubridLogoAlt: 'CUBRID 로고',
   aboutTagline: 'CUBRID를 위한 웹 기반 관리 도구입니다.',
   copyrightNotice: '© 2026 CUBRID Corporation',
-
-  // Unsaved changes confirmation (English fallback pending translation)
-  discardChangesTitle: '변경 사항을 버릴까요?',
-  discardChangesDesc: '저장하지 않은 변경 사항이 있습니다. 닫으면 사라집니다.',
-  discardChangesBtn: '변경 사항 버리기',
-  keepEditingBtn: '계속 편집',
 
   // Breadcrumb
   unsavedChangesTitle: '저장하지 않은 변경 사항',

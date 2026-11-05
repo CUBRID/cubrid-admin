@@ -38,7 +38,7 @@ beforeEach(async () => {
   hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata: [
     '[@demodb]', 'max_clients=123', 'data_buffer_size=512M',
   ] }] });
-  brokerApi.getBrokerList.mockResolvedValue({ result: [] });
+  brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: 'query_editor', port: 30000, state: 'ON' }, { name: 'broker1', port: 33000, state: 'OFF' }] });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -48,6 +48,7 @@ beforeEach(async () => {
     host: {
       selectedHostUid: 'host',
       authorizedHosts: ['host'],
+      hosts: [{ uid: 'host', address: '192.168.3.80' }],
       hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } },
     },
     user: { preferences: { uiLocale: 'en' } },
@@ -110,14 +111,16 @@ it('opening the text editor triggers no additional config fetch/write — it onl
   expect(hostApi.getHostConfig).toHaveBeenCalledTimes(1);
 });
 
-it('Connection Information stays local-only — Apply just closes the modal, no editor redirect, no API write', async () => {
+it('shows Connection Information as read-only values: the host address, each broker\'s port, the character set', async () => {
   const connectionTab = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection'));
   await click(connectionTab);
-  expect(control('apply-btn')).not.toBeNull();
-  expect(control('open-editor-btn')).toBeNull();
-  await click(control('apply-btn'));
-  expect(closeDatabasePropertyModal).toHaveBeenCalledTimes(1);
-  expect(openTab).not.toHaveBeenCalled();
+  expect(control('broker-ip').textContent).toBe('192.168.3.80');
+  expect([...control('broker-ports').querySelectorAll('li')].map((li) => li.textContent)).toEqual(['query_editor [30000/ON]', 'broker1 [33000/OFF]']);
+  expect(control('charset').textContent).toBe('UTF-8');
+  expect(container.querySelector('input, select, [role="combobox"]')).toBeNull();
+  expect(control('apply-btn')).toBeNull();
+  expect(control('open-editor-btn')).not.toBeNull();
+  expect(control('cancel-btn').textContent).toBe('Close');
 });
 
 it('matches [@dbname] case-sensitively, like the engine — [@demodb] is not DemoDB\'s section', async () => {
@@ -149,44 +152,17 @@ it.each(['modal-close', 'cancel-btn'])('closes unchanged properties through %s w
 });
 
 const openConnectionTab = () => click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection')));
-const editBrokerIp = async value => {
-  const field = container.querySelector('input');
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  await act(async () => {
-    setter.call(field, value);
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-};
 
-it.each(['modal-close', 'cancel-btn'])('protects Connection Information edits through %s and only closes after discard', async trigger => {
+it.each(['modal-close', 'cancel-btn'])('closes from Connection Information through %s at once, with nothing to discard', async trigger => {
   await openConnectionTab();
-  await editBrokerIp('10.0.0.5');
   await click(control(trigger));
-  expect(discardControl('modal').textContent).toContain('Discard changes?');
-  expect(dispatch).not.toHaveBeenCalledWith({ type: 'close' });
-  await click(discardControl('cancel-btn'));
   expect(discardControl('modal')).toBeNull();
-  expect(container.querySelector('input').value).toBe('10.0.0.5');
-  await click(control(trigger));
-  await click(discardControl('confirm-btn'));
   expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
 });
 
-it('Escape prompts for Connection Information edits and dismissing the prompt preserves them', async () => {
+it('closes from Connection Information on Escape at once', async () => {
   await openConnectionTab();
-  await editBrokerIp('10.0.0.5');
   await escape();
-  expect(discardControl('modal')).not.toBeNull();
-  await escape();
-  expect(discardControl('modal')).toBeNull();
-  expect(dispatch).not.toHaveBeenCalledWith({ type: 'close' });
-  expect(container.querySelector('input').value).toBe('10.0.0.5');
-});
-
-it('Apply on Connection Information closes without prompting', async () => {
-  await openConnectionTab();
-  await editBrokerIp('10.0.0.5');
-  await click(control('apply-btn'));
   expect(discardControl('modal')).toBeNull();
   expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
 });

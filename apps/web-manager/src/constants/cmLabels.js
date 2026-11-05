@@ -744,7 +744,6 @@ export const CM = {
   consolidatingBlocks: 'Compacting Database',
   retryOptimization: 'Retry Optimization',
   verboseMonitoring: 'Verbose Monitoring',
-  applyChanges: 'Apply Changes',
   updateSuccessful: 'Update Successful',
   loadingLabel: 'Loading',
   navigation: 'Navigation',
@@ -1852,12 +1851,6 @@ export const CM = {
   cubridLogoAlt: 'CUBRID logo',
   aboutTagline: 'A web-based administration tool for CUBRID.',
   copyrightNotice: '© 2026 CUBRID Corporation',
-
-  // Unsaved changes confirmation
-  discardChangesTitle: 'Discard changes?',
-  discardChangesDesc: 'You have unsaved changes. Closing will discard them.',
-  discardChangesBtn: 'Discard changes',
-  keepEditingBtn: 'Keep editing',
 
   // Breadcrumb
   unsavedChangesTitle: 'Unsaved Changes',
