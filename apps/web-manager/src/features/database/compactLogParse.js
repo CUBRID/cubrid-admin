@@ -6,19 +6,17 @@
 //   Pass 2  "Class t1" and a sentence on reclaiming unused OIDs and pages
 //   Pass 3  "Class t1" and "Heap compact succeeded..." / "...failed..."
 
+import { jobOutputLines } from './jobOutput/jobOutputLines';
+
+// Kept for callers that read compact output.
+export const compactLogLines = jobOutputLines;
+
 const COUNTS = {
   'Total objects': 'total',
   'Failed objects': 'failed',
   'Modified objects': 'modified',
   'Big objects': 'big',
 };
-
-/** The output lines of a compact job result, whatever shape the log came in. */
-export function compactLogLines(log) {
-  if (typeof log === 'string') return log.split('\n');
-  if (!Array.isArray(log)) return [];
-  return log.flatMap((entry) => (typeof entry === 'string' ? [entry] : entry?.line ?? []));
-}
 
 /**
  * @returns {{ passes: { 1: object[], 2: object[], 3: object[] }, notes: string[] } | null}

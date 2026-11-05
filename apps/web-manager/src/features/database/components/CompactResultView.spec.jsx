@@ -39,15 +39,17 @@ describe('CompactResultView', () => {
   it('shows pass 1 counts per class and points out classes with failed objects', async () => {
     await render({ log });
     expect(rows()).toEqual([['dba.t1', '120', '0', '3', '0'], ['dba.t2', '8', '2', '0', '1']]);
-    expect(q('compact-result-failed').textContent).toContain('처리하지 못한 객체가 있는 클래스가 1개 있습니다.');
+    expect(q('compact-result-summary-classes').textContent).toBe('클래스2');
+    expect(q('compact-result-summary-failedObjects').textContent).toBe('실패 객체2');
+    expect(q('compact-result-summary-failedClasses').className).toContain('rose');
     expect(container.querySelectorAll('tbody tr')[1].querySelector('.text-rose-600')).not.toBeNull();
   });
 
   it('gives each class result of passes 2 and 3 in the UI language', async () => {
     await render({ log });
-    await act(async () => q('compact-result-pass-2').click());
+    await act(async () => q('compact-result-section-pass-2').click());
     expect(rows()).toEqual([['dba.t1', 'OID와 페이지 회수를 건너뛰었습니다.']]);
-    await act(async () => q('compact-result-pass-3').click());
+    await act(async () => q('compact-result-section-pass-3').click());
     expect(rows()).toEqual([['dba.t1', '힙 공간 정리에 성공했습니다.']]);
   });
 

@@ -8,6 +8,7 @@ import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 import { useCM } from '../../../constants/useCM';
+import LoadResultView from './LoadResultView';
 
 import LoadConfigSection from './load/LoadConfigSection';
 import LoadSourceSection from './load/LoadSourceSection';
@@ -52,6 +53,8 @@ export default function LoadDatabaseModal() {
   } = useActionState();
   const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
+  // loaddb's output (counts and failed lines), shown after the job ends.
+  const [resultLog, setResultLog] = useState(null);
 
   const [unloadList, setUnloadList] = useState([]);
   const [selectedUnload, setSelectedUnload] = useState('');
@@ -274,13 +277,20 @@ export default function LoadDatabaseModal() {
         checkoption: formData.checkBoxes.checkoption ? 'both' : 'load',
       };
 
-      await runJob(
+      setResultLog(null);
+      const job = await runJob(
         () => databaseJobApi.submitLoad(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
-      if (!wasBackgrounded()) endSuccess();
+      if (!wasBackgrounded()) {
+        setResultLog(job?.result?.log ?? null);
+        endSuccess();
+      }
     } catch (err) {
-      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.failure));
+      if (!wasBackgrounded()) {
+        setResultLog(err?.job?.result?.log ?? null);
+        endError(typeof err === 'string' ? err : (err.message || CM.failure));
+      }
     }
   };
 
@@ -374,7 +384,9 @@ export default function LoadDatabaseModal() {
           message={CM.jobCompletedSuccess(CM.loadDatabase)}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <LoadResultView log={resultLog} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
@@ -389,7 +401,9 @@ export default function LoadDatabaseModal() {
           onRetry={handleLoadDatabase}
           onCancel={resetAction}
           cancelText={CM.close}
-        />
+        >
+          <LoadResultView log={resultLog} />
+        </ModalStatusError>
       </Modal>
     );
   }
