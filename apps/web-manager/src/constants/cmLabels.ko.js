@@ -131,6 +131,12 @@ export const CM_KO = {
   dataUnavailableMsg: '이 정보를 불러오지 못했습니다.',
   diskRootFilesystem: '루트 파일 시스템 (/)',
   casCpuNotCollectedLinux: 'Linux에서는 수집되지 않음: CUBRID 브로커는 CAS별 CPU를 Solaris/HP-UX에서만 제공합니다.',
+  // DB dashboard memory bar: host (without the CAS) · CAS · free / total.
+  dbMemHostLabel: '호스트',
+  dbMemHostHint: '이 데이터베이스의 CAS를 뺀 호스트 사용량',
+  dbMemCasLabel: 'CAS',
+  dbMemFreeLabel: '여유',
+  dbMemTotalLabel: '전체',
   lockIndex: '인덱스',
   pname: '프로그램 이름',
   uid: '사용자 이름',
