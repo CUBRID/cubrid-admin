@@ -475,33 +475,6 @@ export default function ImportExportHostModal() {
                 {CM.changeFileBtn}
               </Button>
             )}
-            {importExportMode === 'export' && !isPasswordStep && (
-              <div className="flex items-center gap-2">
-                <Typography variant="caption" className="font-bold text-slate-400 uppercase tracking-tight">{CM.exportFormatLabel}</Typography>
-                <div className="w-44">
-                  <Select
-                    size="sm"
-                    value={exportFormat}
-                    onChange={(e) => setExportFormat(e.target.value)}
-                    options={[
-                      { value: 'nativeXml', label: CM.formatNativeXml },
-                      { value: 'nativeJson', label: CM.formatNativeJson },
-                      { value: 'caXml', label: CM.formatCaXml },
-                    ]}
-                  />
-                </div>
-                <Typography variant="caption" className="font-bold text-slate-400 uppercase tracking-tight">{CM.filenameLabel}</Typography>
-                <div className="w-48">
-                  <Input
-                    size="sm"
-                    value={fileName}
-                    onChange={(e) => setFileName(e.target.value)}
-                    placeholder={CM.exportFilenamePlaceholder}
-                    suffix={exportFormat === 'nativeJson' ? '.JSON' : '.XML'}
-                  />
-                </div>
-              </div>
-            )}
           </div>
           <div className="flex gap-3">
             {isPasswordPromptStep ? (
@@ -636,6 +609,38 @@ export default function ImportExportHostModal() {
         ) : (
           <>
             <div className="px-4 py-2 bg-slate-50/50 dark:bg-bk-main/20 flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800">
+              {/* Format and file name get a row of their own: in the footer next to
+                  the buttons they were squeezed until their labels broke apart. */}
+              {importExportMode === 'export' && (
+                <div data-testid="export-settings" className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
+                  <Select
+                    label={CM.exportFormatLabel}
+                    size="sm"
+                    value={exportFormat}
+                    onChange={(e) => setExportFormat(e.target.value)}
+                    options={[
+                      { value: 'nativeXml', label: CM.formatNativeXml },
+                      { value: 'nativeJson', label: CM.formatNativeJson },
+                      { value: 'caXml', label: CM.formatCaXml },
+                    ]}
+                  />
+                  <div className="flex items-end gap-2 min-w-0">
+                    <Input
+                      data-testid="export-filename-input"
+                      label={CM.filenameLabel}
+                      size="sm"
+                      className="flex-1 min-w-0"
+                      value={fileName}
+                      onChange={(e) => setFileName(e.target.value)}
+                      placeholder={CM.exportFilenamePlaceholder}
+                    />
+                    {/* Outside the field, so it never covers the end of the name. */}
+                    <span className="h-8 flex items-center font-mono text-13 font-semibold text-slate-500 dark:text-slate-400">
+                      {exportFormat === 'nativeJson' ? '.json' : '.xml'}
+                    </span>
+                  </div>
+                </div>
+              )}
               {importExportMode === 'import' && (
                 fileHasPrefsGroups ? (
                   <Typography variant="caption" className="text-slate-500 text-12">

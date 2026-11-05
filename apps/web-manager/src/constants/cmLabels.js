@@ -1606,7 +1606,7 @@ export const CM = {
   irreversibleActionNotice: 'This action cannot be undone.',
 
   // ImportExportHostModal
-  filenameLabel: 'Filename:',
+  filenameLabel: 'Filename',
   duplicateLabel: 'DUPLICATE',
   invalidLabel: 'INVALID',
   importErrorTitle: 'Import Error',
@@ -1647,7 +1647,7 @@ export const CM = {
   importedSetPasswordsLaterMsg: (count) => `${count} host(s) imported. You can set passwords later by editing each host.`,
   exportHostsDesc: 'Export hosts to a file. Note: The passwords are not included.',
   importHostsDesc: 'Import hosts from a CUBRID Admin or legacy CUBRID Admin export file.',
-  exportFormatLabel: 'Format:',
+  exportFormatLabel: 'Format',
   formatCaXml: 'Legacy CUBRID Admin XML',
   formatNativeXml: 'CUBRID Admin XML',
   formatNativeJson: 'CUBRID Admin JSON',

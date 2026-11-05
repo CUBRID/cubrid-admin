@@ -1650,7 +1650,7 @@ export const CM_KO = {
   irreversibleActionNotice: '이 작업은 되돌릴 수 없습니다.',
 
   // 호스트 가져오기/내보내기 모달
-  filenameLabel: '파일명:',
+  filenameLabel: '파일 이름',
   duplicateLabel: '중복',
   invalidLabel: '유효하지 않음',
   importErrorTitle: '가져오기 오류',
@@ -1694,7 +1694,7 @@ export const CM_KO = {
   importedSetPasswordsLaterMsg: (count) => `호스트 ${count}개를 가져왔습니다. 나중에 각 호스트를 수정하여 비밀번호를 설정할 수 있습니다.`,
   exportHostsDesc: '호스트를 파일로 내보냅니다. 참고: 비밀번호는 포함되지 않습니다.',
   importHostsDesc: 'CUBRID Admin 또는 레거시 CUBRID Admin 내보내기 파일에서 호스트를 가져옵니다.',
-  exportFormatLabel: '형식:',
+  exportFormatLabel: '형식',
   formatCaXml: '레거시 CUBRID Admin XML',
   formatNativeXml: 'CUBRID Admin XML',
   formatNativeJson: 'CUBRID Admin JSON',
