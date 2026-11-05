@@ -95,6 +95,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
       ...as,
       qps: rateTrackerRef.current(`${as.as_id}:qps`, as.as_num_query),
       tps: rateTrackerRef.current(`${as.as_id}:tps`, as.as_num_tran),
+      // Long queries per second, as `cubrid broker status` works out LQS:
+      // the rise in the long query count over the interval (broker_monitor.c).
+      lqs: rateTrackerRef.current(`${as.as_id}:lqs`, as.as_long_query),
     })));
   }, [asInfo]);
 
@@ -148,16 +151,22 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   };
 
   /* Table Columns Definitions */
+  // The columns of `cubrid broker status -f` and CA's application server
+  // table, from what CMS getbrokerstatus sends for each AS.
+  const rate = (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span>;
+  // CMS sends as_port on Windows only (each AS listens on its own port there);
+  // elsewhere every AS takes connections through the broker's port.
+  const hasAsPort = asInfoWithRates.some((as) => as.as_port != null && as.as_port !== '');
   const asColumns = [
     { header: CM.idLabel,  accessor: 'as_id',        width: '60px',  render: (v) => <span className="font-mono text-amber-600 dark:text-amber-400">{v}</span> },
     { header: CM.pid, accessor: 'as_pid',       width: '80px',  render: (v) => <span className="font-mono">{v}</span> },
-    { header: CM.qps, accessor: 'qps', width: '60px',  render: (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span> },
-    { header: CM.tps, accessor: 'tps', width: '60px',  render: (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span> },
-    // Not a per-AS CMS field — getbrokerstatus's asinfo has no as_port at
-    // all (every AS under a broker shares that broker's own listen port),
-    // so this column just shows the broker's port for every row.
-    { header: CM.port, accessor: 'as_port', width: '80px', render: () => <span className="font-mono">{basicInfo.port ?? '—'}</span> },
-    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{(parseInt(v) / 1024).toFixed(1)} MiB</span> },
+    { header: CM.asRequestsCol, accessor: 'as_c', width: '80px', render: (v) => <span className="font-mono">{v ?? '—'}</span> },
+    { header: CM.qps, accessor: 'qps', width: '60px', render: rate },
+    { header: CM.lqs, accessor: 'lqs', width: '60px', render: rate },
+    { header: CM.tps, accessor: 'tps', width: '60px', render: rate },
+    ...(hasAsPort ? [{ header: CM.port, accessor: 'as_port', width: '80px', render: (v) => <span className="font-mono">{v ?? '—'}</span> }] : []),
+    // as_psize is kilobytes (broker_process_size.c getsize: VmRSS + VmSwap); -1 when it could not be read.
+    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : '—'}</span> },
     { 
       header: CM.status, 
       accessor: 'as_status', 
@@ -167,9 +176,14 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
         return <StatusBadge label={v || 'IDLE'} variant={isActive ? 'emerald' : 'slate'} pulse={isActive} />;
       }
     },
+    { header: CM.cpu, accessor: 'as_cpu', width: '70px', render: (v) => <span className="font-mono">{v != null && v !== '' ? `${v}%` : '—'}</span> },
+    { header: CM.asCpuTimeCol, accessor: 'as_ctime', width: '80px', render: (v) => <span className="font-mono">{v || '—'}</span> },
     { header: CM.database, accessor: 'as_dbname', render: (v) => <span className="text-amber-600/80 dark:text-amber-500/70 font-mono">{v || '—'}</span> },
+    { header: CM.asDbHostCol, accessor: 'as_dbhost', render: (v) => <span className="font-mono">{v || '—'}</span> },
     { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
+    { header: CM.asLastConnectCol, accessor: 'as_lct', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
     { header: CM.clientIp, accessor: 'as_client_ip', render: (v) => <span className="font-mono">{v || '—'}</span> },
+    { header: CM.asCurrentSqlCol, accessor: 'as_cur', render: (v) => <div className="max-w-xs truncate font-mono text-13 text-slate-500" title={v || undefined}>{v || '—'}</div> },
   ];
 
   const jobColumns = [

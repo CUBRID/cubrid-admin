@@ -229,3 +229,53 @@ describe('BrokerStatus basic information values', () => {
     }
   });
 });
+
+describe('BrokerStatus application server table', () => {
+  // Header text without the sort icon's ligature name.
+  const headers = () => [...container.querySelectorAll('th')].map((th) => th.textContent.replace(/(unfold_more|arrow_upward|arrow_downward|expand_more|expand_less)$/, '').trim());
+  const asRow = (overrides = {}) => ({
+    as_id: '1', as_pid: '4321', as_c: '10', as_psize: '20480', as_status: 'IDLE', as_cpu: '0.5', as_ctime: '0:01',
+    as_lat: '2026/11/05 10:00:00', as_lct: '2026/11/05 09:59:00', as_cur: '',
+    as_num_query: '100', as_num_tran: '50', as_long_query: '4', as_long_tran: '0', as_error_query: '0',
+    as_dbname: 'demodb', as_dbhost: 'localhost', as_client_ip: '10.0.0.5',
+    ...overrides,
+  });
+
+  it('shows the columns of broker status -f, with LQS from the rise in long queries per second', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow()] });
+    await render();
+    await flush();
+
+    expect(headers()).toEqual(expect.arrayContaining([
+      CM.asRequestsCol, CM.qps, CM.lqs, CM.tps, CM.asCpuTimeCol, CM.asDbHostCol, CM.asLastConnectCol, CM.asCurrentSqlCol,
+    ]));
+    // CMS sends as_port on Windows only; without it there is no PORT column.
+    expect(headers()).not.toContain(CM.port);
+    expect(container.textContent).toContain('20.0 MiB');
+
+    now += 2000;
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow({ as_num_query: '120', as_num_tran: '54', as_long_query: '10' })] });
+    await act(async () => refreshButton().click());
+    await flush();
+
+    const row = [...container.querySelectorAll('tbody tr')][0];
+    const cells = [...row.querySelectorAll('td')].map((td) => td.textContent.trim());
+    const col = (label) => cells[headers().indexOf(label)];
+    expect(col(CM.qps)).toBe('10.0');
+    expect(col(CM.lqs)).toBe('3.0');
+    expect(col(CM.tps)).toBe('2.0');
+    vi.restoreAllMocks();
+  });
+
+  it('shows the PORT column when CMS sends each server\'s port (Windows)', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow({ as_port: '30001' })] });
+    await render();
+    await flush();
+
+    expect(headers()).toContain(CM.port);
+  });
+});

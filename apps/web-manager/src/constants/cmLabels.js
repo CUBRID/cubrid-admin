@@ -520,6 +520,13 @@ export const CM = {
   cpu: 'CPU',
   tps: 'TPS',
   qps: 'QPS',
+  // Long queries per second (cubrid broker status's LQS column); kept in English.
+  lqs: 'LQS',
+  asRequestsCol: 'Requests',
+  asCpuTimeCol: 'CPU Time',
+  asDbHostCol: 'DB Host',
+  asLastConnectCol: 'Last Connect',
+  asCurrentSqlCol: 'Current SQL',
   accessPoint: 'Access Point',
   authUser: 'Auth User',
   operatingSystem: 'Operating System',
