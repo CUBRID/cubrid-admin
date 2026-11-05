@@ -22,6 +22,7 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import CompactResultView from './CompactResultView';
 
 export default function CompactDatabaseModal() {
   const CM = useCM();
@@ -43,10 +44,13 @@ export default function CompactDatabaseModal() {
   const [jobStatus, setJobStatus] = useState(null);
 
   const [verbose, setVerbose] = useState(false);
+  // The job's output, shown as tables when Space Monitoring Details was on.
+  const [resultLog, setResultLog] = useState(null);
 
   useEffect(() => {
     if (isCompactDatabaseModalOpen) {
       setVerbose(false);
+      setResultLog(null);
       resetAction();
     }
   }, [isCompactDatabaseModalOpen, resetAction]);
@@ -66,8 +70,8 @@ export default function CompactDatabaseModal() {
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
       if (!wasBackgrounded()) {
-        const log = job?.result?.log;
-        endSuccess(log || CM.compactionComplete);
+        setResultLog(job?.result?.log ?? null);
+        endSuccess();
       }
     } catch (err) {
       if (!wasBackgrounded()) endError(typeof err === 'string' ? err : err.message || CM.compactionFailed);
@@ -93,13 +97,15 @@ export default function CompactDatabaseModal() {
 
   if (isSuccess) {
     return (
-      <Modal isOpen title={CM.dynamicCompaction} icon="compress" iconVariant="success" onClose={handleClose} maxWidth="480px">
-        <ModalStatusSuccess 
+      <Modal isOpen title={CM.dynamicCompaction} icon="compress" iconVariant="success" onClose={handleClose} maxWidth={resultLog ? '760px' : '480px'}>
+        <ModalStatusSuccess
           title={CM.compactionComplete}
           message={selectedDatabase}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <CompactResultView log={resultLog} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
