@@ -3,7 +3,7 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { CmsConfigService } from '@cms-config/cms-config.service';
 import { HaService } from '@ha';
 import { checkCmsStatusError } from '@common';
-import { HostInfo, LoginCmsRequest, LoginCmsResponse, User } from '@type/index';
+import { BaseCmsRequest, HostInfo, LoginCmsRequest, LoginCmsResponse, User } from '@type/index';
 import { getHost } from '@host/host-group.util';
 import { UserRepositoryService } from '@repository';
 import { DatabaseUserService } from '@database/user/database-user.service';
@@ -262,9 +262,9 @@ export class CmsAuthService {
 
   /**
    * Marks the host's CMS session as closed by the user, so a reload no longer
-   * shows it as connected. CMS has no logout task; the token itself is kept
-   * for other tabs still using it, and their requests sent from now on reopen
-   * the session (ones already in flight do not).
+   * shows it as connected. The CMS session is not logged out (CMS's logout
+   * task would end it for other tabs still using the token); their requests
+   * sent from now on reopen it (ones already in flight do not).
    */
   public async disconnect(userId: string, uid: string): Promise<void> {
     await this.repository.atomicUpdateUser(userId, async (user: User) => {
@@ -315,7 +315,7 @@ export class CmsAuthService {
    * @param host - The host information to use for the login test.
    * @returns A Promise that resolves with the authentication token received from the CMS.
    */
-  public async testLogin(host: HostInfo): Promise<string> {
+  public async testLogin(host: Pick<HostInfo, 'address' | 'port' | 'id' | 'password'>): Promise<string> {
     const url = `https://${host.address}:${host.port}/cm_api`;
 
     const requestData: LoginCmsRequest = {
@@ -362,5 +362,25 @@ export class CmsAuthService {
     }
 
     return response.token;
+  }
+
+  /**
+   * Checks that the given address, port, account and password log in to CMS,
+   * saving nothing (Add Host's Test Connection). The test session is logged
+   * out at once: left open it would pile up in CMS, and where CMS keeps one
+   * session per account a later login would end it anyway.
+   */
+  public async testConnection(target: Pick<HostInfo, 'address' | 'port' | 'id' | 'password'>): Promise<{ success: true }> {
+    const token = await this.testLogin(target);
+    const url = `https://${target.address}:${target.port}/cm_api`;
+    try {
+      await this.client.postAuthenticated<BaseCmsRequest, unknown>(url, { task: 'logout', token });
+    } catch (error: unknown) {
+      // The login worked, which is what was asked; CMS ends an unused session itself.
+      this.logger.warn(`CMS logout after a connection test failed: ${String(error)}`);
+    } finally {
+      forgetCmsToken(token);
+    }
+    return { success: true };
   }
 }

@@ -37,6 +37,25 @@ export class AddHostDto {
   groupId?: string;
 }
 
+/** A host's connection settings to check without saving (Add Host's Test Connection). */
+export class TestHostConnectionDto {
+  @IsString()
+  @IsNotEmpty()
+  address: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  port: number;
+
+  @IsString()
+  @IsNotEmpty()
+  id: string;
+
+  @IsString()
+  password: string;
+}
+
 export class CreateHostGroupDto {
   @IsString()
   @IsNotEmpty()

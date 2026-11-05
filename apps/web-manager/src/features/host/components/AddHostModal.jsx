@@ -11,6 +11,7 @@ import { addHost,
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
+import { hostApi } from '../hostApi';
 import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
@@ -31,6 +32,8 @@ export default function AddHostModal({ isOpen, onClose }) {
     groupId: '',
   });
   const [errors, setErrors] = useState({});
+  // Test Connection's outcome: null, { testing }, { ok }, or { error }.
+  const [connectionTest, setConnectionTest] = useState(null);
   const dispatch = useDispatch();
   const { loading, error: apiError, initialHostData, hostGroups } = useSelector((state) => state.host, shallowEqual);
   // Opened from an HA follow-up of a bulk-login result dialog, which stays
@@ -59,6 +62,7 @@ export default function AddHostModal({ isOpen, onClose }) {
         setFormData({ id: '', address: '', port: '8001', password: '', alias: '', groupId: '' });
       }
       setErrors({});
+      setConnectionTest(null);
     }
   }, [isOpen, initialHostData]);
 
@@ -69,6 +73,7 @@ export default function AddHostModal({ isOpen, onClose }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
     if (apiError) dispatch(clearHostError());
+    setConnectionTest(null);
   };
 
   const validate = () => {
@@ -92,6 +97,24 @@ export default function AddHostModal({ isOpen, onClose }) {
     ...formData,
     port: Number(formData.port),
   });
+
+  // Logs in to CMS with what is typed and out again, saving nothing. Only
+  // the connection fields need to be filled in.
+  const handleTestConnection = async () => {
+    const connectionFields = ['address', 'port', 'id', 'password'];
+    const errs = Object.fromEntries(Object.entries(validate()).filter(([field]) => connectionFields.includes(field)));
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setConnectionTest({ testing: true });
+    try {
+      await hostApi.testConnection(buildPayload());
+      setConnectionTest({ ok: true });
+    } catch (err) {
+      setConnectionTest({ error: err?.response?.data?.message || err?.message || CM.hostLoginFailedMsg });
+    }
+  };
 
   // Save only — persists the host without attempting a CMS login.
   const handleSave = async () => {
@@ -174,6 +197,17 @@ export default function AddHostModal({ isOpen, onClose }) {
       testId="add-host"
       footer={
         <>
+          <Button
+            data-testid="add-host-test-connection-btn"
+            variant="ghost"
+            onClick={handleTestConnection}
+            loading={!!connectionTest?.testing}
+            disabled={loading}
+            icon="network_check"
+            className="mr-auto"
+          >
+            {CM.testConnection}
+          </Button>
           <Button data-testid="add-host-cancel-btn" variant="secondary" onClick={handleClose} disabled={loading}>
             {CM.cancel}
           </Button>
@@ -201,6 +235,20 @@ export default function AddHostModal({ isOpen, onClose }) {
       }
     >
       <div className="space-y-4 p-1">
+
+        {connectionTest && !connectionTest.testing && (
+          <div
+            data-testid="add-host-test-result"
+            className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${connectionTest.ok
+              ? 'bg-emerald-500/5 border-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+              : 'bg-rose-500/5 border-rose-500/15 text-rose-500'}`}
+          >
+            <Icon name={connectionTest.ok ? 'check_circle' : 'error_outline'} size="sm" weight={300} className="shrink-0 mt-0.5" />
+            <p className="text-13 font-medium flex-1 leading-relaxed">
+              {connectionTest.ok ? CM.connectionTestSucceededMsg : CM.connectionTestFailedMsg(connectionTest.error)}
+            </p>
+          </div>
+        )}
 
         {/* API Error Banner */}
         {apiError && (
