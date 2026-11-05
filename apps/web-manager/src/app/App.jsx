@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { toggleTheme, toggleSidebar, setIsResizing, setActiveMainTab, closeTab, closeOtherTabs, closeAllTabs, triggerRefreshActiveTab } from '../features/layout/layoutSlice';
@@ -90,6 +90,7 @@ import ReconnectHostModal from '../features/host/components/ReconnectHostModal';
 import { Icon } from '../components/ds/foundation/Icon';
 import { useCM } from '../constants/useCM';
 import { useConfirm } from '../infrastructure/hooks/useConfirm';
+import { useRefreshFlash } from '../infrastructure/hooks/useRefreshFlash';
 
 function DashboardLayout() {
   const CM = useCM();
@@ -100,7 +101,7 @@ function DashboardLayout() {
   const { operationLoading: dbOpLoading } = useSelector((state) => state.databaseOperation, shallowEqual);
   const dbActionLoading = dbCoreLoading || dbOpLoading || dbUILoading;
   const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, dirtyTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
-  const [isFlashing, setIsFlashing] = useState(false);
+  const isFlashing = useRefreshFlash(refreshCounter);
   const { isAddHostModalOpen, hosts, isServiceOperating, serviceOperationType, serviceProgressMessage } = useSelector((state) => state.host, shallowEqual);
   useLoggedOutDbCleanup();
   // isAddDatabaseModalOpen removed
@@ -110,14 +111,6 @@ function DashboardLayout() {
     lastActionTarget: brokerActionName, 
     lastActionType: brokerActionType 
   } = useSelector((state) => state.broker, shallowEqual);
-
-  useEffect(() => {
-    if (refreshCounter > 0) {
-      setIsFlashing(true);
-      const timer = setTimeout(() => setIsFlashing(false), 400);
-      return () => clearTimeout(timer);
-    }
-  }, [refreshCounter]);
 
   const tabLabels = openTabs.reduce((acc, tabId) => {
     if (tabId.startsWith('host:')) {
