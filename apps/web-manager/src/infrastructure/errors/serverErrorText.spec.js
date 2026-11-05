@@ -246,3 +246,25 @@ describe('HA steps with no ha_db_list to check against', () => {
       .toBe('cubrid_ha.conf를 읽지 못해 HA 시작 결과를 확인하지 못했습니다: CMS 작업이 실패했습니다. (cannot open cubrid_ha.conf)');
   });
 });
+
+describe('Top SQL log limits', () => {
+  const tooLarge = (maxLines, maxBytes) => ({
+    status: 413,
+    note: 'Log exceeds the analysis limit. Select a smaller archived log.',
+    data: { type: '/errors/http/log_too_large', code: 'LOG_TOO_LARGE', maxLines, maxBytes },
+  });
+
+  it('says the limits the server used, in Korean', () => {
+    expect(serverErrorText(tooLarge(500000, 64 * 1048576), KO))
+      .toBe('로그가 분석 한도(500,000줄 또는 64 MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.');
+    expect(serverErrorText(tooLarge(2000000, 256 * 1048576), KO)).toContain('2,000,000줄 또는 256 MiB');
+  });
+
+  it("says a CMS answer over the size limit in Korean, with the limit", () => {
+    expect(serverErrorText({
+      status: 500,
+      note: 'CMS response exceeds the analysis size limit (64 MiB). Select a smaller archived log.',
+      data: { type: '/errors/cms/request_failed', reason: 'RESPONSE_TOO_LARGE', maxBytes: 64 * 1048576 },
+    }, KO)).toBe('CMS 응답이 분석할 수 있는 크기(64 MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.');
+  });
+});

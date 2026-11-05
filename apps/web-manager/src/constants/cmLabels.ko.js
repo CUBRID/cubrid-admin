@@ -1851,7 +1851,9 @@ export const CM_KO = {
     'cms/request_failed': 'CMS 작업이 실패했습니다.',
     'cms/request_failed:NO_TOKEN': 'CMS 로그인 응답에 인증 토큰이 없습니다. 다시 연결하세요.',
     'cms/request_failed:ASYNC_JOB_TIMEOUT': (d) => `CMS 작업(${d.cmsTask})이 ${Math.round(d.timeoutMs / 1000)}초 안에 끝나지 않았습니다.`,
-    'cms/request_failed:RESPONSE_TOO_LARGE': 'CMS 응답이 분석할 수 있는 크기를 넘었습니다. 더 작은 보관 로그를 고르세요.',
+    'cms/request_failed:RESPONSE_TOO_LARGE': (d) => (d.maxBytes
+      ? `CMS 응답이 분석할 수 있는 크기(${Math.round(d.maxBytes / 1048576)} MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.`
+      : 'CMS 응답이 분석할 수 있는 크기를 넘었습니다. 더 작은 보관 로그를 고르세요.'),
     'cms/unknown': 'CMS 작업이 실패했습니다.',
     'validation/invalid_request_body': (d) => (d.invalidFields?.length
       ? `입력 값이 올바르지 않습니다: ${fieldProblems(d.invalidFields)}`
@@ -1973,7 +1975,9 @@ export const CM_KO = {
     'internal/internal_error': '서버 내부 오류가 났습니다.',
     'job/job_interrupted': 'API 서버가 다시 시작되어 작업이 중단되었습니다.',
     'http/job_not_found': '작업을 찾을 수 없습니다.',
-    'http/log_too_large': '로그가 분석 한도(100,000줄 또는 16 MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.',
+    'http/log_too_large': (d) => (d.maxLines && d.maxBytes
+      ? `로그가 분석 한도(${Number(d.maxLines).toLocaleString('ko-KR')}줄 또는 ${Math.round(d.maxBytes / 1048576)} MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.`
+      : '로그가 분석 한도를 넘었습니다. 더 작은 보관 로그를 고르세요.'),
     'http/log_capture_incomplete': '로그 전체를 가져오지 못했습니다. 새로 고친 뒤 다시 시도하세요.',
   },
   // Job warnings by their code in warningDetails (see warningText).
