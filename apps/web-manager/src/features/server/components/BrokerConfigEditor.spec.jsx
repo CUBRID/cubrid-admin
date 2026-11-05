@@ -26,6 +26,7 @@ let store;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
+  confirmMock.mockResolvedValue(true);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -63,14 +64,15 @@ async function editAndSave() {
   await act(async () => element('save-btn').click());
 }
 
-it('tells the user the broker must be restarted after a successful save', async () => {
+it('says the broker must be restarted before saving, not again after', async () => {
   brokerApi.updateBrokerConfig.mockResolvedValue({});
   await editAndSave();
 
   expect(brokerApi.updateBrokerConfig).toHaveBeenCalledWith('host', ['[broker]', 'MASTER_SHM_ID=30002'], ['[broker]', 'MASTER_SHM_ID=30001']);
   const status = store.getState().lastStatus;
   expect(status.type).toBe('success');
-  expect(status.guidance).toEqual([CM.brokerConfigRestartRequiredNotice]);
+  expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ description: CM.brokerConfigSaveConfirmDesc }));
+  expect(status.guidance).toBeUndefined();
 });
 
 it('does not mention a restart when the save fails', async () => {

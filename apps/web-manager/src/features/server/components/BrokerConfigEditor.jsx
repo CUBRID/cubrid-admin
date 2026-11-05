@@ -82,6 +82,15 @@ export default function BrokerConfigEditor({ hostUid }) {
   // No client-side check here: the server parses and validates broker.conf
   // and rejects it with per-line reasons.
   const handleSave = async () => {
+    // CMS's broker_setparam (ts2_set_broker_conf) only rewrites broker.conf
+    // on disk and never notifies the running broker, so nothing saved here is
+    // live until the broker restarts: say so before saving.
+    if (!(await confirm({
+      title: CM.saveConfigConfirmTitle,
+      description: CM.brokerConfigSaveConfirmDesc,
+      confirmLabel: CM.saveChanges,
+      variant: 'warning',
+    }))) return;
     setSaving(true);
     try {
       const confdata = rawContent.split('\n');
@@ -96,10 +105,8 @@ export default function BrokerConfigEditor({ hostUid }) {
         type: 'success',
         title: CM.configSaved,
         message: CM.brokerConfigSaveSuccess,
-        // CMS's broker_setparam (ts2_set_broker_conf) only rewrites
-        // broker.conf on disk and never notifies the running broker, so
-        // nothing saved here is live until the broker restarts.
-        guidance: [CM.brokerConfigRestartRequiredNotice, ...warnings],
+        // The restart was already said before saving; only CMS warnings here.
+        ...(warnings.length > 0 ? { guidance: warnings } : {}),
       }));
     } catch (err) {
       if (isConfChangedSinceLoaded(err)) {

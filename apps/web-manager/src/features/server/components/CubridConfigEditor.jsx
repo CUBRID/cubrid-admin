@@ -120,6 +120,16 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   // No client-side check here: the server parses and validates the text
   // (cubrid.conf and cm.conf alike) and rejects it with per-line reasons.
   const handleSave = async () => {
+    // Both files are read only when their process starts: cubrid.conf by the
+    // database server and by each client (boot_sr.c / boot_cl.c, brokers in
+    // broker.c), cm.conf by cub_manager (cub_cm_init_env); nothing re-reads
+    // them while running.
+    if (!(await confirm({
+      title: CM.saveConfigConfirmTitle,
+      description: confname === 'cmconf' ? CM.cmConfSaveConfirmDesc : CM.cubridConfSaveConfirmDesc,
+      confirmLabel: CM.saveChanges,
+      variant: 'warning',
+    }))) return;
     setSaving(true);
     try {
       const payload = { confname, confdata: content.split('\n'), loaded: originalContentRef.current.split('\n') };
