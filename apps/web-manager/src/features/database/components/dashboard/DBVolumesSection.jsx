@@ -10,7 +10,7 @@ import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 import { useRefreshWhenShown } from './useRefreshWhenShown';
-import { pageCount } from '../../volumePages';
+import { pageCount, pagesToSize } from '../../volumePages';
 
 export default function DBVolumesSection({ volumes, volumesStatus, pollingProps }) {
   const CM = useCM();
@@ -85,7 +85,7 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
             <ProgressBar 
               pct={isNaNData ? 0 : usedPct} 
               showValue 
-              valueLabel={`${used.toLocaleString()} / ${total.toLocaleString()}`}
+              valueLabel={`${pagesToSize(used, row.pageSize)} / ${pagesToSize(total, row.pageSize)}`}
               variant="auto"
             />
           </div>

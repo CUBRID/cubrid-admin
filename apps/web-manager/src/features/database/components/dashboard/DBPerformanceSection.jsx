@@ -95,14 +95,16 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
       header: CM.bufferHit,
       accessor: 'hitRatio',
       render: (val, row) => (
-        <div className="min-w-[100px] pr-4">
-          <ProgressBar 
-            pct={row.hitPct} 
-            showValue 
-            valueLabel={val} 
-            variant={row.hitPct < 85 ? 'rose' : 'emerald'}
-          />
-        </div>
+        row.hitPct == null ? <span className="font-mono text-14 text-slate-400">-</span> : (
+          <div className="min-w-[100px] pr-4">
+            <ProgressBar 
+              pct={row.hitPct} 
+              showValue 
+              valueLabel={val} 
+              variant={row.hitPct < 85 ? 'rose' : 'emerald'}
+            />
+          </div>
+        )
       )
     },
     { header: CM.fetchesPerSec, accessor: 'fetch',    render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },

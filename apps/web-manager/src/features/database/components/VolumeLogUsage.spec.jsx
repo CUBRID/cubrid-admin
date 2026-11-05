@@ -52,13 +52,13 @@ describe('VolumeInfoMonitor', () => {
     await render(<VolumeInfoMonitor tabId="vol_info:h1:demodb:/data/demodb_lgat" />);
     const text = container.textContent;
     expect(text).not.toContain('100.00%');
-    expect(text).toContain('- / 32,768');
+    expect(text).toContain('- / 512 MiB');
   });
 
   it('still shows a data volume\'s used share', async () => {
     await render(<VolumeInfoMonitor tabId="vol_info:h1:demodb:/data/demodb" />);
-    expect(container.textContent).toContain('52.34%');
-    expect(container.textContent).toContain('4,288 / 8,192');
+    expect(container.textContent).toContain('52.3%');
+    expect(container.textContent).toContain('67 MiB / 128 MiB');
   });
 });
 
@@ -75,6 +75,6 @@ describe('DatabaseSpaceMonitor allocation column', () => {
     expect(freeIndex).toBeGreaterThanOrEqual(0);
     expect(logCells[freeIndex]).toBe('-'); // not a blank cell
     const dataRow = rows.find((t) => t.includes('demodb') && !t.includes('demodb_lgat'));
-    expect(dataRow).toMatch(/48%/);
+    expect(dataRow).toMatch(/47\.7%/);
   });
 });

@@ -18,7 +18,7 @@ export {
 
 export {
   fetchDatabaseVolumes, fetchDatabaseSpaceInfo, fetchDashboardLocks,
-  fetchDashboardPerformance, fetchDashboardCAS, fetchDashboardData, clearMonitoringError
+  fetchDashboardPerformance, fetchDashboardCAS, fetchDashboardData, clearMonitoringError, volumesChanged
 } from './databaseMonitoringSlice';
 
 export {

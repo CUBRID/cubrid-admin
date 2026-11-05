@@ -96,11 +96,11 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     { header: CM.qps, accessor: 'qps', render: (val) => <span className="font-mono text-14 text-amber-600 dark:text-amber-400 font-semibold">{val ?? '—'}</span> },
     {
       header: CM.longTran, accessor: 'long_tran',
-      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_tran || '0'} / {(parseFloat(row.long_tran_time || 0) * 1000).toFixed(0)}ms</span>
+      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_tran || '0'} / {parseFloat(row.long_tran_time || 0)}s</span>
     },
     {
       header: CM.longQuery, accessor: 'long_query',
-      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_query || '0'} / {(parseFloat(row.long_query_time || 0) * 1000).toFixed(0)}ms</span>
+      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_query || '0'} / {parseFloat(row.long_query_time || 0)}s</span>
     },
     { header: CM.errQuery, accessor: 'error_query', render: (val) => <span className={`font-mono text-14 font-bold ${parseInt(val) > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{val}</span> },
   ], [CM]);

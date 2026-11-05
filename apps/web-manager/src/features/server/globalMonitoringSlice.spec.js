@@ -93,6 +93,8 @@ describe('fetchHostSummary host figures', () => {
     brokerApi.getBrokerList.mockResolvedValue(brokerList(0, 0));
     monitoringApi.getHostStat.mockResolvedValueOnce({ cpu_user: '100', cpu_kernel: '100', cpu_idle: '700', cpu_iowait: '100', mem_phy_total: '1000', mem_phy_free: '250' });
     await store.dispatch(fetchHostSummary('h1')).unwrap();
+    // No CPU use before two samples can be compared (shown as "-").
+    expect(summary(store).cpu).toBeNull();
     monitoringApi.getHostStat.mockResolvedValueOnce({ cpu_user: '150', cpu_kernel: '150', cpu_idle: '800', cpu_iowait: '100', mem_phy_total: '1000', mem_phy_free: '250' });
     await store.dispatch(fetchHostSummary('h1')).unwrap();
 

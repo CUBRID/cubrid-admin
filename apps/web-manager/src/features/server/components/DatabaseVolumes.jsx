@@ -89,6 +89,8 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
+  // A volume was added on this host (AddVolumeModal): read again.
+  const volumesChangedSeq = useSelector((state) => state.databaseMonitoring?.volumesChangedSeq?.[hostUid] ?? 0);
   // Fetched into local state (not the shared `state.databaseMonitoring.volumes`
   // slice) so multiple simultaneously-open dashboard tabs don't clobber each other.
   const [volumes, setVolumes] = useState([]);
@@ -158,7 +160,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     }
   }, [dbListSettled, hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
-  useEffect(() => { fetchVolumes(); }, [fetchVolumes, refreshKey]);
+  useEffect(() => { fetchVolumes(); }, [fetchVolumes, refreshKey, volumesChangedSeq]);
 
   const volumeData = React.useMemo(() => volumes?.map((result) => {
     const empty = { display: '-', pct: 0 };

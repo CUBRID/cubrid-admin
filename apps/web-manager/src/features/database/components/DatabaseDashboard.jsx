@@ -14,6 +14,7 @@ import { isDatabaseInHa } from '../../host/haPeerUtils';
 import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
 import { totalCasQps } from '../casMetrics';
+import { pagesToSize, volumePageSize } from '../volumePages';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -75,12 +76,15 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   // Pass polling props to sections
   const pollingProps = { hostUid, dbname, isTabActive, refreshInterval: preferences.dashboardInterval };
 
+  // Page counts are shown as sizes: pages × the database's page size.
+  const pageSizes = { pagesize: data.pagesize, logpagesize: data.logpagesize };
   const mappedVolumes = (data.volumes || []).map(v => ({
     name: v.spacename, 
     type: v.type, 
     purpose: v.purpose || '-',
-    free: v.freepage && v.freepage.trim() !== '' ? CM.pagesCountLabel(v.freepage) : '-',
-    total: v.totalpage && v.totalpage.trim() !== '' ? CM.pagesCountLabel(v.totalpage) : '-',
+    free: v.freepage,
+    total: v.totalpage,
+    pageSize: volumePageSize(v, pageSizes),
     freePct: v.totalpage && parseInt(v.totalpage) > 0 && v.freepage && v.freepage.trim() !== '' ? (parseInt(v.freepage) / parseInt(v.totalpage)) * 100 : 0,
     date: v.date || '-', 
     path: v.location
@@ -89,10 +93,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const mappedSpaceInfo = (data.spaceInfo || []).map(f => ({
     type: f.data_type, 
     fileCount: f.file_count, 
-    usedPages: f.used_size ? CM.pagesCountLabel(f.used_size) : '-',
-    fileTablePages: f.file_table_size ? CM.pagesCountLabel(f.file_table_size) : '-',
-    reservedPages: f.reserved_size ? CM.pagesCountLabel(f.reserved_size) : '-',
-    totalPages: f.total_size ? CM.pagesCountLabel(f.total_size) : '-'
+    usedPages: pagesToSize(f.used_size, data.pagesize),
+    fileTablePages: pagesToSize(f.file_table_size, data.pagesize),
+    reservedPages: pagesToSize(f.reserved_size, data.pagesize),
+    totalPages: pagesToSize(f.total_size, data.pagesize)
   }));
 
   const perf = data.performance || {};
@@ -105,6 +109,8 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   }, { cpu: 0, memKB: 0 });
 
   const totalQps = totalCasQps(brokersCAS);
+  const rawHitRatio = parseFloat(perf.data_page_buffer_hit_ratio);
+  const hitRatio = Number.isFinite(rawHitRatio) ? rawHitRatio : null;
   const totalMemMB = (casStats.memKB / 1024).toFixed(1);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.
@@ -119,8 +125,9 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     memPct: Math.min((casStats.memKB / 1024) / 4, 100),
     tps: formatRate(rates.tps),
     qps: formatRate(totalQps), 
-    hitRatio: (perf.data_page_buffer_hit_ratio || '0.00') + '%',
-    hitPct: parseFloat(perf.data_page_buffer_hit_ratio || '0'),
+    // CMS reads the engine's ratio as a whole number (cm_mem_cpu_stat.cpp).
+    hitRatio: hitRatio === null ? '-' : `${Math.round(hitRatio)}%`,
+    hitPct: hitRatio,
     fetch: formatRate(rates.fetchPerSec),
     dirty: formatRate(rates.dirtyPerSec),
     ioReads: formatRate(rates.ioReadPerSec),
@@ -143,9 +150,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
       ...(data.volumes || []).map(v => {
         const total = parseInt(v.totalpage, 10);
         const free = parseInt(v.freepage, 10);
+        const pageSize = volumePageSize(v, pageSizes);
         const value = Number.isNaN(total) || Number.isNaN(free)
           ? '-'
-          : CM.pagesCountLabel(`${Math.max(0, total - free)} / ${total}`);
+          : `${pagesToSize(Math.max(0, total - free), pageSize)} / ${pagesToSize(total, pageSize)}`;
         return [CM.volumeLabel, v.spacename, value];
       })
     ];

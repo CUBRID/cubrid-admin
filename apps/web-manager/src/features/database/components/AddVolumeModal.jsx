@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { closeAddVolumeModal } from '../databaseSlice';
+import { closeAddVolumeModal, fetchDatabaseSpaceInfo, volumesChanged } from '../databaseSlice';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
@@ -116,10 +116,17 @@ export default function AddVolumeModal() {
         numberofpages: numberOfPages.toString(),
         size_need_mb: `${sizeMB.toFixed(3)}(MB)`
       };
+      const hostUid = selectedHostUid;
+      const dbname = selectedDatabase;
       await runJob(
-        () => databaseJobApi.submitAddVol(selectedHostUid, selectedDatabase, payload),
+        () => databaseJobApi.submitAddVol(hostUid, dbname, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
+      // The database has a new volume: re-read its space info (DB dashboard,
+      // space and volume screens) and the host dashboard's volume table,
+      // also when this job was backgrounded.
+      dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
+      dispatch(volumesChanged(hostUid));
       // This job may have been backgrounded (and the modal reopened for a
       // different database) by the time it settles — its outcome then
       // belongs to the global job tray, not this now-reused modal instance.

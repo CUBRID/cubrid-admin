@@ -393,8 +393,8 @@ const Component = function ServiceDashboard() {
         if (!s) return <span className="text-slate-300">—</span>;
         return (
           <div className="min-w-[80px]">
-            <span className="font-mono text-13 font-semibold text-slate-700 dark:text-slate-200">{(s.cpu || 0).toFixed(1)}%</span>
-            <MetricBar pct={s.cpu} />
+            <span className="font-mono text-13 font-semibold text-slate-700 dark:text-slate-200">{s.cpu == null ? '-' : `${s.cpu.toFixed(1)}%`}</span>
+            <MetricBar pct={s.cpu ?? 0} />
           </div>
         );
       }

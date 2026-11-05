@@ -94,7 +94,8 @@ export const fetchHostSummary = createAsyncThunk(
         cpu_iowait: hostStat.cpu_iowait,
         brokerSample,
       };
-      const cpuPercent = cpuUsagePercent(prev, snapshot) ?? 0;
+      // Null until there are two samples to compare; shown as "-".
+      const cpuPercent = cpuUsagePercent(prev, snapshot);
 
       // ON: the running databases; OFF: the others start-info knows of. A
       // running database can be missing from dblist, so both lists count.
