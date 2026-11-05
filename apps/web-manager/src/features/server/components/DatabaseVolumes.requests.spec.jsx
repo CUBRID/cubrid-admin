@@ -34,16 +34,20 @@ afterEach(async () => {
 const makeStore = () => configureStore({
   reducer: {
     host: (state = { authorizedHosts: ['host1'] }) => state,
-    database: (state = { loggedInDatabases: ['host1:demodb'], activeDatabasesByHost: {} }) => state,
+    // 'test/sameLogins' rebuilds the list with the same names, as a login
+    // elsewhere does.
+    database: (state = { loggedInDatabases: ['host1:demodb'], activeDatabasesByHost: {} }, action) => (
+      action.type === 'test/sameLogins' ? { ...state, loggedInDatabases: [...state.loggedInDatabases] } : state
+    ),
     user: (state = { preferences: { uiLocale: 'en' } }) => state,
     databaseMonitoring: databaseMonitoringReducer,
   },
 });
 
-const render = (store, refreshKey) => act(async () => {
+const render = (store, refreshKey, isShown = true) => act(async () => {
   root.render(
     <Provider store={store}>
-      <DatabaseVolumes hostUid="host1" activeDatabases={['demodb']} dbListStatus="loaded" refreshKey={refreshKey} />
+      <DatabaseVolumes hostUid="host1" activeDatabases={['demodb']} dbListStatus="loaded" refreshKey={refreshKey} isShown={isShown} />
     </Provider>
   );
 });
@@ -68,5 +72,30 @@ it('sends a volume-info request after a volume was added on the host', async () 
   expect(requests()).toBe(1);
 
   await act(async () => store.dispatch(volumesChanged('host1')));
+  expect(requests()).toBe(2);
+});
+
+it('does not read again when the database lists are rebuilt with the same names', async () => {
+  const store = makeStore();
+  await render(store, 0);
+  expect(requests()).toBe(1);
+
+  await act(async () => store.dispatch({ type: 'test/sameLogins' }));
+  await render(store, 0); // a new activeDatabases array with the same name
+  expect(requests()).toBe(1);
+});
+
+it('reads nothing while its host tab is hidden, then once when shown again', async () => {
+  const store = makeStore();
+  await render(store, 0);
+  expect(requests()).toBe(1);
+
+  await render(store, 1, false);
+  await act(async () => store.dispatch(volumesChanged('host1')));
+  expect(requests()).toBe(1);
+
+  await render(store, 1, true);
+  expect(requests()).toBe(2);
+  await render(store, 1, true);
   expect(requests()).toBe(2);
 });

@@ -41,3 +41,17 @@ export function dbMemorySegments(casBytes, hostTotal, hostUsed) {
     freePct: pct(free),
   };
 }
+
+/** How old a host memory read may be for the bar: two dashboard intervals, at least a minute. */
+export const hostMemoryMaxAgeMs = (intervalSec) => Math.max(60_000, 2 * (Number(intervalSec) || 0) * 1000);
+
+/**
+ * The newest of the host memory reads the other dashboards keep
+ * ({ memTotal, memUsed, readAt }), or null when none was read within `maxAgeMs`.
+ */
+export function recentHostMemory(reads, now, maxAgeMs) {
+  const newest = (reads || [])
+    .filter((read) => read?.memTotal > 0 && Number.isFinite(read.readAt))
+    .sort((a, b) => b.readAt - a.readAt)[0];
+  return newest && now - newest.readAt <= maxAgeMs ? newest : null;
+}

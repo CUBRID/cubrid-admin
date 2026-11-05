@@ -113,6 +113,7 @@ export const fetchHostSummary = createAsyncThunk(
           cpu: cpuPercent,
           memTotal,
           memUsed,
+          readAt: Date.now(),
           memory: memTotal > 0 ? (memUsed / memTotal) * 100 : 0,
           disk: hostStat.disk_usage || '0/0',
           freespaceOnStorage,

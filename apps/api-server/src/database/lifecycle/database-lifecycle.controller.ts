@@ -233,7 +233,8 @@ export class DatabaseLifecycleController {
 
   /**
    * Start the whole service on a host in one call: brokers, then databases
-   * (auto-start list + per-database `ha_start` for HA), matching `cubrid service start`.
+   * (the auto-start list with `startdb`; on an HA node the HA databases with
+   * one node-wide `ha_start`, no dbname), matching `cubrid service start`.
    *
    * @route POST /:hostUid/database/service/start
    * @param req Express request (contains authenticated user)
@@ -254,8 +255,9 @@ export class DatabaseLifecycleController {
   }
 
   /**
-   * Stop the whole service on a host in one call: databases (per-database
-   * `ha_stop` for HA), then brokers, matching `cubrid service stop`.
+   * Stop the whole service on a host in one call: databases (`stopdb`; on an
+   * HA node the HA databases with one node-wide `ha_stop`, no dbname), then
+   * brokers, matching `cubrid service stop`.
    *
    * @route POST /:hostUid/database/service/stop
    * @param req Express request (contains authenticated user)

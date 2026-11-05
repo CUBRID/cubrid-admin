@@ -15,7 +15,7 @@ import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
 import { totalCasQps } from '../casMetrics';
 import { pagesToSize, volumePageSize } from '../volumePages';
-import { dbMemorySegments, formatBytes1 } from '../dbMemorySegments';
+import { dbMemorySegments, formatBytes1, recentHostMemory, hostMemoryMaxAgeMs } from '../dbMemorySegments';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -33,9 +33,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
   // The host's memory as the host or service dashboard last read it
-  // (gethoststat); the DB dashboard does not read it itself.
+  // (gethoststat). The DB dashboard does not read it itself, so the bar uses
+  // only a recent read (dbMemorySegments.js, recentHostMemory) and is hidden
+  // otherwise.
   const hostSummary = useSelector((state) => state.globalMonitoring?.summaries?.[hostUid]);
-  const hostMem = hostData.currentStatus?.memTotal > 0 ? hostData.currentStatus : hostSummary;
   // CMS getenv osinfo ("LINUX", "NT", ...). On Linux the broker never fills
   // per-CAS CPU (get_psinfo in broker_process_info.c is Solaris/HP-UX only),
   // so CMS as_cpu is always 0.00 there; unknown OS keeps the CAS sum.
@@ -123,6 +124,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const hitRatio = Number.isFinite(rawHitRatio) ? rawHitRatio : null;
   // psize is in KiB.
   const casMemBytes = casStats.memKB * 1024;
+  const hostMem = recentHostMemory([hostData.currentStatus, hostSummary], Date.now(), hostMemoryMaxAgeMs(preferences.dashboardInterval));
   const memSegments = dbMemorySegments(casMemBytes, hostMem?.memTotal, hostMem?.memUsed);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.

@@ -147,7 +147,9 @@ const monitoringSlice = createSlice({
           tps: totalTps,
           qps: totalQps,
           memUsed: memUsedBytes,
-          memTotal: memTotalBytes
+          memTotal: memTotalBytes,
+          // When these were read (the DB dashboard's memory bar uses only a recent read).
+          readAt: now,
         };
 
         // Disk (root filesystem on Linux), fetched on its own slower cadence.

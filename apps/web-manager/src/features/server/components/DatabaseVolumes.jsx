@@ -84,7 +84,9 @@ const BarCell = ({ val }) => {
 // refreshKey: changes on each refresh of the open dashboard (see
 // ServerContent); the table re-reads then, when its database list changes,
 // and when a volume was added on the host (volumesChanged).
-export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded', refreshKey = 0 }) {
+// `isShown`: whether its host tab is the one on screen. A hidden tab reads
+// nothing; what changed meanwhile is read once when it is shown again.
+export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded', refreshKey = 0, isShown = true }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
@@ -111,10 +113,16 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   // A database can stay active (running) after logout — logout only drops
   // the session, not the engine process — so filtering on "active" alone
   // keeps showing (and re-fetching) a logged-out database's storage volumes.
-  const loggedInActiveDatabases = React.useMemo(
-    () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db))),
-    [activeDatabases, loggedInDatabases, hostUid]
-  );
+  // The same array while the names are the same: a new array would re-read
+  // the volumes every time either list is rebuilt with the same content.
+  const lastListRef = useRef([]);
+  const loggedInActiveDatabases = React.useMemo(() => {
+    const next = activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
+    const last = lastListRef.current;
+    if (next.length === last.length && next.every((db, i) => db === last[i])) return last;
+    lastListRef.current = next;
+    return next;
+  }, [activeDatabases, loggedInDatabases, hostUid]);
 
   // Guards against a stale response repopulating the table: if the user logs
   // out of (or stops) the last active database while a fetch for it is still
@@ -160,7 +168,14 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     }
   }, [dbListSettled, hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
-  useEffect(() => { fetchVolumes(); }, [fetchVolumes, refreshKey, volumesChangedSeq]);
+  // Something to read: first render, a refresh, a list change, a volume added.
+  const readPendingRef = useRef(true);
+  useEffect(() => { readPendingRef.current = true; }, [fetchVolumes, refreshKey, volumesChangedSeq]);
+  useEffect(() => {
+    if (!isShown || !readPendingRef.current) return;
+    readPendingRef.current = false;
+    fetchVolumes();
+  }, [isShown, fetchVolumes, refreshKey, volumesChangedSeq]);
 
   const volumeData = React.useMemo(() => volumes?.map((result) => {
     const empty = { display: '-', pct: 0 };
