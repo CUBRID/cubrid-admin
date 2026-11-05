@@ -52,13 +52,17 @@ const Component = function ServiceDashboard() {
       return { key: accessor, direction: 'asc' };
     });
   };
+  // The hosts the table shows (not in a collapsed group, not filtered out):
+  // only these are read, each with its databases' volume-info.
+  const visibleHostsRef = React.useRef([]);
   const { isManualRefreshing, lastRefreshed, handleRefresh: refreshAll } = usePollingRefresh({
     hostUid: 'global',
     tabId: 'service_dashboard',
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => async (dispatch) => {
-      if (authorizedHosts.length === 0) return;
-      await Promise.all(authorizedHosts.map(hostUid => 
+      const targets = authorizedHosts.filter((hostUid) => visibleHostsRef.current.includes(hostUid));
+      if (targets.length === 0) return;
+      await Promise.all(targets.map(hostUid =>
         dispatch(fetchHostSummary(silent ? { hostUid, isBackground: true } : hostUid)).unwrap().catch(ignoreRefreshError)
       ));
     }
@@ -147,6 +151,20 @@ const Component = function ServiceDashboard() {
 
     return { tableRows: rows, hostMetaByUid: metaByUid };
   }, [hostGroups, collapsedGroups, haInfo, roleFilter, CM]);
+
+  const visibleHostUids = React.useMemo(() => tableRows.filter((row) => row._type === 'host').map((row) => row.uid), [tableRows]);
+  visibleHostsRef.current = visibleHostUids;
+  // A host that comes into view (a group expanded, a filter cleared) is read
+  // once then, not left empty until the next refresh.
+  const shownBefore = React.useRef(null);
+  React.useEffect(() => {
+    const before = shownBefore.current;
+    shownBefore.current = visibleHostUids;
+    if (before === null) return;
+    visibleHostUids
+      .filter((hostUid) => !before.includes(hostUid) && authorizedHosts.includes(hostUid))
+      .forEach((hostUid) => dispatch(fetchHostSummary({ hostUid, isBackground: true })).unwrap().catch(ignoreRefreshError));
+  }, [visibleHostUids, authorizedHosts, dispatch]);
 
   // Sort host rows within each group while keeping group headers in place.
   const sortedTableRows = React.useMemo(() => {

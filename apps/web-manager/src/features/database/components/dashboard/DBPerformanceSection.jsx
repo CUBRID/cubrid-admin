@@ -21,7 +21,7 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
   };
 
   // Logic: Refresh once when becoming visible AND expanded
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'performance' }, refresh);
 
   // Logic: Interval polling when active AND expanded AND autoRefresh enabled
   useEffect(() => {

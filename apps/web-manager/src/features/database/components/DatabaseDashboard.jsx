@@ -49,11 +49,14 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   
 
 
+  // Which sections are collapsed (useRefreshWhenShown); the refresh skips them.
+  const collapsedSections = React.useRef({});
+
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
     tabId: propHostUid ? `db:${hostUid}:${dbname}` : `db:${dbname}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent }))
+    onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent, collapsed: { ...collapsedSections.current } }))
   });
 
   const activeHost = hosts.find(h => h.uid === selectedHostUid);
@@ -74,7 +77,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
 
   // Pass polling props to sections
-  const pollingProps = { hostUid, dbname, isTabActive, refreshInterval: preferences.dashboardInterval };
+  const pollingProps = { hostUid, dbname, isTabActive, refreshInterval: preferences.dashboardInterval, collapsedSections };
 
   // Page counts are shown as sizes: pages × the database's page size.
   const pageSizes = { pagesize: data.pagesize, logpagesize: data.logpagesize };

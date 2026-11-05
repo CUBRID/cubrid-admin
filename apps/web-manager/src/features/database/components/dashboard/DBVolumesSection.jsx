@@ -23,7 +23,7 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
     if (hostUid && dbname) dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
   };
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'volumes' }, refresh);
 
   useEffect(() => {
     let interval;

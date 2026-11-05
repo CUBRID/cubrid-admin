@@ -56,7 +56,7 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
     if (isLoggedIn) refresh();
   }, [transactionKillSignal, hostUid, dbname, isLoggedIn]);
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'locks' }, refresh);
 
   useEffect(() => {
     let interval;

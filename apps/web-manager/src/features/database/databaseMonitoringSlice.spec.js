@@ -360,3 +360,28 @@ describe('fetchDashboardPerformance rates', () => {
     now.mockRestore();
   });
 });
+
+describe('dashboard refresh of collapsed sections', () => {
+  it('does not read the sections the user collapsed', async () => {
+    databaseApi.getVolumeInfo.mockResolvedValue({ spaceinfo: [], dbinfo: [], fileinfo: [] });
+    databaseApi.getLockInfo.mockResolvedValue({});
+    databaseApi.getStatDump.mockResolvedValue({});
+    brokerApi.getBrokerList.mockResolvedValue([{ broker: [] }]);
+    const store = makeStore();
+
+    await store.dispatch(fetchDashboardData({
+      hostUid: HOST, dbname: DB, collapsed: { locks: true, performance: true, cas: true, volumes: true, files: false },
+    })).unwrap();
+    expect(databaseApi.getLockInfo).not.toHaveBeenCalled();
+    expect(databaseApi.getStatDump).not.toHaveBeenCalled();
+    expect(brokerApi.getBrokerList).not.toHaveBeenCalled();
+    // The file section still shows the space read.
+    expect(databaseApi.getVolumeInfo).toHaveBeenCalledTimes(1);
+
+    await store.dispatch(fetchDashboardData({
+      hostUid: HOST, dbname: DB, collapsed: { volumes: true, files: true },
+    })).unwrap();
+    expect(databaseApi.getVolumeInfo).toHaveBeenCalledTimes(1);
+    expect(databaseApi.getLockInfo).toHaveBeenCalledTimes(1);
+  });
+});

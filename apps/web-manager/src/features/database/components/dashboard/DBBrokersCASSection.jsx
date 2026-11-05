@@ -20,7 +20,7 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
     if (hostUid && dbname) dispatch(fetchDashboardCAS({ hostUid, dbname }));
   };
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'cas' }, refresh);
 
   useEffect(() => {
     let interval;

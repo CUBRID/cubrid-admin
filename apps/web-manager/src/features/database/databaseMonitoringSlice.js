@@ -137,14 +137,18 @@ export const fetchDashboardCAS = createAsyncThunk(
 
 export const fetchDashboardData = createAsyncThunk(
   'database/fetchDashboardData',
-  async ({ hostUid, dbname, isBackground }, { rejectWithValue, dispatch }) => {
+  // `collapsed`: the sections the user collapsed (useRefreshWhenShown); their
+  // data is not read, and a section reads its own when expanded again.
+  async ({ hostUid, dbname, isBackground, collapsed = {} }, { rejectWithValue, dispatch }) => {
     if (!hostUid || !dbname) return rejectWithValue('Missing hostUid or dbname');
 
+    const skipped = Promise.resolve({ skipped: true });
     const settled = await Promise.allSettled([
-      dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardLocks({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardPerformance({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardCAS({ hostUid, dbname, isBackground })).unwrap(),
+      // The volume and file sections show the same read.
+      collapsed.volumes && collapsed.files ? skipped : dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
+      collapsed.locks ? skipped : dispatch(fetchDashboardLocks({ hostUid, dbname })).unwrap(),
+      collapsed.performance ? skipped : dispatch(fetchDashboardPerformance({ hostUid, dbname })).unwrap(),
+      collapsed.cas ? skipped : dispatch(fetchDashboardCAS({ hostUid, dbname, isBackground })).unwrap(),
     ]);
 
     const [spaceR, lockR] = settled;
