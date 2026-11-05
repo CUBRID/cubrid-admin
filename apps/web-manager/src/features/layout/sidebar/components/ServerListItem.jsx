@@ -66,14 +66,14 @@ export default function ServerListItem({
         }
         onMultiSelect?.(e, host.uid);
         onSelect?.(host.uid);
-        // A plain click also refreshes the Resources section for an
-        // already-authorized host (activation for it never triggers login —
-        // onActivate/activateHost only does that for a not-yet-authorized
-        // host), so switching focus shows current data without needing the
-        // double-click below. A not-yet-authorized host still requires the
-        // double-click gesture to trigger login.
+        // A plain click switches the Resources section to an already-
+        // authorized host (activation for it never triggers login) without
+        // opening its dashboard: the dashboard reads every logged-in
+        // database's volumes once on screen, which a focus change must not
+        // do. The double-click below opens it. A not-yet-authorized host
+        // still requires the double-click gesture to trigger login.
         if (isAuthorized) {
-          onActivate?.(host.uid);
+          onActivate?.(host.uid, { openDashboard: false });
         }
       }}
       onDoubleClick={() => {
