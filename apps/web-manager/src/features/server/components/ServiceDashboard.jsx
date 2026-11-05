@@ -26,6 +26,8 @@ const MetricBar = ({ pct }) => (
 );
 
 import { useCM } from '../../../constants/useCM';
+import { DEFAULT_SERVICE_VOLUME_INTERVAL } from '@api-interfaces';
+import { volumesDue } from '../serviceVolumeInterval';
 
 const ignoreRefreshError = () => undefined;
 
@@ -44,6 +46,25 @@ const Component = function ServiceDashboard() {
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
   const activateHost = useHostActivation();
 
+  // A volume added on a host (volumesChanged): read its volume usage now if
+  // this dashboard is on screen, otherwise with its next read.
+  const volumesChangedSeq = useSelector((state) => state.databaseMonitoring?.volumesChangedSeq, shallowEqual);
+  const isOnScreen = useSelector((state) => state.layout?.activeMainTab === 'service_dashboard');
+  const seenVolumesChangedSeq = React.useRef(volumesChangedSeq);
+  React.useEffect(() => {
+    const before = seenVolumesChangedSeq.current ?? {};
+    seenVolumesChangedSeq.current = volumesChangedSeq;
+    Object.entries(volumesChangedSeq ?? {})
+      .filter(([hostUid, seq]) => seq !== before[hostUid] && authorizedHosts.includes(hostUid))
+      .forEach(([hostUid]) => {
+        if (isOnScreen && visibleHostsRef.current.includes(hostUid)) {
+          dispatch(fetchHostSummary({ hostUid, isBackground: true })).unwrap().catch(ignoreRefreshError);
+        } else {
+          volumesChangedHostsRef.current.add(hostUid);
+        }
+      });
+  }, [volumesChangedSeq, authorizedHosts, isOnScreen, dispatch]);
+
   const handleColumnSort = (accessor) => {
     setSortConfig((prev) => {
       if (prev?.key === accessor) {
@@ -55,15 +76,29 @@ const Component = function ServiceDashboard() {
   // The hosts the table shows (not in a collapsed group, not filtered out):
   // only these are read, each with its databases' volume-info.
   const visibleHostsRef = React.useRef([]);
+  const volumeIntervalSeconds = preferences.serviceVolumeInterval ?? DEFAULT_SERVICE_VOLUME_INTERVAL;
+  // Hosts whose volumes changed here (a volume added): their next read
+  // includes the volumes whatever the interval.
+  const volumesChangedHostsRef = React.useRef(new Set());
   const { isManualRefreshing, lastRefreshed, handleRefresh: refreshAll } = usePollingRefresh({
     hostUid: 'global',
     tabId: 'service_dashboard',
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => async (dispatch) => {
+    onFetch: (silent) => async (dispatch, getState) => {
       const targets = authorizedHosts.filter((hostUid) => visibleHostsRef.current.includes(hostUid));
       if (targets.length === 0) return;
+      // Volume usage (a spacedb per database) on its own interval; the rest
+      // at every refresh. A refresh the user asks for reads everything.
+      const summaries = getState().globalMonitoring?.summaries ?? {};
       await Promise.all(targets.map(hostUid =>
-        dispatch(fetchHostSummary(silent ? { hostUid, isBackground: true } : hostUid)).unwrap().catch(ignoreRefreshError)
+        dispatch(fetchHostSummary(silent
+          ? {
+            hostUid,
+            isBackground: true,
+            withVolumes: volumesChangedHostsRef.current.delete(hostUid)
+              || volumesDue(summaries[hostUid]?.volumesReadAt, volumeIntervalSeconds, Date.now()),
+          }
+          : hostUid)).unwrap().catch(ignoreRefreshError)
       ));
     }
   });
@@ -351,8 +386,19 @@ const Component = function ServiceDashboard() {
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.[accessor] : undefined;
         if (v === undefined || v === -1 || Number.isNaN(v)) return <span className="text-slate-300">—</span>;
-        // Percent in use: the fuller the volumes, the more urgent.
-        return <Badge variant={v >= 90 ? 'danger' : v >= 70 ? 'warning' : 'success'}>{v}%</Badge>;
+        // Percent in use: the fuller the volumes, the more urgent. The first
+        // volume column also shows when they were read (own interval).
+        const readAt = accessor === 'permUsed' ? summaries[row.uid]?.volumesReadAt : null;
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <Badge variant={v >= 90 ? 'danger' : v >= 70 ? 'warning' : 'success'}>{v}%</Badge>
+            {readAt && (
+              <span className="text-10 font-mono text-slate-400" title={CM.volumesReadAtTitle} data-testid={`volumes-read-at-${row.uid}`}>
+                {new Date(readAt).toLocaleTimeString()}
+              </span>
+            )}
+          </span>
+        );
       }
     })),
     {
@@ -506,7 +552,7 @@ const Component = function ServiceDashboard() {
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
-          <MonitoringSettingsPopover />
+          <MonitoringSettingsPopover showServiceVolumeInterval />
 
           <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
           <div className="flex items-center gap-4 px-3 py-1 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg shadow-xs">
