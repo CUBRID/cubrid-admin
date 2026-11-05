@@ -11,7 +11,7 @@ import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
 import type { CmsHostLoginClientResponse, UpdateHostRequest } from '@api-interfaces';
 import { CMS_CONFNAME_CM, CMS_CONFNAME_CUBRID } from '@database/database.constants';
-import { closeCmsToken, forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
+import { closeCmsToken, cmsSessionExpiresAt, forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
 import { HostService } from '@host';
 import {
   flattenHanodelist,
@@ -94,6 +94,10 @@ export class CmsAuthService {
    * later. After saving it always reports success; HA details that cannot be
    * read by the deadline come back as `haInfoUnavailable` for the client to
    * read again.
+   *
+   * A connected host whose address, port, CMS user and password are
+   * unchanged is not logged in again: the other changes are saved, and its
+   * CMS session and DB logins stay as they are.
    */
   public async connect(
     userId: string,
@@ -115,6 +119,24 @@ export class CmsAuthService {
     };
     // Before the save below, which may update `stored` in place.
     const sameServer = isSameCmsServer(stored, host);
+
+    // Nothing CMS sees changed (address, port, CMS user, password; a password
+    // left unchanged counts as the same) and the host is connected: save the
+    // other changes only. A login would start a new CMS session, and the DB
+    // logins without a saved profile would end with the old one.
+    if (isSameConnection(stored, host) && (cmsSessionExpiresAt(stored) ?? 0) > startedAt) {
+      await this.hostService.updateHost(userId, uid, changes);
+      try {
+        return await settleBy(
+          this.getHaInfo(userId, uid).then((haInfo) => ({ ...haInfo, ...defaultPasswordFlag(host) })),
+          startedAt + CONNECT_ANSWER_DEADLINE_MS,
+          () => new Error(`not finished within ${CONNECT_ANSWER_DEADLINE_MS}ms`)
+        );
+      } catch (err) {
+        this.logger.warn(`Saved the settings of connected host ${uid}, but could not read its HA details: ${err}`);
+        return { success: true, isHA: false, haInfoUnavailable: true, ...defaultPasswordFlag(host) };
+      }
+    }
 
     const token = await settleBy(
       this.requestToken(userId, uid, host, { notAfter: loginBy }),
@@ -437,4 +459,16 @@ function isSameCmsServer(a: Pick<HostInfo, 'address' | 'port' | 'id'>, b: Pick<H
     String(a.port) === String(b.port) &&
     a.id === b.id
   );
+}
+
+/**
+ * Whether the settings a CMS login uses are unchanged, compared the way
+ * HostService.updateHost does before it keeps the stored session.
+ */
+function isSameConnection(
+  a: Pick<HostInfo, 'address' | 'port' | 'id' | 'password'>,
+  b: Pick<HostInfo, 'address' | 'port' | 'id' | 'password'>
+): boolean {
+  return String(a.address) === String(b.address) && String(a.port) === String(b.port) &&
+    String(a.id) === String(b.id) && String(a.password) === String(b.password);
 }

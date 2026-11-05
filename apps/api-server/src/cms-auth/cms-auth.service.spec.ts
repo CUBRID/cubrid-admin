@@ -196,6 +196,43 @@ describe('CMSAuthService', () => {
         expect(restore).not.toHaveBeenCalled();
       });
 
+      describe('a connected host', () => {
+        beforeEach(() => {
+          saved().cmsTokenIssuedAt = Date.now();
+        });
+
+        it('saves without a CMS login when the address, port, CMS user and password are unchanged', async () => {
+          const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
+          const forget = moduleRef.get(DatabaseUserService).forgetDbLoginsOfHost as jest.Mock;
+
+          await expect(service.connect('u1', 'h1', { alias: 'renamed', address: '10.0.0.1', port: 8001, id: 'admin' }))
+            .resolves.toEqual({ success: true, isHA: false });
+
+          expect(client.postPublic).not.toHaveBeenCalled();
+          expect(updateHost).toHaveBeenCalledWith('u1', 'h1', { alias: 'renamed', address: '10.0.0.1', port: 8001, id: 'admin' });
+          expect(saved()).toMatchObject({ alias: 'renamed', token: 'old-token' });
+          expect(restore).not.toHaveBeenCalled();
+          expect(forget).not.toHaveBeenCalled();
+        });
+
+        it('counts the password given again unchanged as unchanged', async () => {
+          await service.connect('u1', 'h1', { password: 'pw' });
+          expect(client.postPublic).not.toHaveBeenCalled();
+        });
+
+        it('logs in once when the password changes', async () => {
+          await service.connect('u1', 'h1', { password: 'new-pw' });
+          expect(client.postPublic).toHaveBeenCalledTimes(1);
+          expect(saved().token).toBe('new-token');
+        });
+      });
+
+      it('logs in once for a host that is not connected, even with nothing changed', async () => {
+        await service.connect('u1', 'h1', { alias: 'renamed' });
+        expect(client.postPublic).toHaveBeenCalledTimes(1);
+        expect(saved().token).toBe('new-token');
+      });
+
       it('saves nothing when the login with the changed settings fails', async () => {
         client.postPublic.mockResolvedValue({ status: 'failure', note: 'Incorrect or missing password' });
 
