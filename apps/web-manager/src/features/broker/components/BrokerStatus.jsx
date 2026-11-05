@@ -166,7 +166,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     { header: CM.tps, accessor: 'tps', width: '60px', render: rate },
     ...(hasAsPort ? [{ header: CM.port, accessor: 'as_port', width: '80px', render: (v) => <span className="font-mono">{v ?? '—'}</span> }] : []),
     // as_psize is kilobytes (broker_process_size.c getsize: VmRSS + VmSwap); -1 when it could not be read.
-    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : '—'}</span> },
+    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono whitespace-nowrap">{Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : '—'}</span> },
     { 
       header: CM.status, 
       accessor: 'as_status', 
@@ -180,8 +180,8 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     { header: CM.asCpuTimeCol, accessor: 'as_ctime', width: '80px', render: (v) => <span className="font-mono">{v || '—'}</span> },
     { header: CM.database, accessor: 'as_dbname', render: (v) => <span className="text-amber-600/80 dark:text-amber-500/70 font-mono">{v || '—'}</span> },
     { header: CM.asDbHostCol, accessor: 'as_dbhost', render: (v) => <span className="font-mono">{v || '—'}</span> },
-    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
-    { header: CM.asLastConnectCol, accessor: 'as_lct', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
+    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13 whitespace-nowrap">{v || '—'}</span> },
+    { header: CM.asLastConnectCol, accessor: 'as_lct', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13 whitespace-nowrap">{v || '—'}</span> },
     { header: CM.clientIp, accessor: 'as_client_ip', render: (v) => <span className="font-mono">{v || '—'}</span> },
     { header: CM.asCurrentSqlCol, accessor: 'as_cur', render: (v) => <div className="max-w-xs truncate font-mono text-13 text-slate-500" title={v || undefined}>{v || '—'}</div> },
   ];
@@ -369,14 +369,18 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
           bodyClassName="p-0"
           collapsible
         >
-          <Table
-            columns={asColumns}
-            data={asInfoWithRates}
-            sortable
-            zebra
-            maxRows={15}
-            emptyMessage={CM.noAppServersActiveMsg}
-          />
+          {/* The page grows to its content's width (min-w-fit in App); w-0
+              keeps this wide table out of that, so it scrolls on its own. */}
+          <div className="w-0 min-w-full">
+            <Table
+              columns={asColumns}
+              data={asInfoWithRates}
+              sortable
+              zebra
+              maxRows={15}
+              emptyMessage={CM.noAppServersActiveMsg}
+            />
+          </div>
         </Card>
 
         {/* ── Job Queue ── */}
