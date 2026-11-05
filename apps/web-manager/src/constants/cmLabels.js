@@ -1622,8 +1622,8 @@ export const CM = {
   connectedHostsMsg: (count) => `Connected ${count} host(s).`,
   selectedHostsCountLabel: (count) => `${count} hosts selected`,
   moveToGroupMenu: 'Move to Group',
-  loginSelectedHosts: 'Login Selected',
-  deleteSelectedHosts: 'Delete Selected',
+  loginSelectedHosts: 'Log In to Selected Hosts',
+  deleteSelectedHosts: 'Delete Selected Hosts',
   bulkDeleteHostsConfirmTitle: 'Delete Hosts',
   bulkDeleteHostsConfirmDesc: (count) => `Remove these ${count} host connections? Saved credentials and configuration profiles for each will be deleted. This can't be undone.`,
   bulkDeleteHostsSuccessMsg: (count) => `Deleted ${count} host(s).`,
@@ -1895,6 +1895,20 @@ export const CM = {
     forgetCredentials: 'Forget Saved Login',
   },
   multiDbConfirmTitle: (action) => `${action} Selected Databases`,
+  // Multi-select menu items: "<action> the selected <things>", no counts.
+  selectedDbActions: {
+    start: 'Start Selected Databases',
+    stop: 'Stop Selected Databases',
+    restart: 'Restart Selected Databases',
+    login: 'Log In to Selected Databases',
+    logout: 'Log Out of Selected Databases',
+    forgetCredentials: 'Forget Saved Login of Selected Databases',
+  },
+  selectedBrokerActions: {
+    start: 'Start Selected Brokers',
+    stop: 'Stop Selected Brokers',
+    restart: 'Restart Selected Brokers',
+  },
   multiDbConfirmDesc: (action, names) => `${action} (${names.length}): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}`,
   // Databases a bulk or service action skips because the user isn't logged in to them.
   loginSkipWarning: (loggedOut, notLoggedIn) => {

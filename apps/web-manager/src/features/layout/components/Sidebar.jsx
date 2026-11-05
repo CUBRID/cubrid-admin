@@ -1884,7 +1884,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 <MenuItem
                   key={action}
                   icon={MULTI_DB_ACTION_ICONS[action]}
-                  label={`${CM.multiDbActions[action]} (${targets.length})`}
+                  label={CM.selectedDbActions[action]}
                   disabled={targets.length === 0}
                   title={menuOffReason(CM, { noTarget: targets.length === 0 && CM.multiActionNoTargetHint[action] })}
                   onClick={() => {
@@ -1932,7 +1932,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                 <MenuItem
                   key={action}
                   icon={MULTI_DB_ACTION_ICONS[action]}
-                  label={`${CM.multiDbActions[action]} (${targets.length})`}
+                  label={CM.selectedBrokerActions[action]}
                   disabled={targets.length === 0}
                   title={menuOffReason(CM, { noTarget: targets.length === 0 && CM.multiActionNoTargetHint[action] })}
                   onClick={() => {

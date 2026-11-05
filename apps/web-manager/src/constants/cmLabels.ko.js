@@ -1650,8 +1650,8 @@ export const CM_KO = {
   connectedHostsMsg: (count) => `호스트 ${count}개에 연결되었습니다.`,
   selectedHostsCountLabel: (count) => `호스트 ${count}개 선택됨`,
   moveToGroupMenu: '그룹으로 이동',
-  loginSelectedHosts: '선택 항목 로그인',
-  deleteSelectedHosts: '선택 항목 삭제',
+  loginSelectedHosts: '선택한 호스트 로그인',
+  deleteSelectedHosts: '선택한 호스트 삭제',
   bulkDeleteHostsConfirmTitle: '호스트 삭제',
   bulkDeleteHostsConfirmDesc: (count) => `선택한 호스트 ${count}개의 연결을 삭제하시겠습니까? 각 호스트에 저장된 로그인 정보와 설정 프로필이 함께 삭제되며, 되돌릴 수 없습니다.`,
   bulkDeleteHostsSuccessMsg: (count) => `호스트 ${count}개를 삭제했습니다.`,
@@ -2114,6 +2114,19 @@ export const CM_KO = {
     forgetCredentials: '저장된 로그인 정보 삭제',
   },
   multiDbConfirmTitle: (action) => `선택한 데이터베이스 ${action}`,
+  selectedDbActions: {
+    start: '선택한 데이터베이스 시작',
+    stop: '선택한 데이터베이스 중지',
+    restart: '선택한 데이터베이스 재시작',
+    login: '선택한 데이터베이스 로그인',
+    logout: '선택한 데이터베이스 로그아웃',
+    forgetCredentials: '선택한 데이터베이스의 저장된 로그인 정보 삭제',
+  },
+  selectedBrokerActions: {
+    start: '선택한 브로커 시작',
+    stop: '선택한 브로커 중지',
+    restart: '선택한 브로커 재시작',
+  },
   multiDbConfirmDesc: (action, names) => `${action} (${names.length}개): ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`,
   loginSkipWarning: (loggedOut, notLoggedIn) => {
     const list = (names) => `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` 외 ${names.length - 5}개` : ''}`;
