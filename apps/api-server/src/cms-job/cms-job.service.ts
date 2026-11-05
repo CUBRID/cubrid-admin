@@ -38,7 +38,7 @@ import {
 import { CmsJobStore } from './cms-job.store';
 import { CMS_JOB_CLEANUP_INTERVAL_MS, isTerminalJobStatus } from './cms-job.cleanup';
 import { CMS_JOB_RECENT_LIST_LIMIT } from './cms-job.constants';
-import { getMaintenanceResult, getMaintenanceSummary, redactMaintenanceText } from './maintenance-job';
+import { getLoadResult, getMaintenanceResult, getMaintenanceSummary, redactMaintenanceText } from './maintenance-job';
 
 @Injectable()
 export class CmsJobService implements OnModuleInit, OnModuleDestroy {
@@ -316,6 +316,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       if (getMaintenanceSummary(job)) {
         redactJobError(job, cmsResponse);
         job.result = getMaintenanceResult(job, cmsResponse, false);
+      } else if (job.type === 'load') {
+        job.result = getLoadResult(cmsResponse, false);
       }
       return false;
     }
@@ -338,6 +340,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     switch (job.type) {
       case 'unload':
         return response.result ?? {};
+      case 'load':
+        return getLoadResult(response, true);
       case 'compact':
         return response.log
           ? { success: true, log: response.log }
