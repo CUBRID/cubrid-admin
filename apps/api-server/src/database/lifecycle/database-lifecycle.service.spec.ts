@@ -1625,6 +1625,29 @@ describe('DatabaseLifecycleService', () => {
       await expect(service.getDBSpaceInfo(mockUserId, mockHostUid, mockDbname)).rejects.toMatchObject({ code: 'NO_SUCH_DATABASE' });
       expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
     });
+
+    // The host volume table reads every logged-in database at once; their
+    // existence checks share one startinfo instead of sending one each.
+    it('shares the startinfo check between volume reads sent together', async () => {
+      cmsClient.postAuthenticated
+        .mockResolvedValueOnce({
+          __EXEC_TIME: '10 ms',
+          note: 'none',
+          status: 'success',
+          task: 'startinfo',
+          dblist: [{ dbs: [{ dbname: mockDbname }, { dbname: 'otherdb' }] }],
+          activelist: [{ active: [] }],
+        })
+        .mockResolvedValue(mockDbSpaceInfoResponse);
+
+      await Promise.all([
+        service.getDBSpaceInfo(mockUserId, mockHostUid, mockDbname),
+        service.getDBSpaceInfo(mockUserId, mockHostUid, 'otherdb'),
+      ]);
+
+      const tasks = cmsClient.postAuthenticated.mock.calls.map(([, body]) => (body as { task: string }).task);
+      expect(tasks).toEqual(['startinfo', 'dbspaceinfo', 'dbspaceinfo']);
+    });
   });
 
   describe('createDatabase', () => {

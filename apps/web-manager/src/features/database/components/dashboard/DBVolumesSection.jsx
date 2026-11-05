@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
-import { fetchDashboardVolumes } from '../../databaseSlice';
+import { fetchDatabaseSpaceInfo } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Table } from '../../../../components/ds/layout/Table';
 import { Typography } from '../../../../components/ds/foundation/Typography';
@@ -18,8 +18,9 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
 
+  // The same read as the file-space section's; its result fills both.
   const refresh = () => {
-    if (hostUid && dbname) dispatch(fetchDashboardVolumes({ hostUid, dbname }));
+    if (hostUid && dbname) dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
   };
 
   useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);

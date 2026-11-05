@@ -110,6 +110,61 @@ describe('DatabaseInfoService', () => {
       expect(result).toEqual(mockResponse);
     });
 
+    const startInfoResponse = {
+      __EXEC_TIME: '10 ms',
+      note: 'none',
+      status: 'success',
+      task: 'startinfo',
+      dblist: [{ dbs: [{ dbname: 'testdb' }] }],
+      activelist: [{ active: [] }],
+    };
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it('shares a startinfo request still in flight for the same user and host, then reads again', async () => {
+      let finishFirst: (value: unknown) => void = () => undefined;
+      cmsClient.postAuthenticated
+        .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve; }))
+        .mockResolvedValue(startInfoResponse);
+
+      const first = service.startInfoInternal(mockUserId, mockHostUid);
+      const second = service.startInfoInternal(mockUserId, mockHostUid);
+      await settle();
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(1);
+
+      finishFirst(startInfoResponse);
+      await expect(Promise.all([first, second])).resolves.toEqual([startInfoResponse, startInfoResponse]);
+
+      // Settled results are not kept: a later read sends its own request.
+      await service.startInfoInternal(mockUserId, mockHostUid);
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not share across users or hosts', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue(startInfoResponse);
+
+      await Promise.all([
+        service.startInfoInternal(mockUserId, mockHostUid),
+        service.startInfoInternal('other-user', mockHostUid),
+        service.startInfoInternal(mockUserId, 'other-host'),
+      ]);
+
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(3);
+    });
+
+    it('fails every caller that joined a failed request, and a later read can succeed', async () => {
+      cmsClient.postAuthenticated
+        .mockRejectedValueOnce(new Error('ECONNRESET'))
+        .mockResolvedValue(startInfoResponse);
+
+      const first = service.startInfoInternal(mockUserId, mockHostUid);
+      const second = service.startInfoInternal(mockUserId, mockHostUid);
+      await expect(first).rejects.toBeDefined();
+      await expect(second).rejects.toBeDefined();
+
+      await expect(service.startInfoInternal(mockUserId, mockHostUid)).resolves.toEqual(startInfoResponse);
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledTimes(2);
+    });
+
     it('should throw CmsError when CMS status is not success', async () => {
       cmsClient.postAuthenticated.mockResolvedValue({
         status: 'fail',

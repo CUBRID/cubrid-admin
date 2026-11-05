@@ -32,6 +32,7 @@ export {
 } from './cubrid/parse-exvol';
 export { mapWithConcurrency } from './concurrency/map-with-concurrency';
 export { hostConfigKey, withHostConfigQueue } from './concurrency/host-config-mutex';
+export { shareInFlight } from './concurrency/single-flight';
 export {
   parseHaDbListDbNamesFromHaConf,
   isHostHaModeOnFromCubridConf,
