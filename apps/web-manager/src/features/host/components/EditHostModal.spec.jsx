@@ -41,12 +41,12 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = ({ error = null, uiLocale = 'en' } = {}) => {
+const render = ({ error = null, uiLocale = 'en', host = {} } = {}) => {
   const state = {
     host: {
       isEditHostModalOpen: true,
       hostToEditUid: 'h1',
-      hosts: [{ uid: 'h1', id: 'admin', address: '10.0.0.1', port: 8001, alias: 'Prod' }],
+      hosts: [{ uid: 'h1', id: 'admin', address: '10.0.0.1', port: 8001, alias: 'Prod', ...host }],
       hostGroups: {},
       loading: false,
       error,
@@ -71,6 +71,21 @@ it('saves an empty password when asked to change it and the field is left empty'
   await act(async () => q('edit-host-change-password-toggle').click());
   await act(async () => q('edit-host-save-btn').click());
   expect(editHost.mock.calls[0][0].payload.password).toBe('');
+});
+
+it('opens the password field at once for a host with no saved password (imported from a file)', async () => {
+  await render({ host: { hasPassword: false } });
+  const field = document.querySelector('input[name="password"]');
+  expect(field.disabled).toBe(false);
+  expect(q('edit-host-change-password-toggle')).toBeNull();
+  await act(async () => q('edit-host-save-btn').click());
+  expect(editHost.mock.calls[0][0].payload).toHaveProperty('password', '');
+});
+
+it('keeps the change link for a host whose password is saved', async () => {
+  await render({ host: { hasPassword: true } });
+  expect(document.querySelector('input[name="password"]').disabled).toBe(true);
+  expect(q('edit-host-change-password-toggle')).not.toBeNull();
 });
 
 const passwordInvalid = () => document.querySelector('input[name="password"]').getAttribute('aria-invalid') === 'true';

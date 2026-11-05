@@ -59,11 +59,15 @@ export default function EditHostModal() {
         });
       }
       setErrors({});
-      setChangePassword(false);
+      // No saved password (a host imported from a file): the field is open.
+      setChangePassword(hostToEdit?.hasPassword === false);
     }
   }, [isEditHostModalOpen, hostToEditUid]);
 
   if (!isEditHostModalOpen) return null;
+
+  // Older servers do not say; then the host is taken to have a password.
+  const hasSavedPassword = hosts.find((h) => h.uid === hostToEditUid)?.hasPassword !== false;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -307,14 +311,14 @@ export default function EditHostModal() {
               error={errors.password || (isCredentialError ? apiError : undefined)}
               icon="key"
               disabled={loading || !changePassword}
-              labelAction={(
+              labelAction={hasSavedPassword ? (
                 <PasswordChangeLink
                   testId="edit-host-change-password-toggle"
                   active={changePassword}
                   onChange={setChangePassword}
                   disabled={loading}
                 />
-              )}
+              ) : null}
             />
           </div>
         </div>
