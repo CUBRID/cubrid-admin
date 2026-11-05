@@ -73,7 +73,6 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
       .filter((key) => !prev.includes(key) && openedDbs.current.has(key) && !dbLogsByDb[key] && !dbLogsLoadingByDb[key])
       .forEach((key) => dispatch(fetchDatabaseLogs({ hostUid, dbname: key.slice(key.lastIndexOf(':') + 1) })));
     // Only a login change triggers this; the lists are read for the check.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, hostUid, hostConnected, loggedInDatabases]);
 
   return (
