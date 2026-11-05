@@ -37,6 +37,29 @@ describe('CMSAuthService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('getHaInfo', () => {
+    it('asks heartbeatlist for the nodes only (dbmodeall n) and reads the roles from that answer', async () => {
+      const cmsConfig = moduleRef.get(CmsConfigService) as unknown as { getAllSystemParam: jest.Mock };
+      const ha = moduleRef.get(HaService) as unknown as { heartbeatlistInternal: jest.Mock };
+      cmsConfig.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[common]', 'ha_mode=on'] }] });
+      // A dbmodeall=n answer: nodes, and an empty hadbinfolist (cm_job_task.cpp print_dbinfo_list_to_res).
+      ha.heartbeatlistInternal.mockResolvedValue({
+        status: 'success', task: 'heartbeatlist', currentnode: 'ha-a', currentnodestate: 'master',
+        hanodelist: [{ node: [
+          { hostname: 'ha-a', ip: '10.0.0.1', priority: '1', state: 'master' },
+          { hostname: 'ha-b', ip: '10.0.0.2', priority: '2', state: 'slave' },
+        ] }],
+        hadbinfolist: [{}],
+      });
+
+      const info = await service.getHaInfo('u1', 'h1');
+
+      expect(ha.heartbeatlistInternal).toHaveBeenCalledWith('u1', 'h1', 'n');
+      expect(info).toMatchObject({ isHA: true, currentNodeType: 'master' });
+      expect((info as { haNodes: unknown[] }).haNodes).toHaveLength(2);
+    });
+  });
+
   describe('CMS session tracking', () => {
     const host = () => ({
       uid: 'h1', id: 'admin', address: '10.0.0.1', port: 8001, password: 'pw',

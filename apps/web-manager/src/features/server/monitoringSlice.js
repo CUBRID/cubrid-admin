@@ -4,6 +4,7 @@ import { computeBrokerRates, cpuUsagePercent, mapDiskInfo } from './hostMetrics'
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 import { readSharedBrokerList } from '../broker/brokerSlice';
+import { extractHaHeartbeatNodes } from '../host/haPeerUtils';
 
 // Disk usage changes slowly and gethoststat has no disk field, so the
 // separate getsysdiskinfo call runs at most this often per host.
@@ -18,6 +19,42 @@ const heartbeatReads = createSharedReads();
 // Do not share a read across login sessions.
 const readKey = (hostUid) => JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid]);
 const readHeartbeat = (hostUid) => heartbeatReads(readKey(hostUid), () => monitoringApi.getHaHeartbeatList(hostUid));
+const readHeartbeatNodes = (hostUid) => heartbeatReads(`${readKey(hostUid)}:nodes`,
+  () => monitoringApi.getHaHeartbeatList(hostUid, { nodesOnly: true }));
+
+// Node roles and states, to tell when they change.
+const haNodesKey = (haHeartbeat) => JSON.stringify([
+  haHeartbeat?.currentnode, haHeartbeat?.currentnodestate, extractHaHeartbeatNodes(haHeartbeat),
+]);
+
+// A full heartbeat (dbmodeall y) replaces what is shown when newer. Its
+// database part (hadbinfolist) is kept by a later nodes-only read, so it has
+// its own seq.
+function applyHeartbeat(hostData, haHeartbeat, seq) {
+  if (!haHeartbeat) return;
+  if (seq > (hostData.heartbeatSeq ?? 0)) {
+    hostData.haHeartbeat = haHeartbeat;
+    hostData.heartbeatSeq = seq;
+  } else if (seq > (hostData.haDbInfoSeq ?? 0) && hostData.haHeartbeat) {
+    hostData.haHeartbeat = { ...hostData.haHeartbeat, hadbinfolist: haHeartbeat.hadbinfolist };
+  }
+  if (seq > (hostData.haDbInfoSeq ?? 0)) {
+    hostData.haDbInfoSeq = seq;
+    hostData.haDbInfoStale = false;
+  }
+}
+
+// A nodes-only heartbeat (dbmodeall n) has no database part: it updates the
+// nodes and keeps the databases from the last full one. When the nodes
+// changed (a failover, or back to normal), the databases are marked stale so
+// a full heartbeat is read once.
+function applyHeartbeatNodes(hostData, haHeartbeat, seq) {
+  if (!haHeartbeat || seq <= (hostData.heartbeatSeq ?? 0)) return;
+  const previous = hostData.haHeartbeat;
+  if (previous && haNodesKey(previous) !== haNodesKey(haHeartbeat)) hostData.haDbInfoStale = true;
+  hostData.haHeartbeat = { ...haHeartbeat, hadbinfolist: previous?.hadbinfolist ?? haHeartbeat.hadbinfolist };
+  hostData.heartbeatSeq = seq;
+}
 
 const readMonitoringData = async (hostUid, state) => {
   const haInfo = state.host.haInfo[hostUid];
@@ -56,6 +93,17 @@ export const fetchHaHeartbeatOnly = createAsyncThunk(
   'monitoring/fetchHaHeartbeatOnly',
   async (hostUid, { rejectWithValue }) => {
     const result = await readHeartbeat(hostUid);
+    if (!result.ok) return rejectWithValue(result.error.response?.data || result.error.message);
+    return { haHeartbeat: result.value, heartbeatSeq: result.seq };
+  }
+);
+
+// The 1s watch during a suspected failover: node states only, so CMS does
+// not run `cubrid changemode` for every database each second.
+export const fetchHaNodesOnly = createAsyncThunk(
+  'monitoring/fetchHaNodesOnly',
+  async (hostUid, { rejectWithValue }) => {
+    const result = await readHeartbeatNodes(hostUid);
     if (!result.ok) return rejectWithValue(result.error.response?.data || result.error.message);
     return { haHeartbeat: result.value, heartbeatSeq: result.seq };
   }
@@ -170,10 +218,7 @@ const monitoringSlice = createSlice({
         hostData.history = hostData.history.filter(h => now - h.timestamp < MAX_HISTORY_MS);
 
         // 6. Update HA Heartbeat Info if available and newer than shown
-        if (haHeartbeat && heartbeatSeq > (hostData.heartbeatSeq ?? 0)) {
-          hostData.haHeartbeat = haHeartbeat;
-          hostData.heartbeatSeq = heartbeatSeq;
-        }
+        applyHeartbeat(hostData, haHeartbeat, heartbeatSeq);
 
         // 6. Calculate Averages — only over samples that had a real value
         // (a first sample's "no rate yet" must not pull the average to 0).
@@ -200,10 +245,12 @@ const monitoringSlice = createSlice({
         const hostData = state.hostsData[hostUid];
         if (!hostData) return;
         const { haHeartbeat, heartbeatSeq } = action.payload;
-        if (haHeartbeat && heartbeatSeq > (hostData.heartbeatSeq ?? 0)) {
-          hostData.haHeartbeat = haHeartbeat;
-          hostData.heartbeatSeq = heartbeatSeq;
-        }
+        applyHeartbeat(hostData, haHeartbeat, heartbeatSeq);
+      })
+      .addCase(fetchHaNodesOnly.fulfilled, (state, action) => {
+        const hostData = state.hostsData[action.meta.arg];
+        if (!hostData) return;
+        applyHeartbeatNodes(hostData, action.payload.haHeartbeat, action.payload.heartbeatSeq);
       });
   }
 });

@@ -14,7 +14,7 @@ vi.mock('../broker/brokerSlice', () => ({ readSharedBrokerList: vi.fn() }));
 
 import monitoringApi from './monitoringApi';
 import { readSharedBrokerList } from '../broker/brokerSlice';
-import reducer, { fetchMonitoringData, fetchHaHeartbeatOnly } from './monitoringSlice';
+import reducer, { fetchMonitoringData, fetchHaHeartbeatOnly, fetchHaNodesOnly } from './monitoringSlice';
 import apiClient from '../../api/apiClient';
 
 const HOST = 'h1';
@@ -143,5 +143,73 @@ describe('reads shared between views of the same host', () => {
 
     expect(monitoringApi.getHaHeartbeatList).toHaveBeenCalledTimes(1);
     expect(hostData(store).haHeartbeat).toEqual({ currentnode: 'node1' });
+  });
+});
+
+describe('HA failover watch: nodes only (dbmodeall n)', () => {
+  const haStore = () => configureStore({
+    reducer: {
+      monitoring: reducer,
+      host: (s = { haInfo: { [HOST]: { isHA: true } } }) => s,
+    },
+  });
+  const node = (hostname, state) => ({ hostname, ip: hostname, priority: '1', state });
+  const dbInfo = [{ server: [{ dbmode: { dbname: 'demodb', server_mode: 'active' }, dbprocinfo: { dbname: 'demodb', pid: '1', state: 'registered_and_active' } }] }];
+  const full = (nodes) => ({ currentnode: 'a', currentnodestate: 'slave', hanodelist: [{ node: nodes }], hadbinfolist: dbInfo });
+  // CMS's dbmodeall=n answer has no database part; the server sends it as {}.
+  const nodesOnly = (nodes) => ({ currentnode: 'a', currentnodestate: 'slave', hanodelist: [{ node: nodes }], hadbinfolist: {} });
+
+  const loadFull = async (store, nodes) => {
+    monitoringApi.getHostStat.mockResolvedValueOnce(hostStat(100, 900));
+    readSharedBrokerList.mockResolvedValueOnce(brokerList(1000, 5000));
+    monitoringApi.getHaHeartbeatList.mockResolvedValueOnce(full(nodes));
+    now.mockReturnValue(100_000);
+    await store.dispatch(fetchMonitoringData(HOST)).unwrap();
+  };
+
+  it('asks for the nodes only and keeps the database part of the last full read', async () => {
+    const store = haStore();
+    await loadFull(store, [node('a', 'slave'), node('b', 'slave')]);
+
+    monitoringApi.getHaHeartbeatList.mockResolvedValueOnce(nodesOnly([node('a', 'slave'), node('b', 'slave')]));
+    await store.dispatch(fetchHaNodesOnly(HOST)).unwrap();
+
+    expect(monitoringApi.getHaHeartbeatList).toHaveBeenLastCalledWith(HOST, { nodesOnly: true });
+    expect(hostData(store).haHeartbeat.hadbinfolist).toEqual(dbInfo);
+    expect(hostData(store).haDbInfoStale).toBeFalsy();
+  });
+
+  it('marks the databases stale when the nodes change, and a full read clears it', async () => {
+    const store = haStore();
+    await loadFull(store, [node('a', 'slave'), node('b', 'slave')]);
+
+    monitoringApi.getHaHeartbeatList.mockResolvedValueOnce(nodesOnly([node('a', 'master'), node('b', 'slave')]));
+    await store.dispatch(fetchHaNodesOnly(HOST)).unwrap();
+    expect(hostData(store).haDbInfoStale).toBe(true);
+    expect(hostData(store).haHeartbeat.hanodelist[0].node[0].state).toBe('master');
+    expect(hostData(store).haHeartbeat.hadbinfolist).toEqual(dbInfo);
+
+    monitoringApi.getHaHeartbeatList.mockResolvedValueOnce(full([node('a', 'master'), node('b', 'slave')]));
+    await store.dispatch(fetchHaHeartbeatOnly(HOST)).unwrap();
+    expect(monitoringApi.getHaHeartbeatList).toHaveBeenLastCalledWith(HOST);
+    expect(hostData(store).haDbInfoStale).toBe(false);
+  });
+
+  it('keeps the database part of a full read that answers after a newer nodes-only read', async () => {
+    const store = haStore();
+    await loadFull(store, [node('a', 'slave'), node('b', 'slave')]);
+    let answerFull;
+    monitoringApi.getHaHeartbeatList
+      .mockReturnValueOnce(new Promise((r) => { answerFull = r; }))
+      .mockResolvedValueOnce(nodesOnly([node('a', 'master'), node('b', 'slave')]));
+    const slowFull = store.dispatch(fetchHaHeartbeatOnly(HOST));
+    await store.dispatch(fetchHaNodesOnly(HOST)).unwrap();
+    const newerDb = [{ server: [{ dbmode: { dbname: 'demodb', server_mode: 'standby' } }] }];
+    answerFull({ ...full([node('a', 'slave'), node('b', 'slave')]), hadbinfolist: newerDb });
+    await slowFull;
+
+    // The nodes stay as the newer read saw them; the databases take the full read.
+    expect(hostData(store).haHeartbeat.hanodelist[0].node[0].state).toBe('master');
+    expect(hostData(store).haHeartbeat.hadbinfolist).toEqual(newerDb);
   });
 });

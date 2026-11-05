@@ -324,7 +324,8 @@ export class CmsAuthService {
       return { success: true, isHA: false };
     }
 
-    const hb = await this.haService.heartbeatlistInternal(userId, uid);
+    // Only node roles are used here: skip the per-database changemode runs.
+    const hb = await this.haService.heartbeatlistInternal(userId, uid, 'n');
     const haNodes = flattenHanodelist(hb.hanodelist);
     const currentNodeType =
       resolveCurrentNodeRole(hb.currentnode, hb.currentnodestate, haNodes) || 'unknown';

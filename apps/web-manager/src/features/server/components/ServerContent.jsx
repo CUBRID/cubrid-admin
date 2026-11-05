@@ -9,7 +9,7 @@ import { fetchBrokerList } from '../../broker/brokerSlice';
 import DatabaseVolumes from './DatabaseVolumes';
 import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
-import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
+import { fetchMonitoringData, fetchHaHeartbeatOnly, fetchHaNodesOnly } from '../monitoringSlice';
 import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
@@ -159,11 +159,21 @@ const Component = function ServerContent({ hostUid }) {
         clearInterval(timer);
         return;
       }
-      dispatch(fetchHaHeartbeatOnly(hostUid));
+      // Node states only; the databases are read once when the nodes change.
+      dispatch(fetchHaNodesOnly(hostUid));
     }, HA_ABNORMAL_POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
   }, [isTabActive, isHaAbnormal, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
+
+  // The nodes changed under the 1s watch (a failover, or back to normal):
+  // read the databases once so their HA badges match the new roles.
+  const haDbInfoStale = Boolean(hostData?.haDbInfoStale);
+  useEffect(() => {
+    if (haDbInfoStale && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
+      dispatch(fetchHaHeartbeatOnly(hostUid));
+    }
+  }, [haDbInfoStale, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
 
   const haDbs = React.useMemo(() => {
     const names = new Set();
