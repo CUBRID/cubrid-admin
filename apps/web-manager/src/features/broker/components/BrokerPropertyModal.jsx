@@ -180,7 +180,7 @@ export default function BrokerPropertyModal() {
         </>
       }
     >
-      <div className="flex flex-col h-[520px] -m-5">
+      <div className="flex flex-col h-[min(520px,calc(90vh-146px))] -m-5">
         <div className="px-5 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-white/[0.01]">
           {isCommonMode ? (
             <SectionHeader title={CM.brokerCommonProperties} icon="hub" className="!m-0" />
