@@ -10,11 +10,18 @@ vi.mock('axios', async (importOriginal) => {
   axios.post = (...args) => server.post(...args);
   return { ...actual, default: axios };
 });
-vi.mock('../app/store', () => ({ store: { dispatch: () => undefined } }));
-vi.mock('../features/auth/authSlice', () => ({
-  logout: () => ({ type: 'auth/logout' }),
-  sessionRefreshed: (p) => ({ type: 'auth/sessionRefreshed', payload: p }),
-}));
+// Each tab's store runs the real auth reducer, which is where tokens could
+// be written back to storage.
+vi.mock('../app/store', async () => {
+  const { default: auth } = await import('../features/auth/authSlice');
+  let state = auth(undefined, { type: '@@init' });
+  return {
+    store: {
+      dispatch: (action) => { if (action && typeof action === 'object') state = auth(state, action); return action; },
+      getState: () => ({ auth: state }),
+    },
+  };
+});
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -121,6 +128,30 @@ it('two tabs refreshing at once call the server once and do not reuse a refresh 
   expect(server.revoked).toBe(false);
   // B uses the token A stored.
   expect(tabB.default.defaults.headers.common.Authorization).toBe(tabA.default.defaults.headers.common.Authorization);
+});
+
+it("keeps the newer refresh token when another tab's token arrives before its refresh token", async () => {
+  localStorage.setItem('token', jwt(HOUR));
+  const tabA = await openTab();
+  await openTab(); // tab B
+
+  // A refreshes: r1 is spent, r2 stored.
+  await tabA.refreshSession();
+  expect(localStorage.getItem('refreshToken')).toBe('r2');
+  const t2 = localStorage.getItem('token');
+
+  // In B's process the new access token arrives first: when its storage
+  // event runs, B still sees r1; r2 reaches B just after.
+  localStorage.setItem('refreshToken', 'r1');
+  window.dispatchEvent(new StorageEvent('storage', { key: 'token', newValue: t2 }));
+  localStorage.setItem('refreshToken', 'r2');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(localStorage.getItem('refreshToken')).toBe('r2');
+
+  // The next refresh uses r2, not the spent r1.
+  await vi.advanceTimersByTimeAsync(DAY);
+  expect(server.calls).toEqual(['r1', 'r2']);
+  expect(server.revoked).toBe(false);
 });
 
 it('keeps polling for more than a day', async () => {
