@@ -8,6 +8,12 @@ import { BaseCmsRequest } from '@type';
 import * as https from 'https';
 import * as net from 'net';
 import { ConfigService } from '@config/config.service';
+import {
+  CMS_MAX_CONCURRENT_MAX,
+  CMS_MAX_CONCURRENT_MIN,
+  CMS_MAX_CONCURRENT_REQUESTS_PER_HOST,
+  parseCmsMaxConcurrent,
+} from '@config/cms-concurrency';
 
 class CmsHttpsAgent extends https.Agent {
   createConnection(
@@ -49,14 +55,57 @@ export class CmsHttpsClientService {
   private readonly logger = new Logger(CmsHttpsClientService.name);
   private httpsAgent: CmsHttpsAgent | null = null;
 
-  // CMS (cm_server) cannot handle truly concurrent requests against the same
-  // host — confirmed live: firing several requests at one CMS instance at
-  // once made some of them (not all) stall for ~30s before resolving or
-  // failing, while the exact same requests sent sequentially never did.
-  // Serialize per host (keyed by url, unique per host) so the app's normal
-  // concurrent request patterns (parallel dashboard widgets, background
-  // monitoring polls overlapping with user actions) don't trigger it.
-  private readonly hostRequestQueue = new Map<string, Promise<void>>();
+  // Requests to one host (keyed by url, unique per host) are limited to
+  // CMS_MAX_CONCURRENT_REQUESTS_PER_HOST at a time (cwm.conf, default 4); the
+  // rest wait in order. Sending everything at once (parallel dashboard
+  // widgets, monitoring polls overlapping with user actions) made some CMS
+  // requests stall for ~30s, and a CMS host busy with a long task would
+  // otherwise get every request at once. 1 sends them one by one. Different
+  // hosts never wait for each other.
+  private readonly hostSlots = new Map<string, { active: number; waiting: Array<() => void> }>();
+  private lastInvalidConcurrency: string | undefined;
+
+  private maxConcurrentPerHost(): number {
+    const raw = process.env[CMS_MAX_CONCURRENT_REQUESTS_PER_HOST];
+    const { value, invalid } = parseCmsMaxConcurrent(raw);
+    if (invalid && raw !== this.lastInvalidConcurrency) {
+      this.logger.warn(formatAuditLog('cms_queue_config_invalid', {
+        key: CMS_MAX_CONCURRENT_REQUESTS_PER_HOST, value: raw, used: value,
+        allowed: `${CMS_MAX_CONCURRENT_MIN}-${CMS_MAX_CONCURRENT_MAX}`,
+      }));
+    }
+    this.lastInvalidConcurrency = invalid ? raw : undefined;
+    return value;
+  }
+
+  private acquireHostSlot(key: string): Promise<void> {
+    let slot = this.hostSlots.get(key);
+    if (!slot) {
+      slot = { active: 0, waiting: [] };
+      this.hostSlots.set(key, slot);
+    }
+    if (slot.waiting.length === 0 && slot.active < this.maxConcurrentPerHost()) {
+      slot.active += 1;
+      return Promise.resolve();
+    }
+    const waitingSlot = slot;
+    return new Promise<void>((resolve) => waitingSlot.waiting.push(resolve));
+  }
+
+  private releaseHostSlot(key: string): void {
+    const slot = this.hostSlots.get(key);
+    if (!slot) return;
+    slot.active -= 1;
+    // A raised limit lets more of the waiting ones start at once.
+    const limit = this.maxConcurrentPerHost();
+    while (slot.waiting.length > 0 && slot.active < limit) {
+      slot.active += 1;
+      slot.waiting.shift()?.();
+    }
+    if (slot.active === 0 && slot.waiting.length === 0) {
+      this.hostSlots.delete(key);
+    }
+  }
 
   // Deliberately NOT paired with a retry-on-CMS-timeout: this codebase
   // already tried that once (withCmsRetry, removed in #113 / 3abf005) and
@@ -66,28 +115,22 @@ export class CmsHttpsClientService {
   // after CMS explicitly returns a timeout; it never resubmits a mutation.
   private async withHostQueue<T>(key: string, fn: () => Promise<T>, task?: string): Promise<T> {
     const queuedAt = Date.now();
-    const pending = this.hostRequestQueue.get(key) ?? Promise.resolve();
-    let resolve!: () => void;
-    const next = new Promise<void>((r) => (resolve = r));
-    this.hostRequestQueue.set(key, next);
-    let startedAt: number | undefined;
+    await this.acquireHostSlot(key);
+    const startedAt = Date.now();
+    this.logger.debug(formatAuditLog('cms_queue_start', {
+      address: key, task, queueWaitMs: startedAt - queuedAt,
+      inFlight: this.hostSlots.get(key)?.active, waiting: this.hostSlots.get(key)?.waiting.length,
+    }));
     try {
-      await pending;
-      startedAt = Date.now();
-      this.logger.debug(formatAuditLog('cms_queue_start', {
-        address: key, task, queueWaitMs: startedAt - queuedAt,
-      }));
       return await fn();
     } finally {
       this.logger.debug(formatAuditLog('cms_queue_finish', {
         address: key, task,
-        queueWaitMs: (startedAt ?? Date.now()) - queuedAt,
-        executionMs: startedAt === undefined ? 0 : Date.now() - startedAt,
+        queueWaitMs: startedAt - queuedAt,
+        executionMs: Date.now() - startedAt,
+        inFlight: this.hostSlots.get(key)?.active, waiting: this.hostSlots.get(key)?.waiting.length,
       }));
-      resolve();
-      if (this.hostRequestQueue.get(key) === next) {
-        this.hostRequestQueue.delete(key);
-      }
+      this.releaseHostSlot(key);
     }
   }
 

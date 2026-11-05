@@ -4,6 +4,7 @@ import { ConfigService } from '@config/config.service';
 import { resolveCwmConfPath, readCwmConfSafe } from '@config/load-runtime-env';
 import { reloadLogSettings } from './winston-logger';
 import { LoggerService } from '@nestjs/common';
+import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from '@config/cms-concurrency';
 
 const LOG_KEYS = [
   'LOG_TO_FILE',
@@ -13,6 +14,10 @@ const LOG_KEYS = [
   'LOG_MAX_FILES',
   'LOG_APPEND_ON_RESTART',
 ] as const;
+
+// Read from process.env on every use, so updating the env is all a change
+// needs. Removing the key from cwm.conf goes back to the default.
+const LIVE_KEYS = [CMS_MAX_CONCURRENT_REQUESTS_PER_HOST] as const;
 
 // Editors commonly save via a temp-file-then-rename sequence, which can fire
 // several rapid 'change'/'rename' events for one actual edit — debounce so a
@@ -40,17 +45,23 @@ const POLL_INTERVAL_MS = 5000;
  * replace the file on save (delete+recreate), which can silently drop a
  * watch registered on the file itself on certain platforms.
  */
-export function startLogConfigWatcher(configService: ConfigService, logger: LoggerService): void {
+export function startLogConfigWatcher(configService: ConfigService, logger: LoggerService): () => void {
   const confPath = resolveCwmConfPath();
   const confDir = path.dirname(confPath);
   const confFilename = path.basename(confPath);
 
   if (!fs.existsSync(confDir)) {
-    return; // Nothing to watch — e.g. no conf/ directory was ever created.
+    return () => undefined; // Nothing to watch — e.g. no conf/ directory was ever created.
   }
 
   let debounceTimer: NodeJS.Timeout | null = null;
   let lastRaw: string | null = fs.existsSync(confPath) ? fs.readFileSync(confPath, 'utf8') : null;
+  // What cwm.conf had for each live key when last seen; a key set only in
+  // the environment (not in cwm.conf) is left alone until cwm.conf sets it.
+  const bootConf = fs.existsSync(confPath) ? readCwmConfSafe(confPath) : null;
+  const liveValues: Record<string, string | undefined> = Object.fromEntries(
+    LIVE_KEYS.map((key) => [key, bootConf && key in bootConf ? String(bootConf[key]) : undefined])
+  );
 
   const applyChange = () => {
     if (!fs.existsSync(confPath)) {
@@ -73,6 +84,15 @@ export function startLogConfigWatcher(configService: ConfigService, logger: Logg
     }
     lastRaw = raw;
 
+    for (const key of LIVE_KEYS) {
+      const next = key in conf ? String(conf[key]) : undefined;
+      if (next === liveValues[key]) continue;
+      liveValues[key] = next;
+      if (next === undefined) delete process.env[key];
+      else process.env[key] = next;
+      logger.log(`cwm.conf changed — ${key} is now ${next ?? 'unset (default)'}`, 'LogConfigWatcher');
+    }
+
     const relevantKeys = LOG_KEYS.filter((key) => key in conf);
     if (relevantKeys.length === 0) {
       return; // Edit didn't touch any LOG_* key — nothing for us to do.
@@ -87,7 +107,7 @@ export function startLogConfigWatcher(configService: ConfigService, logger: Logg
     logger.log(`cwm.conf changed — log settings reloaded (${summary})`, 'LogConfigWatcher');
   };
 
-  fs.watch(confDir, (_eventType, filename) => {
+  const watcher = fs.watch(confDir, (_eventType, filename) => {
     if (filename !== confFilename) {
       return;
     }
@@ -103,5 +123,11 @@ export function startLogConfigWatcher(configService: ConfigService, logger: Logg
   const pollTimer = setInterval(applyChange, POLL_INTERVAL_MS);
   pollTimer.unref(); // Don't hold the process open just for this.
 
-  logger.log(`Watching ${confPath} for log setting changes (LOG_TO_FILE/LOG_DIR/LOG_LEVEL/LOG_MAX_SIZE/LOG_MAX_FILES/LOG_APPEND_ON_RESTART)`, 'LogConfigWatcher');
+  logger.log(`Watching ${confPath} for setting changes (${[...LOG_KEYS, ...LIVE_KEYS].join('/')})`, 'LogConfigWatcher');
+
+  return () => {
+    watcher.close();
+    clearInterval(pollTimer);
+    if (debounceTimer) clearTimeout(debounceTimer);
+  };
 }

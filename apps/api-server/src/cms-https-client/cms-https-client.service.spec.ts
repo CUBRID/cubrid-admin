@@ -4,11 +4,16 @@ import { ConfigService } from '@config/config.service';
 import { HostService } from '@host';
 import { EncryptionService } from '@security';
 import { CmsHttpsClientService } from './cms-https-client.service';
-import { of, Subject, throwError } from 'rxjs';
+import { of, ReplaySubject, Subject, throwError } from 'rxjs';
 
 describe('CmsHttpsClientService', () => {
   let service: CmsHttpsClientService;
   const post = jest.fn();
+
+  const KEY = 'CMS_MAX_CONCURRENT_REQUESTS_PER_HOST';
+  afterEach(() => {
+    delete process.env[KEY];
+  });
 
   beforeEach(async () => {
     post.mockReset();
@@ -66,6 +71,7 @@ describe('CmsHttpsClientService', () => {
   });
 
   it('releases the host queue after a failed read without retrying it', async () => {
+    process.env[KEY] = '1';
     const blocked = new Subject();
     post.mockReturnValueOnce(blocked).mockReturnValue(of({ data: { status: 'success' } }));
     const read = service.postAuthenticated('https://cms/cm_api', { task: 'dbspaceinfo', token: 'test' });
@@ -81,6 +87,7 @@ describe('CmsHttpsClientService', () => {
   });
 
   it('does not send a public request still queued when its caller gave up, and bounds one that is sent', async () => {
+    process.env[KEY] = '1';
     const blocked = new Subject();
     post.mockReturnValueOnce(blocked).mockReturnValue(of({ data: { status: 'success', token: 't' } }));
     const ahead = service.postAuthenticated('https://cms/cm_api', { task: 'getstartinfo', token: 'test' });
@@ -127,5 +134,82 @@ describe('CmsHttpsClientService', () => {
     post.mockClear().mockReturnValue(of({ data: { status: 'failure', note: 'permission denied' } }));
     await service.postAuthenticated('https://cms/cm_api', { task: 'getautoexecquery', token: 'test' });
     expect(post).toHaveBeenCalledTimes(1);
+  });
+  describe('requests at once per host (CMS_MAX_CONCURRENT_REQUESTS_PER_HOST)', () => {
+    const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+    /** Starts `n` reads to one host whose answers wait; returns them and their answer switches. */
+    const startReads = (n: number, url = 'https://cms/cm_api') => {
+      // Keyed by task, and replayed, so an answer given before its request is sent still arrives.
+      const answers = Array.from({ length: n }, () => new ReplaySubject());
+      post.mockImplementation((_url: string, data: { task: string }) => {
+        const i = /^read([0-9]+)$/.exec(data.task)?.[1];
+        return i === undefined ? of({ data: { status: 'success' } }) : answers[Number(i)];
+      });
+      const reads = answers.map((_, i) => service.postAuthenticated(url, { task: `read${i}`, token: 'test' }));
+      const answer = (i: number) => { answers[i].next({ data: { status: 'success', i } }); answers[i].complete(); };
+      return { reads, answer };
+    };
+
+    it('1 sends them one by one, in order', async () => {
+      process.env[KEY] = '1';
+      const { reads, answer } = startReads(3);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(1);
+      answer(0);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(2);
+      answer(1);
+      await flush();
+      answer(2);
+      await Promise.all(reads);
+      expect(post.mock.calls.map((c) => c[1].task)).toEqual(['read0', 'read1', 'read2']);
+    });
+
+    it('4 (the default) sends four at once, and the fifth when one of them answers', async () => {
+      const { reads, answer } = startReads(5);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(4);
+      answer(2);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(5);
+      expect(post.mock.calls[4][1].task).toBe('read4');
+      [0, 1, 3, 4].forEach(answer);
+      await Promise.all(reads);
+    });
+
+    it('a full host does not hold back another host', async () => {
+      process.env[KEY] = '2';
+      const first = startReads(3, 'https://first/cm_api');
+      await flush();
+      expect(post).toHaveBeenCalledTimes(2);
+      await expect(service.postAuthenticated('https://second/cm_api', { task: 'gethoststat', token: 'test' }))
+        .resolves.toEqual({ status: 'success' });
+      [0, 1, 2].forEach(first.answer);
+      await Promise.all(first.reads);
+    });
+
+    it.each(['0', '17', '-1', 'abc', '2.5'])('uses the default 4 for %p', async (value) => {
+      process.env[KEY] = value;
+      const { reads, answer } = startReads(5);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(4);
+      [0, 1, 2, 3].forEach(answer);
+      await flush();
+      answer(4);
+      await Promise.all(reads);
+    });
+
+    it('a raised limit (cwm.conf edited) lets the waiting ones start without a restart', async () => {
+      process.env[KEY] = '1';
+      const { reads, answer } = startReads(4);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(1);
+      process.env[KEY] = '3';
+      answer(0);
+      await flush();
+      expect(post).toHaveBeenCalledTimes(4);
+      [1, 2, 3].forEach(answer);
+      await Promise.all(reads);
+    });
   });
 });

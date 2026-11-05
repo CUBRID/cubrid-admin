@@ -35,6 +35,7 @@ unreadable.
 | `CMS_JOB_RETENTION_HOURS` | How long finished background-job records (copy/rename/backup/etc.) are kept | `24` |
 | `CMS_JOB_STALE_RUNNING_HOURS` | How long a job can run before it's treated as stalled | `CMS_JOB_LONG_TIMEOUT_HOURS + 1` |
 | `CMS_JOB_LONG_TIMEOUT_HOURS` | Max wait for long-running jobs (unload/load) | `12` |
+| `CMS_MAX_CONCURRENT_REQUESTS_PER_HOST` | How many requests are sent to one CMS host at the same time; the rest wait in order. `1` sends them one by one. A value outside 1–16 uses the default. Applies without a restart. In the desktop app, put it in `conf/cwm.conf` inside the workspace folder. | `4` |
 | `CMS_JOB_RECOVER_ON_STARTUP` | Resume tracking jobs that were still running when the server restarted | `true` |
 | `SERVER_IP` | IP to include in the auto-generated self-signed certificate (avoids browser warnings when accessed by IP) | detected from network interfaces |
 | `CWM_SSL_DIR` | Directory to read/write the self-signed cert from | `ssl/` next to the executable |
