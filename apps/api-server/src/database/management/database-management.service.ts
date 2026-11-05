@@ -331,7 +331,12 @@ export class DatabaseManagementService extends BaseService {
       'split-schema-files': request['split-schema-files'],
       delimit: request.delimit,
       estimate: request.estimate,
-      prefix: request.prefix,
+      // Without a prefix the engine names its files after the name it was
+      // given, which for an HA database is db@host (CMS adds the host), while
+      // CMS reads the result log and writes unloaddb.info as <db>_...: the
+      // result table came back empty. The database name as the prefix makes
+      // both sides use <db>_..., which is also the default for the others.
+      prefix: request.prefix || dbname,
       cach: request.cach,
     };
 

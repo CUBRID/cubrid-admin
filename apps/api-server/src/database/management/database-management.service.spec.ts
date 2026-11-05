@@ -347,6 +347,23 @@ describe('DatabaseManagementService', () => {
       );
     });
 
+    it.each([['no prefix', undefined], ['an empty prefix', '']])(
+      'sends the database name as the prefix for %s, so CMS finds the result log of an HA database',
+      async (_case, prefix) => {
+        // CMS runs an HA database's unloaddb as db@host; without a prefix
+        // the engine names the files db@host_..., while CMS reads <db>_....
+        cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+        await service.unloadDatabase(mockUserId, mockHostUid, mockDbname, { ...baseRequest, prefix });
+
+        expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ task: 'unloaddb', prefix: mockDbname }),
+          expect.objectContaining({ timeoutMs: expect.any(Number) })
+        );
+      }
+    );
+
     it('should throw InvalidParameter error when both isSchemaIncluded and isDataIncluded are false', async () => {
       const request: UnloadDatabaseRequest = {
         ...baseRequest,
