@@ -91,6 +91,7 @@ import ReconnectHostModal from '../features/host/components/ReconnectHostModal';
 import { Icon } from '../components/ds/foundation/Icon';
 import { useCM } from '../constants/useCM';
 import { useConfirm } from '../infrastructure/hooks/useConfirm';
+import { isRefreshViewKey } from './refreshViewKey';
 
 function DashboardLayout() {
   const CM = useCM();
@@ -211,7 +212,7 @@ function DashboardLayout() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'r' || e.key === 'R'))) {
+      if (isRefreshViewKey(e)) {
         e.preventDefault();
         refreshView();
       }
