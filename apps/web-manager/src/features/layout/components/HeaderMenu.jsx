@@ -45,7 +45,7 @@ export default function HeaderMenu() {
         />
       </DropdownMenu>
 
-      <DropdownMenu label={<MenuLabel>{CM.hostServiceManagement}</MenuLabel>} width="w-60">
+      <DropdownMenu label={<MenuLabel>{CM.hostServiceManagement}</MenuLabel>} minWidth="min-w-60">
         <MenuItem
           icon="space_dashboard"
           label={CM.serviceDashboard}
@@ -57,7 +57,7 @@ export default function HeaderMenu() {
           label={CM.cmsAccountManagement}
           {...action(MENU_ACTIONS.cmsAccountManagement)}
         />
-        <SubMenu icon="settings" label={CM.configParam} width="w-56" gap="ml-3">
+        <SubMenu icon="settings" label={CM.configParam} minWidth="min-w-56" gap="ml-3">
           <MenuItem
             icon="edit_document"
             label={CM.editCubridConfig}
@@ -76,7 +76,7 @@ export default function HeaderMenu() {
         </SubMenu>
       </DropdownMenu>
 
-      <DropdownMenu label={<MenuLabel>{CM.help}</MenuLabel>} width="w-56">
+      <DropdownMenu label={<MenuLabel>{CM.help}</MenuLabel>} minWidth="min-w-56">
         <MenuItem
           icon="help"
           label={CM.help}

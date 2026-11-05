@@ -5,8 +5,10 @@ const PADDING = 18;
 
 /**
  * A reusable context menu wrapper that positions itself within the viewport.
+ * It is at least `minWidth` wide and grows with its items up to the window's
+ * width, so long names are cut off only when the window is too narrow.
  */
-export default function ContextMenuWrapper({ x, y, children, onClose, width = "w-60" }) {
+export default function ContextMenuWrapper({ x, y, children, onClose, minWidth = 'min-w-60' }) {
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: y, left: x });
   const [isPositioned, setIsPositioned] = useState(false);
@@ -66,8 +68,8 @@ export default function ContextMenuWrapper({ x, y, children, onClose, width = "w
       role="menu"
       tabIndex={-1}
       aria-label={getCM(getStoredLocale()).contextMenuAriaLabel}
-      className={`fixed z-1000 ${width} bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.2)] p-1.5 max-h-[calc(100vh-36px)] overflow-y-auto overflow-x-hidden custom-scrollbar animate-in fade-in zoom-in-95 duration-200 context-menu-container ${isPositioned ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-      style={{ top: position.top, left: position.left }}
+      className={`fixed z-1000 ${minWidth} w-max bg-white dark:bg-bk-side border border-slate-200 dark:border-slate-800 rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.2)] p-1.5 max-h-[calc(100vh-36px)] overflow-y-auto overflow-x-hidden custom-scrollbar animate-in fade-in zoom-in-95 duration-200 context-menu-container ${isPositioned ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+      style={{ top: position.top, left: position.left, maxWidth: `calc(100vw - ${PADDING * 2}px)` }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >

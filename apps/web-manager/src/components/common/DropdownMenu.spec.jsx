@@ -206,3 +206,14 @@ describe('a label cut off with "…"', () => {
     expect(label().hasAttribute('title')).toBe(false);
   });
 });
+
+it('lets a menu and its submenu grow with their items up to the window', async () => {
+  await renderMenus();
+  await openSubMenu();
+  const top = container.querySelector('[role="menu"]');
+  const sub = subMenuPortal();
+  expect(top.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-52', 'w-max']));
+  expect(top.style.maxWidth).toBe('calc(100vw - 16px)');
+  expect(sub.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-56', 'w-max']));
+  expect(sub.style.maxWidth).toBe('calc(100vw - 40px)');
+});

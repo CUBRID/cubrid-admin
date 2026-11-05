@@ -1249,7 +1249,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           x={serverToolbarMenu.mouseX}
           y={serverToolbarMenu.mouseY}
           onClose={() => setServerToolbarMenu(null)}
-          width="w-48"
+          minWidth="min-w-48"
         >
           <MenuItem
             icon="create_new_folder"
@@ -1792,7 +1792,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             />
           </SubMenu>
 
-          <SubMenu icon="info" label={CM.databaseInfoMenu} width="w-52">
+          <SubMenu icon="info" label={CM.databaseInfoMenu} minWidth="min-w-52">
             <MenuItem
               icon="lock_open"
               label={`${CM.lockingInformation}...`}
