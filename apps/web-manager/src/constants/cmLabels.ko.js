@@ -2400,6 +2400,10 @@ export const CM_KO = {
   desktopFailedWithDetail: (fallback, detail) => `${fallback} (${detail})`,
   // Parameter value checks by code (paramIssueText). Bounds in words, not ≥/≤.
   paramIssues: {
+    DB_NAME_EMPTY: '데이터베이스 이름을 입력하세요',
+    DB_NAME_TOO_LONG: (p) => `${p.max}자까지 쓸 수 있습니다`,
+    DB_NAME_START: '영문자로 시작해야 합니다',
+    DB_NAME_CHARS: '영문자, 숫자, _, -만 쓸 수 있습니다',
     NOT_ONE_OF: (p) => `다음 중 하나여야 합니다: ${(p.options ?? []).join(', ')}`,
     NOT_BOOLEAN: 'yes 또는 no여야 합니다(y/n, 1/0, true/false, on/off도 됨)',
     TOO_MANY_VALUES: (p) => `값은 ${p.max}개까지 쓸 수 있습니다`,
