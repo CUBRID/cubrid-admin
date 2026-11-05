@@ -1,4 +1,5 @@
 import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';
+import { isBlankTreeClick } from '../../../components/domain/tree/isBlankTreeClick';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import {
@@ -983,10 +984,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               id="host-section"
               onContextMenu={handleHostRootContextMenu}
               onClick={(e) => {
-                // Clicking empty space (not bubbled from a host/group row)
+                // Clicking blank space (anywhere but a host or group row)
                 // clears a shift/cmd-click multi-selection, instead of
                 // requiring each host to be cmd/ctrl-clicked off one by one.
-                if (e.target === e.currentTarget && selectedHostUids.size > 0) {
+                if (isBlankTreeClick(e) && selectedHostUids.size > 0) {
                   setSelectedHostUids(new Set());
                 }
               }}
@@ -1131,6 +1132,12 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
                     <div
                       className="flex-1 overflow-y-auto px-4 pb-4 relative min-h-[200px]"
+                      onClick={(e) => {
+                        // Blank space ends the database or broker multi-selection.
+                        if (!isBlankTreeClick(e)) return;
+                        if (selectedDbNames.size > 0) setSelectedDbNames(new Set());
+                        if (selectedBrokerNames.size > 0) setSelectedBrokerNames(new Set());
+                      }}
                       onContextMenu={(e) => {
                         // Tree rows stopPropagation() on their own context menu (see
                         // TreeNode.jsx), so this only ever fires for genuinely blank
