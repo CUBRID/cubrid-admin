@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
 import { DESKTOP_API_BASE_URL } from '../config/constants';
 import { resolveDesktopAllowedOrigin } from '../protocol/origin';
 import { getApiServerDir, getApiServerEntry } from '../workspace/paths';
@@ -40,6 +41,9 @@ export function startApiServer(paths: WorkspacePaths, secrets: { seed: string; s
       STORAGE_PATH: paths.storageDir,
       CWM_SSL_DIR: paths.sslDir,
       ALLOWED_ORIGINS: resolveDesktopAllowedOrigin(),
+      // Settings the server reads from cwm.conf (such as how many requests
+      // go to one CMS host at once) live in the workspace.
+      CWM_CONF_PATH: path.join(paths.workspaceRoot, 'conf', 'cwm.conf'),
     },
     stdio: ['ignore', 'inherit', 'pipe'],
   });
