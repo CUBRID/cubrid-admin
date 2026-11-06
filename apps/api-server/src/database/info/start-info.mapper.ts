@@ -15,7 +15,8 @@ export function mapStartInfoToClientResponse(
   cmsStart: StartInfoCmsResponse,
   dbProfiles: DbProfilesLike,
   haDbNames: Iterable<string> = [],
-  isLoggedIn: (dbname: string) => boolean = () => false
+  isLoggedIn: (dbname: string) => boolean = () => false,
+  unlistedDbs: { dbname: string; dbdir: string }[] = []
 ): StartInfoClientResponse {
   const profileMap = dbProfiles ?? {};
   const dbs = cmsStart.dblist?.[0]?.dbs ?? [];
@@ -28,7 +29,12 @@ export function mapStartInfoToClientResponse(
 
   return {
     activelist: { active: active.map((a) => ({ ...a, ...loginFields(a.dbname) })) },
-    dblist: { dbs: dbs.map((db) => ({ ...db, ...loginFields(db.dbname) })) },
+    dblist: {
+      dbs: [
+        ...dbs.map((db) => ({ ...db, ...loginFields(db.dbname) })),
+        ...unlistedDbs.map((db) => ({ ...db, ...loginFields(db.dbname), cmsListed: false as const })),
+      ],
+    },
     haDbNames: [...haDbNames],
   };
 }

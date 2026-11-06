@@ -24,6 +24,12 @@ export type StartInfoClientResponse = {
       isLoggedIn: boolean;
       /** The user logged out of it (its saved login is kept but not used). */
       isLoggedOut: boolean;
+      /**
+       * false for a database of this HA node that CMS's own list leaves out
+       * (an HA replica: databases.txt names the master/slave hosts, see
+       * DatabaseInfoService.startInfo); absent otherwise.
+       */
+      cmsListed?: false;
     }[];
   };
   /**

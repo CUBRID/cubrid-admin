@@ -14,6 +14,23 @@ import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_HACONF } from '@database/database.con
 import { parseConfigParamsBySection } from '../config/parse-config-params';
 
 /**
+ * databases.txt (CMS confname `databases`) as name -> volume path. Columns
+ * are white-space separated: name, vol-path, db-host, log-path, lob-base-path;
+ * '#' starts a comment line.
+ */
+export function parseDatabasesTxt(response: Pick<GetAllSysParamCmsResponse, 'conflist'>): Map<string, string> {
+  const lines = response?.conflist?.[0]?.confdata ?? [];
+  const out = new Map<string, string>();
+  for (const line of Array.isArray(lines) ? lines : [lines]) {
+    const text = String(line ?? '').trim();
+    if (text === '' || text.startsWith('#')) continue;
+    const [name, volPath] = text.split(/\s+/);
+    if (name && volPath && !out.has(name)) out.set(name, volPath);
+  }
+  return out;
+}
+
+/**
  * Database names listed in `[common]` `ha_db_list` of cubrid_ha.conf (CMS confname `haconf`).
  * The list splits as the engine splits it (splitConfList: spaces, commas,
  * colons); empty or missing `ha_db_list` yields an empty set (no HA DBs).
