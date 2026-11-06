@@ -278,3 +278,78 @@ describe('CmsJobService delete job', () => {
     expect(lifecycleService.forgetDeletedDatabase).toHaveBeenCalledWith('user-1', 'host-1', 'gonedb');
   });
 });
+
+describe('CmsJobService: a create job running when the server restarted', () => {
+  let service: CmsJobService;
+  let store: Record<string, jest.Mock>;
+  let managementService: Record<string, jest.Mock>;
+  let lifecycleService: { resumeCreateDatabase: jest.Mock };
+  const createJob = (patch: Partial<CmsJobRecord> = {}): CmsJobRecord => ({
+    jobId: 'job-c', userId: 'user-1', hostUid: 'host-1', dbname: 'newdb', type: 'create', status: 'running',
+    createdAt: '2026-11-05T01:00:00Z', cmsUuid: 'uuid-c',
+    payload: { dbname: 'newdb', setAutoStart: true, updateUser: { userpass: 'pw' } } as any, ...patch,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    store = {
+      saveJob: jest.fn().mockResolvedValue(undefined),
+      finalizeOrphanedJob: jest.fn().mockResolvedValue(undefined),
+      listOrphanedActiveJobs: jest.fn(),
+    };
+    managementService = { getDatabaseStartInfo: jest.fn().mockResolvedValue({ dblist: { dbs: [] } }) };
+    lifecycleService = { resumeCreateDatabase: jest.fn() };
+    service = new CmsJobService(
+      store as any,
+      { withLock: jest.fn((_f: string, fn: () => Promise<unknown>) => fn()) } as any,
+      {} as any,
+      { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) } as any,
+      managementService as any,
+      lifecycleService as any,
+      {} as any,
+      { postAuthenticated: jest.fn() } as any
+    );
+  });
+
+  it('follows the createdb to its end, runs the remaining steps, and only then releases the lock', async () => {
+    let finishCreate!: (v: unknown) => void;
+    lifecycleService.resumeCreateDatabase.mockReturnValue(new Promise((r) => { finishCreate = r; }));
+    const job = createJob();
+
+    const reconciling = (service as any).tryReconcileOrphanedJob('ukey', job);
+    await Promise.resolve();
+    // Still running: the lock (released by finalizeOrphanedJob) is kept.
+    expect(store.finalizeOrphanedJob).not.toHaveBeenCalled();
+    expect(lifecycleService.resumeCreateDatabase).toHaveBeenCalledWith('user-1', 'host-1', job.payload, 'uuid-c');
+
+    finishCreate({ createDatabase: { success: true, data: { success: true } }, startDatabase: { success: true } });
+    await expect(reconciling).resolves.toBe(true);
+    expect(job.status).toBe('succeeded');
+    expect(job.result).toMatchObject({ startDatabase: { success: true } });
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+  });
+
+  it("ends as failed with CMS's reason when the createdb failed", async () => {
+    lifecycleService.resumeCreateDatabase.mockRejectedValue(Object.assign(new Error('Couldn\'t create database.'), {
+      code: 'REQUEST_FAILED', additionalData: { cmsNote: 'Database "newdb" already exists.' },
+    }));
+    const job = createJob();
+
+    await expect((service as any).tryReconcileOrphanedJob('ukey', job)).resolves.toBe(true);
+    expect(job.status).toBe('failed');
+    expect(job.error?.message).toContain("Couldn't create database.");
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+  });
+
+  it('says whether the database exists when the create cannot be followed (no CMS task id)', async () => {
+    managementService.getDatabaseStartInfo.mockResolvedValue({ dblist: { dbs: [{ dbname: 'newdb' }] } });
+    store.listOrphanedActiveJobs.mockResolvedValue([{ userKey: 'ukey', job: createJob({ cmsUuid: undefined }) }]);
+
+    await (service as any).recoverOrphanedJobsOnStartup();
+
+    const [, job] = store.finalizeOrphanedJob.mock.calls[0];
+    expect(job.status).toBe('failed');
+    expect(job.error).toMatchObject({ code: 'JOB_INTERRUPTED', reason: 'DATABASE_EXISTS', dbname: 'newdb' });
+    expect(lifecycleService.resumeCreateDatabase).not.toHaveBeenCalled();
+  });
+});

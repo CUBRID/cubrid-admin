@@ -100,10 +100,15 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
    * finished (or is still going) overnight shouldn't be reported as
    * "interrupted" just because our own process happened to restart.
    *
-   * `create` jobs are excluded: their outcome is a composite of createdb plus
-   * several follow-up CMS calls (start/updateUser/setAutoAddVol/setAutoStart)
-   * that `applyCmsOutcome` can't reconstruct from a single gettaskstatus
-   * response, so those still fall back to the plain "interrupted" failure.
+   * A `create` job follows its createdb the same way and then runs the
+   * follow-up steps (HA mode off, start, dba password, auto add volume, auto
+   * start) as a live job does (resumeCreateDatabase). Its lock is kept until
+   * then, so the same name can't be created again meanwhile. Orphans are
+   * followed side by side, so one long createdb doesn't hold the others.
+   *
+   * A job with no uuid (the server restarted before CMS answered) or whose
+   * CMS task can't be read ends as "interrupted"; for a `create` the result
+   * says whether the database is on the host now (start-info).
    */
   private async recoverOrphanedJobsOnStartup(): Promise<void> {
     if (process.env.CMS_JOB_RECOVER_ON_STARTUP === 'false') {
@@ -115,21 +120,17 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       let reconciled = 0;
       let failed = 0;
 
-      for (const { userKey, job } of orphans) {
+      await Promise.all(orphans.map(async ({ userKey, job }) => {
         if (await this.tryReconcileOrphanedJob(userKey, job)) {
           reconciled += 1;
         } else {
           job.status = 'failed';
-          job.error = {
-            message: 'Job interrupted because the API server restarted.',
-            code: 'JOB_INTERRUPTED',
-            type: '/errors/job/job_interrupted',
-          };
+          job.error = await this.interruptedJobError(job);
           job.finishedAt = job.finishedAt ?? new Date().toISOString();
           await this.store.finalizeOrphanedJob(userKey, job);
           failed += 1;
         }
-      }
+      }));
 
       if (reconciled > 0) {
         this.logger.warn(`Reconciled ${reconciled} orphaned CMS job(s) against their real CMS outcome after startup`);
@@ -144,10 +145,58 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * "Interrupted by the restart"; for a create, whether the database is on
+   * the host now (reason DATABASE_EXISTS / DATABASE_NOT_FOUND), or nothing
+   * more when start-info can't be read.
+   */
+  private async interruptedJobError(job: CmsJobRecord): Promise<NonNullable<CmsJobRecord['error']>> {
+    const base = {
+      message: 'Job interrupted because the API server restarted.',
+      code: 'JOB_INTERRUPTED',
+      type: '/errors/job/job_interrupted',
+    };
+    if (job.type !== 'create') return base;
+    try {
+      const info = await this.managementService.getDatabaseStartInfo(job.userId, job.hostUid);
+      const exists = (info?.dblist?.dbs ?? []).some((db: { dbname?: string }) => db?.dbname === job.dbname);
+      return exists
+        ? { ...base, reason: 'DATABASE_EXISTS', dbname: job.dbname,
+          message: `Job interrupted because the API server restarted. Database ${job.dbname} was created; its remaining steps (start, dba password, auto add volume, auto start) did not run.` }
+        : { ...base, reason: 'DATABASE_NOT_FOUND', dbname: job.dbname,
+          message: `Job interrupted because the API server restarted. Database ${job.dbname} was not created.` };
+    } catch {
+      return base;
+    }
+  }
+
   /** Returns true if the job was resolved (success or a real CMS failure) and finalized. */
   private async tryReconcileOrphanedJob(userKey: string, job: CmsJobRecord): Promise<boolean> {
-    if (!job.cmsUuid || job.type === 'create') {
+    if (!job.cmsUuid) {
       return false;
+    }
+
+    if (job.type === 'create') {
+      try {
+        const response = await this.lifecycleService.resumeCreateDatabase(
+          job.userId, job.hostUid, job.payload as CreateDatabaseWithConfigRequest, job.cmsUuid
+        );
+        this.applyCmsOutcome(job, response);
+      } catch (err: unknown) {
+        // CMS answered that createdb failed: its reason, as a live job reports
+        // it. Anything else (CMS not reachable, the session gone) leaves the
+        // outcome unknown: "interrupted".
+        if ((err as { code?: string })?.code !== 'REQUEST_FAILED') {
+          this.logger.warn(`Could not follow create job ${job.jobId} (uuid ${job.cmsUuid}) after restart: ${
+            err instanceof Error ? err.message : err}`);
+          return false;
+        }
+        job.status = 'failed';
+        job.error = this.jobError(err, 'Create database failed');
+      }
+      job.finishedAt = job.finishedAt ?? new Date().toISOString();
+      await this.store.finalizeOrphanedJob(userKey, job);
+      return true;
     }
 
     try {

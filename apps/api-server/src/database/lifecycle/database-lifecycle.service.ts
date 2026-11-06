@@ -1395,7 +1395,11 @@ export class DatabaseLifecycleService extends BaseService {
     request: CreateDatabaseWithConfigRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<CreateDatabaseWithConfigResponse> {
-    const { username, updateUser, setAutoAddVol, setAutoStart, ...createDbRequest } = request;
+    // createdb takes the database fields; the rest is for finishCreateDatabase.
+    const {
+      username: _username, updateUser: _updateUser, setAutoAddVol: _setAutoAddVol, setAutoStart: _setAutoStart,
+      ...createDbRequest
+    } = request;
 
     const response: CreateDatabaseWithConfigResponse = {
       createDatabase: { success: false },
@@ -1415,6 +1419,38 @@ export class DatabaseLifecycleService extends BaseService {
       success: true,
       data: createDatabaseResult,
     };
+    return this.finishCreateDatabase(userId, hostUid, request, response);
+  }
+
+  /**
+   * A create job's createdb that was already sent to CMS when this server
+   * restarted: follows the CMS task (its uuid) to its end and, when the
+   * database was created, runs the follow-up steps as createDatabase does.
+   * A CMS failure is thrown as createDatabase would.
+   */
+  async resumeCreateDatabase(
+    userId: string,
+    hostUid: string,
+    request: CreateDatabaseWithConfigRequest,
+    uuid: string
+  ): Promise<CreateDatabaseWithConfigResponse> {
+    await this.resumeAsyncCmsJobRequest(userId, hostUid, 'createdb', uuid);
+    return this.finishCreateDatabase(userId, hostUid, request, {
+      createDatabase: { success: true, data: { success: true } },
+    });
+  }
+
+  /**
+   * The steps after createdb succeeded (HA mode off, start, dba password,
+   * auto add volume, auto start); each records its own success or error.
+   */
+  private async finishCreateDatabase(
+    userId: string,
+    hostUid: string,
+    request: CreateDatabaseWithConfigRequest,
+    response: CreateDatabaseWithConfigResponse
+  ): Promise<CreateDatabaseWithConfigResponse> {
+    const { username, updateUser, setAutoAddVol, setAutoStart, ...createDbRequest } = request;
 
     // 1-0. Opt this database out of the host's HA replication set, if the
     // host is HA-configured. This only runs here, AFTER createDatabaseInternal
