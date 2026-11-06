@@ -14,6 +14,7 @@ import { CMS_CONFNAME_CM, CMS_CONFNAME_CUBRID } from '@database/database.constan
 import { closeCmsToken, cmsSessionExpiresAt, forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
 import { HostService } from '@host';
 import {
+  clearHostConfCache,
   flattenHanodelist,
   formatAuditLog,
   isHostHaModeOnFromCubridConf,
@@ -182,6 +183,8 @@ export class CmsAuthService {
     options?: { notAfter?: number }
   ): Promise<string> {
     const url = `https://${host.address}:${host.port}/cm_api`;
+    // A new CMS session: start-info reads the host's conf files afresh.
+    clearHostConfCache(uid);
     const request: LoginCmsRequest = {
       task: 'login',
       host: host.address,

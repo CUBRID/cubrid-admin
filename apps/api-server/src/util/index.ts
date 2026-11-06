@@ -34,6 +34,14 @@ export { mapWithConcurrency } from './concurrency/map-with-concurrency';
 export { hostConfigKey, withHostConfigQueue } from './concurrency/host-config-mutex';
 export { shareInFlight } from './concurrency/single-flight';
 export {
+  HOST_CONF_CACHE_TTL_MS,
+  clearAllHostConfCache,
+  clearHostConfCache,
+  getCachedHostConf,
+  readHostConfCached,
+  setCachedHostConf,
+} from './concurrency/host-conf-cache';
+export {
   parseHaDbListDbNamesFromHaConf,
   parseDatabasesTxt,
   isHostHaModeOnFromCubridConf,
