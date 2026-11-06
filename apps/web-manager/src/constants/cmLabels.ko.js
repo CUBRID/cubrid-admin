@@ -555,6 +555,7 @@ export const CM_KO = {
   asDbHostCol: 'DB 호스트',
   asLastConnectCol: '마지막 연결',
   asCurrentSqlCol: '현재 SQL',
+  columnSelection: '컬럼 선택',
   accessPoint: '접속 주소',
   authUser: '인증 사용자',
   operatingSystem: '운영 체제',

@@ -11,6 +11,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
 import { jobElapsedSeconds, formatElapsed } from '../jobElapsed';
+import { ColumnPicker } from '../../../components/common/ColumnPicker';
 
 // Stable fallback reference — `status.data?.asinfo || []` would otherwise
 // hand the asInfo-rate-tracking effect below a brand-new array on every
@@ -18,6 +19,20 @@ import { jobElapsedSeconds, formatElapsed } from '../jobElapsed';
 // effect's dependency settle (it keeps seeing a "changed" array) and spins
 // the component in a render/effect loop until real data arrives.
 const EMPTY_LIST = [];
+
+// Application server columns hidden until turned on, as in CA
+// (BrokerStatusAsColumn value -1). The choice is kept per browser.
+const AS_HIDDEN_KEY = 'brokerStatusAsHiddenColumns';
+const AS_HIDDEN_DEFAULT = ['as_dbhost', 'as_lat', 'as_lct', 'as_client_ip', 'as_cur'];
+// ID and PID are always shown (CA disables their check boxes).
+const AS_LOCKED = ['as_id', 'as_pid'];
+const readAsHidden = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AS_HIDDEN_KEY));
+    if (Array.isArray(saved)) return saved;
+  } catch { /* storage unavailable or not JSON: use the default */ }
+  return AS_HIDDEN_DEFAULT;
+};
 
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
@@ -90,6 +105,12 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // hooks called from one render to the next).
   const rateTrackerRef = useRef(createRateTracker());
   const [asInfoWithRates, setAsInfoWithRates] = useState([]);
+  const [asHidden, setAsHidden] = useState(readAsHidden);
+  const toggleAsColumn = (key) => setAsHidden((prev) => {
+    const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+    try { localStorage.setItem(AS_HIDDEN_KEY, JSON.stringify(next)); } catch { /* not kept; still applies now */ }
+    return next;
+  });
   useEffect(() => {
     setAsInfoWithRates(asInfo.map((as) => ({
       ...as,
@@ -201,6 +222,8 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     // Takes the width that is left; max-w-0 keeps a long statement from widening the table.
     { header: CM.asCurrentSqlCol, accessor: 'as_cur', width: '100%', className: wrapHeader, cellClassName: `${tight} max-w-0`, render: cut('w-full', 'text-13 text-slate-500') },
   ];
+  const shownAsColumns = asColumns.filter((col) => AS_LOCKED.includes(col.accessor) || !asHidden.includes(col.accessor));
+  const asColumnChoices = asColumns.map((col) => ({ key: col.accessor, label: col.header, locked: AS_LOCKED.includes(col.accessor) }));
 
   const jobColumns = [
     { header: CM.jobId, accessor: 'job_id', width: '100px', render: (v) => <span className="font-mono">{v}</span> },
@@ -387,7 +410,20 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               <span className="text-14 font-bold">{CM.applicationServers}</span>
             </div>
           }
-          rightContent={(isCollapsed) => (status.error ? statusStaleBadge : isCollapsed && asActiveBadge)}
+          rightContent={(isCollapsed) => (
+            <>
+              {status.error ? statusStaleBadge : isCollapsed && asActiveBadge}
+              {!isCollapsed && (
+                <ColumnPicker
+                  testId="as-column-picker"
+                  label={CM.columnSelection}
+                  columns={asColumnChoices}
+                  shown={shownAsColumns.map((col) => col.accessor)}
+                  onToggle={toggleAsColumn}
+                />
+              )}
+            </>
+          )}
           bodyClassName="p-0"
           collapsible
         >
@@ -395,7 +431,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               keeps this wide table out of that, so it scrolls on its own. */}
           <div className="w-0 min-w-full">
             <Table
-              columns={asColumns}
+              columns={shownAsColumns}
               data={asInfoWithRates}
               sortable
               zebra

@@ -47,6 +47,8 @@ export const Table = ({
     if (!sortConfig) return data;
     // Find the column to check for sortAccessor (raw sort key override)
     const col = columns.find((c) => c.accessor === sortConfig.key);
+    // A column that was hidden after sorting on it no longer orders the rows.
+    if (!col) return data;
     const sortKey = col?.sortAccessor ?? sortConfig.key;
     return [...data].sort((a, b) => {
       let valA = a[sortKey];

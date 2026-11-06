@@ -527,6 +527,8 @@ export const CM = {
   asDbHostCol: 'DB Host',
   asLastConnectCol: 'Last Connect',
   asCurrentSqlCol: 'Current SQL',
+  // The button and list that show or hide a table's columns (CA: "Column Selection").
+  columnSelection: 'Column Selection',
   accessPoint: 'Access Point',
   authUser: 'Auth User',
   operatingSystem: 'Operating System',

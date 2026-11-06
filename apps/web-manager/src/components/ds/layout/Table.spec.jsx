@@ -133,6 +133,14 @@ describe('Table sort arrows', () => {
     expect([...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent)).toEqual(['a1', 'b2']);
   });
 
+  it('stops ordering rows by a column that was hidden after sorting on it', async () => {
+    await render({ columns: twoCols, data, sortable: true });
+    await act(async () => header('Name').click());
+    expect([...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent)).toEqual(['a1', 'b2']);
+    await render({ columns: [twoCols[1]], data, sortable: true });
+    expect([...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent)).toEqual(['2', '1']);
+  });
+
   it('shows no arrow or hint on a table that does not sort', async () => {
     await render({ columns: twoCols, data });
     expect(container.querySelector('th span.absolute, th span.shrink-0')).toBeNull();
