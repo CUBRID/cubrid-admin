@@ -127,7 +127,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
           job.status = 'failed';
           job.error = await this.interruptedJobError(job);
           job.finishedAt = job.finishedAt ?? new Date().toISOString();
-          await this.store.finalizeOrphanedJob(userKey, job);
+          await this.finalizeOrphan(userKey, job);
           failed += 1;
         }
       }));
@@ -143,6 +143,12 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         `CMS job orphan recovery failed: ${err instanceof Error ? err.message : err}`
       );
     }
+  }
+
+  /** Ends an orphaned job and drops its lock under the global operations lock. */
+  private finalizeOrphan(userKey: string, job: CmsJobRecord): Promise<void> {
+    return this.store.finalizeOrphanedJob(userKey, job,
+      (fn) => this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, fn));
   }
 
   /**
@@ -184,9 +190,13 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         this.applyCmsOutcome(job, response);
       } catch (err: unknown) {
         // CMS answered that createdb failed: its reason, as a live job reports
-        // it. Anything else (CMS not reachable, the session gone) leaves the
-        // outcome unknown: "interrupted".
-        if ((err as { code?: string })?.code !== 'REQUEST_FAILED') {
+        // it. Anything else (CMS not reachable, the session gone, or CMS
+        // restarted too and no longer knows the task: "uuid not found") leaves
+        // the outcome unknown: "interrupted", saying whether the database is
+        // there.
+        const said = this.jobError(err, '');
+        const taskUnknown = /uuid not found|invalid uuid/i.test(`${said?.cmsNote ?? ''} ${said?.message ?? ''}`);
+        if ((err as { code?: string })?.code !== 'REQUEST_FAILED' || taskUnknown) {
           this.logger.warn(`Could not follow create job ${job.jobId} (uuid ${job.cmsUuid}) after restart: ${
             err instanceof Error ? err.message : err}`);
           return false;
@@ -195,7 +205,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         job.error = this.jobError(err, 'Create database failed');
       }
       job.finishedAt = job.finishedAt ?? new Date().toISOString();
-      await this.store.finalizeOrphanedJob(userKey, job);
+      await this.finalizeOrphan(userKey, job);
       return true;
     }
 
@@ -220,7 +230,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         await this.followUpAfterSuccess(job);
       }
       job.finishedAt = job.finishedAt ?? new Date().toISOString();
-      await this.store.finalizeOrphanedJob(userKey, job);
+      await this.finalizeOrphan(userKey, job);
       return true;
     } catch (err: unknown) {
       this.logger.warn(

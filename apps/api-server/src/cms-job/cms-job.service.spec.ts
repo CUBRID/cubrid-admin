@@ -90,7 +90,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     expect(managementService.clearDbAliasCachesAfterRename).toHaveBeenCalledWith(
       'user-1', 'host-1', 'olddb', 'newdb'
     );
-    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
   });
 
   it('does not clear caches when an orphaned rename reconciles as failed', async () => {
@@ -114,7 +114,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     await expect((service as any).tryReconcileOrphanedJob('ukey', job)).resolves.toBe(true);
 
     expect(job.status).toBe('succeeded');
-    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
   });
   it('updates autostart for a normal rename, preserving success if list refresh fails', async () => {
     const job = renameJob();
@@ -326,7 +326,7 @@ describe('CmsJobService: a create job running when the server restarted', () => 
     await expect(reconciling).resolves.toBe(true);
     expect(job.status).toBe('succeeded');
     expect(job.result).toMatchObject({ startDatabase: { success: true } });
-    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
   });
 
   it("ends as failed with CMS's reason when the createdb failed", async () => {
@@ -338,7 +338,20 @@ describe('CmsJobService: a create job running when the server restarted', () => 
     await expect((service as any).tryReconcileOrphanedJob('ukey', job)).resolves.toBe(true);
     expect(job.status).toBe('failed');
     expect(job.error?.message).toContain("Couldn't create database.");
-    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
+  });
+
+  it('ends as interrupted, saying whether the database exists, when CMS no longer knows the task (CMS restarted too)', async () => {
+    lifecycleService.resumeCreateDatabase.mockRejectedValue(Object.assign(new Error('uuid not found'), {
+      code: 'REQUEST_FAILED', additionalData: { cmsNote: 'uuid not found' },
+    }));
+    managementService.getDatabaseStartInfo.mockResolvedValue({ dblist: { dbs: [] } });
+    store.listOrphanedActiveJobs.mockResolvedValue([{ userKey: 'ukey', job: createJob() }]);
+
+    await (service as any).recoverOrphanedJobsOnStartup();
+
+    const [, job] = store.finalizeOrphanedJob.mock.calls[0];
+    expect(job.error).toMatchObject({ code: 'JOB_INTERRUPTED', reason: 'DATABASE_NOT_FOUND', dbname: 'newdb' });
   });
 
   it('says whether the database exists when the create cannot be followed (no CMS task id)', async () => {
