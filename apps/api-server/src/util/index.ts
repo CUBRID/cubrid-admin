@@ -35,6 +35,7 @@ export { hostConfigKey, withHostConfigQueue } from './concurrency/host-config-mu
 export { shareInFlight } from './concurrency/single-flight';
 export {
   parseHaDbListDbNamesFromHaConf,
+  parseDatabasesTxt,
   isHostHaModeOnFromCubridConf,
   readHaDbNames,
   getPerDbHaModeOffDbNames,

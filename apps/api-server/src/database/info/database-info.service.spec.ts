@@ -178,6 +178,66 @@ describe('DatabaseInfoService', () => {
     });
   });
 
+  describe('startInfo on an HA replica (databases.txt names the master and slave)', () => {
+    const ok = { __EXEC_TIME: '1 ms', note: 'none', status: 'success', task: 'startinfo' };
+    // As .82 answered: databases.txt db-host ha-test-80:ha-test-81, so CMS lists none of them.
+    const confs = (haMode: string, haDbList: string) => async (_u: string, _h: string, confname: string) => {
+      if (confname === 'haconf') return { conflist: [{ confdata: ['[common]', 'ha_node_list=cubrid@ha-test-80:ha-test-81', 'ha_replica_list=cubrid@ha-test-82', `ha_db_list=${haDbList}`] }] };
+      if (confname === 'cubridconf') return { conflist: [{ confdata: ['[common]', `ha_mode=${haMode}`] }] };
+      if (confname === 'databases') return { conflist: [{ confdata: [
+        '#db-name\tvol-path\t\tdb-host\t\tlog-path\t\tlob-base-path',
+        'testdb1\t\t/db/testdb1\tha-test-80:ha-test-81\t/db/testdb1\tfile:/db/testdb1/lob',
+        'demodb\t\t/db/demodb\tha-test-80:ha-test-81\t/db/demodb\tfile:/db/demodb/lob',
+        'otherdb\t\t/db/otherdb\tha-test-80:ha-test-81\t/db/otherdb\tfile:/db/otherdb/lob',
+      ] }] };
+      throw new Error(`unexpected ${confname}`);
+    };
+
+    it('lists the ha_db_list databases CMS leaves out, stopped and running, after the CMS list', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('replica', 'demodb,testdb1') as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [{ dbname: 'testdb1' }] }] });
+
+      const result = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(result.dblist.dbs.map((db) => [db.dbname, db.dbdir, db.cmsListed])).toEqual([
+        ['demodb', '/db/demodb', false],
+        ['testdb1', '/db/testdb1', false],
+      ]);
+      // otherdb is in databases.txt but not in ha_db_list: not this node's.
+      expect(result.activelist.active.map((a) => a.dbname)).toEqual(['testdb1']);
+    });
+
+    it('reads nothing more when CMS already lists every HA database (master, slave)', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('on', 'demodb') as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: [{ dbname: 'demodb', dbdir: '/db/demodb' }] }], activelist: [{ active: [] }] });
+
+      const result = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(result.dblist.dbs).toEqual([expect.objectContaining({ dbname: 'demodb' })]);
+      expect(result.dblist.dbs[0]).not.toHaveProperty('cmsListed');
+      expect(cmsConfigService.getAllSystemParam.mock.calls.map((c) => c[2])).toEqual(['haconf']);
+    });
+
+    it('adds nothing on a host that is not an HA node, whatever cubrid_ha.conf lists', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('off', 'demodb,testdb1') as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: [{ dbname: 'localdb', dbdir: '/db/localdb' }] }], activelist: [{ active: [] }] });
+
+      const result = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(result.dblist.dbs.map((db) => db.dbname)).toEqual(['localdb']);
+    });
+
+    it('keeps the CMS list when databases.txt cannot be read', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation((async (u: string, h: string, c: string) => {
+        if (c === 'databases') throw new Error('read failed');
+        return confs('replica', 'demodb')(u, h, c);
+      }) as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [] }] });
+
+      await expect(service.startInfo(mockUserId, mockHostUid)).resolves.toMatchObject({ dblist: { dbs: [] } });
+    });
+  });
+
   describe('startInfo', () => {
     it('should return client start info with isProfileExists', async () => {
       const mockCmsResponse = {

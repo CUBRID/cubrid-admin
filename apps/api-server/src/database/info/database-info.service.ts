@@ -8,8 +8,8 @@ import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
 import { BaseCmsRequest, BaseCmsResponse } from '@type';
 import { StartInfoCmsResponse } from '@type/cms-response';
-import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_HACONF } from '@database/database.constants';
-import { isHostHaModeOnFromCubridConf, parseHaDbListDbNamesFromHaConf, readHaDbNames, shareInFlight } from '@util';
+import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_DATABASES, CMS_CONFNAME_HACONF } from '@database/database.constants';
+import { isHostHaModeOnFromCubridConf, parseDatabasesTxt, parseHaDbListDbNamesFromHaConf, readHaDbNames, shareInFlight } from '@util';
 import { mapStartInfoToClientResponse } from './start-info.mapper';
 import { DatabaseUserService } from '../user/database-user.service';
 
@@ -87,10 +87,45 @@ export class DatabaseInfoService extends BaseService {
     // A login being restored after a host login counts as logged in, so the
     // client keeps its views open meanwhile; if the restore fails, the next
     // start-info says so.
+    const unlisted = await this.unlistedHaDbs(userId, hostUid, cmsStart, haDbNames);
     return mapStartInfoToClientResponse(cmsStart, host.dbProfiles, haDbNames, (dbname) =>
       this.databaseUserService.isDbLoginActive(userId, hostUid, dbname, host.token)
-        || this.databaseUserService.isDbLoginRestoring(userId, hostUid, dbname)
-    );
+        || this.databaseUserService.isDbLoginRestoring(userId, hostUid, dbname),
+    unlisted);
+  }
+
+  /**
+   * The HA databases of this node that CMS's start-info leaves out. CMS lists
+   * a databases.txt entry only when its db-host column names this host
+   * (cm_server_util.cpp ut_get_dblist); on an HA replica that column names
+   * the master and slave, so every database, stopped ones included, was
+   * missing. Here: on an HA node (cubrid.conf ha_mode not off), the
+   * ha_db_list names CMS left out that databases.txt has, with their volume
+   * path. A plain host, or an HA node whose list is complete, reads nothing
+   * more. Per-database CMS tasks find these by name alone (cm_utils.c
+   * uReadDBtxtFile), so they work on them as on any other.
+   */
+  private async unlistedHaDbs(
+    userId: string,
+    hostUid: string,
+    cmsStart: StartInfoCmsResponse,
+    haDbNames: Set<string>
+  ): Promise<{ dbname: string; dbdir: string }[]> {
+    const listed = new Set((cmsStart.dblist?.[0]?.dbs ?? []).map((db) => db.dbname));
+    const missing = [...haDbNames].filter((dbname) => !listed.has(dbname));
+    if (missing.length === 0) return [];
+    try {
+      if (!(await this.isHaNode(userId, hostUid))) return [];
+      const databasesTxt = parseDatabasesTxt(
+        await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_DATABASES)
+      );
+      return missing
+        .filter((dbname) => databasesTxt.has(dbname))
+        .map((dbname) => ({ dbname, dbdir: databasesTxt.get(dbname) as string }));
+    } catch {
+      // The list CMS gave is still right; only these extra ones are missing.
+      return [];
+    }
   }
 
   /**
