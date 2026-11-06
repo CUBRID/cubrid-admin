@@ -76,6 +76,24 @@ describe('a broker being restarted', () => {
     expect(withRestartsShownOn([{ name: 'a', state: 'OFF' }], s.getState().broker.restartingBrokers, 'h1')).toEqual([{ name: 'a', state: 'OFF' }]);
   });
 
+  it('shows a broker whose start failed as OFF at once, while the next one is still restarting', async () => {
+    const s = store();
+    const shown = () => withRestartsShownOn([{ name: 'a', state: 'OFF' }, { name: 'b', state: 'OFF' }], s.getState().broker.restartingBrokers, 'h1');
+    let duringB;
+    brokerApi.stopBroker.mockImplementation(async (_hostUid, brokerName) => {
+      if (brokerName === 'b') duringB = shown();
+      return {};
+    });
+    brokerApi.startBroker.mockImplementationOnce(async () => { throw new Error('start failed'); }).mockResolvedValue({});
+
+    const result = await runMultiBrokerAction(s.dispatch, { hostUid: 'h1', action: 'restart', names: ['a', 'b'] });
+
+    expect(result.failed).toEqual([expect.objectContaining({ dbname: 'a', phase: 'start' })]);
+    // While b restarts, a (start failed) is already shown as it is: OFF.
+    expect(duringB).toEqual([{ name: 'a', state: 'OFF' }, { name: 'b', state: 'ON' }]);
+    expect(s.getState().broker.restartingBrokers).toEqual({});
+  });
+
   it('is not marked by a plain stop', async () => {
     const s = store();
     let marks;
