@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { brokerApi } from './brokerApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { createRateTracker } from './rateTracker';
+import { brokerStateOf } from './brokerState';
 import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
@@ -27,7 +28,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
   const formattedBrokers = brokerList.map(item => ({
     ...item,
     name: item.name,
-    state: item.state || item.status,
+    state: brokerStateOf(item),
     pid: item.pid,
     port: item.port,
     as: item.as,

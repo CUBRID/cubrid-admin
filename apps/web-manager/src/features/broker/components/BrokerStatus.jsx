@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
+import { isBrokerRunning } from '../brokerState';
 import { createRateTracker } from '../rateTracker';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -157,9 +158,9 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   const brokerFromList = lastKnownBrokerFromList || {};
   // CMS lists a stopped broker without its settings (getbrokersinfo sends
   // them only for a running one), so they show as unknown, not as defaults.
-  // With the whole broker service off the list has no state at all; a broker
-  // is only ever ON, SUSPENDED or OFF.
-  const isBrokerOff = brokerFromList.state !== 'ON' && brokerFromList.state !== 'SUSPENDED';
+  // With the whole broker service off the list has no state at all, which
+  // is OFF (brokerState.js).
+  const isBrokerOff = !isBrokerRunning(brokerFromList);
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,

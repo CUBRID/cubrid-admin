@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchBrokerList } from '../../broker/brokerSlice';
+import { brokerStateOf, isBrokerOn } from '../../broker/brokerState';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Card } from '../../../components/ds/layout/Card';
@@ -84,11 +85,11 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     {
       header: CM.status,
       accessor: 'state',
-      render: (val) => (
-        <StatusBadge 
-          label={val} 
-          variant={val === 'ON' ? 'emerald' : 'rose'} 
-          pulse={val === 'ON'} 
+      render: (_, row) => (
+        <StatusBadge
+          label={brokerStateOf(row)}
+          variant={isBrokerOn(row) ? 'emerald' : 'rose'}
+          pulse={isBrokerOn(row)}
         />
       )
     },
@@ -110,7 +111,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     { header: CM.errQuery, accessor: 'error_query', render: (val) => <span className={`font-mono text-14 font-bold ${parseInt(val) > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{val}</span> },
   ], [CM]);
 
-  const activeCount = brokers.filter(b => b.state === 'ON').length;
+  const activeCount = brokers.filter(isBrokerOn).length;
 
   const activeBadge = (
     <StatusBadge label={CM.activeCount(activeCount)} variant="emerald" pulse={true} className="rounded-full" />

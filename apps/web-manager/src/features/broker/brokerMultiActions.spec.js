@@ -26,6 +26,12 @@ describe('splitBrokersByAction', () => {
   it.each([['start', ['b']], ['stop', ['a']], ['restart', ['a']]])('%s applies to %j', (action, expected) => {
     expect(splitBrokersByAction(action, brokers).targets.map((b) => b.name)).toEqual(expected);
   });
+
+  it('counts a broker listed without a state (broker service stopped) as OFF', () => {
+    const listed = [{ name: 'a', port: '30000' }, { name: 'b', state: '' }];
+    expect(splitBrokersByAction('start', listed).targets.map((b) => b.name)).toEqual(['a', 'b']);
+    expect(splitBrokersByAction('stop', listed).targets).toEqual([]);
+  });
 });
 
 describe('runMultiBrokerAction', () => {

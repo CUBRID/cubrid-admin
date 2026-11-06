@@ -157,6 +157,23 @@ describe('Brokers embedded in the host dashboard', () => {
 
     expect(container.textContent).not.toContain('1111');
   });
+
+  it('shows OFF for brokers CMS lists without a state (broker service stopped)', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await act(async () => {
+      brokerApi.getBrokerList.mockResolvedValueOnce({ result: [
+        { name: 'broker1', port: '30000', appl_server_shm_id: '30000' },
+        { name: 'query_editor', port: '30001', appl_server_shm_id: '30001' },
+      ] });
+      await store.dispatch(fetchBrokerList('h1'));
+    });
+
+    const rows = [...container.querySelectorAll('tbody tr')];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row.querySelectorAll('td')[1].textContent.trim()).toBe('OFF');
+    expect(store.getState().broker.brokersByHost.h1.map((b) => b.state)).toEqual(['OFF', 'OFF']);
+  });
 });
 
 describe('Brokers as its own tab', () => {

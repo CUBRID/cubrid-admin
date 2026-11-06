@@ -3,6 +3,7 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { brokerStateOf } from '../../broker/brokerState';
 import { databaseApi } from '../databaseApi';
 import { dbKey } from '../dbKey';
 import { dbCharsetFromParamDump } from '../dbCharset';
@@ -345,7 +346,7 @@ export default function DatabasePropertyModal() {
           const response = await brokerApi.getBrokerList(selectedHostUid);
           const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
           if (brokerList && Array.isArray(brokerList)) {
-            const list = brokerList.map(b => ({ label: `${b.name} [${b.port}/${b.status || b.state}]`, port: b.port }));
+            const list = brokerList.map(b => ({ label: `${b.name} [${b.port}/${brokerStateOf(b)}]`, port: b.port }));
             setBrokers(list);
           }
         } catch (err) { console.error('Failed to fetch brokers:', err); }

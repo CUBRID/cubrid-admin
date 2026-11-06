@@ -27,6 +27,7 @@ import { bulkResultStatusModal, runAllDatabasesAction, serviceSkippedTable } fro
 import { autoStartServers, haModeOn, loginSkipsOf, planLoginCheckedAction, readStartInfoDatabases, restartLoginSkips, runningDbNames, serviceDatabases, serviceStartTargets, serviceStopTargets, stoppedDbNames } from '../../database/loginSkips';
 import { hostApi } from '../../host/hostApi';
 import { MULTI_BROKER_ACTIONS, runMultiBrokerAction, splitBrokersByAction } from '../../broker/brokerMultiActions';
+import { brokerStateOf, isBrokerOn } from '../../broker/brokerState';
 import { restartHostService } from '../../host/hostServiceRestart';
 import {
   MULTI_DB_ACTIONS,
@@ -1921,7 +1922,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
       {brokerMultiContextMenu && (() => {
         const selectedBrokers = (navigatorBrokersByHost?.[selectedHostUid] || [])
           .filter((broker) => selectedBrokerNames.has(broker.name))
-          .map((broker) => ({ name: broker.name, state: broker.state }));
+          .map((broker) => ({ name: broker.name, state: brokerStateOf(broker) }));
         const close = () => setBrokerMultiContextMenu(null);
         return (
           <ContextMenuWrapper x={brokerMultiContextMenu.mouseX} y={brokerMultiContextMenu.mouseY} onClose={close}>
@@ -2235,7 +2236,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             <Typography variant="caption" title={brokerContextMenu.broker} className="font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-11 block truncate min-w-0">{CM.broker}: <span className="normal-case">{brokerContextMenu.broker}</span></Typography>
             <Icon name="hub" size="xs" className="opacity-30" weight={300} />
           </div>
-          {brokerContextMenu.state === 'ON' ? (
+          {isBrokerOn(brokerContextMenu) ? (
             <MenuItem
               icon="stop"
               label={CM.stopBroker}
@@ -2261,7 +2262,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               }}
             />
           ) : null}
-          {brokerContextMenu.state === 'ON' && (
+          {isBrokerOn(brokerContextMenu) && (
             <MenuItem
               icon="restart_alt"
               label={CM.restartBroker}
@@ -2272,7 +2273,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               }}
             />
           )}
-          {brokerContextMenu.state !== 'ON' && (
+          {!isBrokerOn(brokerContextMenu) && (
             <MenuItem
               icon="play_arrow"
               label={CM.startBroker}
