@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { closeSetAutomationVolumeModal, fetchAutoVolumeConfig, updateAutoVolumeConfig } from '../databaseSlice';
+import { closeSetAutomationVolumeModal, fetchAutoVolumeConfig, fetchDatabaseSpaceInfo, updateAutoVolumeConfig } from '../databaseSlice';
 import { dbKey } from '../dbKey';
 import { useCM } from '../../../constants/useCM';
 import { AUTO_ADD_PAGES_MIN, checkIntInRange } from '@api-interfaces';
@@ -143,11 +143,11 @@ export default function SetAutomationVolumeModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isSetAutomationVolumeModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, loggedInDatabases, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { autoVolumeConfigs, autoVolumeLoading } = useSelector((state) => state.databaseConfiguration, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
-  // The database's page size from a space read this tab already made (the
-  // dashboard, the space screens); null when none was made.
+  // The database's page size from a space read (the dashboard, the space
+  // screens, or the one this window makes below); null until one is made.
   const pageSize = useSelector((state) => {
     const key = dbKey(selectedHostUid, selectedDatabase);
     const monitoring = state.databaseMonitoring || {};
@@ -171,12 +171,35 @@ export default function SetAutomationVolumeModal() {
   const [combinedAddSize, setCombinedAddSize] = useState(2048);
   // The stored expansion in pages, shown in MiB once the page size is known.
   const [loadedExtPages, setLoadedExtPages] = useState(null);
+  // Each kind's expansion as CMS stored it; saving OFF sends these back as
+  // they are, so turning the policy off needs no page size.
+  const [loadedExt, setLoadedExt] = useState(null);
+
+  // Opened before any space read in this tab (a reload, then the sidebar):
+  // read the page size once, only for a database that is logged in and
+  // running. A failed read is not retried while the window stays open.
+  const entryKey = dbKey(selectedHostUid, selectedDatabase);
+  const canReadSpace = Boolean(selectedHostUid && selectedDatabase)
+    && (loggedInDatabases || []).includes(entryKey)
+    && (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const spaceReadFor = useRef(null);
+  useEffect(() => {
+    if (!isSetAutomationVolumeModalOpen) {
+      spaceReadFor.current = null;
+      return;
+    }
+    if (pageSize || !canReadSpace || spaceReadFor.current === entryKey) return;
+    spaceReadFor.current = entryKey;
+    dispatch(fetchDatabaseSpaceInfo({ hostUid: selectedHostUid, dbname: selectedDatabase }));
+  }, [isSetAutomationVolumeModalOpen, pageSize, canReadSpace, entryKey, selectedHostUid, selectedDatabase, dispatch]);
 
   useEffect(() => {
     if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
       resetAction();
       // Reset local state before fetching new config to avoid stale view
       setCombinedEnabled(false);
+      setLoadedExtPages(null);
+      setLoadedExt(null);
       dispatch(fetchAutoVolumeConfig({ hostUid: selectedHostUid, dbname: selectedDatabase }));
     }
   }, [isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase, dispatch, resetAction]);
@@ -193,6 +216,10 @@ export default function SetAutomationVolumeModal() {
       setCombinedEnabled(config.data === 'ON' || config.index === 'ON');
       setCombinedThreshold(warnOutOfSpace ? Math.max(5, Math.round(parseFloat(warnOutOfSpace) * 100)) : 15);
       setLoadedExtPages(extensionPages ? parseInt(extensionPages) : null);
+      setLoadedExt(extensionPages ? {
+        data: String(config.data_ext_page || extensionPages),
+        index: String(config.index_ext_page || extensionPages),
+      } : null);
     }
   }, [autoVolumeConfigs, selectedHostUid, selectedDatabase]);
 
@@ -203,21 +230,25 @@ export default function SetAutomationVolumeModal() {
   // Below AUTO_ADD_PAGES_MIN pages CMS adds nothing (0 or less) or rounds up
   // to that many, so the size starts there.
   const sizeIssue = combinedEnabled && pageSize ? checkIntInRange(combinedAddSize, minExpansionMib(pageSize)) : null;
-  const saveBlockedReason = !pageSize ? CM.autoVolumePageSizeUnknownMsg : inputIssueText(sizeIssue, CM);
+  // The size is checked only when the policy is ON; OFF sends the stored pages back.
+  const saveBlockedReason = combinedEnabled || !loadedExt
+    ? (!pageSize ? CM.autoVolumePageSizeUnknownMsg : inputIssueText(sizeIssue, CM))
+    : null;
 
   const handleSave = useCallback(async () => {
     if (saveBlockedReason) return;
     startAction();
     const enabledValue = combinedEnabled ? 'ON' : 'OFF';
     const thresholdValue = (combinedThreshold / 100).toFixed(2);
-    const extensionPageValue = mibToPages(combinedAddSize, pageSize).toString();
+    const pagesFromSize = () => mibToPages(combinedAddSize, pageSize).toString();
+    const keepStored = !combinedEnabled && loadedExt;
     const payload = {
       data: enabledValue,
       data_warn_outofspace: thresholdValue,
-      data_ext_page: extensionPageValue,
+      data_ext_page: keepStored ? loadedExt.data : pagesFromSize(),
       index: enabledValue,
       index_warn_outofspace: thresholdValue,
-      index_ext_page: extensionPageValue,
+      index_ext_page: keepStored ? loadedExt.index : pagesFromSize(),
     };
     try {
       await dispatch(updateAutoVolumeConfig({ hostUid: selectedHostUid, dbname: selectedDatabase, payload })).unwrap();
@@ -225,7 +256,7 @@ export default function SetAutomationVolumeModal() {
     } catch (err) {
       endError(typeof err === 'string' ? err : (err?.message || CM.saveConfigFailedRetryMsg));
     }
-  }, [saveBlockedReason, pageSize, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError]);
+  }, [saveBlockedReason, pageSize, loadedExt, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError]);
 
   const handleClose = () => dispatch(closeSetAutomationVolumeModal());
 
