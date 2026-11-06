@@ -268,3 +268,14 @@ describe('Top SQL log limits', () => {
     }, KO)).toBe('CMS 응답이 분석할 수 있는 크기(64 MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.');
   });
 });
+
+describe('a create job interrupted by a server restart', () => {
+  const interrupted = (reason) => ({ message: 'Job interrupted because the API server restarted.', code: 'JOB_INTERRUPTED',
+    type: '/errors/job/job_interrupted', reason, dbname: 'newdb' });
+
+  it('says in Korean whether the database was created', () => {
+    expect(failureText(interrupted('DATABASE_EXISTS'), KO)).toContain('데이터베이스 newdb는 만들어졌지만');
+    expect(failureText(interrupted('DATABASE_NOT_FOUND'), KO)).toContain('데이터베이스 newdb는 만들어지지 않았습니다');
+    expect(failureText(interrupted(undefined), KO)).toBe('API 서버가 다시 시작되어 작업이 중단되었습니다.');
+  });
+});

@@ -1976,6 +1976,8 @@ export const CM_KO = {
     'storage/unknown': '저장소 작업이 실패했습니다.',
     'internal/internal_error': '서버 내부 오류가 났습니다.',
     'job/job_interrupted': 'API 서버가 다시 시작되어 작업이 중단되었습니다.',
+    'job/job_interrupted:DATABASE_EXISTS': (d) => `API 서버가 다시 시작되어 작업이 중단되었습니다. 데이터베이스 ${d.dbname ?? ''}는 만들어졌지만 나머지 단계(시작, dba 비밀번호, 자동 볼륨 추가, 자동 시작)는 실행되지 않았습니다.`,
+    'job/job_interrupted:DATABASE_NOT_FOUND': (d) => `API 서버가 다시 시작되어 작업이 중단되었습니다. 데이터베이스 ${d.dbname ?? ''}는 만들어지지 않았습니다.`,
     'http/job_not_found': '작업을 찾을 수 없습니다.',
     'http/log_too_large': (d) => (d.maxLines && d.maxBytes
       ? `로그가 분석 한도(${Number(d.maxLines).toLocaleString('ko-KR')}줄 또는 ${Math.round(d.maxBytes / 1048576)} MiB)를 넘었습니다. 더 작은 보관 로그를 고르세요.`
