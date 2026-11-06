@@ -11,6 +11,8 @@ export enum HostErrorCode {
   DUPLICATED_ALIAS = 'DUPLICATED_ALIAS',
   NO_SUCH_HOST = 'NO_SUCH_HOST',
   HOST_CONNECTED = 'HOST_CONNECTED',
+  /** CMS user management asked on a host not connected as the CMS admin account. */
+  CMS_ADMIN_REQUIRED = 'CMS_ADMIN_REQUIRED',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   UNKNOWN = 'UNKNOWN',
 }

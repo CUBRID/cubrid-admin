@@ -1712,6 +1712,7 @@ export const CM = {
   connectionFailed: 'Connection failed',
   hostLoginFailedMsg: 'Could not log in to the host.',
   hostLoginNoResponseMsg: 'No response from the CMS. Check that the CMS is running on the host and that the address and port are correct.',
+  cmsAdminRequiredErrorMsg: 'Only a host connected as the CMS admin account can manage CMS users.',
   hostLoginTlsErrorMsg: "Could not establish a trusted connection to the CMS. Check the CMS server's TLS certificate.",
   tryAgain: 'Try Again',
   allBrokers: 'All Brokers',
