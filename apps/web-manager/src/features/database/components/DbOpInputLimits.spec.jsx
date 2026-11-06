@@ -149,7 +149,7 @@ describe('auto add volume: page size', () => {
     mocks.autoVolume = { data: 'ON', data_warn_outofspace: '0.15', data_ext_page: '16384', index: 'ON', index_warn_outofspace: '0.15', index_ext_page: '16384' };
     await render(<SetAutomationVolumeModal />);
     expect(q('auto-volume-save-btn').disabled).toBe(true);
-    expect(q('auto-volume-footer-note').textContent).toContain("page size isn't known");
+    expect(q('auto-volume-footer-note').textContent).toContain("Couldn't read the database's page size");
     // Not logged in: nothing is read for it.
     expect(mocks.fetchSpaceInfo).not.toHaveBeenCalled();
   });

@@ -183,6 +183,8 @@ export default function SetAutomationVolumeModal() {
     && (loggedInDatabases || []).includes(entryKey)
     && (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const spaceReadFor = useRef(null);
+  // While that read runs the page size is not "unreadable" yet: no notice.
+  const [readingSpace, setReadingSpace] = useState(false);
   useEffect(() => {
     if (!isSetAutomationVolumeModalOpen) {
       spaceReadFor.current = null;
@@ -190,7 +192,9 @@ export default function SetAutomationVolumeModal() {
     }
     if (pageSize || !canReadSpace || spaceReadFor.current === entryKey) return;
     spaceReadFor.current = entryKey;
-    dispatch(fetchDatabaseSpaceInfo({ hostUid: selectedHostUid, dbname: selectedDatabase }));
+    setReadingSpace(true);
+    Promise.resolve(dispatch(fetchDatabaseSpaceInfo({ hostUid: selectedHostUid, dbname: selectedDatabase })))
+      .finally(() => setReadingSpace(false));
   }, [isSetAutomationVolumeModalOpen, pageSize, canReadSpace, entryKey, selectedHostUid, selectedDatabase, dispatch]);
 
   useEffect(() => {
@@ -232,7 +236,7 @@ export default function SetAutomationVolumeModal() {
   const sizeIssue = combinedEnabled && pageSize ? checkIntInRange(combinedAddSize, minExpansionMib(pageSize)) : null;
   // The size is checked only when the policy is ON; OFF sends the stored pages back.
   const saveBlockedReason = combinedEnabled || !loadedExt
-    ? (!pageSize ? CM.autoVolumePageSizeUnknownMsg : inputIssueText(sizeIssue, CM))
+    ? (!pageSize ? (readingSpace ? CM.loadingConfig : CM.autoVolumePageSizeUnknownMsg) : inputIssueText(sizeIssue, CM))
     : null;
 
   const handleSave = useCallback(async () => {
@@ -318,7 +322,7 @@ export default function SetAutomationVolumeModal() {
       footer={
         <div className="flex items-center justify-between w-full">
           <Typography variant="caption" className="text-11 text-slate-400 font-mono hidden sm:block" data-testid="auto-volume-footer-note">
-            {pageSize ? CM.autoVolumePageSizeLabel(pageSize / 1024) : CM.autoVolumePageSizeUnknownMsg}
+            {pageSize ? CM.autoVolumePageSizeLabel(pageSize / 1024) : (readingSpace ? '' : CM.autoVolumePageSizeUnknownMsg)}
           </Typography>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
