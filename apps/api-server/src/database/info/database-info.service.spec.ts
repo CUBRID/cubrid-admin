@@ -8,6 +8,7 @@ import { CmsConfigService } from '@cms-config/cms-config.service';
 import { CmsError } from '@error/cms/cms-error';
 import { failureDetails } from '@error/index';
 import { DatabaseUserService } from '../user/database-user.service';
+import { clearAllHostConfCache, clearHostConfCache } from '@util';
 
 // Real GetEnv values (e.g. BROKERVER, CUBRIDVER) vary by host; tests use fixed mock data only.
 const mockGetEnvForCreatedb: GetEnvClientResponse = {
@@ -78,6 +79,8 @@ describe('DatabaseInfoService', () => {
     databaseUserService = module.get(DatabaseUserService);
 
     hostService.findHostInternal.mockResolvedValue(mockHost);
+    // The host conf cache is module-level: start each test without it.
+    clearAllHostConfCache();
   });
 
   afterEach(() => {
@@ -235,6 +238,59 @@ describe('DatabaseInfoService', () => {
       cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [] }] });
 
       await expect(service.startInfo(mockUserId, mockHostUid)).resolves.toMatchObject({ dblist: { dbs: [] } });
+    });
+
+    // The two extra reads (cubrid.conf ha_mode, databases.txt) are kept per
+    // host for a while: a start-info poll must not repeat them every tick.
+    const extraReads = () => cmsConfigService.getAllSystemParam.mock.calls.map((c) => c[2]).filter((c) => c !== 'haconf');
+
+    it('reads ha_mode and databases.txt once for consecutive start-info polls', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('replica', 'demodb,testdb1') as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [] }] });
+
+      const first = await service.startInfo(mockUserId, mockHostUid);
+      const second = await service.startInfo(mockUserId, mockHostUid);
+
+      expect(second.dblist.dbs.map((db) => db.dbname)).toEqual(first.dblist.dbs.map((db) => db.dbname));
+      expect(extraReads()).toEqual(['cubridconf', 'databases']);
+      // Another host's entries are its own.
+      await service.startInfo(mockUserId, 'other-host');
+      expect(extraReads()).toEqual(['cubridconf', 'databases', 'cubridconf', 'databases']);
+    });
+
+    it('reads ha_mode again, and nothing more, on a host with ha_mode off that still lists HA databases', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('off', 'demodb,testdb1') as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [] }] });
+
+      await service.startInfo(mockUserId, mockHostUid);
+      await service.startInfo(mockUserId, mockHostUid);
+      expect(extraReads()).toEqual(['cubridconf']);
+    });
+
+    it('reads both again after a conf save cleared the host (clearHostConfCache)', async () => {
+      cmsConfigService.getAllSystemParam.mockImplementation(confs('replica', 'demodb') as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [] }] });
+
+      await service.startInfo(mockUserId, mockHostUid);
+      clearHostConfCache(mockHostUid);
+      await service.startInfo(mockUserId, mockHostUid);
+      expect(extraReads()).toEqual(['cubridconf', 'databases', 'cubridconf', 'databases']);
+    });
+
+    it('keeps nothing from a failed read and reads again on the next poll', async () => {
+      let fail = true;
+      cmsConfigService.getAllSystemParam.mockImplementation((async (u: string, h: string, c: string) => {
+        if (c === 'databases' && fail) throw new Error('read failed');
+        return confs('replica', 'demodb')(u, h, c);
+      }) as never);
+      cmsClient.postAuthenticated.mockResolvedValue({ ...ok, dblist: [{ dbs: null }], activelist: [{ active: [] }] });
+
+      await expect(service.startInfo(mockUserId, mockHostUid)).resolves.toMatchObject({ dblist: { dbs: [] } });
+      fail = false;
+      const result = await service.startInfo(mockUserId, mockHostUid);
+      expect(result.dblist.dbs.map((db) => db.dbname)).toEqual(['demodb']);
+      // ha_mode was kept from the first poll; databases.txt was read on each.
+      expect(extraReads()).toEqual(['cubridconf', 'databases', 'databases']);
     });
   });
 

@@ -9,7 +9,7 @@ import { Injectable } from '@nestjs/common';
 import { BaseCmsRequest, BaseCmsResponse } from '@type';
 import { StartInfoCmsResponse } from '@type/cms-response';
 import { CMS_CONFNAME_CUBRID, CMS_CONFNAME_DATABASES, CMS_CONFNAME_HACONF } from '@database/database.constants';
-import { isHostHaModeOnFromCubridConf, parseDatabasesTxt, parseHaDbListDbNamesFromHaConf, readHaDbNames, shareInFlight } from '@util';
+import { isHostHaModeOnFromCubridConf, parseDatabasesTxt, parseHaDbListDbNamesFromHaConf, readHaDbNames, readHostConfCached, shareInFlight } from '@util';
 import { mapStartInfoToClientResponse } from './start-info.mapper';
 import { DatabaseUserService } from '../user/database-user.service';
 
@@ -115,15 +115,21 @@ export class DatabaseInfoService extends BaseService {
     const missing = [...haDbNames].filter((dbname) => !listed.has(dbname));
     if (missing.length === 0) return [];
     try {
-      if (!(await this.isHaNode(userId, hostUid))) return [];
-      const databasesTxt = parseDatabasesTxt(
-        await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_DATABASES)
-      );
+      // Both reads are kept per host for a short while (readHostConfCached):
+      // start-info is polled every few seconds, and these files change only
+      // when a conf is saved, which clears them. On a host with ha_mode off
+      // whose cubrid_ha.conf still lists databases, this also stops the
+      // cubrid.conf read on every poll.
+      const haNode = await readHostConfCached(hostUid, 'haMode', () => this.isHaNode(userId, hostUid));
+      if (!haNode) return [];
+      const databasesTxt = await readHostConfCached(hostUid, 'databasesTxt', async () =>
+        parseDatabasesTxt(await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_DATABASES)));
       return missing
         .filter((dbname) => databasesTxt.has(dbname))
         .map((dbname) => ({ dbname, dbdir: databasesTxt.get(dbname) as string }));
     } catch {
       // The list CMS gave is still right; only these extra ones are missing.
+      // Nothing is kept from a failed read: the next poll reads again.
       return [];
     }
   }

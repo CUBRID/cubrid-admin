@@ -1,5 +1,6 @@
 import { HandleHostErrors } from '@common';
 import { HostError } from '@error/index';
+import { clearHostConfCache } from '@util';
 import { Injectable, Logger } from '@nestjs/common';
 import { UserRepositoryService } from '@repository';
 import { HostInfo, User } from '@type/index';
@@ -300,6 +301,7 @@ export class HostService {
       forgetCmsToken(removedToken);
       return user;
     });
+    clearHostConfCache(hostUid);
     return sanitizeHostGroups(updatedUser);
   }
 
