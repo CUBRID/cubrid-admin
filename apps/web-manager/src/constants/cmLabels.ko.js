@@ -1457,7 +1457,7 @@ export const CM_KO = {
 
   // CMSUserManagementModal
   systemAdministrator: '시스템 관리자',
-  managementUsers: 'CMS 계정',
+  managementUsers: '사용자',
 
   // Monitor refresh buttons
   refreshVolumeData: '볼륨 데이터 새로 고침',
@@ -2044,7 +2044,7 @@ export const CM_KO = {
   importedPlaceholder: '가져옴',
 
   // CMS 사용자 관리 모달
-  addManagementUserBtn: 'CMS 계정 추가',
+  addManagementUserBtn: '사용자 계정 추가',
 
   // 데이터베이스 공간 모니터
   freeBadge: '여유',

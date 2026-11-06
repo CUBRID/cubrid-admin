@@ -1400,7 +1400,7 @@ export const CM = {
 
   // CMSUserManagementModal
   systemAdministrator: 'System administrator',
-  managementUsers: 'Management users',
+  managementUsers: 'Users',
 
   // Monitor refresh buttons
   refreshVolumeData: 'Refresh volume data',
@@ -1783,7 +1783,7 @@ export const CM = {
   importedPlaceholder: 'Imported',
 
   // CMSUserManagementModal add-user CTA
-  addManagementUserBtn: 'Add a management user',
+  addManagementUserBtn: 'Add User Account',
 
   // DatabaseSpaceMonitor inline labels
   freeBadge: 'free',

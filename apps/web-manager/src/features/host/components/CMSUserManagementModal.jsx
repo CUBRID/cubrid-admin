@@ -223,7 +223,7 @@ export default function CMSUserManagementModal() {
               {CM.close}
             </Button>
             <Button data-testid="cms-user-management-add-btn" icon="person_add" onClick={handleAddUser}>
-              {CM.addUser}
+              {CM.addManagementUserBtn}
             </Button>
           </div>
         </div>

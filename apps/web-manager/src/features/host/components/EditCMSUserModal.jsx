@@ -180,7 +180,7 @@ export default function EditCMSUserModal() {
       onClose={handleClose}
       onSubmit={handleSave}
       submitDisabled={!canSave}
-      title={isEditMode ? CM.editUser : CM.addUser}
+      title={isEditMode ? CM.editUser : CM.addManagementUserBtn}
       subtitle={isEditMode ? CM.editingUser(username) : CM.createManagementAccount}
       icon={isEditMode ? 'manage_accounts' : 'person_add'}
       maxWidth="540px"
@@ -189,7 +189,7 @@ export default function EditCMSUserModal() {
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="edit-cms-user-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
           <Button data-testid="edit-cms-user-save-btn" onClick={handleSave} disabled={!canSave}>
-            {isEditMode ? CM.saveChanges : CM.addUser}
+            {isEditMode ? CM.saveChanges : CM.addManagementUserBtn}
           </Button>
         </div>
       }
