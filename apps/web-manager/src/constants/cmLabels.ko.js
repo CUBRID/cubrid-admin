@@ -1663,6 +1663,7 @@ export const CM_KO = {
   connectionFailed: '연결 실패',
   hostLoginFailedMsg: '호스트에 로그인하지 못했습니다.',
   hostLoginNoResponseMsg: 'CMS가 응답하지 않습니다. 호스트에서 CMS가 실행 중인지, 주소와 포트가 올바른지 확인하세요.',
+  cmsAdminRequiredErrorMsg: 'CMS 사용자 관리는 CMS admin 계정으로 연결한 호스트에서만 할 수 있습니다.',
   hostLoginTlsErrorMsg: 'CMS와 신뢰할 수 있는 연결을 설정하지 못했습니다. CMS 서버의 TLS 인증서를 확인하세요.',
   tryAgain: '다시 시도',
   allBrokers: '모든 브로커',

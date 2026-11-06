@@ -207,6 +207,8 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'This name is already used by another host. Choose a different name.';
       case HostErrorCode.HOST_CONNECTED:
         return "Can't test the connection while a host with this address, port and CMS user is connected (the test could end that connection).";
+      case HostErrorCode.CMS_ADMIN_REQUIRED:
+        return 'Only a host connected as the CMS admin account can manage CMS users.';
       case HostErrorCode.INTERNAL_ERROR:
       case HostErrorCode.UNKNOWN:
         return 'A host operation failed.';

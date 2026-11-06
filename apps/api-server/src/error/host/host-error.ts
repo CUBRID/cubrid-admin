@@ -64,6 +64,15 @@ export class HostError extends AppError {
   }
 
   /**
+   * CMS user management (add, update, delete, another user's password) was
+   * asked on a host whose CMS connection account is not `admin`.
+   * `username` is that account.
+   */
+  static CmsAdminRequired(additionalData?: Record<string, any>, originalError?: Error) {
+    return new HostError('RESOURCE', HostErrorCode.CMS_ADMIN_REQUIRED, additionalData, originalError);
+  }
+
+  /**
    * Creates an error indicating an internal host-related server error.
    */
   static InternalError(additionalData?: Record<string, any>, originalError?: Error) {

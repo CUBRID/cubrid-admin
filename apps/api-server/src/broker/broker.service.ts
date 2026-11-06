@@ -1,6 +1,7 @@
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { BaseService, HandleCmsErrors } from '@common';
 import { CmsJobLockService } from '@cms-job/cms-job-lock.service';
+import { assertCmsAdminHost } from '../cms-user/cms-admin';
 import { CmsError } from '@error/cms/cms-error';
 import { CmsErrorCode } from '@error/cms/cms-error-code';
 import { DatabaseError } from '@error/database/database-error';
@@ -91,6 +92,7 @@ export class BrokerService extends BaseService {
     hostUid: string,
     request: AddDbmtUserRequest
   ): Promise<AddDbmtUserClientResponse> {
+    assertCmsAdminHost(await this.hostService.findHostInternal(userId, hostUid));
     const cmsRequest: AddDbmtUserCmsRequest = {
       task: 'adddbmtuser',
       targetid: request.targetid,
@@ -121,6 +123,7 @@ export class BrokerService extends BaseService {
     hostUid: string,
     request: UpdateDbmtUserRequest
   ): Promise<UpdateDbmtUserClientResponse> {
+    assertCmsAdminHost(await this.hostService.findHostInternal(userId, hostUid));
     const cmsRequest: UpdateDbmtUserCmsRequest = {
       task: 'updatedbmtuser',
       targetid: request.targetid,

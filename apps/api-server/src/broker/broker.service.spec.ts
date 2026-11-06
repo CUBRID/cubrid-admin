@@ -20,7 +20,8 @@ describe('BrokerService', () => {
 
   const mockHost = {
     uid: 'host-uid-1',
-    id: 'host-1',
+    // Connected as the CMS admin account: the DBMT user tasks below need it.
+    id: 'admin',
     address: 'localhost',
     port: 8001,
     password: 'host-password',

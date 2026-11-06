@@ -191,6 +191,8 @@ export class AppError extends Error {
           case HostErrorCode.DUPLICATED_HOST:
           case HostErrorCode.HOST_CONNECTED:
             return 409; // Conflict - resource collision
+          case HostErrorCode.CMS_ADMIN_REQUIRED:
+            return 403; // Forbidden - the host's CMS account may not manage users
           case HostErrorCode.INTERNAL_ERROR:
           case HostErrorCode.UNKNOWN:
             return 500; // Internal Server Error
