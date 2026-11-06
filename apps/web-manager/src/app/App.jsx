@@ -242,7 +242,8 @@ function DashboardLayout() {
               scroll container that picks up the difference, so header, tab
               bar, and dashboard body scroll together as one unit instead of
               wrapping/squishing internally. */}
-          <main className="w-full h-full bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
+          {/* @container: the header sizes itself to what is visible (100cqw), not to the page. */}
+          <main className="@container w-full h-full bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
           <div className="h-full min-w-fit flex flex-col">
 
             <Header theme={theme} toggleTheme={() => dispatch(toggleTheme())} />

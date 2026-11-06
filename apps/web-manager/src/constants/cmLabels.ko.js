@@ -426,6 +426,7 @@ export const CM_KO = {
   importHostsXml: '호스트 XML 가져오기',
   tools: '도구',
   hostServiceManagement: '호스트 서비스 관리',
+  headerMenu: '메뉴',
   help: '도움말',
   aboutCubridAdmin: 'CUBRID Admin 정보',
   cubridWebManager: 'CUBRID Admin',

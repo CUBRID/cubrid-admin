@@ -392,6 +392,8 @@ export const CM = {
   importHostsXml: 'Import Hosts XML',
   tools: 'Tools',
   hostServiceManagement: 'Host Service Management',
+  // The one menu the header folds File, Host Service Management and Help into when narrow.
+  headerMenu: 'Menu',
   help: 'Help',
   aboutCubridAdmin: 'About CUBRID Admin',
   cubridWebManager: 'CUBRID Admin',
