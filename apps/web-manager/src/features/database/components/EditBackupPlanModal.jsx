@@ -285,6 +285,8 @@ export default function EditBackupPlanModal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={CM.planIdLabel} value={formData.backupId} disabled icon="badge" />
             <Input label={CM.path} value={formData.backupPath} onChange={(e) => handleInputChange('backupPath', e.target.value)} placeholder={CM.backupDirPlaceholder} icon="folder_zip" className="font-mono!" />
+            {/* At least 1 or the plan is refused, so not under the advanced settings. */}
+            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" min={BACKUPS_TO_KEEP_MIN} error={inputIssueText(planIssues.backupsToKeep, CM)} data-testid="backup-plan-keep-input" required />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label={CM.type}>
@@ -495,7 +497,6 @@ export default function EditBackupPlanModal() {
           </summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 dark:border-white/10 px-4 py-4">
             <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" min={BACKUP_THREAD_COUNT_MIN} error={inputIssueText(planIssues.threads, CM)} data-testid="backup-plan-threads-input" />
-            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" min={BACKUPS_TO_KEEP_MIN} error={inputIssueText(planIssues.backupsToKeep, CM)} data-testid="backup-plan-keep-input" />
           </div>
         </details>
       </div>

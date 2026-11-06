@@ -115,6 +115,21 @@ describe('backup plan: backups to keep', () => {
     expect(q('edit-backup-plan-save-btn').disabled).toBe(false);
   });
 
+  it('shows backups to keep as a required field, not under the advanced settings', async () => {
+    for (const Plan of [AddBackupPlanModal, EditBackupPlanModal]) {
+      mocks.schedules = [{ backupid: 'p1', path: '/b', period_type: 'Daily', period_date: '', time: '0130', level: '0', mt: '0', bknum: '1' }];
+      await render(<Plan />);
+      await act(() => Promise.resolve());
+      const keep = q('backup-plan-keep-input');
+      expect(keep.closest('details')).toBeNull();
+      expect(keep.required).toBe(true);
+      const label = container.querySelector(`label[for="${keep.id}"]`);
+      expect(label.parentElement.textContent).toContain('*');
+      // Threads stay under the advanced settings.
+      expect(q('backup-plan-threads-input').closest('details')).not.toBeNull();
+    }
+  });
+
   it('refuses negative threads', async () => {
     await render(<AddBackupPlanModal />);
     await setValue(q('backup-plan-threads-input'), '-2');
