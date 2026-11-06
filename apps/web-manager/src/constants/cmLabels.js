@@ -508,9 +508,9 @@ export const CM = {
   monitorOnly: 'monitor',
   fullControl: 'admin',
   permissions: 'Permissions',
-  monitoringPermission: 'Status monitor authority:',
-  dbCreatePermission: 'DB creation authority:',
-  brokerPermission: 'Broker authority:',
+  monitoringPermission: 'Status monitor authority',
+  dbCreatePermission: 'DB creation authority',
+  brokerPermission: 'Broker authority',
 
   // Server dashboard
   serverDashboard: 'Host Dashboard',
