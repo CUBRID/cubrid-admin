@@ -241,7 +241,7 @@ describe('BrokerStatus application server table', () => {
     ...overrides,
   });
 
-  it('shows the columns of broker status -f, with LQS from the rise in long queries per second', async () => {
+  it('shows CA\'s columns, with LQS from the rise in long queries per second', async () => {
     let now = 1_000_000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
@@ -249,9 +249,11 @@ describe('BrokerStatus application server table', () => {
     await render();
     await flush();
 
-    expect(headers()).toEqual(expect.arrayContaining([
-      CM.asRequestsCol, CM.qps, CM.lqs, CM.tps, CM.asCpuTimeCol, CM.asDbHostCol, CM.asLastConnectCol, CM.asCurrentSqlCol,
-    ]));
+    // CA's columns, in CA's order (PORT only when CMS sends it, see below).
+    expect(headers()).toEqual([
+      CM.idLabel, CM.pid, CM.qps, CM.lqs, CM.memory, CM.status, CM.database, CM.asDbHostCol,
+      CM.lastAccess, CM.asLastConnectCol, CM.clientIp, CM.asCurrentSqlCol,
+    ]);
     // CMS sends as_port on Windows only; without it there is no PORT column.
     expect(headers()).not.toContain(CM.port);
     expect(container.textContent).toContain('20.0 MiB');
@@ -266,7 +268,6 @@ describe('BrokerStatus application server table', () => {
     const col = (label) => cells[headers().indexOf(label)];
     expect(col(CM.qps)).toBe('10.0');
     expect(col(CM.lqs)).toBe('3.0');
-    expect(col(CM.tps)).toBe('2.0');
     vi.restoreAllMocks();
   });
 

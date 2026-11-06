@@ -551,8 +551,6 @@ export const CM_KO = {
   tps: 'TPS',
   qps: 'QPS',
   lqs: 'LQS',
-  asRequestsCol: '요청 수',
-  asCpuTimeCol: 'CPU 시간',
   asDbHostCol: 'DB 호스트',
   asLastConnectCol: '마지막 연결',
   asCurrentSqlCol: '현재 SQL',

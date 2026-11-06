@@ -94,7 +94,6 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
     setAsInfoWithRates(asInfo.map((as) => ({
       ...as,
       qps: rateTrackerRef.current(`${as.as_id}:qps`, as.as_num_query),
-      tps: rateTrackerRef.current(`${as.as_id}:tps`, as.as_num_tran),
       // Long queries per second, as `cubrid broker status` works out LQS:
       // the rise in the long query count over the interval (broker_monitor.c).
       lqs: rateTrackerRef.current(`${as.as_id}:lqs`, as.as_long_query),
@@ -151,8 +150,10 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   };
 
   /* Table Columns Definitions */
-  // The columns of `cubrid broker status -f` and CA's application server
-  // table, from what CMS getbrokerstatus sends for each AS. Kept narrow so
+  // CA's application server table, its columns in its order
+  // (BrokerStatusAsColumn: ID, PID, QPS, LQS, PORT, PSIZE, STATUS, DB, HOST,
+  // LAST ACCESS TIME, LAST CONNECT TIME, CLIENT IP, SQL), from what CMS
+  // getbrokerstatus sends for each AS. Kept narrow so
   // the table fits the page at usual widths: tight padding, headers of two
   // words may wrap, long text is cut with the full value on hover, and a
   // time on the broker's current date shows only the time of day.
@@ -177,10 +178,8 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   const asColumns = [
     { header: CM.idLabel, accessor: 'as_id', className: tight, cellClassName: tight, render: (v) => <span className="font-mono text-amber-600 dark:text-amber-400">{v}</span> },
     { header: CM.pid, accessor: 'as_pid', className: wrapHeader, cellClassName: tight, render: mono },
-    { header: CM.asRequestsCol, accessor: 'as_c', className: wrapHeader, cellClassName: tight, render: mono },
     { header: CM.qps, accessor: 'qps', className: tight, cellClassName: tight, render: rate },
     { header: CM.lqs, accessor: 'lqs', className: tight, cellClassName: tight, render: rate },
-    { header: CM.tps, accessor: 'tps', className: tight, cellClassName: tight, render: rate },
     ...(hasAsPort ? [{ header: CM.port, accessor: 'as_port', className: tight, cellClassName: tight, render: mono }] : []),
     // as_psize is kilobytes (broker_process_size.c getsize: VmRSS + VmSwap); -1 when it could not be read.
     { header: CM.memory, accessor: 'as_psize', className: tight, cellClassName: tight, render: (v) => mono(Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : null) },
@@ -194,8 +193,6 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
         return <span className="whitespace-nowrap"><StatusBadge label={v || 'IDLE'} variant={isActive ? 'emerald' : 'slate'} pulse={isActive} /></span>;
       }
     },
-    { header: CM.cpu, accessor: 'as_cpu', className: tight, cellClassName: tight, render: (v) => mono(v != null && v !== '' ? `${v}%` : null) },
-    { header: CM.asCpuTimeCol, accessor: 'as_ctime', className: wrapHeader, cellClassName: tight, render: (v) => mono(v || null) },
     { header: CM.database, accessor: 'as_dbname', className: wrapHeader, cellClassName: tight, render: cut('max-w-[96px]', 'text-amber-600/80 dark:text-amber-500/70') },
     { header: CM.asDbHostCol, accessor: 'as_dbhost', className: wrapHeader, cellClassName: tight, render: cut('max-w-[96px]') },
     { header: CM.lastAccess, accessor: 'as_lat', className: wrapHeader, cellClassName: tight, render: when },
