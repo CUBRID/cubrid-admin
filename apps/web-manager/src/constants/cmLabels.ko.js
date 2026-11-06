@@ -617,6 +617,8 @@ export const CM_KO = {
   dataIndexVolumeDescription: '데이터 및 인덱스 볼륨',
   autoVolumeEnabled: '볼륨 자동 확장 켜짐',
   autoVolumeDisabled: '볼륨 자동 확장 꺼짐',
+  autoVolumePageSizeLabel: (kb) => `페이지 크기: ${kb}K`,
+  autoVolumePageSizeUnknownMsg: '데이터베이스의 페이지 크기를 읽지 못했습니다. 데이터베이스에 로그인하고 실행 중인지 확인한 뒤 이 창을 다시 여세요.',
   createBackupPlan: '백업 자동화 계획 추가',
   editBackupPlan: '백업 자동화 계획 편집',
   executionSchedule: '실행 일정',
