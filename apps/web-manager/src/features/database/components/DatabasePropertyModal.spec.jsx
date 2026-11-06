@@ -2,14 +2,17 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../host/hostApi', () => ({ hostApi: { getHostConfig: vi.fn() } }));
 vi.mock('../../broker/brokerApi', () => ({ brokerApi: { getBrokerList: vi.fn() } }));
+vi.mock('../databaseApi', () => ({ databaseApi: { getParamDump: vi.fn() } }));
 vi.mock('../databaseSlice', () => ({ closeDatabasePropertyModal: vi.fn(() => ({ type: 'close' })) }));
 vi.mock('../../layout/layoutSlice', () => ({ openTab: vi.fn(tabId => ({ type: 'openTab', payload: tabId })) }));
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { databaseApi } from '../databaseApi';
+import { CM } from '../../../constants/cmLabels';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { openTab } from '../../layout/layoutSlice';
 import { ToastProvider } from '../../../infrastructure/context/ToastContext';
@@ -116,7 +119,10 @@ it('shows Connection Information as read-only values: the host address, each bro
   await click(connectionTab);
   expect(control('broker-ip').textContent).toBe('192.168.3.80');
   expect([...control('broker-ports').querySelectorAll('li')].map((li) => li.textContent)).toEqual(['query_editor [30000/ON]', 'broker1 [33000/OFF]']);
-  expect(control('charset').textContent).toBe('UTF-8');
+  // Not logged in to demodb here: nothing is asked for, and the reason is the tooltip.
+  expect(control('charset').textContent).toBe('—');
+  expect(control('charset').title).toBe(CM.dbLoginRequiredHint);
+  expect(databaseApi.getParamDump).not.toHaveBeenCalled();
   expect(container.querySelector('input, select, [role="combobox"]')).toBeNull();
   expect(control('apply-btn')).toBeNull();
   expect(control('open-editor-btn')).not.toBeNull();
@@ -318,4 +324,57 @@ it('stops showing the loading view when the config read fails', async () => {
     <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
   ));
   expect(container.querySelector('.animate-spin')).toBeNull();
+});
+
+describe('character set in Connection Information', () => {
+  const dump = (collation) => ({ client: [{ intl_collation: `"${collation}"` }], server: [{ intl_collation: '""' }] });
+  const renderDb = async ({ confdata = ['[@demodb]', 'max_clients=123'], loggedIn = true, running = true } = {}) => {
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata }] });
+    brokerApi.getBrokerList.mockResolvedValue({ result: [] });
+    const state = {
+      databaseUI: { isDatabasePropertyModalOpen: true },
+      database: {
+        selectedDatabase: 'demodb',
+        loggedInDatabases: loggedIn ? ['host:demodb'] : [],
+        activeDatabasesByHost: { host: running ? ['demodb'] : [] },
+      },
+      host: { selectedHostUid: 'host', authorizedHosts: ['host'], hosts: [], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+      user: { preferences: { uiLocale: 'en' } },
+    };
+    await act(async () => root.render(
+      <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+    ));
+    await act(async () => { await Promise.resolve(); });
+    await click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection')));
+  };
+
+  it('reads it once from the client side of paramdump for a running database logged in to', async () => {
+    databaseApi.getParamDump.mockResolvedValue(dump('iso88591_bin'));
+    await renderDb();
+    expect(databaseApi.getParamDump).toHaveBeenCalledTimes(1);
+    expect(databaseApi.getParamDump).toHaveBeenCalledWith('host', 'demodb', 'y');
+    expect(control('charset').textContent).toBe('ISO-8859-1');
+    // Switching tabs does not ask again.
+    await click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes(CM.serverNavLabel)));
+    await click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes(CM.connectionNavLabel)));
+    expect(databaseApi.getParamDump).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing it cannot know: cubrid.conf sets intl_collation, or the database is stopped', async () => {
+    await renderDb({ confdata: ['[common]', 'intl_collation=utf8_bin', '[@demodb]', 'max_clients=123'] });
+    expect(control('charset').textContent).toBe('—');
+    expect(control('charset').title).toBe(CM.charsetCollationSetHint);
+    await renderDb({ running: false });
+    expect(control('charset').title).toBe(CM.dbStartRequiredHint);
+    expect(databaseApi.getParamDump).not.toHaveBeenCalled();
+  });
+
+  it('says so when the dump does not tell it', async () => {
+    databaseApi.getParamDump.mockRejectedValue(new Error('boom'));
+    await renderDb();
+    expect(control('charset').textContent).toBe('—');
+    expect(control('charset').title).toBe(CM.charsetUnreadHint);
+  });
 });

@@ -3,6 +3,9 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { databaseApi } from '../databaseApi';
+import { dbKey } from '../dbKey';
+import { dbCharsetFromParamDump } from '../dbCharset';
 import { fetchHostEnv } from '../../host/hostSlice';
 import { openTab } from '../../layout/layoutSlice';
 import { useCM } from '../../../constants/useCM';
@@ -244,7 +247,7 @@ export default function DatabasePropertyModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isDatabasePropertyModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, loggedInDatabases, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid, authorizedHosts, hosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
   // Resolved per this host's actual engine version by the server (see
@@ -274,10 +277,16 @@ export default function DatabasePropertyModal() {
   // Connection Information is shown, not edited: nothing in this web manager
   // reads it (it came from CA, whose query editor connected through a
   // broker). The brokers run on the host itself, so its address and their
-  // ports are what there is to show; the character set has no source here
-  // and stays the value it always showed.
+  // ports are what there is to show.
   const brokerHostAddress = hosts?.find((h) => h.uid === selectedHostUid)?.address;
-  const CONNECTION_CHARSET = 'UTF-8';
+  // The database's character set, read once per opened database (see
+  // dbCharset.js): { value } or { reason } (why it can't be shown).
+  const [charset, setCharset] = useState(null);
+  const charsetKeyRef = useRef(null);
+  // Which (host, database) `params` holds; the charset waits for it.
+  const [paramsKey, setParamsKey] = useState(null);
+  const isDbLoggedIn = Boolean(selectedDatabase) && (loggedInDatabases ?? []).includes(dbKey(selectedHostUid, selectedDatabase));
+  const isDbRunning = Boolean(selectedDatabase) && (activeDatabasesByHost?.[selectedHostUid] ?? []).includes(selectedDatabase);
   // Tracks which (host, database) the Server Parameter config has already
   // been fetched for, so switching tabs and back doesn't needlessly re-fetch.
   const fetchedConfigKeyRef = useRef(null);
@@ -292,8 +301,36 @@ export default function DatabasePropertyModal() {
       setBufferMode(DEFAULT_BUFFER_MODE);
       setActiveSidebar('Server Parameter');
       fetchedConfigKeyRef.current = null;
+      setParamsKey(null);
+      setCharset(null);
+      charsetKeyRef.current = null;
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase]);
+
+  // Only for a database logged in to (never a query for one that isn't) and
+  // running (paramdump in SA mode leaves the client values empty). When
+  // cubrid.conf sets intl_collation, the dump shows that setting, not the
+  // database's charset, so there is nothing to read.
+  useEffect(() => {
+    const key = `${selectedHostUid}:${selectedDatabase || ''}`;
+    if (!isDatabasePropertyModalOpen || !selectedDatabase) return;
+    if (!isDbLoggedIn) { setCharset({ reason: CM.dbLoginRequiredHint }); return; }
+    if (!isDbRunning) { setCharset({ reason: CM.dbStartRequiredHint }); return; }
+    if (paramsKey !== key) return;
+    if (params.intl_collation?.trim()) { setCharset({ reason: CM.charsetCollationSetHint }); return; }
+    if (charsetKeyRef.current === key) return;
+    charsetKeyRef.current = key;
+    setCharset(null);
+    databaseApi.getParamDump(selectedHostUid, selectedDatabase, 'y')
+      .then((dump) => {
+        if (charsetKeyRef.current !== key) return;
+        const value = dbCharsetFromParamDump(dump);
+        setCharset(value ? { value } : { reason: CM.charsetUnreadHint });
+      })
+      .catch(() => {
+        if (charsetKeyRef.current === key) setCharset({ reason: CM.charsetUnreadHint });
+      });
+  }, [isDatabasePropertyModalOpen, selectedHostUid, selectedDatabase, isDbLoggedIn, isDbRunning, paramsKey, params, CM]);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && !hostEnv) {
@@ -379,6 +416,7 @@ export default function DatabasePropertyModal() {
           });
           setBufferMode({ ...DEFAULT_BUFFER_MODE, ...nextMode });
           setParams({ ...newParams });
+          setParamsKey(configKey);
         } catch (err) {
           console.error('Failed to fetch config:', err);
           // Allow a retry on the next tab switch instead of permanently
@@ -707,7 +745,7 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
                     </div>
-                    <p data-testid="database-property-charset" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200">{CONNECTION_CHARSET}</p>
+                    <p data-testid="database-property-charset" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200" title={charset?.reason}>{charset?.value ?? '—'}</p>
                   </div>
                 </div>
 
