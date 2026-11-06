@@ -8,6 +8,9 @@ import { HA_NODE_STEP } from './haNodeStep';
 import { hostLoginErrorMessage } from './hostLoginError';
 import { cmsUserErrorMessage } from './cmsUserError';
 import { getCM, getStoredLocale } from '../../constants/useCM';
+
+// The stored locale follows the account's language (userSlice stores it).
+const uiLabels = () => getCM(getStoredLocale());
 import { findHaPeersNeedingMerge,
   findRegisteredHaPeersInSameGroup,
   findUndiscoveredHaPeers,
@@ -209,13 +212,12 @@ export const deleteHostGroup = createAsyncThunk(
 
 export const setHostPassword = createAsyncThunk(
   'host/setHostPassword',
-  async ({ hostUid, payload }, { rejectWithValue, getState }) => {
+  async ({ hostUid, payload }, { rejectWithValue }) => {
     try {
       await hostApi.setHostPassword(hostUid, payload);
       return hostUid;
     } catch (err) {
-      const CM = getCM(getState().user?.preferences?.uiLocale ?? getStoredLocale());
-      return rejectWithValue(cmsUserErrorMessage(err, CM, 'Failed to set password'));
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to set password'));
     }
   }
 );
@@ -398,43 +400,42 @@ export const fetchCmsUsers = createAsyncThunk(
 );
 
 // The user's language, for an error the server reports by code.
-const uiLabels = (getState) => getCM(getState().user?.preferences?.uiLocale ?? getStoredLocale());
 
 export const addCmsUser = createAsyncThunk(
   'host/addCmsUser',
-  async ({ hostUid, payload }, { rejectWithValue, getState }) => {
+  async ({ hostUid, payload }, { rejectWithValue }) => {
     try {
       const response = await hostApi.addCmsUser(hostUid, payload);
       const userlist = (response.userlist || []).flatMap(item => item.user || item);
       return { hostUid, userlist };
     } catch (err) {
-      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(getState), 'Failed to add CMS user'));
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to add CMS user'));
     }
   }
 );
 
 export const updateCmsUser = createAsyncThunk(
   'host/updateCmsUser',
-  async ({ hostUid, payload }, { rejectWithValue, getState }) => {
+  async ({ hostUid, payload }, { rejectWithValue }) => {
     try {
       const response = await hostApi.updateCmsUser(hostUid, payload);
       const userlist = (response.userlist || []).flatMap(item => item.user || item);
       return { hostUid, userlist };
     } catch (err) {
-      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(getState), 'Failed to update CMS user'));
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to update CMS user'));
     }
   }
 );
 
 export const deleteCmsUser = createAsyncThunk(
   'host/deleteCmsUser',
-  async ({ hostUid, targetid }, { rejectWithValue, getState }) => {
+  async ({ hostUid, targetid }, { rejectWithValue }) => {
     try {
       const response = await hostApi.deleteCmsUser(hostUid, targetid);
       const userlist = (response.userlist || []).flatMap(item => item.user || item);
       return { hostUid, userlist };
     } catch (err) {
-      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(getState), 'Failed to delete CMS user'));
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to delete CMS user'));
     }
   }
 );
