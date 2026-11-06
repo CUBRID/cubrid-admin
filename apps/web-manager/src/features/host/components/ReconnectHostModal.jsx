@@ -21,6 +21,8 @@ export default function ReconnectHostModal() {
   // Asked after the CMS account's password changed: the saved one no longer
   // works, so the user types the new one and it is saved only once it logs in.
   const needsPassword = useSelector((state) => !!state.host.reconnectPasswordHosts?.includes(reconnectHostUid));
+  // The host's CMS could not be reached (hostUnreachable), not a lost session.
+  const isUnreachable = useSelector((state) => state.host.reconnectReasons?.[reconnectHostUid] === 'unreachable');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -209,7 +211,11 @@ export default function ReconnectHostModal() {
         <div className="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/8 rounded-xl">
           <Icon name="info" size="sm" className="text-sky-500 shrink-0 mt-0.5" weight={300} />
           <Typography variant="caption" className="text-slate-500 font-medium leading-relaxed">
-            {needsPassword ? CM.reconnectNewPasswordPrompt : (CM.reconnectPrompt || 'Your session was disconnected, possibly because another user logged into this host. Click Reconnect to attempt to re-establish the connection.')}
+            {needsPassword
+              ? CM.reconnectNewPasswordPrompt
+              : isUnreachable
+                ? CM.hostUnreachablePrompt
+                : (CM.reconnectPrompt || 'Your session was disconnected, possibly because another user logged into this host. Click Reconnect to attempt to re-establish the connection.')}
           </Typography>
         </div>
 

@@ -429,6 +429,7 @@ export const CM = {
   connectionLost: 'Connection Lost',
   reconnect: 'Reconnect',
   reconnectPrompt: 'Your session was disconnected, possibly because the token expired or another user logged into this host. Click Reconnect to try again.',
+  hostUnreachablePrompt: 'The host did not answer. Its CUBRID Manager server may be stopped, or its port may have changed. Click Reconnect to try again, or check the host settings.',
   reconnectNewPasswordTitle: 'Enter the New Password',
   reconnectNewPasswordPrompt: 'The password of the CMS account this host connects with was changed. Enter the new password to connect again.',
   editHost: 'Edit Host',

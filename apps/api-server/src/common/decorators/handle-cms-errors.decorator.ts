@@ -72,7 +72,9 @@ function mapAxiosToCmsError(error: unknown): CmsError | null {
         path: request.path,
       })
     );
-    return CmsError.NoResponse(undefined, error as Error);
+    // Why (ECONNREFUSED, EHOSTUNREACH, ECONNABORTED for a timeout, ...): the
+    // client tells a host that cannot be reached from a CMS that is busy.
+    return CmsError.NoResponse(e.code ? { reason: e.code } : undefined, error as Error);
   }
 
   return null;

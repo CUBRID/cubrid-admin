@@ -34,7 +34,7 @@ const ignoreRefreshError = () => undefined;
 const Component = function ServiceDashboard() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { hosts, hostGroups, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, hostGroups, authorizedHosts, haInfo, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
   // Rows come from the registered host list (fetchHosts); while it loads the
@@ -85,7 +85,10 @@ const Component = function ServiceDashboard() {
     tabId: 'service_dashboard',
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: (silent) => async (dispatch, getState) => {
-      const targets = authorizedHosts.filter((hostUid) => visibleHostsRef.current.includes(hostUid));
+      // A host waiting in the reconnect window (session lost, or its CMS not
+      // reachable) is not read until the user decides, as its own dashboard does.
+      const targets = authorizedHosts.filter((hostUid) =>
+        visibleHostsRef.current.includes(hostUid) && !(reconnectQueue ?? []).includes(hostUid));
       if (targets.length === 0) return;
       // Volume usage (a spacedb per database) on its own interval; the rest
       // at every refresh. A refresh the user asks for reads everything.

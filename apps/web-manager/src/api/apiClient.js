@@ -4,6 +4,9 @@ import { nextSeq } from '../infrastructure/utils/singleFlight';
 export const hostActions = {
   revokeHostLogin: (hostUid) => ({ type: 'host/revokeHostLogin', payload: hostUid }),
   openReconnectModal: (hostUid) => ({ type: 'host/openReconnectModal', payload: hostUid }),
+  // The host's CMS could not be reached (stopped, its port changed, the host
+  // down): the same reconnect window, saying so.
+  hostUnreachable: (hostUid) => ({ type: 'host/hostUnreachable', payload: hostUid }),
   loginToHost: null,
   clearReconnectingHost: null,
 };
@@ -58,6 +61,34 @@ const isStaleHostRequest = (hostUid, originalRequest) =>
 // Directly export so ReconnectHostModal can clear the guard on close.
 export const clearReconnectingHost = (hostUid) => {
   reconnectingHosts.delete(hostUid);
+};
+
+// A host-scoped request the server could not send to its CMS
+// (/errors/cms/no_response, or a TLS failure). A refused or unreachable
+// connection (CMS stopped, its port changed, the host down) opens the
+// reconnect window at once; a request that only timed out can be a busy
+// CMS, so that takes CMS_NO_RESPONSE_MAX_TIMEOUTS in a row for the host
+// within the window. Without this the host stayed "connected" and every
+// screen kept its last values. Polling pauses for a host in the reconnect
+// queue, so nothing keeps asking.
+const CMS_NO_RESPONSE_TYPE = '/errors/cms/no_response';
+const CMS_TLS_ERROR_TYPE = '/errors/cms/tls_error';
+const CMS_UNREACHABLE_REASONS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET']);
+export const CMS_NO_RESPONSE_MAX_TIMEOUTS = 3;
+const CMS_NO_RESPONSE_WINDOW_MS = 120000;
+const hostNoResponseFailures = new Map(); // hostUid -> { count, windowStart }
+
+const isHostUnreachableError = (hostUid, apiData) => {
+  const type = apiData?.data?.type || apiData?.type || '';
+  if (type === CMS_TLS_ERROR_TYPE) return true;
+  if (type !== CMS_NO_RESPONSE_TYPE) return false;
+  const reason = apiData?.data?.reason || apiData?.reason;
+  if (CMS_UNREACHABLE_REASONS.has(reason)) return true;
+  const now = Date.now();
+  const entry = hostNoResponseFailures.get(hostUid);
+  if (entry && now - entry.windowStart < CMS_NO_RESPONSE_WINDOW_MS) entry.count += 1;
+  else hostNoResponseFailures.set(hostUid, { count: 1, windowStart: now });
+  return hostNoResponseFailures.get(hostUid).count >= CMS_NO_RESPONSE_MAX_TIMEOUTS;
 };
 
 const isDesktopRuntime = () =>
@@ -414,7 +445,10 @@ apiClient.interceptors.response.use(
     // fine again — reset the circuit breaker so a future real disconnect
     // gets its own fresh attempts instead of inheriting an old count.
     const successHostUid = getHostUidFromUrl(response.config?.url);
-    if (successHostUid) hostAutoReloginFailures.delete(successHostUid);
+    if (successHostUid) {
+      hostAutoReloginFailures.delete(successHostUid);
+      hostNoResponseFailures.delete(successHostUid);
+    }
 
     const rawData = response.data;
     if (rawData && typeof rawData === 'object' && Object.prototype.hasOwnProperty.call(rawData, 'data')) {
@@ -637,6 +671,27 @@ apiClient.interceptors.response.use(
 
       await handleSystemSessionExpired();
       return Promise.reject(error);
+    }
+
+    // The server could not reach the host's CMS (see isHostUnreachableError):
+    // the host goes to the reconnect window, where Reconnect tries the login
+    // again and Disconnect closes its screens, instead of staying "connected"
+    // with its last values on screen. A host login reports its own failure.
+    if (!requestUrl.includes('/cms-auth/login')) {
+      const hostUid = getHostUidFromUrl(requestUrl);
+      if (hostUid && !reconnectingHosts.has(hostUid) && isHostUnreachableError(hostUid, apiData)) {
+        try {
+          const { store } = await import('../app/store');
+          if (store.getState().host?.authorizedHosts?.includes(hostUid)) {
+            reconnectingHosts.add(hostUid);
+            store.dispatch(hostActions.hostUnreachable(hostUid));
+          }
+        } catch (e) {
+          reconnectingHosts.delete(hostUid);
+          console.error('Failed to dispatch hostUnreachable:', e);
+        }
+        return Promise.reject(error);
+      }
     }
 
     // ensureDbLogin (api-server) only accepts a live login the user made; a
