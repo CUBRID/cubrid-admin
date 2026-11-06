@@ -42,9 +42,19 @@ describe('getMenuActionEnabled', () => {
     expect(unauthorized[MENU_ACTIONS.editHost]).toBe(true);
     expect(unauthorized[MENU_ACTIONS.cmsAccountManagement]).toBe(false);
 
-    const authorized = getMenuActionEnabled({ selectedHostUid: 'h1', authorizedHosts: ['h1'] });
+    const authorized = getMenuActionEnabled({ selectedHostUid: 'h1', authorizedHosts: ['h1'], hosts: [{ uid: 'h1', id: 'admin' }] });
     expect(authorized[MENU_ACTIONS.cmsAccountManagement]).toBe(true);
     expect(authorized[MENU_ACTIONS.checkForUpdates]).toBe(true);
+  });
+
+  it('offers CMS Account Management only on a host connected with the CMS admin account, as CA does', () => {
+    const enabledFor = (id) => getMenuActionEnabled({
+      selectedHostUid: 'h1', authorizedHosts: ['h1'], hosts: [{ uid: 'h1', id }],
+    })[MENU_ACTIONS.cmsAccountManagement];
+    expect(enabledFor('admin')).toBe(true);
+    expect(enabledFor('monitor_user')).toBe(false);
+    // CA compares the name exactly (userName.equals("admin")).
+    expect(enabledFor('Admin')).toBe(false);
   });
 
   it('covers every action id, as does the all-disabled state', () => {

@@ -160,6 +160,7 @@ export const CM = {
   },
   manageDatabaseHaDisabledHint: 'Not available for an HA-configured database.',
   hostConnectRequiredHint: 'Connect to the host first.',
+  cmsAdminRequiredHint: 'Only a host connected with the CMS admin account can manage CMS users.',
   dbLoginRequiredHint: 'Log in to the database first.',
   hostSelectRequiredHint: 'Select a host first.',
   dbStopRequiredHint: 'Stop the database first.',

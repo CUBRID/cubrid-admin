@@ -30,3 +30,10 @@ it('asks for the running state the item needs, and nothing when the database is 
   expect(menuOffReason(KO, { needs: 'running', dbRunning: false })).toBe('데이터베이스를 먼저 시작하세요.');
   expect(menuOffReason(KO, { needs: 'running', dbRunning: true })).toBeUndefined();
 });
+
+it('asks for the CMS admin account after the connection, before anything about a database', () => {
+  expect(menuOffReason(KO, { hostConnected: false, cmsAdmin: false })).toBe(KO.hostConnectRequiredHint);
+  expect(menuOffReason(KO, { cmsAdmin: false, dbLoggedIn: false })).toBe(KO.cmsAdminRequiredHint);
+  expect(KO.cmsAdminRequiredHint).toBe('CMS admin 계정으로 연결한 호스트에서만 CMS 사용자를 관리할 수 있습니다.');
+  expect(menuOffReason(KO, { cmsAdmin: true })).toBeUndefined();
+});

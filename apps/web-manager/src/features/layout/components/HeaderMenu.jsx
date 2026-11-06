@@ -2,21 +2,24 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { MENU_ACTIONS, getMenuActionEnabled, runMenuAction } from '../menuActions';
 import { menuOffReason } from '../menuOffReason';
+import { isCmsAdminHost } from '../../host/cmsAdmin';
 import { useCM } from '../../../constants/useCM';
 
 export default function HeaderMenu({ folded = false }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { selectedHostUid, authorizedHosts, hosts } = useSelector((state) => state.host, shallowEqual);
 
-  const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts });
+  const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts, hosts });
   // Only Edit Host, CMS Account Management and Host Engine Version are ever
-  // off, for want of a selected (and, for CMS accounts, connected) host.
+  // off, for want of a selected (and, for CMS accounts, connected with the
+  // CMS admin account) host.
   const action = (id) => ({
     disabled: !enabled[id],
     title: enabled[id] ? undefined : menuOffReason(CM, {
       hostSelected: Boolean(selectedHostUid),
       hostConnected: (authorizedHosts ?? []).includes(selectedHostUid),
+      cmsAdmin: id !== MENU_ACTIONS.cmsAccountManagement || isCmsAdminHost(hosts, selectedHostUid),
     }),
     onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid }),
   });

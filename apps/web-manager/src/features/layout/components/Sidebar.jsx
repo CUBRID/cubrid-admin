@@ -111,6 +111,7 @@ import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME, orderedGro
 import { useHostActivation } from '../../host/useHostActivation';
 import { useRefillNavigatorLists } from '../sidebar/useRefillNavigatorLists';
 import { menuOffReason } from '../menuOffReason';
+import { isCmsAdminHost } from '../../host/cmsAdmin';
 
 // A selection updater keeping only the names in `namesText` (newline-joined).
 const keepOnly = (namesText) => (prev) => {
@@ -1388,12 +1389,16 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             title={hostOffReason(contextMenu.hostUid)}
             onClick={() => { dispatch(openChangePasswordModal(contextMenu.hostUid)); setContextMenu(null); }} 
           />
-          <MenuItem 
-            icon="supervisor_account" 
-            label={CM.userManagement} 
-            disabled={!authorizedHosts.includes(contextMenu.hostUid)}
-            title={hostOffReason(contextMenu.hostUid)}
-            onClick={() => { dispatch(openCmsUserManagementModal(contextMenu.hostUid)); setContextMenu(null); }} 
+          {/* Only for the CMS admin account, as in CA (isCmsAdminHost). */}
+          <MenuItem
+            icon="supervisor_account"
+            label={CM.userManagement}
+            disabled={!authorizedHosts.includes(contextMenu.hostUid) || !isCmsAdminHost(hosts, contextMenu.hostUid)}
+            title={menuOffReason(CM, {
+              hostConnected: authorizedHosts.includes(contextMenu.hostUid),
+              cmsAdmin: isCmsAdminHost(hosts, contextMenu.hostUid),
+            })}
+            onClick={() => { dispatch(openCmsUserManagementModal(contextMenu.hostUid)); setContextMenu(null); }}
           />
           <MenuItem icon="info" label={CM.serverVersion} onClick={() => { dispatch(openServerVersionModal(contextMenu.hostUid)); setContextMenu(null); }} />
         </ContextMenuWrapper>
