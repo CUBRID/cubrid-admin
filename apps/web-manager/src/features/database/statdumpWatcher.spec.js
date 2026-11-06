@@ -5,6 +5,7 @@ vi.mock('./databaseApi', () => ({ databaseApi: {} }));
 import {
   acquireStatdumpWatcher,
   restartFrozenStatdumpWatcher,
+  setStatdumpWatcherPaused,
   WATCHER_REFRESH_MS,
   STOP_GRACE_MS,
   FROZEN_RESTART_MS,
@@ -82,6 +83,34 @@ describe('acquireStatdumpWatcher', () => {
     acquire('h1', 'b');
     await vi.advanceTimersByTimeAsync(0);
     expect(api.startStatDumpWatcher.mock.calls).toEqual([['h1', 'a'], ['h1', 'b']]);
+  });
+});
+
+describe('setStatdumpWatcherPaused', () => {
+  it('sends nothing while paused (host in the reconnect window, a modal open) and starts again on resume', async () => {
+    acquire();
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(1);
+
+    setStatdumpWatcherPaused('h1', 'demodb', true);
+    await vi.advanceTimersByTimeAsync(WATCHER_REFRESH_MS * 3);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(1);
+    expect(api.stopStatDumpWatcher).not.toHaveBeenCalled();
+    // Frozen counters are not restarted either while paused.
+    expect(restartFrozenStatdumpWatcher('h1', 'demodb', 0, FROZEN_RESTART_MS * 2, api)).toBe(false);
+
+    setStatdumpWatcherPaused('h1', 'demodb', false);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(WATCHER_REFRESH_MS);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('acquired while paused, sends nothing until resumed', async () => {
+    releases.push(acquireStatdumpWatcher('h1', 'demodb', api, { paused: true }));
+    await vi.advanceTimersByTimeAsync(WATCHER_REFRESH_MS);
+    expect(api.startStatDumpWatcher).not.toHaveBeenCalled();
+
+    setStatdumpWatcherPaused('h1', 'demodb', false);
+    expect(api.startStatDumpWatcher).toHaveBeenCalledTimes(1);
   });
 });
 
