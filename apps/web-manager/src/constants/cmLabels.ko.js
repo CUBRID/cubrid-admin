@@ -206,6 +206,8 @@ export const CM_KO = {
   hostSelectRequiredHint: '호스트를 먼저 선택하세요.',
   dbStopRequiredHint: '데이터베이스를 먼저 중지하세요.',
   dbStartRequiredHint: '데이터베이스를 먼저 시작하세요.',
+  charsetCollationSetHint: 'cubrid.conf에 intl_collation이 설정되어 있어 데이터베이스의 문자 집합을 알 수 없습니다.',
+  charsetUnreadHint: '데이터베이스의 문자 집합을 읽지 못했습니다.',
   taskInProgressHint: '다른 작업이 진행 중입니다.',
   hostLoginInProgressHint: '호스트 로그인이 진행 중입니다.',
   groupHostsAlreadyConnectedHint: '이 그룹의 호스트가 모두 이미 연결되어 있습니다.',

@@ -164,6 +164,8 @@ export const CM = {
   hostSelectRequiredHint: 'Select a host first.',
   dbStopRequiredHint: 'Stop the database first.',
   dbStartRequiredHint: 'Start the database first.',
+  charsetCollationSetHint: "cubrid.conf sets intl_collation, so the database's own character set can't be shown.",
+  charsetUnreadHint: "Could not read the database's character set.",
   taskInProgressHint: 'Another task is in progress.',
   hostLoginInProgressHint: 'A host login is in progress.',
   groupHostsAlreadyConnectedHint: 'All hosts in this group are already connected.',
