@@ -1886,6 +1886,7 @@ export const CM_KO = {
     'resource/no_such_host': '호스트를 찾을 수 없습니다.',
     'resource/host_connected': '같은 주소·포트·CMS 사용자로 연결된 호스트가 있어 연결 테스트를 하지 않았습니다(그 연결이 끊길 수 있음).',
     'resource/exceed_max_hosts': '등록할 수 있는 호스트 수를 넘었습니다.',
+    'resource/cms_admin_required': 'CMS 사용자 관리는 CMS admin 계정으로 연결한 호스트에서만 할 수 있습니다.',
     'resource/invalid_format': '호스트 정보 형식이 올바르지 않습니다.',
     'resource/invalid_format:MISSING_OR_BLANK_ALIAS': '호스트를 추가하려면 이름(별칭)이 필요합니다.',
     'resource/invalid_format:BLANK_ALIAS_NOT_ALLOWED': '이름(별칭)은 비워 둘 수 없습니다.',

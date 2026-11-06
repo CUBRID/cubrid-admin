@@ -279,3 +279,9 @@ describe('a create job interrupted by a server restart', () => {
     expect(failureText(interrupted(undefined), KO)).toBe('API 서버가 다시 시작되어 작업이 중단되었습니다.');
   });
 });
+
+it('says in Korean that only a host connected as the CMS admin can manage CMS users', () => {
+  const refused = { status: 403, note: 'Only a host connected as the CMS admin account can manage CMS users.',
+    data: { type: '/errors/resource/cms_admin_required', code: 'CMS_ADMIN_REQUIRED' } };
+  expect(serverErrorText(refused, KO)).toBe('CMS 사용자 관리는 CMS admin 계정으로 연결한 호스트에서만 할 수 있습니다.');
+});
