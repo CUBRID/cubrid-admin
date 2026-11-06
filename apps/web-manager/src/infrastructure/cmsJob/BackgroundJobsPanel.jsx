@@ -13,6 +13,10 @@ import {
   isTerminalCmsJobStatus,
 } from './cmsJobLabels';
 
+// The sync glyph's arrows go counter-clockwise; animate-spin turns
+// clockwise, so run it backwards to turn the way the arrows point.
+const SPIN_AS_DRAWN = 'animate-spin [animation-direction:reverse]';
+
 function formatElapsed(ms) {
   const totalSeconds = Math.floor(ms / 1000);
   const h = Math.floor(totalSeconds / 3600);
@@ -146,7 +150,7 @@ function JobRow({ job, CM, hostLabel, onSelect, onDismiss }) {
           {job.outcomeUnknown ? (
             <Icon name="help_outline" className="text-amber-500" size="sm" weight={300} />
           ) : isActive ? (
-            <Icon name="sync" className="text-amber-500 animate-spin" size="sm" weight={300} />
+            <Icon name="sync" className={`text-amber-500 ${SPIN_AS_DRAWN}`} size="sm" weight={300} />
           ) : job.jobStatus === 'succeeded' ? (
             <Icon name="check_circle" className="text-green-500" size="sm" weight={300} />
           ) : (
@@ -237,7 +241,7 @@ export function BackgroundJobsPanel({
           />
         </div>
         {activeCount > 0 ? (
-          <Icon name="sync" className="text-amber-500 animate-spin shrink-0" size="sm" weight={300} />
+          <Icon name="sync" className={`text-amber-500 ${SPIN_AS_DRAWN} shrink-0`} size="sm" weight={300} />
         ) : (
           <Icon name="pending_actions" className="text-slate-400 shrink-0" size="sm" weight={300} />
         )}
