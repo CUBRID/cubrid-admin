@@ -1654,7 +1654,7 @@ export const CM_KO = {
   autoVolumePoliciesSavedMsg: (db) => `"${db}"의 볼륨 자동 확장 정책이 저장되었습니다.`,
   saveConfigFailedRetryMsg: '구성을 저장하지 못했습니다. 다시 시도하세요.',
   autoVolumePageSizeLabel: (kb) => `페이지 크기: ${kb}K`,
-  autoVolumePageSizeUnknownMsg: '데이터베이스의 페이지 크기를 아직 모릅니다. 대시보드를 한 번 연 뒤 다시 시도하세요.',
+  autoVolumePageSizeUnknownMsg: '데이터베이스의 페이지 크기를 읽지 못했습니다. 데이터베이스에 로그인하고 실행 중인지 확인한 뒤 이 창을 다시 여세요.',
   autoVolumeExpandDesc: '여유 공간이 임계값 이하로 떨어지면 볼륨이 자동으로 확장됩니다. 페이지 수는 데이터베이스의 페이지 크기로 셉니다.',
 
   // 데이터베이스 플랜 덤프 모달
