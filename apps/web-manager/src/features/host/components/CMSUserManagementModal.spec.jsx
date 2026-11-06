@@ -55,3 +55,43 @@ it('lists and edits the CMS users of the host it was opened for', async () => {
   await act(async () => document.querySelector('[data-testid="cms-user-management-add-btn"]').click());
   expect(openEditCmsUserModal).toHaveBeenCalledWith({ hostUid: 'B', user: null });
 });
+
+it('lists the users in a table by user ID, sorts by a clicked column and keeps admin above it', async () => {
+  const state = {
+    host: {
+      isCmsUserManagementModalOpen: true,
+      selectedHostUid: 'A',
+      cmsUserManagementHostUid: 'A',
+      hosts: [{ uid: 'A', alias: 'hostA', id: 'admin' }],
+      cmsUsers: {
+        A: [
+          { '@id': 'zeta', dbcreate: 'none', casauth: 'admin', statusmonitorauth: 'none' },
+          { '@id': 'admin', dbcreate: 'admin', casauth: 'admin', statusmonitorauth: 'admin' },
+          { '@id': 'alpha', dbcreate: 'admin', casauth: 'none', statusmonitorauth: 'monitor' },
+        ],
+      },
+      cmsUsersLoading: {},
+    },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  await act(async () => root.render(<Provider store={configureStore({ reducer: () => state })}><ConfirmProvider><CMSUserManagementModal /></ConfirmProvider></Provider>));
+
+  const rowNames = () => [...document.querySelectorAll('[data-testid="cms-user-table"] tbody tr')]
+    .map((tr) => tr.querySelector('td [title]').textContent);
+  const header = (text) => [...document.querySelectorAll('[data-testid="cms-user-table"] th')]
+    .find((th) => th.textContent.includes(text));
+
+  expect(document.querySelector('[data-testid="cms-user-admin"]')).not.toBeNull();
+  expect(rowNames()).toEqual(['alpha', 'zeta']);
+  expect(header('User ID').getAttribute('aria-sort')).toBe('ascending');
+
+  await act(async () => header('User ID').click());
+  expect(rowNames()).toEqual(['zeta', 'alpha']);
+  expect(header('User ID').getAttribute('aria-sort')).toBe('descending');
+
+  await act(async () => header('Broker authority').click());
+  expect(rowNames()).toEqual(['zeta', 'alpha']);
+  expect(header('Broker authority').getAttribute('aria-sort')).toBe('ascending');
+  await act(async () => header('Broker authority').click());
+  expect(rowNames()).toEqual(['alpha', 'zeta']);
+});

@@ -16,12 +16,21 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
+import { Table } from '../../../components/ds/layout/Table';
+import {
+  DEFAULT_CMS_USER_SORT,
+  cmsUserName,
+  nextCmsUserSort,
+  sortCmsUserRows,
+  toCmsUserRow,
+} from '../cmsUserRows';
 
 export default function CMSUserManagementModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const confirm = useConfirm();
   const [deletingUser, setDeletingUser] = useState(null);
+  const [userSort, setUserSort] = useState(DEFAULT_CMS_USER_SORT);
   const { 
     isCmsUserManagementModalOpen, 
     cmsUserManagementHostUid: hostUid, 
@@ -85,109 +94,111 @@ export default function CMSUserManagementModal() {
 
   if (!isOpen) return null;
 
-  const adminUsers = userlist.filter(u => {
-    const name = typeof u === 'string' ? u : (u.name || u.id || u['@id'] || u.targetid || '');
-    return name.toLowerCase() === 'admin';
+  const adminUsers = userlist.filter((u) => cmsUserName(u).toLowerCase() === 'admin');
+  // The other users in a table sorted as in CA; admin stays on top in its own section.
+  const regularRows = sortCmsUserRows(
+    userlist
+      .filter((u) => {
+        const name = cmsUserName(u);
+        return name.toLowerCase() !== 'admin' && name !== '';
+      })
+      .map(toCmsUserRow),
+    userSort
+  );
+  const sortableColumn = (key, header) => ({
+    header,
+    accessor: key,
+    onHeaderClick: () => setUserSort((prev) => nextCmsUserSort(prev, key)),
+    sortDirection: userSort.key === key ? userSort.direction : null,
   });
-  const regularUsers = userlist.filter(u => {
-    const name = typeof u === 'string' ? u : (u.name || u.id || u['@id'] || u.targetid || '');
-    return name.toLowerCase() !== 'admin' && name !== '';
-  });
+  const authority = (value) => (
+    <span className="font-mono text-13 text-slate-600 dark:text-slate-300">{value}</span>
+  );
+  // The authority titles wrap (long in English) so the table fits the window.
+  const wrapHeader = '!whitespace-normal [&>div>span:first-child]:!whitespace-normal [&>div>span:first-child]:break-keep';
+  const authorityColumn = (key, header) => ({ ...sortableColumn(key, header), className: wrapHeader, render: authority });
+  const userColumns = [
+    {
+      ...sortableColumn('name', CM.userIdLabel),
+      render: (name) => (
+        <span className="flex items-center gap-2 min-w-0" data-testid={`cms-user-${name}`}>
+          <Icon name="person" size="15px" weight={300} className="text-slate-400 shrink-0" />
+          <span title={name} className="truncate">{name}</span>
+        </span>
+      ),
+    },
+    authorityColumn('dbcreate', CM.dbCreatePermission),
+    authorityColumn('casauth', CM.brokerPermission),
+    authorityColumn('statusmonitorauth', CM.monitoringPermission),
+    {
+      header: CM.actions,
+      accessor: 'actions',
+      align: 'right',
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            data-testid={`cms-user-${row.name}-edit-btn`}
+            onClick={() => handleEditUser(row.user)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
+            title={CM.editUser}
+            aria-label={CM.editUser}
+          >
+            <Icon name="edit" size="15px" weight={300} />
+          </button>
+          <button
+            type="button"
+            data-testid={`cms-user-${row.name}-delete-btn`}
+            onClick={() => handleDeleteUser(row.name)}
+            disabled={deletingUser === row.name}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all disabled:opacity-50 disabled:pointer-events-none"
+            title={CM.deleteUser}
+            aria-label={CM.deleteUser}
+          >
+            <Icon name={deletingUser === row.name ? 'progress_activity' : 'delete'} size="14px" weight={300} className={deletingUser === row.name ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
-  const renderUser = (user) => {
-    // CMS often uses @id or targetid for the username in the response
-    const username = typeof user === 'string' 
-      ? user 
-      : (user.name || user.id || user['@id'] || user.targetid || CM.unknownFallback);
-    const isAdmin = username.toLowerCase() === 'admin';
-    const casauth = user?.casauth || user?.['@casauth'] || 'none';
-    const dbcreate = user?.dbcreate || user?.['@dbcreate'] || 'none';
-    const statusmonitorauth = user?.statusmonitorauth || user?.['@statusmonitorauth'] || 'none';
-
+  // The admin account: a card of its own, above the table, never deleted.
+  const renderAdmin = (user) => {
+    const username = cmsUserName(user) || CM.unknownFallback;
     return (
       <div
         key={username}
-        data-testid={`cms-user-${username.toLowerCase() === 'admin' ? 'admin' : username}`}
-        className={`group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl border transition-all duration-200 cursor-default ${
-          isAdmin
-            ? 'bg-amber-500/4 border-amber-500/20 hover:border-amber-500/40'
-            : 'bg-white dark:bg-white/1 border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/12 hover:shadow-xs'
-        }`}
+        data-testid="cms-user-admin"
+        className="group relative flex items-center gap-4 px-4 py-3.5 rounded-2xl border transition-all duration-200 cursor-default bg-amber-500/4 border-amber-500/20 hover:border-amber-500/40"
       >
-        {/* Avatar */}
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
-          isAdmin
-            ? 'bg-amber-500 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-            : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/8 group-hover:bg-amber-500/8 group-hover:border-amber-500/20'
-        }`}>
-          <Icon
-            name={isAdmin ? 'verified_user' : 'person'}
-            size="17px"
-            weight={isAdmin ? 400 : 300}
-            className={isAdmin ? 'text-slate-900' : 'text-slate-400 group-hover:text-amber-500'}
-          />
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all bg-amber-500 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)]">
+          <Icon name="verified_user" size="17px" weight={400} className="text-slate-900" />
         </div>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <Typography title={username} variant="p" className="font-black text-15 text-slate-800 dark:text-white truncate">
               {username}
             </Typography>
-            {isAdmin && (
-              <span className="shrink-0 text-11 font-black px-1.5 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-amber-500 uppercase tracking-wider">
-                {CM.admin}
-              </span>
-            )}
+            <span className="shrink-0 text-11 font-black px-1.5 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 text-amber-500 uppercase tracking-wider">
+              {CM.admin}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isAdmin && (
-              <>
-                <span className="flex items-center gap-1 text-12 text-slate-400 font-medium">
-                  <Icon name="storage" size="11px" weight={300} />
-                  <span>{CM.dbCreatePermission}: <span className="font-bold text-slate-600 dark:text-slate-300 capitalize">{dbcreate}</span></span>
-                </span>
-                <span className="w-px h-3 bg-slate-200 dark:bg-white/8" />
-                <span className="flex items-center gap-1 text-12 text-slate-400 font-medium">
-                  <Icon name="hub" size="11px" weight={300} />
-                  <span>{CM.brokerPermission}: <span className="font-bold text-slate-600 dark:text-slate-300 capitalize">{casauth}</span></span>
-                </span>
-                <span className="w-px h-3 bg-slate-200 dark:bg-white/8" />
-                <span className="flex items-center gap-1 text-12 text-slate-400 font-medium">
-                  <Icon name="monitor_heart" size="11px" weight={300} />
-                  <span>{CM.monitoringPermission}: <span className="font-bold text-slate-600 dark:text-slate-300 capitalize">{statusmonitorauth}</span></span>
-                </span>
-              </>
-            )}
-            {isAdmin && (
-              <span className="text-12 text-slate-400 font-medium">{CM.fullSystemAuthorization}</span>
-            )}
-          </div>
+          <span className="text-12 text-slate-400 font-medium">{CM.fullSystemAuthorization}</span>
         </div>
 
-        {/* Actions — appear on hover */}
+        {/* Edit appears on hover */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
           <button
+            type="button"
             data-testid={`cms-user-${username}-edit-btn`}
             onClick={() => handleEditUser(user)}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all"
             title={CM.editUser}
+            aria-label={CM.editUser}
           >
             <Icon name="edit" size="15px" weight={300} />
           </button>
-          {!isAdmin && (
-            <button
-              type="button"
-              data-testid={`cms-user-${username}-delete-btn`}
-              onClick={() => handleDeleteUser(username)}
-              disabled={deletingUser === username}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all disabled:opacity-50 disabled:pointer-events-none"
-              title={CM.deleteUser}
-              aria-label={CM.deleteUser}
-            >
-              <Icon name={deletingUser === username ? 'progress_activity' : 'delete'} size="14px" weight={300} className={deletingUser === username ? 'animate-spin' : ''} />
-            </button>
-          )}
         </div>
       </div>
     );
@@ -212,7 +223,7 @@ export default function CMSUserManagementModal() {
               {CM.close}
             </Button>
             <Button data-testid="cms-user-management-add-btn" icon="person_add" onClick={handleAddUser}>
-              {CM.addUser}
+              {CM.addManagementUserBtn}
             </Button>
           </div>
         </div>
@@ -240,22 +251,22 @@ export default function CMSUserManagementModal() {
               <div>
                 <SectionHeader title={CM.systemAdministrator} icon="verified_user" badge={adminUsers.length} />
                 <div className="space-y-2">
-                  {adminUsers.map(renderUser)}
+                  {adminUsers.map(renderAdmin)}
                 </div>
               </div>
             )}
 
             {/* Regular user accounts */}
-            {regularUsers.length > 0 && (
+            {regularRows.length > 0 && (
               <div>
-                <SectionHeader title={CM.managementUsers} icon="group" badge={regularUsers.length} />
-                <div className="space-y-2">
-                  {regularUsers.map(renderUser)}
+                <SectionHeader title={CM.managementUsers} icon="group" badge={regularRows.length} />
+                <div data-testid="cms-user-table" className="rounded-xl border border-slate-100 dark:border-white/5 overflow-hidden">
+                  <Table columns={userColumns} data={regularRows} />
                 </div>
               </div>
             )}
 
-            {regularUsers.length === 0 && adminUsers.length > 0 && (
+            {regularRows.length === 0 && adminUsers.length > 0 && (
               <div>
                 <SectionHeader title={CM.managementUsers} icon="group" />
                 <button

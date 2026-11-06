@@ -202,6 +202,7 @@ export const CM_KO = {
   },
   manageDatabaseHaDisabledHint: 'HA 구성 DB에서는 사용할 수 없습니다.',
   hostConnectRequiredHint: '호스트에 먼저 연결하세요.',
+  cmsAdminRequiredHint: 'CMS admin 계정으로 연결한 호스트에서만 CMS 사용자를 관리할 수 있습니다.',
   dbLoginRequiredHint: '데이터베이스에 먼저 로그인하세요.',
   hostSelectRequiredHint: '호스트를 먼저 선택하세요.',
   dbStopRequiredHint: '데이터베이스를 먼저 중지하세요.',
@@ -1456,7 +1457,7 @@ export const CM_KO = {
 
   // CMSUserManagementModal
   systemAdministrator: '시스템 관리자',
-  managementUsers: 'CMS 계정',
+  managementUsers: '사용자',
 
   // Monitor refresh buttons
   refreshVolumeData: '볼륨 데이터 새로 고침',
@@ -2043,7 +2044,7 @@ export const CM_KO = {
   importedPlaceholder: '가져옴',
 
   // CMS 사용자 관리 모달
-  addManagementUserBtn: 'CMS 계정 추가',
+  addManagementUserBtn: '사용자 계정 추가',
 
   // 데이터베이스 공간 모니터
   freeBadge: '여유',
