@@ -14,8 +14,11 @@ const mocks = vi.hoisted(() => ({
   editBackupSchedule: vi.fn(),
   fetchBackupSchedule: vi.fn(),
   updateAutoVolumeConfig: vi.fn(),
+  fetchSpaceInfo: vi.fn(),
   schedules: [],
   autoVolume: null,
+  // What a volume-info read answers with; null for a read that fails.
+  spacePagesize: null,
 }));
 
 // Stand-ins for the thunks: each records its argument and resolves.
@@ -36,6 +39,11 @@ vi.mock('../databaseSlice', () => ({
   fetchBackupSchedule: thunk(mocks.fetchBackupSchedule, () => ({ schedules: mocks.schedules })),
   fetchAutoVolumeConfig: () => () => Promise.resolve({}),
   updateAutoVolumeConfig: thunk(mocks.updateAutoVolumeConfig, {}),
+  fetchDatabaseSpaceInfo: (arg) => (dispatch) => {
+    mocks.fetchSpaceInfo(arg);
+    if (mocks.spacePagesize) dispatch({ type: 'test/spaceInfo', key: `${arg.hostUid}:${arg.dbname}`, pagesize: mocks.spacePagesize });
+    return Promise.resolve();
+  },
 }));
 
 import AddBackupPlanModal from './AddBackupPlanModal';
@@ -49,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.schedules = [];
   mocks.autoVolume = null;
+  mocks.spacePagesize = null;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -59,10 +68,15 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = (ui, { pagesize } = {}) => {
+const render = (ui, { pagesize, loggedIn = false, running = false } = {}) => {
   const state = {
     databaseUI: { isAddBackupPlanModalOpen: true, isEditBackupPlanModalOpen: true, isSetAutomationVolumeModalOpen: true, selectedBackupId: 'p1' },
-    database: { selectedDatabase: 'demodb', databasesByHost: {} },
+    database: {
+      selectedDatabase: 'demodb',
+      databasesByHost: {},
+      loggedInDatabases: loggedIn ? ['h1:demodb'] : [],
+      activeDatabasesByHost: running ? { h1: ['demodb'] } : {},
+    },
     databaseOperation: { backupDbInfo: {} },
     databaseConfiguration: { autoVolumeConfigs: mocks.autoVolume ? { 'h1:demodb': mocks.autoVolume } : {}, autoVolumeLoading: false },
     databaseMonitoring: { spaceInfo: pagesize ? { 'h1:demodb': { pagesize: String(pagesize) } } : {}, dashboardData: {} },
@@ -70,7 +84,11 @@ const render = (ui, { pagesize } = {}) => {
     user: { preferences: { uiLocale: 'en' } },
     layout: { statusModal: { isOpen: false } },
   };
-  const store = configureStore({ reducer: (s = state) => s });
+  const store = configureStore({
+    reducer: (s = state, action) => (action.type === 'test/spaceInfo'
+      ? { ...s, databaseMonitoring: { ...s.databaseMonitoring, spaceInfo: { [action.key]: { pagesize: action.pagesize } } } }
+      : s),
+  });
   return act(async () => root.render(<Provider store={store}>{ui}</Provider>));
 };
 const q = (id) => container.querySelector(`[data-testid="${id}"]`);
@@ -128,8 +146,53 @@ describe('auto add volume: page size', () => {
   });
 
   it('does not save while the page size is unknown, and says why', async () => {
+    mocks.autoVolume = { data: 'ON', data_warn_outofspace: '0.15', data_ext_page: '16384', index: 'ON', index_warn_outofspace: '0.15', index_ext_page: '16384' };
     await render(<SetAutomationVolumeModal />);
     expect(q('auto-volume-save-btn').disabled).toBe(true);
     expect(q('auto-volume-footer-note').textContent).toContain("page size isn't known");
+    // Not logged in: nothing is read for it.
+    expect(mocks.fetchSpaceInfo).not.toHaveBeenCalled();
+  });
+
+  it('reads the page size itself when opened before any dashboard (a reload, then the sidebar), and saves ON', async () => {
+    mocks.autoVolume = { data: 'ON', data_warn_outofspace: '0.15', data_ext_page: '16384', index: 'ON', index_warn_outofspace: '0.15', index_ext_page: '16384' };
+    mocks.spacePagesize = '4096';
+    await render(<SetAutomationVolumeModal />, { loggedIn: true, running: true });
+    expect(mocks.fetchSpaceInfo).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchSpaceInfo).toHaveBeenCalledWith({ hostUid: 'h1', dbname: 'demodb' });
+    expect(q('auto-volume-size-input').value).toBe('64');
+
+    await act(async () => q('auto-volume-save-btn').click());
+    expect(mocks.updateAutoVolumeConfig).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ data: 'ON', data_ext_page: '16384', index: 'ON', index_ext_page: '16384' }),
+    }));
+  });
+
+  it('reads once and does not ask again when that read fails', async () => {
+    mocks.autoVolume = { data: 'ON', data_warn_outofspace: '0.15', data_ext_page: '16384', index: 'ON', index_warn_outofspace: '0.15', index_ext_page: '16384' };
+    await render(<SetAutomationVolumeModal />, { loggedIn: true, running: true });
+    await setValue(q('auto-volume-size-input'), '100');
+    await act(() => Promise.resolve());
+    expect(mocks.fetchSpaceInfo).toHaveBeenCalledTimes(1);
+    expect(q('auto-volume-save-btn').disabled).toBe(true);
+  });
+
+  it('reads nothing for a database that is logged in but not running', async () => {
+    await render(<SetAutomationVolumeModal />, { loggedIn: true, running: false });
+    expect(mocks.fetchSpaceInfo).not.toHaveBeenCalled();
+  });
+
+  it('saves OFF without a page size, sending the stored pages back as they are', async () => {
+    mocks.autoVolume = { data: 'ON', data_warn_outofspace: '0.15', data_ext_page: '16384', index: 'ON', index_warn_outofspace: '0.2', index_ext_page: '8192' };
+    await render(<SetAutomationVolumeModal />);
+    expect(q('auto-volume-save-btn').disabled).toBe(true);
+
+    // Turn the policy off.
+    await act(async () => container.querySelector('button[role="switch"], input[type="checkbox"]').click());
+    expect(q('auto-volume-save-btn').disabled).toBe(false);
+    await act(async () => q('auto-volume-save-btn').click());
+    expect(mocks.updateAutoVolumeConfig).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ data: 'OFF', data_ext_page: '16384', index: 'OFF', index_ext_page: '8192' }),
+    }));
   });
 });
