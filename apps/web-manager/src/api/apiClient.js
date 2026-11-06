@@ -192,8 +192,9 @@ export const ACCESS_TOKEN_REFRESH_TIMEOUT_MS = 15000;
 // is used again, revokes the whole session. So one refresh path serves the
 // 401 handler, the timer before expiry, the window becoming visible again
 // (a laptop waking up) and the first request of an expired session; within
-// a tab one refresh runs at a time, and across tabs the Web Locks API lets
-// one tab refresh while the others take the tokens it stored.
+// a tab one refresh runs at a time, and across tabs the Web Locks API (or,
+// without it, a lease in localStorage) lets one tab refresh while the others
+// take the tokens it stored.
 
 /** Refresh this long before the access token expires. */
 export const SESSION_REFRESH_LEAD_MS = 5 * 60 * 1000;
@@ -236,11 +237,60 @@ const refreshesSoon = (token, now = Date.now()) => {
 // The desktop app has no app login (no token), so none of this runs there.
 const sessionRefreshEnabled = () => !isDesktopRuntime();
 
-// One tab at a time across the browser; without Web Locks, this tab only.
+// Web Locks exist only in a secure context (https, or localhost). A server
+// opened over plain http on another address has none, so there tabs take
+// turns through a lease in localStorage instead: a tab writes its own lease,
+// waits a moment and reads it back; only the tab whose lease is still there
+// refreshes, and the others wait for it to finish and then take the tokens
+// it stored. A lease left by a closed tab ends on its own.
+const STORAGE_LOCK_KEY = 'cwm-session-refresh-lock';
+const STORAGE_LOCK_LEASE_MS = ACCESS_TOKEN_REFRESH_TIMEOUT_MS + 5000;
+export const STORAGE_LOCK_SETTLE_MS = 100;
+const STORAGE_LOCK_POLL_MS = 100;
+const tabLockId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const readStorageLease = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY));
+  } catch {
+    return null;
+  }
+};
+
+async function withStorageLock(run) {
+  let lease = null;
+  try {
+    for (;;) {
+      const held = readStorageLease();
+      if (!held || !(held.until > Date.now())) {
+        lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
+        localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
+        await sleep(STORAGE_LOCK_SETTLE_MS);
+        // Two tabs that wrote at once: the later write is the one both read back.
+        if (readStorageLease()?.owner === tabLockId) break;
+        lease = null;
+      } else {
+        await sleep(STORAGE_LOCK_POLL_MS);
+      }
+    }
+  } catch {
+    // Storage unusable: refresh as this tab alone.
+    lease = null;
+  }
+  try {
+    return await run();
+  } finally {
+    try {
+      if (lease && readStorageLease()?.owner === tabLockId) localStorage.removeItem(STORAGE_LOCK_KEY);
+    } catch { /* storage unusable */ }
+  }
+}
+
+// One tab at a time across the browser.
 const withSessionRefreshLock = (run) => (
   typeof navigator !== 'undefined' && navigator.locks?.request
     ? navigator.locks.request('cwm-session-refresh', run)
-    : run()
+    : withStorageLock(run)
 );
 
 // Another tab's refresh (or login) stored new tokens: use them here too.
