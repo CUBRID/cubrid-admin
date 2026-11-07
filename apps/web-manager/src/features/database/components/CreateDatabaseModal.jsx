@@ -8,9 +8,9 @@ import {
   AUTO_ADD_WARN_RATIO,
   AUTO_ADD_PAGES_MIN,
   checkNumberInRange,
-  checkNewDbName,
 } from '@api-interfaces';
 import { inputIssueText } from '../inputIssueText';
+import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { closeCreateDatabaseModal,
   fetchCreateDatabaseInfo,
   fetchDatabaseStartInfo 
@@ -131,6 +131,7 @@ export default function CreateDatabaseModal() {
   const dispatch = useDispatch();
   const { isCreateDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const hostDbs = useSelector((state) => state.database.databasesByHost[selectedHostUid]);
 
   const { 
     error, 
@@ -288,7 +289,7 @@ export default function CreateDatabaseModal() {
   const extSizeMin = Math.ceil((AUTO_ADD_PAGES_MIN * formData.pageSize / UNIT_BYTES[formData.autoAddVol.extUnit]) * 100) / 100;
   const createIssues = {
     // An empty name only keeps Next off; it is not shown as an error.
-    dbName: formData.dbName ? checkNewDbName(formData.dbName) : null,
+    dbName: formData.dbName ? newDbNameIssue(formData.dbName, takenDbNames(hostDbs)) : null,
     logVolSize: checkNumberInRange(formData.logVolSize, LOG_VOLUME_SIZE_MIB.min, LOG_VOLUME_SIZE_MIB.max),
     volumes: formData.volumes.map((vol) => checkNumberInRange(vol.size, formData.pageSize / UNIT_BYTES.MiB)),
     warn: autoAddOn ? checkNumberInRange(formData.autoAddVol.warn, AUTO_ADD_WARN_RATIO.min, AUTO_ADD_WARN_RATIO.max) : null,
