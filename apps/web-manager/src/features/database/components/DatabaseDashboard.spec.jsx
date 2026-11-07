@@ -30,9 +30,9 @@ const cas = (id, qps) => ({
   cpu: '0', psize: '1024', _idNum: id, _pidNum: 100 + id, _qpsNum: qps, _lqsNum: 0,
 });
 
-const makeStore = (brokersCAS) => configureStore({
+const makeStore = (brokersCAS, hostExtra = {}) => configureStore({
   reducer: {
-    host: (state = { selectedHostUid: 'h1', hosts: [{ uid: 'h1', address: 'a', port: 8001 }], haInfo: {}, hostEnvs: {} }) => state,
+    host: (state = { selectedHostUid: 'h1', hosts: [{ uid: 'h1', address: 'a', port: 8001 }], haInfo: {}, hostEnvs: {}, ...hostExtra }) => state,
     monitoring: (state = { hostsData: {} }) => state,
     databaseMonitoring: (state = {
       dashboardData: { 'h1:demodb': { brokersCAS, casStatus: 'loaded', volumes: [], spaceInfo: [], locks: [], performance: {} } },
@@ -59,6 +59,21 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+});
+
+it('says the connection is lost instead of the polling state while the host waits in the reconnect window', async () => {
+  const badge = () => container.querySelector('[data-testid="dashboard-live-badge"]').textContent;
+  await act(async () => root.render(
+    <Provider store={makeStore([])}><DatabaseDashboard hostUid="h1" dbname="demodb" /></Provider>
+  ));
+  expect(badge()).toBe(CM.paused);
+
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(
+    <Provider store={makeStore([], { reconnectQueue: ['h1'] })}><DatabaseDashboard hostUid="h1" dbname="demodb" /></Provider>
+  ));
+  expect(badge()).toBe(CM.connectionLost);
 });
 
 it('sorts the CAS table by QPS as numbers', async () => {
