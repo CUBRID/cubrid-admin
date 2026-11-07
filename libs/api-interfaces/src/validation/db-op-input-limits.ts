@@ -107,3 +107,20 @@ export function checkNewDbName(value: unknown): ParamValueIssue | null {
   if (!/^[A-Za-z0-9_-]+$/.test(name)) return issue('DB_NAME_CHARS', 'Use only letters, digits, _ and -');
   return null;
 }
+
+/**
+ * A new database's name against the host's databases (`existing`: every
+ * name in its database list, replica ones too). createdb, copydb and
+ * renamedb refuse a name already in databases.txt, compared case-sensitively
+ * (databases_file.c cfg_find_db_list, strcmp), so "DemoDB" is free next to
+ * "demodb". Kept apart from checkNewDbName, whose second argument a DTO
+ * check fills with the request object.
+ */
+export function checkDbNameFree(value: unknown, existing: Iterable<string> | null | undefined): ParamValueIssue | null {
+  const name = typeof value === 'string' ? value : '';
+  if (name === '' || !existing) return null;
+  for (const taken of existing) {
+    if (taken === name) return issue('DB_NAME_EXISTS', 'A database with this name already exists on this host');
+  }
+  return null;
+}

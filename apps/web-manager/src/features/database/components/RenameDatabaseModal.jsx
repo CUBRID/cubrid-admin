@@ -17,12 +17,10 @@ import {
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
-import { checkNewDbName } from '@api-interfaces';
 import { inputIssueText } from '../inputIssueText';
+import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 
-// The shared new-name rule (also used by create and copy, and the server).
-const validateDbName = (name) => checkNewDbName(name) === null;
 
 export default function RenameDatabaseModal() {
   const CM = useCM();
@@ -30,6 +28,7 @@ export default function RenameDatabaseModal() {
   const { isRenameDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const hostDbs = useSelector((state) => state.database.databasesByHost[selectedHostUid]);
 
   const {
     error,
@@ -122,7 +121,10 @@ export default function RenameDatabaseModal() {
     resetAction();
   };
 
-  const isNameValid = validateDbName(newDbName);
+  // The shared new-name rule (also used by create and copy, and the server),
+  // and no other database on the host by that name.
+  const nameIssue = newDbNameIssue(newDbName, takenDbNames(hostDbs, selectedDatabase));
+  const isNameValid = nameIssue === null;
   const isNameChanged = newDbName.trim() !== selectedDatabase;
 
   const isFormValid = isNameValid && isNameChanged;
@@ -220,7 +222,7 @@ export default function RenameDatabaseModal() {
             placeholder={`${selectedDatabase}_v2`}
             className="w-full"
             autoFocus
-            error={newDbName ? inputIssueText(checkNewDbName(newDbName), CM) : undefined}
+            error={newDbName ? inputIssueText(nameIssue, CM) : undefined}
           />
         </div>
 

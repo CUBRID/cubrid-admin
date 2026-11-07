@@ -57,7 +57,7 @@ beforeEach(() => {
         ...databaseCoreReducer(undefined, { type: 'init' }),
         activeHostUid: 'host-1',
         selectedDatabase: 'demodb',
-        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }] },
+        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }, { dbname: 'otherdb', dbdir: '/db/otherdb' }, { dbname: 'repdb', cmsListed: false }] },
         loggedInDatabases: ['host-1:demodb', 'host-1:newdb', 'host-1:otherdb'],
       },
       databaseUI: { ...uiReducer(undefined, { type: 'init' }), isRenameDatabaseModalOpen: true },
@@ -139,4 +139,19 @@ it('shows a successful rename with its autostart warning instead of a retry acti
   expect(container.textContent).toContain('Rename Successful');
   expect(container.textContent).not.toContain('Retry Rename');
   expect(mocks.submitRename).toHaveBeenCalledTimes(1);
+});
+
+it("refuses a new name the host's database list already has, replica ones too (case-sensitive, as the engine)", async () => {
+  await render();
+  const execute = () => container.querySelector('[data-testid="rename-database-execute-btn"]');
+  for (const taken of ['otherdb', 'repdb']) {
+    await typeNewName(taken);
+    expect(execute().disabled).toBe(true);
+    expect(container.textContent).toContain('A database with this name already exists on this host');
+  }
+  await typeNewName('demodb');
+  expect(container.textContent).not.toContain('already exists');
+  await typeNewName('OtherDB');
+  expect(execute().disabled).toBe(false);
+  expect(container.textContent).not.toContain('already exists');
 });

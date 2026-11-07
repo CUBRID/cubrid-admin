@@ -21,7 +21,7 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
-import { checkNewDbName } from '@api-interfaces';
+import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
 
@@ -188,7 +188,9 @@ export default function CopyDatabaseModal() {
   }));
   const individualVolumesValid = !volInfoLoading && canCopyIndividualVolumes(copyVolumes);
   const isDestinationSameAsSource = !!formData.destName.trim() && formData.destName.trim() === selectedDatabase;
-  const destNameIssue = formData.destName.trim() ? checkNewDbName(formData.destName.trim()) : null;
+  const destNameIssue = formData.destName.trim()
+    ? newDbNameIssue(formData.destName.trim(), takenDbNames(databases, selectedDatabase))
+    : null;
   const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource && !destNameIssue &&
     (!formData.copyIndividual || individualVolumesValid);
 
