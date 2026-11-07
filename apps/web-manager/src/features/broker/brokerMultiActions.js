@@ -1,6 +1,6 @@
 import { startBroker, stopBroker } from './brokerSlice';
 import { refreshAfterBrokerAction } from './brokerSidebarActions';
-import { isBrokerOn } from './brokerState';
+import { isBrokerRunning } from './brokerState';
 
 export const MULTI_BROKER_ACTIONS = ['start', 'stop', 'restart'];
 
@@ -9,7 +9,7 @@ export function splitBrokersByAction(action, brokers) {
   const targets = [];
   const skipped = [];
   for (const broker of brokers) {
-    const on = isBrokerOn(broker);
+    const on = isBrokerRunning(broker);
     if (action === 'start' ? !on : on) targets.push(broker);
     else skipped.push(broker);
   }

@@ -93,3 +93,31 @@ it('starts a Ctrl/Cmd click from a broker selected by right-click', async () => 
 
   expect([...selection].sort()).toEqual(['b2', 'b3']);
 });
+
+it('shows a SUSPENDED broker with an orange dot and passes its state to the menu', async () => {
+  store = configureStore({
+    reducer: combineReducers({ broker: brokerReducer, layout: layoutReducer, user: () => ({ preferences: { uiLocale: 'en' } }) }),
+    preloadedState: {
+      ...store.getState(),
+      broker: {
+        ...store.getState().broker,
+        navigatorBrokersByHost: { h1: [{ name: 's1', state: 'SUSPENDED' }, { name: 'o1' }, { name: 'n1', state: 'ON' }] },
+      },
+    },
+  });
+  const onContextMenu = vi.fn();
+  await act(async () => root.render(
+    <Provider store={store}>
+      <BrokerTree hostUid="h1" onContextMenu={onContextMenu} selectedBrokerNames={new Set()} onSelectedBrokerNamesChange={() => undefined} />
+    </Provider>,
+  ));
+
+  const node = (name) => container.querySelector(`[data-testid="tree-node-${name}"]`);
+  expect(node('s1').dataset.status).toBe('suspended');
+  expect(node('o1').dataset.status).toBe('off');
+  expect(node('n1').dataset.status).toBe('on');
+  expect(node('s1').querySelector('summary .bg-amber-500')).not.toBeNull();
+
+  await fire('s1', 'contextmenu');
+  expect(onContextMenu).toHaveBeenCalledWith(expect.anything(), 's1', 'SUSPENDED');
+});

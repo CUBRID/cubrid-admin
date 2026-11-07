@@ -176,6 +176,31 @@ describe('Brokers embedded in the host dashboard', () => {
   });
 });
 
+describe('a SUSPENDED broker on the host dashboard', () => {
+  it('shows an orange SUSPENDED chip and counts it as active', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await act(async () => {
+      brokerApi.getBrokerList.mockResolvedValueOnce({ result: [
+        { name: 'off1', port: '30001' },
+        { name: 'sus1', state: 'SUSPENDED', pid: '42', port: '30002' },
+        { name: 'on1', state: 'ON', pid: '43', port: '30003' },
+      ] });
+      await store.dispatch(fetchBrokerList('h1'));
+    });
+
+    const chip = (name) => [...container.querySelectorAll('tbody tr')]
+      .find((tr) => tr.querySelector('td').textContent.trim() === name).querySelectorAll('td')[1];
+    expect(chip('sus1').textContent.trim()).toBe('SUSPENDED');
+    expect(chip('sus1').innerHTML).toContain('text-amber-600');
+    expect(chip('on1').innerHTML).toContain('text-emerald-600');
+    expect(chip('off1').innerHTML).toContain('text-rose');
+
+    await act(async () => container.querySelector('[data-testid="server-dashboard-broker-status"] button').click());
+    expect(container.textContent).toMatch(/2\s*Active/i);
+  });
+});
+
 describe('Brokers as its own tab', () => {
   it('still fetches its own list', async () => {
     brokerApi.getBrokerList.mockResolvedValue(brokerList('4444'));

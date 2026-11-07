@@ -1,6 +1,6 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs } from '../../../broker/brokerSlice';
-import { brokerStateOf, isBrokerOn } from '../../../broker/brokerState';
+import { brokerDotStatus, brokerStateOf } from '../../../broker/brokerState';
 import { openTab } from '../../layoutSlice';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { useTreeMultiSelect } from '../../../../components/domain/tree/useTreeMultiSelect';
@@ -74,7 +74,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
             label={`${broker.name} (${broker.port})`}
             icon="hub"
             level={1}
-            status={isBrokerOn(broker) ? 'on' : 'off'}
+            status={brokerDotStatus(broker)}
             isActive={isBrokerSelected && !selectedBrokerSubItem}
             isMultiSelected={selectedBrokerNames?.has(broker.name) ?? false}
             hasChildren={true}
