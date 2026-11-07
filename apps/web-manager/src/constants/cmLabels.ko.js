@@ -2410,6 +2410,8 @@ export const CM_KO = {
     DB_NAME_TOO_LONG: (p) => `${p.max}자까지 쓸 수 있습니다`,
     DB_NAME_START: '영문자로 시작해야 합니다',
     DB_NAME_CHARS: '영문자, 숫자, _, -만 쓸 수 있습니다',
+    // Code from checkDbNameFree (fix/db-name-exists): the host already has a database by that name.
+    DB_NAME_EXISTS: '이 호스트에 같은 이름의 데이터베이스가 이미 있습니다',
     NOT_ONE_OF: (p) => `다음 중 하나여야 합니다: ${(p.options ?? []).join(', ')}`,
     NOT_BOOLEAN: 'yes 또는 no여야 합니다(y/n, 1/0, true/false, on/off도 됨)',
     TOO_MANY_VALUES: (p) => `값은 ${p.max}개까지 쓸 수 있습니다`,
