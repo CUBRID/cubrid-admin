@@ -6,6 +6,7 @@ import {
   openImportExportModal,
   openCmsUserManagementModal,
 } from '../host/hostSlice';
+import { isCmsAdminHost } from '../host/cmsAdmin';
 import { openUpdateCheck, setAboutCubrid } from './appBarSlice';
 
 /**
@@ -48,15 +49,16 @@ export const NO_DASHBOARD_MENU_ACTIONS = Object.freeze({
 });
 
 /** @returns {Record<string, boolean>} enabled flag per action id */
-export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [] }) {
+export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [], hosts = [] }) {
   return {
     [MENU_ACTIONS.addHost]: true,
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
     [MENU_ACTIONS.exportHosts]: true,
     [MENU_ACTIONS.importHosts]: true,
     [MENU_ACTIONS.serviceDashboard]: true,
+    // Only for the CMS admin account, as in CA (isCmsAdminHost).
     [MENU_ACTIONS.cmsAccountManagement]:
-      Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid),
+      Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid) && isCmsAdminHost(hosts, selectedHostUid),
     // The config editors stay enabled and explain a missing host on click.
     [MENU_ACTIONS.editCubridConfig]: true,
     [MENU_ACTIONS.editBrokerConfig]: true,

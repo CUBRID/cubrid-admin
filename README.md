@@ -96,9 +96,9 @@ npm run package:server:mac       # macOS용
 출력물 (`dist/executables/`):
 ```
 dist/executables/
-  ├── cubrid-web-manager-linux          # Linux 실행파일 (Node.js + 프론트엔드 내장)
-  ├── cubrid-web-manager-macos          # macOS 실행파일
-  ├── cubrid-web-manager.exe            # Windows 실행파일
+  ├── cubrid-admin-linux          # Linux 실행파일 (Node.js + 프론트엔드 내장)
+  ├── cubrid-admin-macos          # macOS 실행파일
+  ├── cubrid-admin.exe            # Windows 실행파일
   └── conf/
       └── cwm.conf.sample  # 설정 파일 샘플 → cwm.conf로 복사 후 편집
 ```
@@ -184,13 +184,13 @@ cwm-vault/
 
 ```bash
 # Linux
-./cubrid-web-manager-linux
+./cubrid-admin-linux
 
 # Windows
-cubrid-web-manager.exe
+cubrid-admin.exe
 
 # macOS
-./cubrid-web-manager-macos
+./cubrid-admin-macos
 ```
 
 ### 방법 C — Electron 데스크톱 앱

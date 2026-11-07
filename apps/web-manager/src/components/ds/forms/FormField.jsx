@@ -5,6 +5,8 @@ import { useCM } from '../../../constants/useCM';
 export const FormField = ({
   label,
   labelExtra,
+  // Shown at the right end of the label row, e.g. a "Change" link.
+  labelAction,
   description,
   error,
   required = false,
@@ -31,6 +33,7 @@ export const FormField = ({
               </span>
             )}
           </div>
+          {labelAction && <div className="shrink-0 ml-2">{labelAction}</div>}
         </div>
       )}
       {description && (

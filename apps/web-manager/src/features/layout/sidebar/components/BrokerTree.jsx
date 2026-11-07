@@ -1,5 +1,6 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs } from '../../../broker/brokerSlice';
+import { brokerDotStatus, brokerStateOf } from '../../../broker/brokerState';
 import { openTab } from '../../layoutSlice';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { useTreeMultiSelect } from '../../../../components/domain/tree/useTreeMultiSelect';
@@ -73,7 +74,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
             label={`${broker.name} (${broker.port})`}
             icon="hub"
             level={1}
-            status={broker.state === 'ON' ? 'on' : 'off'}
+            status={brokerDotStatus(broker)}
             isActive={isBrokerSelected && !selectedBrokerSubItem}
             isMultiSelected={selectedBrokerNames?.has(broker.name) ?? false}
             hasChildren={true}
@@ -91,7 +92,18 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
               }
             }}
             onDoubleClick={() => dispatch(openTab(`broker_status:${hostUid}:${broker.name}`))}
-            onContextMenu={(e) => onContextMenu(e, broker.name, broker.state)}
+            onContextMenu={(e) => {
+              // As in a file explorer: right-clicking a broker outside the
+              // selection selects just that one; inside a multi-selection
+              // the selection stays, for the menu to act on all of it.
+              if (!(selectedBrokerNames?.size > 1 && selectedBrokerNames.has(broker.name))) {
+                if (selectedBrokerNames?.size > 0) onSelectedBrokerNamesChange?.(new Set());
+                handleMultiSelect.setAnchor(broker.name);
+                dispatch(setSelectedBroker(broker.name));
+                dispatch(setSelectedBrokerSubItem(null));
+              }
+              onContextMenu(e, broker.name, brokerStateOf(broker));
+            }}
           >
             <TreeNode
               label={CM.sqlLog}

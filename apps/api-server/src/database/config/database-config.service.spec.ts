@@ -118,7 +118,12 @@ describe('DatabaseConfigService', () => {
     it('keeps [@old] and warns when a [@new] section already exists, still renaming server=', async () => {
       cmsConfigService.getAllSystemParam.mockResolvedValue({ conflist: [{ confdata: ['[service]', 'server=old', '[@old]', 'a=1', '[@new]', 'b=2'] }] } as any);
       const warnings = await service.renameAutoStart(mockUserId, mockHostUid, 'old', 'new');
-      expect(warnings).toEqual([expect.stringContaining('[@new]')]);
+      expect(warnings).toEqual([{
+        code: 'RENAME_SECTION_KEPT',
+        oldName: 'old',
+        newName: 'new',
+        message: expect.stringContaining('[@new]'),
+      }]);
       expect(cmsConfigService.setSystemParam).toHaveBeenCalledWith(mockUserId, mockHostUid, 'cubridconf',
         ['[service]', 'server=new', '[@old]', 'a=1', '[@new]', 'b=2']);
     });

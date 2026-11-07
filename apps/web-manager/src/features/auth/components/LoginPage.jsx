@@ -65,7 +65,7 @@ export default function LoginPage() {
     try {
       const response = await authApi.login(username, password);
       if (!response?.token || !response?.refreshToken) {
-        throw new Error('Login response missing access/refresh token');
+        throw new Error(CM.loginTokenMissingMsg);
       }
       dispatch(loginSuccess({
         token: response.token,
@@ -74,7 +74,9 @@ export default function LoginPage() {
       }));
       navigate('/home', { replace: true });
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg;
+      // A wrong ID or password says so in plain words in every language.
+      const wrongLogin = err.response?.data?.data?.type === '/errors/auth/invalid_credentials';
+      const msg = wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg);
       dispatch(loginFailure(msg));
       setApiError(msg);
     }
@@ -132,7 +134,7 @@ export default function LoginPage() {
             <img src="/cubrid-logo.png" alt="CUBRID" className="w-6 h-6 object-contain dark:brightness-100" />
           </div>
           <div>
-            <h1 className="text-slate-900 dark:text-white font-extrabold text-base leading-none tracking-tight">Next CUBRID <span className="text-amber-500 font-light">Admin</span></h1>
+            <h1 className="text-slate-900 dark:text-white font-extrabold text-base leading-none tracking-tight">CUBRID <span className="text-amber-500 font-light">Admin</span></h1>
             <p className="text-12 text-slate-400 dark:text-slate-500 font-medium mt-0.5">{CM.signIn}</p>
           </div>
         </div>

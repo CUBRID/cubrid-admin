@@ -7,7 +7,6 @@ import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Button } from '../../../../components/ds/foundation/Button';
 import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { Typography } from '../../../../components/ds/foundation/Typography';
-import { InfoBanner } from '../../../../components/ds/foundation/InfoBanner';
 import { useCM } from '../../../../constants/useCM';
 
 const getStatusColor = (p) => {
@@ -37,7 +36,7 @@ export default function SystemStatusSection({ hostUid, isTabActive = true, onExp
   const CM = useCM();
   const dispatch = useDispatch();
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
-  const { currentStatus = {}, averages = {}, disk = null, error = null } = hostData;
+  const { currentStatus = {}, averages = {}, disk = null } = hostData;
   const { authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = hostUid && authorizedHosts.includes(hostUid);
   const hostHaInfo = haInfo[hostUid] || {};
@@ -192,12 +191,6 @@ export default function SystemStatusSection({ hostUid, isTabActive = true, onExp
       isCollapsed={!isExpanded}
       onToggle={(collapsed) => setIsExpanded(!collapsed)}
     >
-      {error && (
-        <InfoBanner variant="danger" title={CM.systemStatusError} icon="error" className="m-4">
-          {typeof error === 'object' ? (error.message || error.note || JSON.stringify(error)) : error}
-        </InfoBanner>
-      )}
-
       <Table columns={columns} data={rows} className="font-mono text-14" maxRows={15} />
     </Card>
   );

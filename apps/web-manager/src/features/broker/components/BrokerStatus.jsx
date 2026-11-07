@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
+import { isBrokerRunning } from '../brokerState';
 import { createRateTracker } from '../rateTracker';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -11,6 +12,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
 import { jobElapsedSeconds, formatElapsed } from '../jobElapsed';
+import { ColumnPicker } from '../../../components/common/ColumnPicker';
 
 // Stable fallback reference — `status.data?.asinfo || []` would otherwise
 // hand the asInfo-rate-tracking effect below a brand-new array on every
@@ -18,6 +20,20 @@ import { jobElapsedSeconds, formatElapsed } from '../jobElapsed';
 // effect's dependency settle (it keeps seeing a "changed" array) and spins
 // the component in a render/effect loop until real data arrives.
 const EMPTY_LIST = [];
+
+// Application server columns hidden until turned on, as in CA
+// (BrokerStatusAsColumn value -1). The choice is kept per browser.
+const AS_HIDDEN_KEY = 'brokerStatusAsHiddenColumns';
+const AS_HIDDEN_DEFAULT = ['as_dbhost', 'as_lat', 'as_lct', 'as_client_ip', 'as_cur'];
+// ID and PID are always shown (CA disables their check boxes).
+const AS_LOCKED = ['as_id', 'as_pid'];
+const readAsHidden = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AS_HIDDEN_KEY));
+    if (Array.isArray(saved)) return saved;
+  } catch { /* storage unavailable or not JSON: use the default */ }
+  return AS_HIDDEN_DEFAULT;
+};
 
 const Component = function BrokerStatus({ hostUid, brokerName }) {
   const CM = useCM();
@@ -90,11 +106,19 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // hooks called from one render to the next).
   const rateTrackerRef = useRef(createRateTracker());
   const [asInfoWithRates, setAsInfoWithRates] = useState([]);
+  const [asHidden, setAsHidden] = useState(readAsHidden);
+  const toggleAsColumn = (key) => setAsHidden((prev) => {
+    const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+    try { localStorage.setItem(AS_HIDDEN_KEY, JSON.stringify(next)); } catch { /* not kept; still applies now */ }
+    return next;
+  });
   useEffect(() => {
     setAsInfoWithRates(asInfo.map((as) => ({
       ...as,
       qps: rateTrackerRef.current(`${as.as_id}:qps`, as.as_num_query),
-      tps: rateTrackerRef.current(`${as.as_id}:tps`, as.as_num_tran),
+      // Long queries per second, as `cubrid broker status` works out LQS:
+      // the rise in the long query count over the interval (broker_monitor.c).
+      lqs: rateTrackerRef.current(`${as.as_id}:lqs`, as.as_long_query),
     })));
   }, [asInfo]);
 
@@ -132,6 +156,11 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // fresh by this tab's own onFetch above, which populates
   // lastKnownBrokerFromList directly from its own request's result).
   const brokerFromList = lastKnownBrokerFromList || {};
+  // CMS lists a stopped broker without its settings (getbrokersinfo sends
+  // them only for a running one), so they show as unknown, not as defaults.
+  // With the whole broker service off the list has no state at all, which
+  // is OFF (brokerState.js).
+  const isBrokerOff = !isBrokerRunning(brokerFromList);
   const basicInfo = {
     pid: brokerFromList.pid,
     port: brokerFromList.port,
@@ -143,29 +172,59 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   };
 
   /* Table Columns Definitions */
+  // CA's application server table, its columns in its order
+  // (BrokerStatusAsColumn: ID, PID, QPS, LQS, PORT, PSIZE, STATUS, DB, HOST,
+  // LAST ACCESS TIME, LAST CONNECT TIME, CLIENT IP, SQL), from what CMS
+  // getbrokerstatus sends for each AS. Kept narrow so
+  // the table fits the page at usual widths: tight padding, headers of two
+  // words may wrap, long text is cut with the full value on hover, and a
+  // time on the broker's current date shows only the time of day.
+  const tight = '!px-2';
+  // keep-all: Korean headers break between words, not inside one.
+  const wrapHeader = `${tight} [&>div>span:first-child]:!whitespace-normal [&>div>span:first-child]:break-keep`;
+  const mono = (v) => <span className="font-mono whitespace-nowrap">{v ?? '—'}</span>;
+  const rate = (v) => mono(v?.toFixed(1));
+  const cut = (maxWidth, extra = '') => (v) => (
+    <span className={`block truncate font-mono ${maxWidth} ${extra}`} title={v || undefined}>{v || '—'}</span>
+  );
+  // as_lat/as_lct and the status time are "YYYY/MM/DD hh:mm:ss".
+  const today = String(status.data?.time ?? '').slice(0, 10);
+  const when = (v) => {
+    if (!v) return <span className="text-slate-400 dark:text-slate-600">—</span>;
+    const short = today && String(v).startsWith(`${today} `) ? String(v).slice(11) : v;
+    return <span className="font-mono text-13 whitespace-nowrap text-slate-400 dark:text-slate-600" title={short !== v ? v : undefined}>{short}</span>;
+  };
+  // CMS sends as_port on Windows only (each AS listens on its own port there);
+  // elsewhere every AS takes connections through the broker's port.
+  const hasAsPort = asInfoWithRates.some((as) => as.as_port != null && as.as_port !== '');
   const asColumns = [
-    { header: CM.idLabel,  accessor: 'as_id',        width: '60px',  render: (v) => <span className="font-mono text-amber-600 dark:text-amber-400">{v}</span> },
-    { header: CM.pid, accessor: 'as_pid',       width: '80px',  render: (v) => <span className="font-mono">{v}</span> },
-    { header: CM.qps, accessor: 'qps', width: '60px',  render: (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span> },
-    { header: CM.tps, accessor: 'tps', width: '60px',  render: (v) => <span className="font-mono">{v?.toFixed(1) ?? '—'}</span> },
-    // Not a per-AS CMS field — getbrokerstatus's asinfo has no as_port at
-    // all (every AS under a broker shares that broker's own listen port),
-    // so this column just shows the broker's port for every row.
-    { header: CM.port, accessor: 'as_port', width: '80px', render: () => <span className="font-mono">{basicInfo.port ?? '—'}</span> },
-    { header: CM.memory, accessor: 'as_psize', width: '100px', render: (v) => <span className="font-mono">{(parseInt(v) / 1024).toFixed(1)} MiB</span> },
-    { 
-      header: CM.status, 
-      accessor: 'as_status', 
-      width: '100px', 
+    { header: CM.idLabel, accessor: 'as_id', className: tight, cellClassName: tight, render: (v) => <span className="font-mono text-amber-600 dark:text-amber-400">{v}</span> },
+    { header: CM.pid, accessor: 'as_pid', className: wrapHeader, cellClassName: tight, render: mono },
+    { header: CM.qps, accessor: 'qps', className: tight, cellClassName: tight, render: rate },
+    { header: CM.lqs, accessor: 'lqs', className: tight, cellClassName: tight, render: rate },
+    ...(hasAsPort ? [{ header: CM.port, accessor: 'as_port', className: tight, cellClassName: tight, render: mono }] : []),
+    // as_psize is kilobytes (broker_process_size.c getsize: VmRSS + VmSwap); -1 when it could not be read.
+    { header: CM.memory, accessor: 'as_psize', className: tight, cellClassName: tight, render: (v) => mono(Number(v) >= 0 ? `${(Number(v) / 1024).toFixed(1)} MiB` : null) },
+    {
+      header: CM.status,
+      accessor: 'as_status',
+      className: tight,
+      cellClassName: tight,
       render: (v) => {
         const isActive = v && v !== 'IDLE' && v !== 'OFF';
-        return <StatusBadge label={v || 'IDLE'} variant={isActive ? 'emerald' : 'slate'} pulse={isActive} />;
+        return <span className="whitespace-nowrap"><StatusBadge label={v || 'IDLE'} variant={isActive ? 'emerald' : 'slate'} pulse={isActive} /></span>;
       }
     },
-    { header: CM.database, accessor: 'as_dbname', render: (v) => <span className="text-amber-600/80 dark:text-amber-500/70 font-mono">{v || '—'}</span> },
-    { header: CM.lastAccess, accessor: 'as_lat', render: (v) => <span className="text-slate-400 dark:text-slate-600 text-13">{v || '—'}</span> },
-    { header: CM.clientIp, accessor: 'as_client_ip', render: (v) => <span className="font-mono">{v || '—'}</span> },
+    { header: CM.database, accessor: 'as_dbname', className: wrapHeader, cellClassName: tight, render: cut('max-w-[96px]', 'text-amber-600/80 dark:text-amber-500/70') },
+    { header: CM.asDbHostCol, accessor: 'as_dbhost', className: wrapHeader, cellClassName: tight, render: cut('max-w-[96px]') },
+    { header: CM.lastAccess, accessor: 'as_lat', className: wrapHeader, cellClassName: tight, render: when },
+    { header: CM.asLastConnectCol, accessor: 'as_lct', className: wrapHeader, cellClassName: tight, render: when },
+    { header: CM.clientIp, accessor: 'as_client_ip', className: wrapHeader, cellClassName: tight, render: cut('max-w-[112px]') },
+    // Takes the width that is left; max-w-0 keeps a long statement from widening the table.
+    { header: CM.asCurrentSqlCol, accessor: 'as_cur', width: '100%', className: wrapHeader, cellClassName: `${tight} max-w-0`, render: cut('w-full', 'text-13 text-slate-500') },
   ];
+  const shownAsColumns = asColumns.filter((col) => AS_LOCKED.includes(col.accessor) || !asHidden.includes(col.accessor));
+  const asColumnChoices = asColumns.map((col) => ({ key: col.accessor, label: col.header, locked: AS_LOCKED.includes(col.accessor) }));
 
   const jobColumns = [
     { header: CM.jobId, accessor: 'job_id', width: '100px', render: (v) => <span className="font-mono">{v}</span> },
@@ -283,17 +342,23 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
           bodyClassName="p-0"
           collapsible
         >
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 text-left">
+          {/* Columns follow the card's own width (the sidebar takes part of the window). */}
+          <div className="@container">
+          <div className="grid grid-cols-2 @xl:grid-cols-4 @5xl:grid-cols-7 text-left">
             {[
               { label: CM.pid,           value: basicInfo.pid                           || '—',    accent: 'emerald' },
               { label: CM.port,          value: basicInfo.port                          || '—',    accent: 'amber'   },
-              { label: CM.jobQueue,      value: basicInfo.job_queue                     ?? '0',    accent: 'slate'   },
-              { label: CM.autoAddAS,     value: basicInfo.auto_add_as                  || 'OFF',  badge: true       },
-              { label: CM.sqlLogMode,    value: basicInfo.sql_log_mode                 || 'OFF',  badge: true       },
-              { label: CM.longTranLabel, value: `${basicInfo.long_transaction_time      || '0'}s`, accent: 'slate'   },
-              { label: CM.longQueryLabel,value: `${basicInfo.long_query_time            || '0'}s`, accent: 'slate'   },
+              // The broker's current job queue length (CMS jq) is a status;
+              // the rest are cubrid_broker.conf parameters, named as in the
+              // conf file in every language.
+              { label: CM.jobQueue,               value: basicInfo.job_queue                ?? '0',    accent: 'slate'   },
+              { label: 'AUTO_ADD_APPL_SERVER',    value: isBrokerOff ? '-' : basicInfo.auto_add_as             || 'OFF',  badge: true       },
+              { label: 'SQL_LOG',                 value: isBrokerOff ? '-' : basicInfo.sql_log_mode            || 'OFF',  badge: true       },
+              { label: 'LONG_TRANSACTION_TIME',   value: isBrokerOff ? '-' : `${basicInfo.long_transaction_time || '0'}s`, accent: 'slate'   },
+              { label: 'LONG_QUERY_TIME',         value: isBrokerOff ? '-' : `${basicInfo.long_query_time       || '0'}s`, accent: 'slate'   },
             ].map((m, i, arr) => {
-              const isActive = m.badge && m.value && m.value !== 'IDLE' && m.value !== 'OFF';
+              // The engine reports SQL_LOG=OFF as NONE.
+              const isActive = m.badge && m.value && !['IDLE', 'OFF', 'NONE', '-'].includes(m.value);
               const accentBar = m.accent === 'emerald'
                 ? 'bg-emerald-500'
                 : m.accent === 'amber'
@@ -307,8 +372,11 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
                   `}
                 >
                   <div className={`absolute top-0 left-4 right-4 h-[2px] rounded-b-full opacity-30 ${accentBar || 'bg-slate-300 dark:bg-slate-700'}`} />
-                  <span className="text-11 font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.12em] leading-none">
-                    {m.label}
+                  <span className="text-11 font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.12em] leading-tight">
+                    {/* Long parameter names break after an underscore, not over the next cell. */}
+                    {String(m.label).split('_').map((part, j, parts) => (
+                      <React.Fragment key={j}>{part}{j < parts.length - 1 && <>_<wbr /></>}</React.Fragment>
+                    ))}
                   </span>
                   {m.badge ? (
                     <span className={`inline-flex items-center gap-1.5 self-start px-2 py-1 rounded-md text-13 font-bold uppercase tracking-wide border
@@ -332,6 +400,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               );
             })}
           </div>
+          </div>
         </Card>
 
         {/* ── Application Servers ── */}
@@ -342,18 +411,35 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               <span className="text-14 font-bold">{CM.applicationServers}</span>
             </div>
           }
-          rightContent={(isCollapsed) => (status.error ? statusStaleBadge : isCollapsed && asActiveBadge)}
+          rightContent={(isCollapsed) => (
+            <>
+              {status.error ? statusStaleBadge : isCollapsed && asActiveBadge}
+              {!isCollapsed && (
+                <ColumnPicker
+                  testId="as-column-picker"
+                  label={CM.columnSelection}
+                  columns={asColumnChoices}
+                  shown={shownAsColumns.map((col) => col.accessor)}
+                  onToggle={toggleAsColumn}
+                />
+              )}
+            </>
+          )}
           bodyClassName="p-0"
           collapsible
         >
-          <Table
-            columns={asColumns}
-            data={asInfoWithRates}
-            sortable
-            zebra
-            maxRows={15}
-            emptyMessage={CM.noAppServersActiveMsg}
-          />
+          {/* The page grows to its content's width (min-w-fit in App); w-0
+              keeps this wide table out of that, so it scrolls on its own. */}
+          <div className="w-0 min-w-full">
+            <Table
+              columns={shownAsColumns}
+              data={asInfoWithRates}
+              sortable
+              zebra
+              maxRows={15}
+              emptyMessage={CM.noAppServersActiveMsg}
+            />
+          </div>
         </Card>
 
         {/* ── Job Queue ── */}

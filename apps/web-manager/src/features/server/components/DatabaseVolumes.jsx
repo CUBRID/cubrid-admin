@@ -110,6 +110,10 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db))),
     [activeDatabases, loggedInDatabases, hostUid]
   );
+  // Running databases left out of the table for want of a login. Said in a
+  // line under the table when some are shown; with none shown the table's
+  // own empty message says it.
+  const hiddenCount = loggedInActiveDatabases.length > 0 ? activeDatabases.length - loggedInActiveDatabases.length : 0;
 
   // Guards against a stale response repopulating the table: if the user logs
   // out of (or stops) the last active database while a fetch for it is still
@@ -226,6 +230,11 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
         emptyMessage={loggedInActiveDatabases.length === 0 ? CM.storageVolumesRequireOnlineDbMsg : undefined}
         emptyState={dbListStatus === 'error' || loadFailed ? <FetchEmptyState status="error" /> : undefined}
       />
+      {hiddenCount > 0 && (
+        <p data-testid="server-dashboard-storage-volumes-hidden" className="px-4 py-2 text-12 text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-white/5">
+          {CM.storageVolumesHiddenMsg(hiddenCount)}
+        </p>
+      )}
     </Card>
   );
 }

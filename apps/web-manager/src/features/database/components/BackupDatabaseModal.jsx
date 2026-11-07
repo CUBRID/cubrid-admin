@@ -62,7 +62,7 @@ export default function BackupDatabaseModal() {
     isSuccess,
     isError
   } = useActionState();
-  const { trackJob } = useCmsJobs();
+  const { trackJob, dismissJobResult } = useCmsJobs();
   const [jobStatus, setJobStatus] = useState(null);
   // Identifies the most recent handleBackup() call. This modal has no
   // runJob()/background() concept (unlike the other CMS-job modals) — its
@@ -74,6 +74,11 @@ export default function BackupDatabaseModal() {
   // modal to its success view using whatever database is *currently*
   // selected — not the one that backup actually ran against.
   const latestBackupTokenRef = useRef(null);
+  // The backup this modal is showing, until it is closed or opened afresh.
+  // Only that backup's result replaces the job tray's result window; one
+  // that ends after the modal was closed, or reopened for another database,
+  // leaves the tray's window as its notice.
+  const attachedTokenRef = useRef(null);
 
   const [formData, setFormData] = useState({
     backupLevel: '0',
@@ -161,6 +166,8 @@ export default function BackupDatabaseModal() {
   }, [availableLevels, formData.backupLevel]);
 
   useEffect(() => {
+    // Closed by any means, or opened afresh: no backup is shown here.
+    attachedTokenRef.current = null;
     if (!isBackupDatabaseModalOpen) return;
     resetAction();
     setActiveTab(TAB_INFO);
@@ -196,7 +203,10 @@ export default function BackupDatabaseModal() {
     startAction();
     const invocationToken = {};
     latestBackupTokenRef.current = invocationToken;
+    attachedTokenRef.current = invocationToken;
     const progressOpts = { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) };
+    let jobId;
+    const shownHere = () => attachedTokenRef.current === invocationToken;
     try {
       const payload = {
         level: formData.backupLevel,
@@ -215,13 +225,12 @@ export default function BackupDatabaseModal() {
         pendingBackupJob?.dbname === selectedDatabase &&
         JSON.stringify(pendingBackupJob?.payload) === JSON.stringify(payload);
 
-      let jobId;
       if (exactMatch) {
         jobId = pendingBackupJob.jobId;
       } else {
         const created = await databaseJobApi.submitBackup(selectedHostUid, selectedDatabase, payload);
         jobId = created?.jobId;
-        if (!jobId) throw new Error('Backup could not be started. Please try again.');
+        if (!jobId) throw new Error(CM.backupStartFailedMsg);
         // Replace only after confirmed acceptance — preserves the previous pending job if submit fails
         dispatch(setPendingBackupJob({ jobId, hostUid: selectedHostUid, dbname: selectedDatabase, payload }));
       }
@@ -229,20 +238,30 @@ export default function BackupDatabaseModal() {
       await trackJob(jobId, progressOpts);
       if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
       dispatch(clearPendingBackupJob());
-      endSuccess(CM.databaseBackedUpMsg(selectedDatabase, formData.backupDir));
+      if (!shownHere()) return;
+      dismissJobResult(jobId);
+      endSuccess(backupWrittenMsg);
     } catch (err) {
       if (latestBackupTokenRef.current !== invocationToken) return; // superseded by a newer backup request
       if (!err?.cancelled) {
         // Terminal job failure on the server — clear pending so retry submits a new backup.
         // Transient polling failures keep pendingBackupJob to allow reconnect on retry.
         if (err?.jobTerminalFailure) dispatch(clearPendingBackupJob());
+        if (!shownHere()) return;
+        dismissJobResult(jobId);
         endError(typeof err === 'string' ? err : err.message || CM.failure);
       }
     }
   };
 
+  const backupKind = [CM.backupLevelFullTitle, CM.backupLevelIncrL1Title, CM.backupLevelIncrL2Title][Number(formData.backupLevel)];
+  const backupWrittenMsg = CM.backupWrittenMsg(backupKind, selectedDatabase, formData.backupDir);
+
   // Don't clear pendingBackupJob on close — the open effect reconnects on reopen
-  const handleClose = () => dispatch(closeBackupDatabaseModal());
+  const handleClose = () => {
+    attachedTokenRef.current = null;
+    dispatch(closeBackupDatabaseModal());
+  };
 
   const flags = [
     { field: 'checkConsistency', label: CM.checkDatabaseConsistency },
@@ -350,8 +369,8 @@ export default function BackupDatabaseModal() {
     return (
       <Modal isOpen title={CM.backupCompleted} icon="backup" iconVariant="success" onClose={handleClose} maxWidth="720px">
         <ModalStatusSuccess 
-          title={CM.snapshotSecured}
-          message={`A complete backup of ${selectedDatabase} has been written to: ${formData.backupDir}.`}
+          title={false}
+          message={backupWrittenMsg}
           onConfirm={handleClose}
           confirmText={CM.ok}
         />

@@ -157,6 +157,8 @@ export class CmsHttpsClientService {
         const response = await firstValueFrom(this.httpService.post<P>(url, data, config)).catch(error => {
           if (options?.maxResponseBytes !== undefined && /maxContentLength/i.test(error?.message ?? '')) {
             throw CmsError.RequestFailed({
+              reason: 'RESPONSE_TOO_LARGE',
+              maxBytes: options.maxResponseBytes,
               message: `CMS response exceeds the analysis size limit (${options.maxResponseBytes} bytes). Select a smaller archived log.`,
             }, error);
           }

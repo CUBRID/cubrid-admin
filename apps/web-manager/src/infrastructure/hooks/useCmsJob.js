@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { cancelCmsJobPoll } from '../services/cmsJobRunner';
 import { useCmsJobs } from '../hooks/useCmsJobs';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 /**
  * Run a CMS background job: submit (202 + jobId) then poll until done.
@@ -59,7 +60,7 @@ export function useCmsJob({ cancelOnUnmount = false, sharedResult = false } = {}
         const created = await submitFn();
         const jobId = created?.jobId;
         if (!jobId) {
-          throw new Error('Server did not return a job id');
+          throw new Error(getCM(getStoredLocale()).jobIdMissingMsg);
         }
         jobIdRef.current = jobId;
         capturedJobId = jobId;

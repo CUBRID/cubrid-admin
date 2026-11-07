@@ -15,6 +15,7 @@ import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
 import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
+import HostReadErrorBanner from './server/HostReadErrorBanner';
 import DatabaseListSection from './server/DatabaseListSection';
 import HaClusterStatusSection from './server/HaClusterStatusSection';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
@@ -45,6 +46,8 @@ const Component = function ServerContent({ hostUid }) {
   // 'loading' until the first database-list fetch settles, then 'loaded' or
   // 'error', so sections built on it don't read an empty list as "no databases".
   const [dbListStatus, setDbListStatus] = useState('loading');
+  // The last database list read's failure, cleared by the next success.
+  const [startInfoError, setStartInfoError] = useState(null);
   const [lastReadActiveDatabases, setActiveDatabases] = useState([]);
   const databases = sharedDatabases ?? lastReadDatabases;
   const activeDatabases = sharedActiveDatabases ?? lastReadActiveDatabases;
@@ -65,7 +68,11 @@ const Component = function ServerContent({ hostUid }) {
   // The system status section is read by this refresh while it is expanded,
   // so its broker list is the one fetchBrokerList below is reading.
   const systemStatusExpanded = useRef(true);
-  const handleSystemStatusExpanded = useCallback((expanded) => { systemStatusExpanded.current = expanded; }, []);
+  const [isSystemStatusExpanded, setIsSystemStatusExpanded] = useState(true);
+  const handleSystemStatusExpanded = useCallback((expanded) => {
+    systemStatusExpanded.current = expanded;
+    setIsSystemStatusExpanded(expanded);
+  }, []);
 
   const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,
@@ -78,9 +85,11 @@ const Component = function ServerContent({ hostUid }) {
         dbInfo = await dispatch(fetchDatabaseStartInfo(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
       } catch (err) {
         setDbListStatus('error');
+        setStartInfoError(err);
         throw err;
       }
       setDbListStatus('loaded');
+      setStartInfoError(null);
       const newDatabases = dbInfo.dblist?.dbs || [];
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
@@ -280,6 +289,7 @@ const Component = function ServerContent({ hostUid }) {
 
       {/* ── Scrollable Body ── */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <HostReadErrorBanner hostUid={hostUid} startInfoError={startInfoError} statusReadActive={isHA || isSystemStatusExpanded} />
         <HaClusterStatusSection hostUid={hostUid} />
         <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
         <Brokers hostUid={hostUid} isSection={true} />

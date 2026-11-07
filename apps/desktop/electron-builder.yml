@@ -1,5 +1,5 @@
 appId: com.cubrid.webmanager
-productName: Next CUBRID Admin
+productName: CUBRID Admin
 electronVersion: 35.7.5
 asar: false
 directories:
@@ -11,7 +11,7 @@ files:
   - dist/libs/update-check/**/*
   - package.json
 extraMetadata:
-  name: cubrid-web-manager-desktop
+  name: cubrid-admin-desktop
   version: 0.1.0-alpha.1
   main: dist/apps/desktop/main.js
 extraResources:

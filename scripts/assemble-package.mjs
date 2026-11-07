@@ -4,7 +4,7 @@
  * public/ (frontend static files) is embedded inside the binary via pkg assets.
  *
  * Output: dist/executables/
- *   ├── cubrid-web-manager-linux | cubrid-web-manager.exe | cubrid-web-manager-macos   (public/ embedded)
+ *   ├── cubrid-admin-linux | cubrid-admin.exe | cubrid-admin-macos   (public/ embedded)
  *   └── conf/
  *       ├── cwm.conf.sample        (rename to cwm.conf before first run)
  *       └── cwm.conf.reference.md  (full list of supported keys)
@@ -24,9 +24,9 @@ const CONF_SAMPLE = path.join(ROOT, 'cwm.conf.sample');
 const CONF_REFERENCE = path.join(ROOT, 'cwm.conf.reference.md');
 
 const PLATFORM_MAP = {
-  linux: { src: 'cubrid-web-manager-linux',  dest: 'cubrid-web-manager-linux'  },
-  win:   { src: 'cubrid-web-manager.exe',    dest: 'cubrid-web-manager.exe'    },
-  mac:   { src: 'cubrid-web-manager-macos',  dest: 'cubrid-web-manager-macos'  },
+  linux: { src: 'cubrid-admin-linux',  dest: 'cubrid-admin-linux'  },
+  win:   { src: 'cubrid-admin.exe',    dest: 'cubrid-admin.exe'    },
+  mac:   { src: 'cubrid-admin-macos',  dest: 'cubrid-admin-macos'  },
 };
 
 function assemble(platform) {

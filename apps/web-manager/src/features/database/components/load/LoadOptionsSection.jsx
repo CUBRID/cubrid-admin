@@ -119,7 +119,7 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
             value={formData.values.errorcontrolfile}
             onChange={(e) => handleValueChange('errorcontrolfile', e.target.value)}
             disabled={!formData.checkBoxes.errorcontrolfile}
-            placeholder="e.g. /path/to/error.err"
+            placeholder={CM.examplePlaceholder('/path/to/error.err')}
             className="font-mono text-13"
           />
         </CaDialogField>
@@ -141,7 +141,7 @@ export default function LoadOptionsSection({ formData, handleCheckBoxChange, han
             value={formData.values.ignoreclassfile}
             onChange={(e) => handleValueChange('ignoreclassfile', e.target.value)}
             disabled={!formData.checkBoxes.ignoreclassfile}
-            placeholder="e.g. /path/to/ignore.txt"
+            placeholder={CM.examplePlaceholder('/path/to/ignore.txt')}
             className="font-mono text-13"
           />
         </CaDialogField>

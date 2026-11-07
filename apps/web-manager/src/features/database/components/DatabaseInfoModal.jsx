@@ -104,10 +104,12 @@ export default function DatabaseInfoModal() {
       </Typography>
     )},
     { header: CM.parameterTypeLabel, accessor: 'scope', className: 'w-[130px]', render: (val) => <ParamScopeBadge scope={val} /> },
-    { header: CM.serverValue, accessor: 'server', className: dumpBoth ? 'w-[200px]' : 'w-[400px]', render: (val) => (
+    // A value with no spaces (call_stack_dump_activation_list) wraps
+    // instead of widening the table past the dialog.
+    { header: CM.serverValue, accessor: 'server', className: dumpBoth ? 'w-[200px]' : 'w-[400px]', cellClassName: 'wrap-anywhere', render: (val) => (
       <Typography variant="span" className="font-mono text-13 text-amber-500 font-bold">{val}</Typography>
     )},
-    ...(dumpBoth ? [{ header: CM.clientValue, accessor: 'client', className: 'w-[200px]', render: (val) => (
+    ...(dumpBoth ? [{ header: CM.clientValue, accessor: 'client', className: 'w-[200px]', cellClassName: 'wrap-anywhere', render: (val) => (
       <Typography variant="span" className={`font-mono text-13 ${val === '-' ? 'text-slate-300 dark:text-slate-600' : 'text-slate-900 dark:text-slate-100'}`}>{val}</Typography>
     )}] : [])
   ];
@@ -195,7 +197,9 @@ export default function DatabaseInfoModal() {
           </div>
         }
       >
-        <div className="flex flex-col h-[550px] -m-6 animate-in fade-in slide-in-from-bottom-4 duration-400">
+        {/* Fills the body edge to edge (-m-5 against its padding) and never
+            taller than the window allows, so only the list scrolls. */}
+        <div className="flex flex-col h-[min(550px,calc(90vh-146px))] -m-5 animate-in fade-in slide-in-from-bottom-4 duration-400">
           <div className="px-6 py-4 flex items-center justify-between bg-slate-50/80 dark:bg-black/20 border-b border-slate-100 dark:border-white/5 shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20">

@@ -28,6 +28,7 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import {
   BaseService,
   HandleCmsErrors,
+  Warning,
 } from '@common';
 import { ConfigError } from '@error/config/config-error';
 import { ValidationError } from '@error/validation/validation-error';
@@ -258,6 +259,7 @@ export class DatabaseConfigService extends BaseService {
       const headerLine = serviceHeaderLine(confdata);
       if (headerLine === undefined) {
         throw ConfigError.ServerParamNotFound(confname, {
+          reason: 'SERVICE_SECTION_NOT_FOUND',
           message: '[service] section not found in configuration file',
         });
       }
@@ -434,6 +436,7 @@ export class DatabaseConfigService extends BaseService {
 
     if (serverEntries(confdata).length === 0) {
       throw ConfigError.ServerParamNotFound(confname, {
+        reason: 'SERVER_PARAM_NOT_IN_SERVICE',
         message: 'server parameter not found in [service] section',
       });
     }
@@ -459,14 +462,19 @@ export class DatabaseConfigService extends BaseService {
    * including reconciliation retries. Returns a warning when `[@newName]`
    * already exists and `[@oldName]` was left as it is.
    */
-  async renameAutoStart(userId: string, hostUid: string, oldName: string, newName: string): Promise<string[]> {
+  async renameAutoStart(userId: string, hostUid: string, oldName: string, newName: string): Promise<Warning[]> {
     return this.withHostConfigMutex(userId, hostUid, async () => {
       const current = await this.cmsConfigService.getAllSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID);
       const confdata = current.conflist?.[0]?.confdata;
       if (!confdata?.length) throw ConfigError.NoConfdata(CMS_CONFNAME_CUBRID);
       const { lines: updated, kept } = renameDbSection(renameAutostart(confdata, oldName, newName), oldName, newName);
-      const warnings = kept
-        ? [`cubrid.conf already has a [@${newName}] section, so the [@${oldName}] section was left as it is. Move its settings to [@${newName}] by hand if "${newName}" needs them.`]
+      const warnings: Warning[] = kept
+        ? [{
+          code: 'RENAME_SECTION_KEPT',
+          oldName,
+          newName,
+          message: `cubrid.conf already has a [@${newName}] section, so the [@${oldName}] section was left as it is. Move its settings to [@${newName}] by hand if "${newName}" needs them.`,
+        }]
         : [];
       if (updated.length === confdata.length && updated.every((line, index) => line === confdata[index])) return warnings;
       await this.cmsConfigService.setSystemParam(userId, hostUid, CMS_CONFNAME_CUBRID, updated);

@@ -110,3 +110,112 @@ describe('Brokers broker list fetch states', () => {
     expect(card().textContent).not.toContain(CM.dataUnavailableTitle);
   });
 });
+
+describe('Brokers refresh button during background polls', () => {
+  // The status tab polls every few seconds; each poll used to dim and spin
+  // the refresh button, which read as the view flickering.
+  const pollingStore = () => {
+    const store = configureStore({
+      reducer: {
+        broker: brokerReducer,
+        layout: layoutReducer,
+        host: () => ({ authorizedHosts: ['h1'] }),
+        user: () => ({ preferences: { uiLocale: 'en', brokerStatusInterval: 3 } }),
+      },
+    });
+    store.dispatch(setActiveMainTab('brokers_status:h1'));
+    return store;
+  };
+  const refreshButton = () => container.querySelector(`button[title="${CM.refreshBrokersList}"]`);
+
+  it('leaves the button alone while a background poll waits', async () => {
+    vi.useFakeTimers();
+    const poll = deferred();
+    try {
+      brokerApi.getBrokerList.mockResolvedValue(brokerList(['broker1']));
+      await render(pollingStore());
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(refreshButton().disabled).toBe(false);
+
+      brokerApi.getBrokerList.mockReturnValue(poll.promise);
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(2);
+      expect(refreshButton().disabled).toBe(false);
+      expect(refreshButton().querySelector('.animate-spin')).toBeNull();
+    } finally {
+      // Broker list reads are shared per host across the module; a poll left
+      // waiting would hold up the next test's read.
+      await act(async () => { poll.resolve(brokerList(['broker1'])); await vi.advanceTimersByTimeAsync(0); });
+      vi.useRealTimers();
+    }
+  });
+
+  it('still shows a refresh the user asked for', async () => {
+    brokerApi.getBrokerList.mockResolvedValue(brokerList(['broker1']));
+    await render(pollingStore());
+    const read = deferred();
+    brokerApi.getBrokerList.mockReturnValue(read.promise);
+    await act(async () => refreshButton().click());
+    expect(refreshButton().disabled).toBe(true);
+    await act(async () => read.resolve(brokerList(['broker1'])));
+    expect(refreshButton().disabled).toBe(false);
+  });
+});
+
+describe('Brokers background polls and the sidebar', () => {
+  // The sidebar's broker list moves only on the user's own reads; a
+  // dashboard tab's poll used to read in the foreground every tick.
+  const pollingStore = () => {
+    const store = configureStore({
+      reducer: {
+        broker: brokerReducer,
+        layout: layoutReducer,
+        host: () => ({ authorizedHosts: ['h1'] }),
+        user: () => ({ preferences: { uiLocale: 'en', brokerStatusInterval: 3 } }),
+      },
+    });
+    store.dispatch(setActiveMainTab('brokers_status:h1'));
+    return store;
+  };
+  const names = (list) => (list || []).map((b) => b.name);
+
+  it('updates the tab but leaves the sidebar list and its spinner alone', async () => {
+    vi.useFakeTimers();
+    const poll = deferred();
+    try {
+      brokerApi.getBrokerList.mockResolvedValue(brokerList(['broker1']));
+      const store = pollingStore();
+      await render(store);
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(names(store.getState().broker.navigatorBrokersByHost.h1)).toEqual(['broker1']);
+
+      brokerApi.getBrokerList.mockReturnValue(poll.promise);
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(store.getState().broker.loadingByHost.h1).toBeFalsy();
+
+      await act(async () => { poll.resolve(brokerList(['broker1', 'broker2'])); await vi.advanceTimersByTimeAsync(0); });
+      expect(names(store.getState().broker.brokersByHost.h1)).toEqual(['broker1', 'broker2']);
+      expect(names(store.getState().broker.navigatorBrokersByHost.h1)).toEqual(['broker1']);
+    } finally {
+      poll.resolve(brokerList(['broker1']));
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the sidebar list when a background poll fails', async () => {
+    vi.useFakeTimers();
+    try {
+      brokerApi.getBrokerList.mockResolvedValue(brokerList(['broker1']));
+      const store = pollingStore();
+      await render(store);
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+
+      brokerApi.getBrokerList.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(names(store.getState().broker.navigatorBrokersByHost.h1)).toEqual(['broker1']);
+      expect(store.getState().broker.error).toBeFalsy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -35,9 +35,9 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = () => {
+const render = (cmsUserToEdit = { user: { id: 'user1', casauth: 'none' } }) => {
   const state = {
-    host: { isEditCmsUserModalOpen: true, selectedHostUid: 'h1', cmsUserToEdit: { user: { id: 'user1', casauth: 'none' } } },
+    host: { isEditCmsUserModalOpen: true, selectedHostUid: 'h1', cmsUserToEdit },
     user: { preferences: { uiLocale: 'en' } },
   };
   const store = configureStore({ reducer: () => state });
@@ -69,4 +69,16 @@ it('changes the password once asked, which CMS needs to be non-empty', async () 
   });
   await act(async () => q('edit-cms-user-save-btn').click());
   expect(setHostPassword).toHaveBeenCalledWith({ hostUid: 'h1', payload: { targetid: 'user1', newpassword: 'newpass' } });
+});
+
+it('saves to the host the user list was opened for, not the selected one', async () => {
+  await render({ hostUid: 'h2', user: { id: 'user1', casauth: 'none' } });
+  await act(async () => q('edit-cms-user-save-btn').click());
+  expect(updateCmsUser.mock.calls[0][0]).toMatchObject({ hostUid: 'h2' });
+});
+
+it('names the password fields as new ones when editing', async () => {
+  await render();
+  expect(q('edit-cms-user-password-input').placeholder).toBe('New Password');
+  expect(document.body.textContent).toContain('Confirm New Password');
 });

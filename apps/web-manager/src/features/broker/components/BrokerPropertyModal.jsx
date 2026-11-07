@@ -11,7 +11,8 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { TabGroup } from '../../../components/ds/layout/TabGroup';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
-import { parseConfText, validateEffectiveParams } from '@api-interfaces';
+import { checkEffectiveParams, parseConfText } from '@api-interfaces';
+import { paramIssuesText } from '../../../infrastructure/errors/paramIssueText';
 
 // The param list (which keys exist, their category/guard/default) no
 // longer lives here — it comes from the connected host's `getEnv`
@@ -132,16 +133,16 @@ export default function BrokerPropertyModal() {
   };
 
   // One shared rule engine (required/guard/section-placement/cross-field) —
-  // see validateEffectiveParams's own doc comment. Nothing here is editable
+  // see checkEffectiveParams's own doc comment. Nothing here is editable
   // any more, so this only ever flags a value that's ALREADY stored in
   // broker.conf and fails its own guard — a passive diagnostic pointing at
   // the text editor.
-  const guardErrors = useMemo(() => validateEffectiveParams(brokerParamSchema, localParams, {
+  const guardErrors = useMemo(() => paramIssuesText(checkEffectiveParams(brokerParamSchema, localParams, {
     isCommonSection: isCommonMode,
     commonSectionLabel: 'broker',
     emptyValueIsError: true,
     emptyIntIsZero: true,
-  }), [brokerParamSchema, localParams, isCommonMode]);
+  }), CM), [brokerParamSchema, localParams, isCommonMode, CM]);
   const guardErrorCount = Object.keys(guardErrors).length;
   const tabs = [
     { id: 'common',   label: CM.common,   icon: 'settings' },
@@ -179,7 +180,7 @@ export default function BrokerPropertyModal() {
         </>
       }
     >
-      <div className="flex flex-col h-[520px] -m-5">
+      <div className="flex flex-col h-[min(520px,calc(90vh-146px))] -m-5">
         <div className="px-5 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-white/[0.01]">
           {isCommonMode ? (
             <SectionHeader title={CM.brokerCommonProperties} icon="hub" className="!m-0" />

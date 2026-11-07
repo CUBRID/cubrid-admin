@@ -67,6 +67,28 @@ function cmsNoteFromPayload(additionalData?: Record<string, any>): string | unde
 }
 
 /**
+ * The CMS's own text (`cmsNote`, without its `<end>` marker) and the CMS task
+ * that failed (`cmsTask`), from the places a CMS response lands in a CMS
+ * error. Only real CMS notes: an error CMS never answered (no response, TLS)
+ * has no `cmsNote`.
+ */
+export function cmsFieldsFromPayload(additionalData?: Record<string, any>): { cmsNote?: string; cmsTask?: string } {
+  if (!additionalData) return {};
+  const responses = [
+    additionalData.response,
+    additionalData.cmsResponse,
+    typeof additionalData.data === 'object' && additionalData.data !== null ? additionalData.data : undefined,
+    additionalData,
+  ];
+  const note = responses.map((r) => r?.note).find(isMeaningfulCmsNote);
+  const task = responses.map((r) => r?.task).find((t) => typeof t === 'string' && t.trim() !== '');
+  return {
+    ...(note !== undefined ? { cmsNote: stripCmsArtifacts(String(note)) } : {}),
+    ...(task !== undefined ? { cmsTask: String(task) } : {}),
+  };
+}
+
+/**
  * Safe user-facing API error strings.
  * - CMS: prefer CMS response `note` when meaningful
  * - Otherwise: fixed copy per kind/code (no raw OS/lock messages)

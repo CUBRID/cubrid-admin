@@ -5,6 +5,10 @@
  */
 
 import { UNGROUPED_GROUP_ID } from './hostGroupUtils';
+import { getCM, getStoredLocale } from '../../constants/useCM';
+
+// Import errors reach the screen as is, in the UI language.
+const labels = () => getCM(getStoredLocale());
 
 export const MIN_IMPORT_PORT = 1;
 export const MAX_IMPORT_PORT = 65535;
@@ -65,7 +69,7 @@ export function buildGroupedExportPayload(hostGroups, selectedUids) {
     groups.push({
       // The no-group bucket is written without a name, so a user group may
       // itself be called "Ungrouped".
-      ...(groupId === UNGROUPED_GROUP_ID ? {} : { name: group.name || 'Imported' }),
+      ...(groupId === UNGROUPED_GROUP_ID ? {} : { name: group.name || labels().importedPlaceholder }),
       hosts: hostsInGroup.map((host) => ({
         alias: host.alias || '',
         address: host.address || '',
@@ -322,12 +326,12 @@ export function parseImportPort(value, defaultPort = DEFAULT_IMPORT_PORT) {
   }
 
   if (!/^\d+$/.test(raw)) {
-    return { valid: false, error: 'Port must be an integer' };
+    return { valid: false, error: labels().importPortNotIntegerMsg };
   }
 
   const port = Number(raw);
   if (!Number.isInteger(port) || port < MIN_IMPORT_PORT || port > MAX_IMPORT_PORT) {
-    return { valid: false, error: `Port must be ${MIN_IMPORT_PORT}-${MAX_IMPORT_PORT}` };
+    return { valid: false, error: labels().importPortRangeMsg(MIN_IMPORT_PORT, MAX_IMPORT_PORT) };
   }
 
   return { valid: true, port };
@@ -346,8 +350,11 @@ function sameAlias(a, b) {
   return left !== '' && right !== '' && left === right;
 }
 
+const problem = (code, message) => ({ code, message });
+
 /**
- * @returns {string|null} validation error message
+ * @returns {{ code: string, message: string }|null} what is wrong with the
+ *   row (code) and how to say it in the UI language (message)
  */
 export function validateImportHostEntry(entry, { existingHosts = [], batchPeers = [] } = {}) {
   const alias = String(entry.alias ?? '').trim();
@@ -357,29 +364,29 @@ export function validateImportHostEntry(entry, { existingHosts = [], batchPeers 
     ? { valid: true, port: entry.portNumber }
     : parseImportPort(entry.port);
 
-  if (!alias) return 'Name (alias) is required';
-  if (!address) return 'Address is required';
-  if (!id) return 'Username is required';
-  if (!portResult.valid) return portResult.error;
+  if (!alias) return problem('ALIAS_REQUIRED', labels().importAliasRequiredMsg);
+  if (!address) return problem('ADDRESS_REQUIRED', labels().addressRequired);
+  if (!id) return problem('USERNAME_REQUIRED', labels().usernameRequired);
+  if (!portResult.valid) return problem('PORT_INVALID', portResult.error);
 
   const normalized = { alias, address, id, port: portResult.port };
 
   for (const existing of existingHosts) {
     if (sameConnection(normalized, existing)) {
-      return 'Already registered (address + port)';
+      return problem('ALREADY_REGISTERED', labels().importAlreadyRegisteredMsg);
     }
     if (sameAlias(normalized, existing)) {
-      return 'Alias already in use';
+      return problem('ALIAS_IN_USE', labels().importAliasInUseMsg);
     }
   }
 
   for (const peer of batchPeers) {
     if (peer.rowId != null && peer.rowId === entry.rowId) continue;
     if (sameConnection(normalized, peer)) {
-      return 'Duplicate address + port in import file';
+      return problem('DUPLICATE_CONNECTION_IN_FILE', labels().importDuplicateConnectionMsg);
     }
     if (sameAlias(normalized, peer)) {
-      return 'Duplicate alias in import file';
+      return problem('DUPLICATE_ALIAS_IN_FILE', labels().importDuplicateAliasMsg);
     }
   }
 
@@ -428,13 +435,13 @@ export function buildImportPreviewList(parsed, existingHosts) {
         };
       });
 
-    const validationError = validateImportHostEntry(row, { existingHosts, batchPeers });
+    const invalid = validateImportHostEntry(row, { existingHosts, batchPeers });
 
     return {
       ...row,
-      validationError,
-      isDuplicate: validationError === 'Already registered (address + port)',
-      isSelectable: !validationError,
+      validationError: invalid?.message ?? null,
+      isDuplicate: invalid?.code === 'ALREADY_REGISTERED',
+      isSelectable: !invalid,
     };
   });
 }
@@ -483,22 +490,22 @@ function parseXmlDocument(xmlString, contextLabel) {
 
   const errorNode = doc.querySelector('parsererror');
   if (errorNode) {
-    throw new Error(`Invalid XML in ${contextLabel}. Please select a valid CUBRID Manager file.`);
+    throw new Error(labels().importInvalidXmlMsg(contextLabel));
   }
 
   return doc;
 }
 
 function parseHostsFromXmlString(xmlString) {
-  const doc = parseXmlDocument(xmlString, 'host list');
+  const doc = parseXmlDocument(xmlString, labels().importHostListLabel);
 
   if (doc.documentElement.nodeName !== 'hosts') {
-    throw new Error('Incorrect file format. Expected <hosts> root element.');
+    throw new Error(labels().importWrongRootMsg);
   }
 
   const hostNodes = doc.getElementsByTagName('host');
   if (hostNodes.length === 0) {
-    throw new Error('No host connection information found in the selected file.');
+    throw new Error(labels().importNoHostInfoMsg);
   }
 
   const parsedHosts = [];
@@ -518,14 +525,14 @@ function parseHostsFromXmlString(xmlString) {
   }
 
   if (parsedHosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
 
   return parsedHosts;
 }
 
 function parseHostGroupsFromXmlString(xmlString) {
-  const doc = parseXmlDocument(xmlString, 'host groups');
+  const doc = parseXmlDocument(xmlString, labels().importHostGroupsLabel);
 
   const groupNodes = doc.getElementsByTagName('group');
   const groups = [];
@@ -606,14 +613,14 @@ function tryParseNativeJson(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(data.groups);
   if (parsed.hosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
   return parsed;
 }
 
 /** @returns {{ hosts, groups }|null} parsed native XML payload, or null if not our native format */
 function tryParseNativeXml(input) {
-  const doc = parseXmlDocument(input, 'host list');
+  const doc = parseXmlDocument(input, labels().importHostListLabel);
   if (doc.documentElement.nodeName !== 'cwm-hosts') {
     return null;
   }
@@ -639,7 +646,7 @@ function tryParseNativeXml(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(groupList);
   if (parsed.hosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
   return parsed;
 }

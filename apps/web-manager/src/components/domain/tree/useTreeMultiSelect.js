@@ -11,14 +11,17 @@ import { useRef } from 'react';
  *
  * @param {string[]} order - item keys in the order the tree shows them
  * @returns {(event, key) => boolean} true when the click was a
- *   multi-selection click, which should neither select nor toggle the node
+ *   multi-selection click, which should neither select nor toggle the node.
+ *   Its `setAnchor(key)` makes `key` the item later Ctrl/Cmd and Shift
+ *   clicks start from, as a plain click does; a right-click that selects an
+ *   item calls it.
  */
 export function useTreeMultiSelect(order, selected, onSelectedChange) {
   const lastClickedRef = useRef(null);
   // The item picked with the last plain click, until a Ctrl/Cmd or Shift
   // click: only it joins a multi-selection that starts empty.
   const plainClickedRef = useRef(null);
-  return (e, key) => {
+  const handleClick = (e, key) => {
     if (!onSelectedChange) return false;
     if (e?.shiftKey && lastClickedRef.current) {
       const startIdx = order.indexOf(lastClickedRef.current);
@@ -48,4 +51,9 @@ export function useTreeMultiSelect(order, selected, onSelectedChange) {
     if (selected?.size > 0 && !selected.has(key)) onSelectedChange(new Set());
     return false;
   };
+  handleClick.setAnchor = (key) => {
+    lastClickedRef.current = key;
+    plainClickedRef.current = key;
+  };
+  return handleClick;
 }

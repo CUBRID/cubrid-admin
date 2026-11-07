@@ -26,10 +26,11 @@ export function useDesktopMenuActions() {
   const CM = useCM();
   const dispatch = useDispatch();
   const isAuthenticated = useSelector((state) => state.auth?.isAuthenticated, shallowEqual);
-  const { selectedHostUid, authorizedHosts } = useSelector(
+  const { selectedHostUid, authorizedHosts, hosts } = useSelector(
     (state) => ({
       selectedHostUid: state.host?.selectedHostUid ?? null,
       authorizedHosts: state.host?.authorizedHosts ?? [],
+      hosts: state.host?.hosts ?? [],
     }),
     shallowEqual
   );
@@ -39,7 +40,7 @@ export function useDesktopMenuActions() {
     && !NO_DASHBOARD_PATHS.includes(pathname.replace(/\/+$/, '') || '/');
 
   const enabled = isDashboardShown
-    ? getMenuActionEnabled({ selectedHostUid, authorizedHosts })
+    ? getMenuActionEnabled({ selectedHostUid, authorizedHosts, hosts })
     : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);

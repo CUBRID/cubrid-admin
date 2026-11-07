@@ -39,6 +39,7 @@ export interface ParsedExvol {
 export function parseExvolString(volumeString: string): ParsedExvol {
   if (!volumeString || typeof volumeString !== 'string') {
     throw DatabaseError.InvalidVolumeString('Volume string must be a non-empty string', {
+      reason: 'EMPTY_VOLUME_STRING',
       receivedValue: volumeString,
     });
   }
@@ -47,6 +48,7 @@ export function parseExvolString(volumeString: string): ParsedExvol {
 
   if (parts.length !== 3) {
     throw DatabaseError.InvalidVolumeFormat('"type;size;path"', volumeString, {
+      reason: 'NOT_THREE_PARTS',
       partCount: parts.length,
     });
   }
@@ -57,7 +59,7 @@ export function parseExvolString(volumeString: string): ParsedExvol {
     throw DatabaseError.InvalidVolumeFormat(
       'all parts (type, size, path) must be non-empty',
       volumeString,
-      { type, size, path }
+      { reason: 'EMPTY_VOLUME_PART', type, size, path }
     );
   }
 
@@ -69,18 +71,20 @@ export function parseExvolString(volumeString: string): ParsedExvol {
 }
 
 /**
- * Carries the specific, fixed-text `message` of a volume validation error
- * (e.g. InvalidVolumeSize) through to the wrapping Parse/ConvertVolumeFailed
- * error, so the client sees the actual cause instead of the generic
- * "Invalid volume information." Only DatabaseError messages built in this
- * module are forwarded; unknown errors keep the generic fallback.
+ * Carries the specific, fixed-text `message` and `reason` of a volume
+ * validation error (e.g. InvalidVolumeSize) through to the wrapping
+ * Parse/ConvertVolumeFailed error, so the client sees the actual cause
+ * instead of the generic "Invalid volume information." Only DatabaseError
+ * messages built in this module are forwarded; unknown errors keep the
+ * generic fallback.
  */
-function causeMessageFor(volumeName: string, cause: DatabaseError): { message?: string } {
+function causeMessageFor(volumeName: string, cause: DatabaseError): { message?: string; reason?: string } {
+  const reason = cause.additionalData?.reason;
   const message = cause.additionalData?.message;
-  if (typeof message !== 'string' || message.trim() === '') {
-    return {};
-  }
-  return { message: `Volume "${volumeName}": ${message.trim()}` };
+  return {
+    ...(typeof reason === 'string' ? { reason } : {}),
+    ...(typeof message === 'string' && message.trim() !== '' ? { message: `Volume "${volumeName}": ${message.trim()}` } : {}),
+  };
 }
 
 /**
@@ -108,6 +112,7 @@ export function parseExvolArray(
 ): Array<ParsedExvol & { volumeName: string }> {
   if (!Array.isArray(exvolArray)) {
     throw DatabaseError.InvalidVolumeFormat('an array', typeof exvolArray, {
+      reason: 'NOT_AN_ARRAY',
       receivedType: typeof exvolArray,
     });
   }
@@ -174,11 +179,15 @@ export function convertExvolInfoToCmsFormat(volumeInfo: {
   volpath: string;
 }): string {
   if (!volumeInfo.type || !volumeInfo.volpath) {
-    throw DatabaseError.InvalidVolumeInfo('Volume info must have type and volpath', { volumeInfo });
+    throw DatabaseError.InvalidVolumeInfo('Volume info must have type and volpath', {
+      reason: 'VOLUME_TYPE_OR_PATH_MISSING',
+      volumeInfo,
+    });
   }
 
   if (volumeInfo.size <= 0 || volumeInfo.pagesize <= 0) {
     throw DatabaseError.InvalidVolumeSize('Volume size and pagesize must be positive numbers', {
+      reason: 'VOLUME_SIZE_NOT_POSITIVE',
       size: volumeInfo.size,
       pagesize: volumeInfo.pagesize,
     });

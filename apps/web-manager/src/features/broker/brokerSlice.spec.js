@@ -15,7 +15,7 @@ vi.mock('./brokerApi', () => ({
 }));
 
 import { brokerApi } from './brokerApi';
-import reducer, { fetchBrokerList, readSharedBrokerList } from './brokerSlice';
+import reducer, { fetchBrokerList, fetchDetailedBrokerStatus, readSharedBrokerList } from './brokerSlice';
 import apiClient from '../../api/apiClient';
 import { closeHostTabs } from '../layout/layoutSlice';
 
@@ -482,5 +482,48 @@ describe('readSharedBrokerList', () => {
     brokerApi.getBrokerList.mockRejectedValue(new Error('No response was received from CMS'));
 
     await expect(readSharedBrokerList('host1')).rejects.toThrow('No response was received from CMS');
+  });
+});
+
+describe('fetchDetailedBrokerStatus', () => {
+  // A stopped broker's status read keeps failing; each background poll used
+  // to switch the view to loading and back to the error.
+  const status = (store) => store.getState().broker.detailedStatus.broker1;
+  const read = (store, isBackground) => store.dispatch(fetchDetailedBrokerStatus({ hostUid: 'h1', brokerName: 'broker1', isBackground }));
+
+  it('keeps the error shown while a background poll of a failing broker waits', async () => {
+    brokerApi.getBrokerStatus.mockRejectedValue({ response: { data: { message: 'broker1 is not running' } } });
+    const store = makeStore();
+    await read(store, false);
+    expect(status(store)).toMatchObject({ loading: false, error: 'broker1 is not running' });
+
+    let answer;
+    brokerApi.getBrokerStatus.mockReturnValue(new Promise((_, reject) => { answer = reject; }));
+    const poll = read(store, true);
+    expect(status(store)).toMatchObject({ loading: false, error: 'broker1 is not running' });
+
+    answer({ response: { data: { message: 'broker1 is not running' } } });
+    await poll;
+    expect(status(store)).toMatchObject({ loading: false, error: 'broker1 is not running' });
+  });
+
+  it('still shows loading for a read the user asked for', async () => {
+    brokerApi.getBrokerStatus.mockRejectedValue({ response: { data: { message: 'broker1 is not running' } } });
+    const store = makeStore();
+    await read(store, false);
+
+    brokerApi.getBrokerStatus.mockReturnValue(new Promise(() => undefined));
+    read(store, false);
+    expect(status(store)).toMatchObject({ loading: true, error: null });
+  });
+
+  it('clears the old error once a background poll succeeds', async () => {
+    brokerApi.getBrokerStatus.mockRejectedValueOnce({ response: { data: { message: 'broker1 is not running' } } });
+    const store = makeStore();
+    await read(store, false);
+
+    brokerApi.getBrokerStatus.mockResolvedValue({ asinfo: [{ as_id: '1' }] });
+    await read(store, true);
+    expect(status(store)).toMatchObject({ loading: false, error: null, data: { asinfo: [{ as_id: '1' }] } });
   });
 });

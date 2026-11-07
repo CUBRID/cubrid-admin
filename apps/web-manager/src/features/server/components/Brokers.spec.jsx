@@ -157,6 +157,48 @@ describe('Brokers embedded in the host dashboard', () => {
 
     expect(container.textContent).not.toContain('1111');
   });
+
+  it('shows OFF for brokers CMS lists without a state (broker service stopped)', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await act(async () => {
+      brokerApi.getBrokerList.mockResolvedValueOnce({ result: [
+        { name: 'broker1', port: '30000', appl_server_shm_id: '30000' },
+        { name: 'query_editor', port: '30001', appl_server_shm_id: '30001' },
+      ] });
+      await store.dispatch(fetchBrokerList('h1'));
+    });
+
+    const rows = [...container.querySelectorAll('tbody tr')];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row.querySelectorAll('td')[1].textContent.trim()).toBe('OFF');
+    expect(store.getState().broker.brokersByHost.h1.map((b) => b.state)).toEqual(['OFF', 'OFF']);
+  });
+});
+
+describe('a SUSPENDED broker on the host dashboard', () => {
+  it('shows an orange SUSPENDED chip and counts it as active', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await act(async () => {
+      brokerApi.getBrokerList.mockResolvedValueOnce({ result: [
+        { name: 'off1', port: '30001' },
+        { name: 'sus1', state: 'SUSPENDED', pid: '42', port: '30002' },
+        { name: 'on1', state: 'ON', pid: '43', port: '30003' },
+      ] });
+      await store.dispatch(fetchBrokerList('h1'));
+    });
+
+    const chip = (name) => [...container.querySelectorAll('tbody tr')]
+      .find((tr) => tr.querySelector('td').textContent.trim() === name).querySelectorAll('td')[1];
+    expect(chip('sus1').textContent.trim()).toBe('SUSPENDED');
+    expect(chip('sus1').innerHTML).toContain('text-amber-600');
+    expect(chip('on1').innerHTML).toContain('text-emerald-600');
+    expect(chip('off1').innerHTML).toContain('text-rose');
+
+    await act(async () => container.querySelector('[data-testid="server-dashboard-broker-status"] button').click());
+    expect(container.textContent).toMatch(/2\s*Active/i);
+  });
 });
 
 describe('Brokers as its own tab', () => {

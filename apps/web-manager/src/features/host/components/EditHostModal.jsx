@@ -7,7 +7,7 @@ import { setActiveMainTab } from '../../layout/layoutSlice';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
-import { Toggle } from '../../../components/ds/forms/Toggle';
+import PasswordChangeLink from './PasswordChangeLink';
 import { Select } from '../../../components/ds/forms/Select';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
@@ -21,7 +21,8 @@ export default function EditHostModal() {
   // Opened from an HA follow-up of a bulk-login result dialog, which stays
   // open (z-[2100]) underneath — stack above it like the HA modals do.
   const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
-  const isCredentialError = /password/i.test(apiError || '');
+  // A failure that mentions the password is shown under the password field.
+  const isCredentialError = !!apiError && String(apiError).toLowerCase().includes(CM.password.toLowerCase());
 
   const [formData, setFormData] = useState({
     id: '',
@@ -58,11 +59,15 @@ export default function EditHostModal() {
         });
       }
       setErrors({});
-      setChangePassword(false);
+      // No saved password (a host imported from a file): the field is open.
+      setChangePassword(hostToEdit?.hasPassword === false);
     }
   }, [isEditHostModalOpen, hostToEditUid]);
 
   if (!isEditHostModalOpen) return null;
+
+  // Older servers do not say; then the host is taken to have a password.
+  const hasSavedPassword = hosts.find((h) => h.uid === hostToEditUid)?.hasPassword !== false;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -284,7 +289,7 @@ export default function EditHostModal() {
 
         {/* Section 3: Credentials */}
         <SectionHeader title={CM.credentials} icon="lock" className="mt-8" />
-        <div className="px-1">
+        <div className="px-1 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={CM.username}
@@ -297,25 +302,24 @@ export default function EditHostModal() {
               disabled={loading}
               required
             />
-            <div className="space-y-2">
-              <Toggle
-                testId="edit-host-change-password-toggle"
-                label={CM.changePassword}
-                checked={changePassword}
-                onChange={setChangePassword}
-                disabled={loading}
-              />
-              <Input
-                label={CM.password}
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                error={errors.password || (isCredentialError ? apiError : undefined)}
-                icon="key"
-                disabled={loading || !changePassword}
-              />
-            </div>
+            <Input
+              label={CM.password}
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              error={errors.password || (isCredentialError ? apiError : undefined)}
+              icon="key"
+              disabled={loading || !changePassword}
+              labelAction={hasSavedPassword ? (
+                <PasswordChangeLink
+                  testId="edit-host-change-password-toggle"
+                  active={changePassword}
+                  onChange={setChangePassword}
+                  disabled={loading}
+                />
+              ) : null}
+            />
           </div>
         </div>
 

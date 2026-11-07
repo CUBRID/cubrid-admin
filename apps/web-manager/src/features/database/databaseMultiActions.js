@@ -1,4 +1,5 @@
 import { dbKey } from './dbKey';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 import {
   deleteDatabaseProfile,
   loginDatabase,
@@ -119,6 +120,6 @@ export async function runMultiDatabaseAction(dispatch, CM, { hostUid, action, ro
         await dispatch(deleteDatabaseProfile({ hostUid, dbname: row.dbname })).unwrap();
       });
     default:
-      throw new Error(`Unknown multi-database action: ${action}`);
+      throw new Error(getCM(getStoredLocale()).unknownActionMsg(action));
   }
 }

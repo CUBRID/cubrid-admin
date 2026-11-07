@@ -34,7 +34,24 @@ import { DatabaseUserService } from '@database/user/database-user.service';
 import { CmsError } from '@error/cms/cms-error';
 import { resolveHostParamSchemas } from './param-schema.util';
 import { ConfigError } from '@error/config/config-error';
-import { ConfFileKind, EngineKnownKeys, ParamSchemaEntry, formatConfTextProblem, isBlockingConfTextProblem, validateConfText } from '@api-interfaces';
+import {
+  ConfFileKind,
+  ConfTextProblem,
+  EngineKnownKeys,
+  ParamSchemaEntry,
+  formatConfTextProblem,
+  isBlockingConfTextProblem,
+  validateConfText,
+} from '@api-interfaces';
+
+/**
+ * A save's non-blocking conf problems: as "Line N: ..." texts (`warnings`)
+ * and as problems with their codes (`warningProblems`), in the same order.
+ */
+const confTextWarnings = (problems: ConfTextProblem[]) => ({
+  warnings: problems.map(formatConfTextProblem),
+  warningProblems: problems,
+});
 
 /**
  * Seconds between the statdump watcher's own dumps. Its output goes to
@@ -419,6 +436,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     if (confname !== 'cubridconf' && confname !== 'cmconf') {
       throw ValidationError.InvalidFieldFormat('confname', 'cubridconf | cmconf', {
         confname,
+        reason: 'CONFNAME_NOT_SAVABLE',
         message: `confname "${confname}" cannot be saved through this endpoint (use cubridconf or cmconf; broker.conf has its own endpoint).`,
       });
     }
@@ -431,7 +449,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
       assertUnchangedSinceLoaded(confname, loaded, current.conflist?.[0]?.confdata);
       return this.setSystemParam(userId, hostUid, confname, confdata);
     });
-    return warnings.length > 0 ? { ...result, warnings } : result;
+    return warnings.length > 0 ? { ...result, ...confTextWarnings(warnings) } : result;
   }
 
   /**
@@ -520,7 +538,7 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
       assertUnchangedSinceLoaded('brokerconf', loaded, current.conflist?.[0]?.confdata);
       return this.setBrokerParam(userId, hostUid, confdata);
     });
-    return warnings.length > 0 ? { ...result, warnings } : result;
+    return warnings.length > 0 ? { ...result, ...confTextWarnings(warnings) } : result;
   }
 
   /**
@@ -562,17 +580,18 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
     lines: string[],
     kind: ConfFileKind,
     knownKeys: EngineKnownKeys
-  ): string[] {
+  ): ConfTextProblem[] {
     const problems = validateConfText(schema, lines, kind, knownKeys);
     const blocking = problems.filter(isBlockingConfTextProblem);
     if (blocking.length > 0) {
       throw ValidationError.InvalidFieldFormat('confdata', undefined, {
         confname: kind,
+        reason: 'INVALID_CONF_TEXT',
         message: `Invalid configuration: ${blocking.map(formatConfTextProblem).join('; ')}`,
-        problems: blocking.map(({ lineNo, key, message }) => ({ lineNo: lineNo ?? null, key: key ?? null, message })),
+        problems: blocking.map((problem) => ({ ...problem, lineNo: problem.lineNo ?? null, key: problem.key ?? null })),
       });
     }
-    return problems.map(formatConfTextProblem);
+    return problems;
   }
 
   private flattenCmsLogLines(log: LogContentContainer[] | undefined): string[] {

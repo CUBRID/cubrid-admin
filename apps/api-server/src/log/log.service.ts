@@ -135,12 +135,20 @@ export class LogService extends BaseService {
       { timeoutMs: 30_000, maxResponseBytes: maxBytes });
     const total = Number(response.total);
     if (total > maxLines || Buffer.byteLength(JSON.stringify(response), 'utf8') > maxBytes) {
-      throw new PayloadTooLargeException('Log exceeds the analysis limit (100,000 lines or 16 MiB). Select a smaller archived log.');
+      throw new PayloadTooLargeException({
+        message: 'Log exceeds the analysis limit (100,000 lines or 16 MiB). Select a smaller archived log.',
+        code: 'LOG_TOO_LARGE',
+        maxLines,
+        maxBytes,
+      });
     }
     const lines = (response.log || []).flatMap(group => group.line || []);
     if (response.total == null || response.total === '' || !Number.isSafeInteger(total) || total < 0
       || lines.length !== total || !lines.every(line => typeof line === 'string')) {
-      throw new ConflictException('Could not capture the complete log. Refresh and try again.');
+      throw new ConflictException({
+        message: 'Could not capture the complete log. Refresh and try again.',
+        code: 'LOG_CAPTURE_INCOMPLETE',
+      });
     }
     return { path, start: '1', end: String(total), total: String(total), log: [{ line: lines }] };
   }

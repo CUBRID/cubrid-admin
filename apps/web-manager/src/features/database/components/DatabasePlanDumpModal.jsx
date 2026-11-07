@@ -207,7 +207,7 @@ export default function DatabasePlanDumpModal() {
 
         ) : (
           /* Results View */
-          <div className="flex flex-col -m-5 h-[560px]">
+          <div className="flex flex-col -m-5 h-[min(560px,calc(90vh-146px))]">
             {/* Stats Bar */}
             {Object.keys(stats).length > 0 && (
               <div className="grid grid-cols-4 border-b border-slate-100 dark:border-white/5 shrink-0">
