@@ -11,6 +11,8 @@ import { addHost,
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
+import { hostApi } from '../hostApi';
+import { connectedHostWithSameServer } from '../connectionTestGuard';
 import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
@@ -31,8 +33,10 @@ export default function AddHostModal({ isOpen, onClose }) {
     groupId: '',
   });
   const [errors, setErrors] = useState({});
+  // Test Connection's outcome: null, { testing }, { ok }, or { error }.
+  const [connectionTest, setConnectionTest] = useState(null);
   const dispatch = useDispatch();
-  const { loading, error: apiError, initialHostData, hostGroups } = useSelector((state) => state.host, shallowEqual);
+  const { loading, error: apiError, initialHostData, hostGroups, hosts, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   // Opened from an HA follow-up of a bulk-login result dialog, which stays
   // open (z-[2100]) underneath — stack above it like the HA modals do.
   const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
@@ -59,6 +63,7 @@ export default function AddHostModal({ isOpen, onClose }) {
         setFormData({ id: '', address: '', port: '8001', password: '', alias: '', groupId: '' });
       }
       setErrors({});
+      setConnectionTest(null);
     }
   }, [isOpen, initialHostData]);
 
@@ -69,6 +74,7 @@ export default function AddHostModal({ isOpen, onClose }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
     if (apiError) dispatch(clearHostError());
+    setConnectionTest(null);
   };
 
   const validate = () => {
@@ -92,6 +98,28 @@ export default function AddHostModal({ isOpen, onClose }) {
     ...formData,
     port: Number(formData.port),
   });
+
+  // Off while a connected host has the same address, port and CMS user: the
+  // test login could end its session (the server refuses it too).
+  const sameServerConnected = Boolean(connectedHostWithSameServer(hosts, authorizedHosts, formData));
+
+  // Logs in to CMS with what is typed and out again, saving nothing. Only
+  // the connection fields need to be filled in.
+  const handleTestConnection = async () => {
+    const connectionFields = ['address', 'port', 'id', 'password'];
+    const errs = Object.fromEntries(Object.entries(validate()).filter(([field]) => connectionFields.includes(field)));
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setConnectionTest({ testing: true });
+    try {
+      await hostApi.testConnection(buildPayload());
+      setConnectionTest({ ok: true });
+    } catch (err) {
+      setConnectionTest({ error: err?.response?.data?.message || err?.message || CM.hostLoginFailedMsg });
+    }
+  };
 
   // Save only — persists the host without attempting a CMS login.
   const handleSave = async () => {
@@ -169,11 +197,12 @@ export default function AddHostModal({ isOpen, onClose }) {
       submitDisabled={loading}
       title={CM.newConnection}
       icon="add_link"
-      maxWidth="max-w-[500px]"
+      maxWidth="max-w-[580px]"
       loading={loading}
       testId="add-host"
       footer={
-        <>
+        // Wraps instead of clipping when the window is narrow.
+        <div className="flex flex-wrap justify-end gap-3 w-full">
           <Button data-testid="add-host-cancel-btn" variant="secondary" onClick={handleClose} disabled={loading}>
             {CM.cancel}
           </Button>
@@ -197,7 +226,7 @@ export default function AddHostModal({ isOpen, onClose }) {
           >
             {CM.testConnectionAndSave}
           </Button>
-        </>
+        </div>
       }
     >
       <div className="space-y-4 p-1">
@@ -306,6 +335,39 @@ export default function AddHostModal({ isOpen, onClose }) {
               required
             />
           </div>
+        </div>
+
+        {/* Tests the connection fields above, so it sits under them. */}
+        <div className="px-1 space-y-3">
+          <div className="flex justify-end">
+            {/* A disabled button gets no hover, so the reason hangs off this wrapper. */}
+            <span title={sameServerConnected ? CM.testConnectionSameServerConnectedHint : undefined}>
+              <Button
+                data-testid="add-host-test-connection-btn"
+                variant="secondary"
+                onClick={handleTestConnection}
+                loading={!!connectionTest?.testing}
+                disabled={loading || sameServerConnected}
+                icon="network_check"
+                className={sameServerConnected ? 'pointer-events-none' : ''}
+              >
+                {CM.testConnection}
+              </Button>
+            </span>
+          </div>
+          {connectionTest && !connectionTest.testing && (
+            <div
+              data-testid="add-host-test-result"
+              className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${connectionTest.ok
+                ? 'bg-emerald-500/5 border-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                : 'bg-rose-500/5 border-rose-500/15 text-rose-500'}`}
+            >
+              <Icon name={connectionTest.ok ? 'check_circle' : 'error_outline'} size="sm" weight={300} className="shrink-0 mt-0.5" />
+              <p className="text-13 font-medium flex-1 min-w-0 break-words leading-relaxed">
+                {connectionTest.ok ? CM.connectionTestSucceededMsg : CM.connectionTestFailedMsg(connectionTest.error)}
+              </p>
+            </div>
+          )}
         </div>
 
       </div>

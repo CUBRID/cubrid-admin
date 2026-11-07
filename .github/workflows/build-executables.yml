@@ -35,7 +35,7 @@ jobs:
 
       # Artifact: dist uploaded only for direct pushes to develop in the official repository.
       - name: Upload dist
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && github.repository == 'cubrid/cubrid-webmanager'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && github.repository == 'CUBRID/cubrid-admin'
         uses: actions/upload-artifact@v4
         with:
           name: cubrid-webmanager-dist

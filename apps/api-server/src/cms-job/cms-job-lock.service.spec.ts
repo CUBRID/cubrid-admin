@@ -138,4 +138,31 @@ describe('CmsJobLockService', () => {
       expect(hostService.findHostInternal).toHaveBeenCalledWith(mockUserId, mockHostUid);
     });
   });
+  describe('activeJobDatabasesForHost', () => {
+    const job = (type: string, dbname: string, payload: object, status = 'running') => ({ jobId: 'j', type, dbname, payload, status });
+
+    it('names both databases of a copy (source and new) and of a rename (old and new name)', async () => {
+      store.readGlobalOperations.mockResolvedValue({
+        [buildOperationKey(hostKey, 'newdb')]: { jobId: 'copy-1', userKey: 'uk' },
+        [buildOperationKey(hostKey, 'olddb')]: { jobId: 'rename-1', userKey: 'uk' },
+      });
+      store.getJob.mockImplementation(async (_uk: string, jobId: string) => (jobId === 'copy-1'
+        ? job('copy', 'srcdb', { srcdbname: 'srcdb', destdbname: 'newdb' })
+        : job('rename', 'olddb', { rename: 'renamed' })) as never);
+
+      const busy = await service.activeJobDatabasesForHost(mockUserId, mockHostUid);
+
+      expect(Object.fromEntries(busy)).toEqual({ srcdb: 'copy-1', newdb: 'copy-1', olddb: 'rename-1', renamed: 'rename-1' });
+    });
+
+    it('leaves out finished jobs and other hosts', async () => {
+      store.readGlobalOperations.mockResolvedValue({
+        [buildOperationKey(hostKey, 'donedb')]: { jobId: 'done', userKey: 'uk' },
+        [buildOperationKey('other-host:9999', 'demodb')]: { jobId: 'other', userKey: 'uk' },
+      });
+      store.getJob.mockResolvedValue(job('load', 'donedb', {}, 'succeeded') as never);
+
+      expect((await service.activeJobDatabasesForHost(mockUserId, mockHostUid)).size).toBe(0);
+    });
+  });
 });

@@ -4,6 +4,19 @@ import { Response } from 'express';
 import { AppError } from './app-error';
 import { StandardResponse } from '@api-interfaces';
 
+const INTERNAL_ERROR_NOTE = 'An internal server error occurred.';
+
+/** What a client maps an error by when it is not an AppError. */
+const internalErrorData = () => ({
+  type: '/errors/internal/internal_error',
+  code: 'INTERNAL_ERROR',
+  message: INTERNAL_ERROR_NOTE,
+  detail: INTERNAL_ERROR_NOTE,
+});
+
+// Fields a thrown HttpException may carry for the client, besides its message.
+const HTTP_EXCEPTION_FIELDS = ['reason', 'jobId', 'maxLines', 'maxBytes'];
+
 /**
  * Global exception filter for handling all unhandled exceptions across the application.
  * It catches various types of exceptions (HttpException, AppError, and others)
@@ -30,19 +43,26 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       if (status >= 500) {
-        note = 'An internal server error occurred.';
-        errorData = { message: note };
-      } else if (typeof exceptionResponse === 'string') {
-        note = exceptionResponse;
-      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        const responseObj = exceptionResponse as any;
-        note =
-          responseObj.message || responseObj.detail || exception.message || 'The request could not be processed.';
-        if (responseObj.detail || responseObj.message) {
-          errorData = { message: responseObj.message || responseObj.detail };
-        }
+        note = INTERNAL_ERROR_NOTE;
+        errorData = internalErrorData();
       } else {
-        note = exception.message || 'The request could not be processed.';
+        const responseObj =
+          typeof exceptionResponse === 'object' && exceptionResponse !== null ? (exceptionResponse as any) : {};
+        note =
+          (typeof exceptionResponse === 'string' ? exceptionResponse : undefined) ||
+          responseObj.message ||
+          responseObj.detail ||
+          exception.message ||
+          'The request could not be processed.';
+        // A code the throw site set (e.g. JOB_NOT_FOUND), else the HTTP status name.
+        const code = typeof responseObj.code === 'string' ? responseObj.code : HttpStatus[status] ?? `HTTP_${status}`;
+        errorData = {
+          type: `/errors/http/${code.toLowerCase()}`,
+          code,
+          message: note,
+          detail: note,
+          ...Object.fromEntries(HTTP_EXCEPTION_FIELDS.filter((k) => k in responseObj).map((k) => [k, responseObj[k]])),
+        };
       }
 
       this.logger.error(
@@ -77,7 +97,8 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       // Do not expose raw internal exception messages to clients
-      note = 'An internal server error occurred.';
+      note = INTERNAL_ERROR_NOTE;
+      errorData = internalErrorData();
 
       this.logger.error(
         `Unhandled Error: ${exception?.message || 'No message'}`,

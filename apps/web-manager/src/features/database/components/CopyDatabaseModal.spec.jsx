@@ -48,7 +48,7 @@ beforeEach(() => {
         ...databaseCoreReducer(undefined, { type: 'init' }),
         activeHostUid: 'host-1',
         selectedDatabase: 'demodb',
-        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }] },
+        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }, { dbname: 'otherdb', dbdir: '/db/otherdb' }, { dbname: 'repdb', cmsListed: false }] },
         loggedInDatabases: ['host-1:demodb', 'host-1:newdb', 'host-1:otherdb'],
       },
       databaseUI: { ...uiReducer(undefined, { type: 'init' }), isCopyDatabaseModalOpen: true },
@@ -179,4 +179,31 @@ it.each([false, true])('blocks the source name before submission (individual cop
   await typeNewName('clone');
   expect(input.getAttribute('aria-invalid')).toBeNull();
   expect(execute().disabled).toBe(false);
+});
+
+it('refuses a new name that createdb would reject (18 characters and more, a digit first)', async () => {
+  await render();
+  await typeNewName('a'.repeat(18));
+  expect(execute().disabled).toBe(true);
+  expect(container.textContent).toContain('At most 17 characters');
+  await typeNewName('2copy');
+  expect(execute().disabled).toBe(true);
+  expect(container.textContent).toContain('Must start with a letter');
+  await typeNewName('a'.repeat(17));
+  expect(execute().disabled).toBe(false);
+});
+
+it("refuses a new name the host's database list already has, replica ones too (case-sensitive, as the engine)", async () => {
+  await render();
+  for (const taken of ['otherdb', 'repdb']) {
+    await typeNewName(taken);
+    expect(execute().disabled).toBe(true);
+    expect(container.textContent).toContain('A database with this name already exists on this host');
+  }
+  await typeNewName('demodb');
+  expect(execute().disabled).toBe(true);
+  expect(container.textContent).not.toContain('already exists');
+  await typeNewName('OtherDB');
+  expect(execute().disabled).toBe(false);
+  expect(container.textContent).not.toContain('already exists');
 });

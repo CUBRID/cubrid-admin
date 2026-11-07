@@ -1,4 +1,5 @@
 import { RefreshingOverlay } from '../../../components/ds/feedback/RefreshingOverlay';
+import { isBlankTreeClick } from '../../../components/domain/tree/isBlankTreeClick';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import {
@@ -7,8 +8,6 @@ import {
   openDeleteHostModal,
   openEditHostModal,
   openChangePasswordModal,
-  revokeHostLogin,
-  forgetHostSession,
   loadHosts,
   openServerVersionModal,
   openCmsUserManagementModal,
@@ -80,6 +79,7 @@ import {
 import { setActiveMainTab, openTab, closeHostTabs, showStatusModal } from '../layoutSlice';
 import { fetchDatabaseUsers, openCreateUserModal, openEditUserModal, openDropUserModal } from '../../user/userSlice';
 import { clearHostSummary } from '../../server/globalMonitoringSlice';
+import { connectedHostUids, disconnectHosts } from '../../host/disconnectHosts';
 import { MenuItem, MenuDivider, SubMenu } from '../../../components/common/DropdownMenu';
 import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { SplitPane } from '../../../components/ds/layout/SplitPane';
@@ -561,6 +561,30 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     setContextMenu({ mouseX: e.clientX, mouseY: e.clientY, server: serverName, hostUid, alias });
   };
 
+  // Disconnect, as the host menu's Disconnect does for one host.
+  const disconnectHost = (hostUid) => disconnectHosts(dispatch, [hostUid], selectedHostUid);
+
+  // The connected ones of the selected hosts; the others are skipped.
+  const handleBulkLogoutSelected = () => {
+    const uids = connectedHostUids(bulkHostContextMenu?.hostUids, authorizedHosts);
+    setBulkHostContextMenu(null);
+    if (uids.length === 0) return;
+    const names = uids.map((uid) => {
+      const host = hosts.find((h) => h.uid === uid);
+      return host?.alias || host?.id || uid;
+    });
+    requestActionConfirm({
+      title: CM.logoutSelectedHosts,
+      description: CM.confirmDisconnectHostsDesc(names),
+      confirmLabel: CM.disconnect,
+      variant: 'danger',
+      run: () => {
+        disconnectHosts(dispatch, uids, selectedHostUid);
+        setSelectedHostUids(new Set());
+      },
+    });
+  };
+
   const handleBulkLoginSelected = () => {
     const uids = (bulkHostContextMenu?.hostUids || []).filter((uid) => !authorizedHosts.includes(uid));
     setBulkHostContextMenu(null);
@@ -983,10 +1007,10 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
               id="host-section"
               onContextMenu={handleHostRootContextMenu}
               onClick={(e) => {
-                // Clicking empty space (not bubbled from a host/group row)
+                // Clicking blank space (anywhere but a host or group row)
                 // clears a shift/cmd-click multi-selection, instead of
                 // requiring each host to be cmd/ctrl-clicked off one by one.
-                if (e.target === e.currentTarget && selectedHostUids.size > 0) {
+                if (isBlankTreeClick(e) && selectedHostUids.size > 0) {
                   setSelectedHostUids(new Set());
                 }
               }}
@@ -1131,6 +1155,12 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
 
                     <div
                       className="flex-1 overflow-y-auto px-4 pb-4 relative min-h-[200px]"
+                      onClick={(e) => {
+                        // Blank space ends the database or broker multi-selection.
+                        if (!isBlankTreeClick(e)) return;
+                        if (selectedDbNames.size > 0) setSelectedDbNames(new Set());
+                        if (selectedBrokerNames.size > 0) setSelectedBrokerNames(new Set());
+                      }}
                       onContextMenu={(e) => {
                         // Tree rows stopPropagation() on their own context menu (see
                         // TreeNode.jsx), so this only ever fires for genuinely blank
@@ -1284,17 +1314,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                   description: CM.confirmDisconnectHostDesc(alias),
                   confirmLabel: CM.disconnect,
                   variant: 'danger',
-                  run: () => {
-                    dispatch(revokeHostLogin(hostUid));
-                    dispatch(forgetHostSession(hostUid));
-                    dispatch(closeHostTabs(hostUid));
-                    if (selectedHostUid === hostUid) {
-                      dispatch(setSelectedHost(null));
-                      dispatch(resetDatabaseState(hostUid));
-                      dispatch(resetBrokerState(hostUid));
-                    }
-                    dispatch(clearHostSummary(hostUid));
-                  },
+                  run: () => disconnectHost(hostUid),
                 });
               }}
             />
@@ -1381,6 +1401,18 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             <Icon name="dns" size="xs" className="opacity-30" weight={300} />
           </div>
           <MenuItem icon="login" label={CM.loginSelectedHosts} onClick={handleBulkLoginSelected} />
+          {(() => {
+            const noneConnected = connectedHostUids(bulkHostContextMenu.hostUids, authorizedHosts).length === 0;
+            return (
+              <MenuItem
+                icon="power_settings_new"
+                label={CM.logoutSelectedHosts}
+                disabled={noneConnected}
+                title={noneConnected ? CM.noConnectedHostSelectedHint : undefined}
+                onClick={handleBulkLogoutSelected}
+              />
+            );
+          })()}
           <SubMenu icon="drive_file_move" label={CM.moveToGroupMenu}>
             <MenuItem icon="folder_off" label={CM.ungroupedHosts} onClick={() => handleBulkMoveSelected(UNGROUPED_GROUP_ID)} />
             {orderedGroupEntries(hostGroups)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { closeAddVolumeModal } from '../databaseSlice';
+import { closeAddVolumeModal, fetchDatabaseSpaceInfo, volumesChanged } from '../databaseSlice';
 import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
@@ -20,6 +20,8 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { checkPositiveNumber } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 
 const PURPOSE_OPTIONS = [
   {
@@ -80,6 +82,8 @@ export default function AddVolumeModal() {
   };
 
   const numberOfPages = Math.floor(sizeMB * 1024 / 16);
+  // addvoldb refuses 0 or less (util_cs.c addvoldb); there is no upper limit.
+  const sizeIssue = checkPositiveNumber(sizeMB);
   useEffect(() => {
     if (isAddVolumeModalOpen && selectedHostUid && selectedDatabase) {
       resetAction();
@@ -116,10 +120,17 @@ export default function AddVolumeModal() {
         numberofpages: numberOfPages.toString(),
         size_need_mb: `${sizeMB.toFixed(3)}(MB)`
       };
+      const hostUid = selectedHostUid;
+      const dbname = selectedDatabase;
       await runJob(
-        () => databaseJobApi.submitAddVol(selectedHostUid, selectedDatabase, payload),
+        () => databaseJobApi.submitAddVol(hostUid, dbname, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
+      // The database has a new volume: re-read its space info (DB dashboard,
+      // space and volume screens) and the host dashboard's volume table,
+      // also when this job was backgrounded.
+      dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
+      dispatch(volumesChanged(hostUid));
       // This job may have been backgrounded (and the modal reopened for a
       // different database) by the time it settles — its outcome then
       // belongs to the global job tray, not this now-reused modal instance.
@@ -188,7 +199,7 @@ export default function AddVolumeModal() {
       maxWidth="560px"
       testId="add-volume"
       onSubmit={handleAdd}
-      submitDisabled={!path || !sizeMB || fetchingStatus}
+      submitDisabled={!path || Boolean(sizeIssue) || fetchingStatus}
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="add-volume-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
@@ -197,7 +208,7 @@ export default function AddVolumeModal() {
             variant="primary"
             onClick={handleAdd}
             icon="add_to_drive"
-            disabled={!path || !sizeMB || fetchingStatus}
+            disabled={!path || Boolean(sizeIssue) || fetchingStatus}
             className="min-w-[140px]"
           >
             {CM.addVolume}
@@ -280,6 +291,9 @@ export default function AddVolumeModal() {
               label={CM.customCapacity}
               value={displaySize}
               onChange={(e) => handleDisplaySizeChange(e.target.value)}
+              min={0}
+              error={inputIssueText(sizeIssue, CM)}
+              data-testid="add-volume-size-input"
               icon="memory"
               suffix={
                 <button

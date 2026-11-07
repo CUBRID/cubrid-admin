@@ -1,5 +1,5 @@
 import { User } from '@type/index';
-import { moveHostToGroup, findHostRef, isValidGroupNameStart } from './host-group.util';
+import { moveHostToGroup, findHostRef, isValidGroupNameStart, toSafeHost } from './host-group.util';
 
 function makeUser(groups: User['host_groups']): User {
   return { host_groups: groups } as User;
@@ -117,5 +117,19 @@ describe('isValidGroupNameStart', () => {
     expect(isValidGroupNameStart('Production')).toBe(true);
     expect(isValidGroupNameStart('1st-floor')).toBe(true);
     expect(isValidGroupNameStart('운영 클러스터')).toBe(true);
+  });
+});
+
+describe('toSafeHost', () => {
+  const host = { uid: 'h1', alias: 'a', address: '10.0.0.1', port: 8001, id: 'admin' };
+
+  it('says whether a password is saved without sending it', () => {
+    const withPassword = toSafeHost({ ...host, password: 'secret', token: 't' } as never);
+    expect(withPassword).toMatchObject({ uid: 'h1', hasPassword: true });
+    expect(withPassword).not.toHaveProperty('password');
+    expect(withPassword).not.toHaveProperty('token');
+    // A host imported from a file comes in without one.
+    expect(toSafeHost({ ...host, password: '' } as never).hasPassword).toBe(false);
+    expect(toSafeHost({ ...host } as never).hasPassword).toBe(false);
   });
 });

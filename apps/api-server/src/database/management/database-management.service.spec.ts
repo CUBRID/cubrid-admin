@@ -321,7 +321,6 @@ describe('DatabaseManagementService', () => {
         estimate: '1000',
         prefix: 'backup',
         cach: '100',
-        lofile: '10',
       };
 
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
@@ -343,11 +342,27 @@ describe('DatabaseManagementService', () => {
           estimate: '1000',
           prefix: 'backup',
           cach: '100',
-          lofile: '10',
         }),
           expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
+
+    it.each([['no prefix', undefined], ['an empty prefix', '']])(
+      'sends the database name as the prefix for %s, so CMS finds the result log of an HA database',
+      async (_case, prefix) => {
+        // CMS runs an HA database's unloaddb as db@host; without a prefix
+        // the engine names the files db@host_..., while CMS reads <db>_....
+        cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+        await service.unloadDatabase(mockUserId, mockHostUid, mockDbname, { ...baseRequest, prefix });
+
+        expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ task: 'unloaddb', prefix: mockDbname }),
+          expect.objectContaining({ timeoutMs: expect.any(Number) })
+        );
+      }
+    );
 
     it('should throw InvalidParameter error when both isSchemaIncluded and isDataIncluded are false', async () => {
       const request: UnloadDatabaseRequest = {
@@ -1024,7 +1039,12 @@ describe('DatabaseManagementService', () => {
 
       const warnings = await service.finishCopy(mockUserId, mockHostUid, { ...copyReq, move: 'y' } as any);
 
-      expect(warnings).toEqual([expect.stringContaining('could not be updated')]);
+      expect(warnings).toEqual([expect.objectContaining({
+        code: 'RENAME_AUTOSTART_NOT_UPDATED',
+        oldName: 'srcdb',
+        newName: 'newdb',
+        message: expect.stringContaining('could not be updated'),
+      })]);
     });
   });
 
@@ -1113,7 +1133,7 @@ describe('DatabaseManagementService', () => {
 
     it('passes on the warnings of the cubrid.conf rename (e.g. a [@new] section already there)', async () => {
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
-      databaseConfigService.renameAutoStart.mockResolvedValueOnce(['kept [@old]']);
+      databaseConfigService.renameAutoStart.mockResolvedValueOnce([{ code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new', message: 'kept [@old]' }]);
 
       const result = await service.renameDatabase(mockUserId, mockHostUid, mockDbname, {
         rename: 'renamed_db', exvolpath: 'none', advanced: 'off', forcedel: 'n',
@@ -1121,6 +1141,7 @@ describe('DatabaseManagementService', () => {
 
       expect(databaseConfigService.renameAutoStart).toHaveBeenCalledWith(mockUserId, mockHostUid, mockDbname, 'renamed_db');
       expect(result.warnings).toEqual(['kept [@old]']);
+      expect(result.warningDetails).toEqual([{ code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new' }]);
     });
 
     it('leaves cubrid.conf alone when nothing in it names the database', async () => {

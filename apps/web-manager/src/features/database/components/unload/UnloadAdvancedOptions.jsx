@@ -2,8 +2,10 @@ import { Checkbox } from '../../../../components/ds/forms/Checkbox';
 import { Input } from '../../../../components/ds/forms/Input';
 import { SectionHeader } from '../../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../../constants/useCM';
+import { UNLOAD_CACHED_PAGES_MIN, UNLOAD_ESTIMATED_SIZE_MIN } from '@api-interfaces';
+import { inputIssueText } from '../../inputIssueText';
 
-export default function UnloadAdvancedOptions({ formData, handleInputChange }) {
+export default function UnloadAdvancedOptions({ formData, handleInputChange, numberIssues = {} }) {
   const CM = useCM();
 
   const isRefDisabled = formData.schemaScope !== 'selected';
@@ -11,9 +13,8 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange }) {
   const optionFields = [
     { label: CM.prefixOutputFiles, name: 'prefixOutputFile', useName: 'usePrefixOutputFile', type: 'text' },
     { label: CM.fileForHash, name: 'fileForHash', useName: 'useFileForHash', type: 'text' },
-    { label: CM.numCachedPages, name: 'cachedPages', useName: 'useCachedPages', type: 'number' },
-    { label: CM.estimatedInstances, name: 'estimateInstances', useName: 'useEstimateInstances', type: 'number' },
-    { label: CM.loFileCountPerDir, name: 'loFileDirectory', useName: 'useLoFileDirectory', type: 'text' },
+    { label: CM.numCachedPages, name: 'cachedPages', useName: 'useCachedPages', type: 'number', min: UNLOAD_CACHED_PAGES_MIN },
+    { label: CM.estimatedInstances, name: 'estimateInstances', useName: 'useEstimateInstances', type: 'number', min: UNLOAD_ESTIMATED_SIZE_MIN },
   ];
 
   const handleCheckboxToggle = (e, useName, _valueName) => {
@@ -76,6 +77,10 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange }) {
               value={formData[field.name]}
               onChange={handleInputChange}
               disabled={!formData[field.useName]}
+              min={field.min}
+              step={field.type === 'number' ? 1 : undefined}
+              error={formData[field.useName] ? inputIssueText(numberIssues[field.name], CM) : undefined}
+              data-testid={`unload-${field.name}-input`}
               size="md"
               className="w-full font-mono text-14"
             />

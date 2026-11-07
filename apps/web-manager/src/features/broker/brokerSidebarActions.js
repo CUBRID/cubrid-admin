@@ -1,4 +1,5 @@
 import {
+  markBrokersRestarting,
   fetchBrokerList,
   startBroker,
   stopBroker,
@@ -58,13 +59,21 @@ export const stopAllBrokersAndRefresh = (hostUid) => async (dispatch) => {
   dispatch(refreshAfterBrokerAction(hostUid));
 };
 
-export const restartAllBrokersAndRefresh = (hostUid) => async (dispatch) => {
-  await dispatch(stopAllBrokers(hostUid)).unwrap();
+export const restartAllBrokersAndRefresh = (hostUid) => async (dispatch, getState) => {
+  // The running ones keep showing ON until the restart ends.
+  const running = (getState().broker.navigatorBrokersByHost?.[hostUid] || [])
+    .filter((broker) => broker.state === 'ON')
+    .map((broker) => broker.name);
+  dispatch(markBrokersRestarting({ hostUid, names: running, restarting: true }));
+  let stopped = false;
   try {
+    await dispatch(stopAllBrokers(hostUid)).unwrap();
+    stopped = true;
     await dispatch(startAllBrokers(hostUid)).unwrap();
   } finally {
+    dispatch(markBrokersRestarting({ hostUid, names: running, restarting: false }));
     // Also after a failed start: the brokers really are stopped now.
-    dispatch(refreshAfterBrokerAction(hostUid));
+    if (stopped) dispatch(refreshAfterBrokerAction(hostUid));
   }
 };
 

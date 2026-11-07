@@ -34,6 +34,9 @@ export interface ConfTextSection {
 export interface ConfTextSyntaxError {
   lineNo: number;
   message: string;
+  /** SYNTAX_LINE_TOO_LONG ({ max } bytes) or SYNTAX_NOT_KEY_VALUE. */
+  code: string;
+  params?: Record<string, unknown>;
 }
 
 export interface ParsedConfText {
@@ -138,7 +141,12 @@ export function parseConfText(input: string | string[]): ParsedConfText {
     const accumulated = pending + stripped;
     // fgets fills a byte buffer, so a non-ASCII line hits the limit sooner.
     if (utf8Length(pending) + utf8Length(raw) > INI_MAX_LINE_LENGTH) {
-      syntaxErrors.push({ lineNo, message: `Line is longer than the engine's ${INI_MAX_LINE_LENGTH}-byte limit` });
+      syntaxErrors.push({
+        lineNo,
+        code: 'SYNTAX_LINE_TOO_LONG',
+        params: { max: INI_MAX_LINE_LENGTH },
+        message: `Line is longer than the engine's ${INI_MAX_LINE_LENGTH}-byte limit`,
+      });
       pending = '';
       continue;
     }
@@ -162,7 +170,11 @@ export function parseConfText(input: string | string[]): ParsedConfText {
 
     const kv = parseKeyValue(line);
     if (!kv) {
-      syntaxErrors.push({ lineNo: pendingStart, message: 'Not a valid "key = value" line, section header, or # comment' });
+      syntaxErrors.push({
+        lineNo: pendingStart,
+        code: 'SYNTAX_NOT_KEY_VALUE',
+        message: 'Not a valid "key = value" line, section header, or # comment',
+      });
       continue;
     }
     let value = iniTrim(kv.value);

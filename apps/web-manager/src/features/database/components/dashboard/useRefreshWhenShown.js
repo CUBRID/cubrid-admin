@@ -10,7 +10,14 @@ import { useEffect, useRef } from 'react';
  * can take tens of seconds on a database with many locks, so in that case
  * only an expand refreshes here.
  */
-export function useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh) {
+export function useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections, section }, refresh) {
+  // Tells the dashboard's own refresh (fetchDashboardData) which sections
+  // are collapsed, so it does not read data nobody sees.
+  useEffect(() => {
+    if (!collapsedSections || !section) return undefined;
+    collapsedSections.current[section] = isCollapsed;
+    return () => { delete collapsedSections.current[section]; };
+  }, [collapsedSections, section, isCollapsed]);
   const shownRef = useRef({ active: isTabActive, expanded: !isCollapsed });
   useEffect(() => {
     const was = shownRef.current;

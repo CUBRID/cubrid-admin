@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
 import { IsArray, IsIn, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import { AUTO_ADD_PAGES_MIN, AUTO_ADD_WARN_RATIO, checkIntInRange, checkNumberInRange } from '@api-interfaces';
+import { PassesCheck } from './passes-check.decorator';
+
+// Checked only while that kind is ON; OFF keeps whatever is stored.
+const whenOn = (kind: 'data' | 'index', check: (v: unknown) => ReturnType<typeof checkIntInRange>) =>
+  (v: unknown, o: Record<string, unknown>) => (o[kind] === 'ON' ? check(v) : null);
+const checkWarnRatio = (v: unknown) => checkNumberInRange(v, AUTO_ADD_WARN_RATIO.min, AUTO_ADD_WARN_RATIO.max);
+const checkExtPages = (v: unknown) => checkIntInRange(v, AUTO_ADD_PAGES_MIN);
 
 /**
  * Validated request bodies for DatabaseConfigController. Kept as
@@ -95,12 +103,16 @@ export class SetAutoAddVolDto {
   @IsNotEmpty()
   data: string;
 
+  // CMS's ranges, checked while the kind is ON (CMS adds nothing below
+  // AUTO_ADD_PAGES_MIN pages and caps the ratio at 0.5).
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('autoAddWarnRatio', whenOn('data', checkWarnRatio))
   data_warn_outofspace: string;
 
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('autoAddPages', whenOn('data', checkExtPages))
   data_ext_page: string;
 
   @IsString()
@@ -109,10 +121,12 @@ export class SetAutoAddVolDto {
 
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('autoAddWarnRatio', whenOn('index', checkWarnRatio))
   index_warn_outofspace: string;
 
   @IsString()
   @IsNotEmpty()
+  @PassesCheck('autoAddPages', whenOn('index', checkExtPages))
   index_ext_page: string;
 }
 

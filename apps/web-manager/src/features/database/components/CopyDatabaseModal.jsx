@@ -21,6 +21,8 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
+import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
@@ -186,7 +188,10 @@ export default function CopyDatabaseModal() {
   }));
   const individualVolumesValid = !volInfoLoading && canCopyIndividualVolumes(copyVolumes);
   const isDestinationSameAsSource = !!formData.destName.trim() && formData.destName.trim() === selectedDatabase;
-  const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource &&
+  const destNameIssue = formData.destName.trim()
+    ? newDbNameIssue(formData.destName.trim(), takenDbNames(databases, selectedDatabase))
+    : null;
+  const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource && !destNameIssue &&
     (!formData.copyIndividual || individualVolumesValid);
 
   if (!isCopyDatabaseModalOpen) return null;
@@ -436,7 +441,7 @@ export default function CopyDatabaseModal() {
                 <Input
                   data-testid="copy-database-dest-name-input"
                   value={formData.destName}
-                  error={isDestinationSameAsSource ? CM.copyDestinationSameAsSource : undefined}
+                  error={isDestinationSameAsSource ? CM.copyDestinationSameAsSource : inputIssueText(destNameIssue, CM) ?? undefined}
                   onChange={e => handleInputChange('destName', e.target.value)}
                   placeholder="e.g. demodb_copy"
                   autoFocus

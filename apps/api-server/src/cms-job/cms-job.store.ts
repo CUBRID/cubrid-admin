@@ -214,10 +214,19 @@ export class CmsJobStore {
    * it — reconciled against CMS's real state, or given up on) and releases
    * its operation lock, exactly like the tail end of a normal job run would.
    */
-  async finalizeOrphanedJob(userKey: string, job: CmsJobRecord): Promise<void> {
+  async finalizeOrphanedJob(
+    userKey: string,
+    job: CmsJobRecord,
+    underOpsLock: (fn: () => Promise<void>) => Promise<unknown> = (fn) => fn()
+  ): Promise<void> {
     await this.saveJob(userKey, job);
-    await this.removeJobIdFromOperations(userKey, job.jobId);
-    await this.removeJobIdFromGlobalOperations(job.jobId);
+    // Read and written back under the lock createJob takes to add a lock
+    // entry: a followed job can end minutes after the restart, and a lock
+    // written meanwhile for another job must not be dropped with this one's.
+    await underOpsLock(async () => {
+      await this.removeJobIdFromOperations(userKey, job.jobId);
+      await this.removeJobIdFromGlobalOperations(job.jobId);
+    });
   }
 
   private async removeJobIdFromOperations(userKey: string, jobId: string): Promise<void> {

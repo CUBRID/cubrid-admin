@@ -2,6 +2,7 @@ import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.servic
 import { BaseService, HandleCmsErrors } from '@common';
 import { HostService } from '@host';
 import { Injectable } from '@nestjs/common';
+import { assertCmsAdminHost } from './cms-admin';
 import {
   AddDbmtUserClientResponse,
   AddDbmtUserRequest,
@@ -58,6 +59,7 @@ export class CmsUserService extends BaseService {
     hostUid: string,
     request: AddDbmtUserRequest
   ): Promise<AddDbmtUserClientResponse> {
+    assertCmsAdminHost(await this.hostService.findHostInternal(userId, hostUid));
     const cmsRequest: AddDbmtUserCmsRequest = {
       task: 'adddbmtuser',
       targetid: request.targetid,
@@ -107,6 +109,7 @@ export class CmsUserService extends BaseService {
     hostUid: string,
     request: UpdateDbmtUserRequest
   ): Promise<UpdateDbmtUserClientResponse> {
+    assertCmsAdminHost(await this.hostService.findHostInternal(userId, hostUid));
     const cmsRequest: UpdateDbmtUserCmsRequest = {
       task: 'updatedbmtuser',
       targetid: request.targetid,
@@ -136,6 +139,7 @@ export class CmsUserService extends BaseService {
     hostUid: string,
     targetid: string
   ): Promise<DeleteDbmtUserClientResponse> {
+    assertCmsAdminHost(await this.hostService.findHostInternal(userId, hostUid));
     const cmsRequest: DeleteDbmtUserCmsRequest = {
       task: 'deletedbmtuser',
       targetid,
@@ -162,6 +166,9 @@ export class CmsUserService extends BaseService {
     targetid: string,
     newpassword: string
   ): Promise<SetDbmtPasswdClientResponse> {
+    // Every account may change its own password (the host's Change Password);
+    // another user's password takes the admin account.
+    assertCmsAdminHost(await this.hostService.findHostInternal(userId, hostUid), { targetid });
     const cmsRequest: SetDbmtPasswdCmsRequest = {
       task: 'setdbmtpasswd',
       targetid,

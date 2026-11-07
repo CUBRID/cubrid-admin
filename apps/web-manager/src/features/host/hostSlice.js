@@ -6,7 +6,11 @@ import { fetchBrokerList } from '../broker/brokerSlice';
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
 import { HA_NODE_STEP } from './haNodeStep';
 import { hostLoginErrorMessage } from './hostLoginError';
+import { cmsUserErrorMessage } from './cmsUserError';
 import { getCM, getStoredLocale } from '../../constants/useCM';
+
+// The stored locale follows the account's language (userSlice stores it).
+const uiLabels = () => getCM(getStoredLocale());
 import { findHaPeersNeedingMerge,
   findRegisteredHaPeersInSameGroup,
   findUndiscoveredHaPeers,
@@ -213,7 +217,7 @@ export const setHostPassword = createAsyncThunk(
       await hostApi.setHostPassword(hostUid, payload);
       return hostUid;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to set password');
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to set password'));
     }
   }
 );
@@ -272,14 +276,20 @@ export const stopService = createAsyncThunk(
   }
 );
 
+// loginToHost takes a host uid, or { hostUid, changes } to log in with changed
+// settings that the server saves only if the login succeeds.
+const loginHostUid = (arg) => (typeof arg === 'string' ? arg : arg?.hostUid);
+
 // Async thunk to explicitly login/forward to a specific host
 export const loginToHost = createAsyncThunk(
   'host/loginToHost',
-  async (hostUid, { rejectWithValue, getState }) => {
+  async (arg, { rejectWithValue, getState, dispatch }) => {
+    const hostUid = loginHostUid(arg);
+    const changes = typeof arg === 'string' ? undefined : arg?.changes;
     // Same locale source as useCM: the message is stored as shown.
     const CM = getCM(getState().user?.preferences?.uiLocale ?? getStoredLocale());
     try {
-      const response = await hostApi.loginToHost(hostUid);
+      const response = changes ? await hostApi.connectHost(hostUid, changes) : await hostApi.loginToHost(hostUid);
       // The API returns { success: true, isHA: boolean, ... }
       if (
         response === false ||
@@ -288,6 +298,8 @@ export const loginToHost = createAsyncThunk(
       ) {
         return rejectWithValue(CM.hostLoginFailedMsg);
       }
+      // Logged in and saved, but the server could not read the HA details in time.
+      if (response?.haInfoUnavailable) dispatch(refreshHaInfo(hostUid));
       return { hostUid, ...response };
     } catch (err) {
       return rejectWithValue(hostLoginErrorMessage(err, CM));
@@ -387,6 +399,8 @@ export const fetchCmsUsers = createAsyncThunk(
   }
 );
 
+// The user's language, for an error the server reports by code.
+
 export const addCmsUser = createAsyncThunk(
   'host/addCmsUser',
   async ({ hostUid, payload }, { rejectWithValue }) => {
@@ -395,7 +409,7 @@ export const addCmsUser = createAsyncThunk(
       const userlist = (response.userlist || []).flatMap(item => item.user || item);
       return { hostUid, userlist };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to add CMS user');
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to add CMS user'));
     }
   }
 );
@@ -408,7 +422,7 @@ export const updateCmsUser = createAsyncThunk(
       const userlist = (response.userlist || []).flatMap(item => item.user || item);
       return { hostUid, userlist };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update CMS user');
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to update CMS user'));
     }
   }
 );
@@ -421,7 +435,7 @@ export const deleteCmsUser = createAsyncThunk(
       const userlist = (response.userlist || []).flatMap(item => item.user || item);
       return { hostUid, userlist };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to delete CMS user');
+      return rejectWithValue(cmsUserErrorMessage(err, uiLabels(), 'Failed to delete CMS user'));
     }
   }
 );
@@ -483,6 +497,12 @@ const initialState = {
   error: null,
   loginErrorHostUid: null, // host whose failed login wrote `error`
   reconnectQueue: [],
+  // Hosts in reconnectQueue whose saved password no longer works, so the
+  // reconnect window asks for the new one (askHostPassword).
+  reconnectPasswordHosts: [],
+  // Why a host is in reconnectQueue when it is not a lost session:
+  // 'unreachable' (its CMS could not be reached, see hostUnreachable).
+  reconnectReasons: {}, // { [hostUid]: 'unreachable' }
 };
 
 const hostSlice = createSlice({
@@ -520,6 +540,7 @@ const hostSlice = createSlice({
       // Reset specific host data
       delete state.hostEnvs[hostUid];
       if (state.hostAuthErrors[hostUid]) delete state.hostAuthErrors[hostUid];
+      if (state.reconnectReasons?.[hostUid]) delete state.reconnectReasons[hostUid];
       // Reset general error if it was likely related to this host
       state.error = null;
     },
@@ -680,7 +701,27 @@ const hostSlice = createSlice({
       }
     },
     closeReconnectModal: (state) => {
-      state.reconnectQueue.shift();
+      const hostUid = state.reconnectQueue.shift();
+      state.reconnectPasswordHosts = (state.reconnectPasswordHosts ?? []).filter((uid) => uid !== hostUid);
+      if (hostUid && state.reconnectReasons?.[hostUid]) delete state.reconnectReasons[hostUid];
+    },
+    // The CMS account this host logs in with got a new password (Edit CMS
+    // User): ask for it instead of logging in again with the saved one.
+    askHostPassword: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid) return;
+      if (!state.reconnectQueue.includes(hostUid)) state.reconnectQueue.push(hostUid);
+      state.reconnectPasswordHosts = [...new Set([...(state.reconnectPasswordHosts ?? []), hostUid])];
+    },
+    // The host's CMS could not be reached (stopped, its port changed, the
+    // host down): the reconnect window, saying that. The host stays in
+    // authorizedHosts so Reconnect keeps every screen; its polling pauses
+    // while it is in the queue.
+    hostUnreachable: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid) return;
+      if (!state.reconnectQueue.includes(hostUid)) state.reconnectQueue.push(hostUid);
+      state.reconnectReasons = { ...(state.reconnectReasons ?? {}), [hostUid]: 'unreachable' };
     },
   },
   extraReducers: (builder) => {
@@ -743,7 +784,7 @@ const hostSlice = createSlice({
           state.loading = true;
         }
         // Clean up previous error for this host if any
-        clearHostLoginError(state, action.meta.arg);
+        clearHostLoginError(state, loginHostUid(action.meta.arg));
       })
       .addCase(loginToHost.fulfilled, (state, action) => {
         if (!state.isBatchHostLogin) {
@@ -758,6 +799,7 @@ const hostSlice = createSlice({
           state.authorizedHosts.push(hostUid);
         }
         state.reconnectQueue = state.reconnectQueue.filter((uid) => uid !== hostUid);
+        state.reconnectPasswordHosts = (state.reconnectPasswordHosts ?? []).filter((uid) => uid !== hostUid);
         state.haInfo[hostUid] = haInfo;
         localStorage.setItem('cubrid_ha_info', JSON.stringify(state.haInfo));
 
@@ -778,10 +820,11 @@ const hostSlice = createSlice({
           state.isLoggingIntoHost = false;
           state.loading = false;
         }
-        state.hostAuthErrors[action.meta.arg] = action.payload;
+        const hostUid = loginHostUid(action.meta.arg);
+        state.hostAuthErrors[hostUid] = action.payload;
         if (!state.isBatchHostLogin) {
           state.error = action.payload;
-          state.loginErrorHostUid = action.meta.arg;
+          state.loginErrorHostUid = hostUid;
         }
       })
       // Silent background refresh — no loading/error state, so a failure
@@ -1052,6 +1095,8 @@ export const {
   closeEditCmsUserModal,
   openReconnectModal,
   closeReconnectModal,
+  hostUnreachable,
+  askHostPassword,
 } = hostSlice.actions;
 
 /**
@@ -1202,9 +1247,10 @@ export const haFollowUpAction = (followUp, hostState) => {
 /** Login + HA side effects — use instead of bare loginToHost for user-initiated logins. */
 export const loginToHostWithSideEffects = createAsyncThunk(
   'host/loginToHostWithSideEffects',
-  async (hostUid, { dispatch, rejectWithValue }) => {
+  async (arg, { dispatch, rejectWithValue }) => {
+    const hostUid = loginHostUid(arg);
     try {
-      await dispatch(loginToHost(hostUid)).unwrap();
+      await dispatch(loginToHost(arg)).unwrap();
       await dispatch(processHaLoginSideEffects(hostUid)).unwrap();
       return hostUid;
     } catch (err) {
