@@ -34,6 +34,7 @@ vi.mock('../monitoringSlice', () => ({
 }));
 
 import ServerContent from './ServerContent';
+import { CM } from '../../../constants/cmLabels';
 import DatabaseVolumes from './DatabaseVolumes';
 
 const HOST = 'host1';
@@ -93,6 +94,25 @@ afterEach(async () => {
 
 const tick = () => act(async () => {
   await vi.advanceTimersByTimeAsync(10000);
+});
+
+it('says the connection is lost instead of "Live" while the host waits in the reconnect window', async () => {
+  const badge = () => container.querySelector('[data-testid="dashboard-live-badge"]').textContent;
+  expect(badge()).toBe(CM.live);
+
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  const waiting = configureStore({
+    reducer: (state = { ...initialState, host: { ...initialState.host, reconnectQueue: [HOST] } }) => state,
+  });
+  await act(async () => {
+    root.render(
+      <Provider store={waiting}>
+        <ServerContent hostUid={HOST} />
+      </Provider>
+    );
+  });
+  expect(badge()).toBe(CM.connectionLost);
 });
 
 it('never reads volume-info itself: the storage volume table reads its own', async () => {

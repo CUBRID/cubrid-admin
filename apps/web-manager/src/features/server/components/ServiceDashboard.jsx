@@ -37,6 +37,10 @@ const Component = function ServiceDashboard() {
   const { hosts, hostGroups, authorizedHosts, haInfo, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // While a connected host waits in the reconnect window its row is not
+  // read: the badge says so instead of "Live".
+  const isPendingReconnect = (reconnectQueue ?? []).some((uid) => authorizedHosts.includes(uid));
+  const liveStatus = isPendingReconnect ? 'lost' : preferences.dashboardInterval > 0 ? 'live' : 'paused';
   // Rows come from the registered host list (fetchHosts); while it loads the
   // table must not say "No data available".
   const hostsLoading = useSelector((state) => state.host.loading);
@@ -497,10 +501,10 @@ const Component = function ServiceDashboard() {
               <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
                 {CM.serviceDashboard}
               </Typography>
-              <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
-                <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
+              <div data-testid="dashboard-live-badge" className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${liveStatus === 'live' ? 'bg-emerald-500/10 border-emerald-500/30' : liveStatus === 'lost' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
+                <div className={`w-1 h-1 rounded-full ${liveStatus === 'live' ? 'bg-emerald-500 animate-pulse' : liveStatus === 'lost' ? 'bg-rose-500' : 'bg-slate-400'}`} />
+                <span className={`text-11 font-bold ${liveStatus === 'live' ? 'text-emerald-600 dark:text-emerald-400' : liveStatus === 'lost' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {liveStatus === 'live' ? CM.live : liveStatus === 'lost' ? CM.connectionLost : CM.paused}
                 </span>
               </div>
             </div>
