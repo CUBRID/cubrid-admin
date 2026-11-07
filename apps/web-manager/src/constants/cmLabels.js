@@ -417,7 +417,7 @@ export const CM = {
   keepCurrentPassword: 'Keep current',
   defaultCmsPasswordTitle: 'Default CMS password in use',
   defaultCmsPasswordMsg: 'These hosts use the CMS account admin with the default password (admin). Changing it is recommended.',
-  userManagement: 'User Management',
+  userManagement: 'CMS Account Management',
   cmsAccountManagement: 'CMS Account Management',
   serverVersion: 'Host Engine Version',
   server: 'Host',
