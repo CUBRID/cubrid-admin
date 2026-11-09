@@ -9,6 +9,7 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange, num
   const CM = useCM();
 
   const isRefDisabled = formData.schemaScope !== 'selected';
+  const isRefChecked = Boolean(formData.includeReferencedTables && !isRefDisabled);
 
   const optionFields = [
     { label: CM.prefixOutputFiles, name: 'prefixOutputFile', useName: 'usePrefixOutputFile', type: 'text' },
@@ -55,8 +56,8 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange, num
         <Checkbox
           name="includeReferencedTables"
           label={CM.includeReferencedTables}
-          description={CM.includeReferencedTablesSchemaNote}
-          checked={Boolean(formData.includeReferencedTables && !isRefDisabled)}
+          description={isRefChecked ? CM.includeReferencedTablesSchemaNote : undefined}
+          checked={isRefChecked}
           onChange={handleInputChange}
           disabled={isRefDisabled}
         />
