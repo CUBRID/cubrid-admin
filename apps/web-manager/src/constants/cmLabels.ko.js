@@ -285,6 +285,7 @@ export const CM_KO = {
   selectedTables: '선택된 테이블',
   useDelimitedIdentifier: '식별자 처음과 끝에 \'"\' 사용',
   includeReferencedTables: '참조되는 테이블 포함',
+  includeReferencedTablesSchemaNote: '데이터베이스 전체의 스키마도 함께 언로드됩니다.',
   prefixOutputFiles: '출력 파일의 접두어',
   fileForHash: '해시 파일 이름',
   numCachedPages: '캐시 페이지 개수',
