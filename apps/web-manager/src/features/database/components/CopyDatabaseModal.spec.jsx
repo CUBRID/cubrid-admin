@@ -18,7 +18,17 @@ vi.mock('../../../infrastructure/services/cmsJobRunner', () => ({
   runCmsJobInBackground: mocks.run, isCmsJobPolling: () => false,
   cancelAllCmsJobPolls: vi.fn(), cancelCmsJobPoll: vi.fn(),
 }));
-vi.mock('../databaseApi', () => ({ databaseApi: { getStartInfo: mocks.getStartInfo, getVolumeInfo: mocks.getVolumeInfo } }));
+vi.mock('../databaseApi', async () => {
+  const { createSharedReads } = await import('../../../infrastructure/utils/singleFlight');
+  const reads = createSharedReads();
+  return {
+    databaseApi: {
+      getStartInfo: mocks.getStartInfo,
+      getVolumeInfo: mocks.getVolumeInfo,
+      readStartInfo: (hostUid, options) => reads(hostUid, () => mocks.getStartInfo(hostUid), options),
+    },
+  };
+});
 // The tray's shared result popup isn't under test here.
 vi.mock('../../../infrastructure/cmsJob/JobResultModal', () => ({ JobResultModal: () => null }));
 
@@ -206,4 +216,12 @@ it("refuses a new name the host's database list already has, replica ones too (c
   await typeNewName('OtherDB');
   expect(execute().disabled).toBe(false);
   expect(container.textContent).not.toContain('already exists');
+});
+
+it('does not refuse a listed name when the database list could not be read again (it may have been deleted since)', async () => {
+  mocks.getStartInfo.mockRejectedValue(new Error('no answer'));
+  await render();
+  await typeNewName('otherdb');
+  expect(container.textContent).not.toContain('already exists');
+  expect(execute().disabled).toBe(false);
 });

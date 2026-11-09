@@ -12,12 +12,14 @@ vi.mock('../databaseJobApi', async (importOriginal) => ({
   ...await importOriginal(),
   databaseJobApi: { submitCreate: vi.fn(), listRecent: async () => [] },
 }));
+const startInfo = vi.hoisted(() => ({ fails: false }));
 vi.mock('../databaseSlice', () => {
-  const done = (data) => () => () => { const p = Promise.resolve(data); return Object.assign(p, { unwrap: () => p }); };
+  const settle = (p) => Object.assign(p, { unwrap: () => p });
+  const done = (data) => () => () => settle(Promise.resolve(data));
   return {
     closeCreateDatabaseModal: () => ({ type: 'test/close' }),
     fetchCreateDatabaseInfo: done({ default_db_dir: '/db' }),
-    fetchDatabaseStartInfo: done({}),
+    fetchDatabaseStartInfo: () => () => settle(startInfo.fails ? Promise.reject(new Error('no answer')) : Promise.resolve({})),
   };
 });
 
@@ -28,6 +30,7 @@ let container;
 let root;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  startInfo.fails = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -69,6 +72,15 @@ it("refuses a name the host's database list already has, replica ones too, as th
   expect(next().disabled).toBe(true);
 
   await typeName('DemoDB');
+  expect(container.textContent).not.toContain('already exists');
+  expect(next().disabled).toBe(false);
+});
+
+it('does not refuse a listed name when the database list could not be read again (it may have been deleted since)', async () => {
+  startInfo.fails = true;
+  await render([{ dbname: 'demodb' }]);
+
+  await typeName('demodb');
   expect(container.textContent).not.toContain('already exists');
   expect(next().disabled).toBe(false);
 });
