@@ -5,7 +5,7 @@ import { getPortableAppRoot } from '../config/portable-root';
 import { getMainWindow } from '../window/window-registry';
 import { applyZoom, type ZoomAction } from '../window/zoom';
 
-const PRODUCT_NAME = 'Next CUBRID Admin';
+export const PRODUCT_NAME = 'Next CUBRID Admin';
 
 export type MenuLanguage = 'en' | 'ko';
 
@@ -85,6 +85,8 @@ export const MENU_LABELS = {
     unsavedQuitButton: 'Quit',
     unsavedLeaveButton: 'Leave',
     unsavedCancelButton: 'Cancel',
+    // Asked on every quit (File > Quit, Cmd+Q, closing the window).
+    quitConfirmMessage: 'Do you want to quit?',
   },
   ko: {
     file: '파일',
@@ -134,6 +136,7 @@ export const MENU_LABELS = {
     unsavedQuitButton: '종료',
     unsavedLeaveButton: '떠나기',
     unsavedCancelButton: '취소',
+    quitConfirmMessage: '종료하시겠습니까?',
   },
 } satisfies Record<MenuLanguage, Record<string, string>>;
 

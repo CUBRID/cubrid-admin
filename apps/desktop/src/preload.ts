@@ -20,6 +20,7 @@ const desktopBridge: DesktopBridge = {
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),
   setMenuLanguage: (language) => ipcRenderer.invoke('desktop:set-menu-language', language),
   setMenuState: (state) => ipcRenderer.invoke('desktop:set-menu-state', state),
+  setUnsavedChanges: (unsaved) => ipcRenderer.invoke('desktop:set-unsaved-changes', unsaved),
   onMenuAction: (callback) => {
     const subscription = (_event: IpcRendererEvent, actionId: string) => callback(actionId);
     ipcRenderer.on('desktop:menu-action', subscription);

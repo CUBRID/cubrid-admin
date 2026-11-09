@@ -21,6 +21,7 @@ import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { dialogDefaultDirectory, rememberDialogPath } from '../window/dialog-paths';
 import { toAppRouteUrl } from '../window/app-window';
 import { getMainWindow } from '../window/window-registry';
+import { setPageUnsavedChanges } from '../window/quit-flow';
 import {
   dismissUpdate,
   getStartupUpdateNotice,
@@ -113,6 +114,15 @@ export function registerDesktopIpcHandlers(): void {
 
   ipcMain.handle('desktop:set-menu-state', (_event, state: unknown) => {
     setApplicationMenuState(state);
+    return { ok: true };
+  });
+
+  // Asked on quit: the unsaved-changes question instead of the plain one.
+  ipcMain.handle('desktop:set-unsaved-changes', (_event, unsaved: unknown) => {
+    if (typeof unsaved !== 'boolean') {
+      throw new Error('unsaved must be a boolean');
+    }
+    setPageUnsavedChanges(unsaved);
     return { ok: true };
   });
 
@@ -212,8 +222,8 @@ export function registerDesktopIpcHandlers(): void {
   });
 
   // File > Quit in the window's header menu: the same as the native Quit
-  // (app.quit). A page with unsaved changes is asked first (main.ts,
-  // will-prevent-unload); the server stops in will-quit.
+  // (app.quit). The window asks first (main.ts, close); the server stops in
+  // will-quit.
   ipcMain.handle('desktop:quit', () => {
     app.quit();
   });
