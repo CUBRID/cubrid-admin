@@ -2,6 +2,7 @@ import { BrowserWindow, shell } from 'electron';
 import * as path from 'path';
 import { installContextMenu } from '../menu/context-menu';
 import { installZoomShortcuts } from './zoom';
+import { keepNoBackForwardHistory } from './no-back-forward';
 
 /** Hash routes keep asset URLs rooted at index.html (./assets/...). */
 export function toAppRouteUrl(routePath: string): string {
@@ -67,6 +68,7 @@ export function createAppWindow(apiBaseUrl?: string): BrowserWindow {
     },
   });
   routeExternalLinksToBrowser(window);
+  keepNoBackForwardHistory(window.webContents);
   installZoomShortcuts(window);
   installContextMenu(window);
   return window;
