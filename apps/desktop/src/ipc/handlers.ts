@@ -16,7 +16,7 @@ import { getPortableAppRoot } from '../config/portable-root';
 import { installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
-import { getDefaultWorkspaceRoot, resolveWorkspacePaths } from '../workspace/workspace-paths';
+import { getDefaultWorkspaceRoot, isSameWorkspaceFolder, resolveWorkspacePaths } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { dialogDefaultDirectory, rememberDialogPath } from '../window/dialog-paths';
 import { toAppRouteUrl } from '../window/app-window';
@@ -45,11 +45,25 @@ export function setWorkspaceStartupError(error: string | null): void {
  * to the workspace it was on and the reason is thrown, never a silent
  * fallback.
  */
-async function changeWorkspace(root: string): Promise<{ ok: true }> {
-  const paths = await checkWorkspaceRoot(root);
+async function changeWorkspace(
+  root: string,
+  { ignoreUnknownJobs = false }: { ignoreUnknownJobs?: boolean } = {}
+): Promise<{ ok: true; unchanged?: true }> {
   const running = getRunningWorkspacePaths();
-  if (running && (await listActiveJobs(running.socketPath)).length > 0) {
-    throw new WorkspaceError('WORKSPACE_JOBS_RUNNING');
+  // The folder the server already runs on, however it was typed: nothing to do.
+  if (running && root && isSameWorkspaceFolder(root, running.workspaceRoot)) {
+    return { ok: true, unchanged: true };
+  }
+  const paths = await checkWorkspaceRoot(root);
+  if (running) {
+    const jobs = await listActiveJobs(running.socketPath);
+    if (jobs === null && !ignoreUnknownJobs) {
+      // The server did not say: ask the user before stopping it under a job.
+      throw new WorkspaceError('WORKSPACE_JOBS_UNKNOWN');
+    }
+    if (jobs && jobs.length > 0) {
+      throw new WorkspaceError('WORKSPACE_JOBS_RUNNING');
+    }
   }
 
   await stopDesktopApi();
@@ -154,8 +168,8 @@ export function registerDesktopIpcHandlers(): void {
     return { name: path.basename(filePath), base64: (await fs.promises.readFile(filePath)).toString('base64') };
   });
 
-  ipcMain.handle('desktop:set-workspace-root', (_event, workspaceRoot: string) =>
-    changeWorkspace(workspaceRoot?.trim() ?? '')
+  ipcMain.handle('desktop:set-workspace-root', (_event, workspaceRoot: string, options?: { ignoreUnknownJobs?: unknown }) =>
+    changeWorkspace(workspaceRoot?.trim() ?? '', { ignoreUnknownJobs: options?.ignoreUnknownJobs === true })
   );
 
   // First run, or the configured workspace failed at launch: no server runs
@@ -198,7 +212,8 @@ export function registerDesktopIpcHandlers(): void {
   });
 
   // File > Quit in the window's header menu: the same as the native Quit
-  // (app.quit); `before-quit` in main.ts stops the server.
+  // (app.quit). A page with unsaved changes is asked first (main.ts,
+  // will-prevent-unload); the server stops in will-quit.
   ipcMain.handle('desktop:quit', () => {
     app.quit();
   });

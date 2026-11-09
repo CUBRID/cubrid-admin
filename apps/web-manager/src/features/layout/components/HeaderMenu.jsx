@@ -4,17 +4,21 @@ import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../component
 import { MENU_ACTIONS, getMenuActionEnabled, runMenuAction } from '../menuActions';
 import { useCM } from '../../../constants/useCM';
 import { isDesktopApp } from '../../desktop/isDesktopApp';
+import { isAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
+
+const NO_TABS = [];
 
 export default function HeaderMenu() {
   const CM = useCM();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
 
   const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts });
   const action = (id) => ({
     disabled: !enabled[id],
-    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, navigate }),
+    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, navigate, dirtyTabs, anyModalOpen: isAnyModalOpen() }),
   });
 
   const MenuLabel = ({ children }) => (

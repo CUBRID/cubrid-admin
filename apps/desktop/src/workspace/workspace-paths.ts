@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { loadDesktopSettings } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
@@ -66,3 +67,27 @@ export function assertWorkspaceWritable(workspaceRoot: string): void {
   fs.mkdirSync(workspaceRoot, { recursive: true });
   fs.accessSync(workspaceRoot, fs.constants.W_OK);
 }
+
+/**
+ * Whether two workspace folders are the same folder: resolved against the
+ * current directory, with symbolic links followed (/tmp and /private/tmp on
+ * macOS), '~' expanded, and case ignored where the file system usually does
+ * (macOS, Windows; there C:/ and C:\ are one). A folder that does not exist
+ * yet is compared by its resolved path.
+ */
+export function isSameWorkspaceFolder(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  const canonical = (value: string) => {
+    const expanded = value.trim().replace(/^~(?=$|[\\/])/, os.homedir());
+    const resolved = path.resolve(expanded);
+    let real = resolved;
+    try {
+      real = fs.realpathSync.native(resolved);
+    } catch {
+      // Not there yet: the resolved path is all there is.
+    }
+    const normalized = path.normalize(real).replace(/[\\/]+$/, '') || path.sep;
+    return platform === 'darwin' || platform === 'win32' ? normalized.toLowerCase() : normalized;
+  };
+  return canonical(a) === canonical(b);
+}
+

@@ -21,7 +21,12 @@ export type DesktopBridge = {
   pickWorkspaceDirectory: () => Promise<string | null>;
   /** A file chosen in the app's open dialog (with its default folder), as base64; null if cancelled. */
   pickOpenFile: (accept?: string) => Promise<{ name: string; base64: string } | null>;
-  setWorkspaceRoot: (workspaceRoot: string) => Promise<{ ok: true }>;
+  /**
+   * Moves the app to another workspace. `unchanged` when it is the folder in
+   * use. Throws WORKSPACE_JOBS_UNKNOWN when the running jobs could not be
+   * read; `ignoreUnknownJobs` goes on anyway (the user said so).
+   */
+  setWorkspaceRoot: (workspaceRoot: string, options?: { ignoreUnknownJobs?: boolean }) => Promise<{ ok: true; unchanged?: true }>;
   finishWorkspaceSetup: (workspaceRoot: string) => Promise<{ ok: boolean }>;
   revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
   setMenuLanguage: (language: 'en' | 'ko') => Promise<{ ok: true }>;

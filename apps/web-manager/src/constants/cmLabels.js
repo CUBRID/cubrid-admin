@@ -1626,7 +1626,6 @@ export const CM = {
   workspaceSettingsLoadFailedMsg: 'Failed to load workspace settings',
   applyingWorkspaceMsg: 'Applying workspace…',
   workspaceSaveFailedMsg: 'Failed to save workspace',
-  workspaceAppliedRelogMsg: 'Workspace applied. Please log in again.',
   workspaceDesktopOnlyDesc: 'Workspace settings are available in the Next CUBRID Admin desktop app.',
   desktopConnectFailedMsg: 'Could not connect to the desktop app. Quit and run again with',
   selectWorkspaceTitle: 'Select Workspace',
@@ -2087,6 +2086,8 @@ export const CM = {
   // Breadcrumb
   unsavedChangesTitle: 'Unsaved Changes',
   unsavedChangesDesc: (name) => `You have unsaved changes in "${name}". If you close it, your changes will be lost.`,
+  switchWorkspaceUnsavedDesc: 'You have unsaved changes. Switching the workspace will discard them.',
+  workspaceJobsUnknownDesc: "Couldn't check whether a job is still running. Switch the workspace anyway?",
   unsavedReloadDesc: (name) => `You have unsaved changes in "${name}". Reloading will discard them.`,
 
   // Footer

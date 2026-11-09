@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./layoutSlice', () => ({
   openTab: (payload) => ({ type: 'layout/openTab', payload }),
   showStatusModal: (payload) => ({ type: 'layout/showStatusModal', payload }),
+  askWorkspaceSwitch: () => ({ type: 'layout/askWorkspaceSwitch' }),
 }));
 vi.mock('./appBarSlice', () => ({
   setAboutCubrid: (payload) => ({ type: 'appBar/setAboutCubrid', payload }),
@@ -111,3 +112,31 @@ describe('runMenuAction', () => {
     expect(actions).toEqual([expect.objectContaining({ type: 'appBar/openUpdateCheck', payload: { source: 'manual' } })]);
   });
 });
+
+describe('switch workspace guard', () => {
+  const switchWith = (extra) => {
+    const dispatch = vi.fn();
+    const navigate = vi.fn();
+    runMenuAction(MENU_ACTIONS.switchWorkspace, { dispatch, CM, selectedHostUid: 'h1', navigate, ...extra });
+    return { dispatch, navigate };
+  };
+
+  it('opens the workspace page when nothing is unsaved and no modal is open', () => {
+    const { navigate, dispatch } = switchWith({ dirtyTabs: [], anyModalOpen: false });
+    expect(navigate).toHaveBeenCalledWith('/desktop/workspace');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('asks first, without leaving, while a tab has unsaved changes', () => {
+    const { navigate, dispatch } = switchWith({ dirtyTabs: ['edit_config:h1:cubridconf'] });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'layout/askWorkspaceSwitch' });
+  });
+
+  it('does nothing while a modal is open', () => {
+    const { navigate, dispatch } = switchWith({ dirtyTabs: ['t'], anyModalOpen: true });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+

@@ -1,4 +1,4 @@
-import { openTab, showStatusModal } from './layoutSlice';
+import { askWorkspaceSwitch, openTab, showStatusModal } from './layoutSlice';
 import {
   openAddHostModal,
   openEditHostModal,
@@ -84,9 +84,11 @@ export const DESKTOP_WORKSPACE_PATH = '/desktop/workspace';
 /**
  * Runs one menu action. Callers check the enabled flag first.
  * `navigate` is react-router's, for actions that leave the dashboard.
+ * `dirtyTabs` (tabs with unsaved changes) and `anyModalOpen` guard the
+ * workspace switch, which leaves the dashboard and drops both.
  * @returns {boolean} false when the id is unknown
  */
-export function runMenuAction(id, { dispatch, CM, selectedHostUid, navigate }) {
+export function runMenuAction(id, { dispatch, CM, selectedHostUid, navigate, dirtyTabs = [], anyModalOpen = false }) {
   switch (id) {
     case MENU_ACTIONS.addHost:
       dispatch(openAddHostModal());
@@ -101,6 +103,13 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid, navigate }) {
       dispatch(openImportExportModal('import'));
       return true;
     case MENU_ACTIONS.switchWorkspace:
+      // Leaving the dashboard would close an open modal with what it holds.
+      if (anyModalOpen) return true;
+      // ... and drop unsaved conf edits: ask first (WorkspaceSwitchConfirm).
+      if (dirtyTabs.length > 0) {
+        dispatch(askWorkspaceSwitch());
+        return true;
+      }
       navigate(DESKTOP_WORKSPACE_PATH);
       return true;
     case MENU_ACTIONS.serviceDashboard:

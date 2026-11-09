@@ -63,6 +63,7 @@ import { useDesktopMenuActions } from '../features/desktop/hooks/useDesktopMenuA
 import { useLoggedOutDbCleanup } from '../features/layout/useLoggedOutDbCleanup';
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
+import WorkspaceSwitchConfirm from '../features/desktop/components/WorkspaceSwitchConfirm';
 import AboutModal from '../features/layout/components/AboutModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import UpdateCheckModal from '../features/layout/components/UpdateCheckModal';
@@ -521,6 +522,7 @@ function DashboardLayout() {
         <BrokerPropertyModal />
         <AddVolumeModal />
         <StatusModal />
+        <WorkspaceSwitchConfirm />
 
         <LoadingOverlay 
           isVisible={isServiceOperating || dbActionLoading || brokerActionLoading} 

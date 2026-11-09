@@ -14,7 +14,7 @@ const desktopBridge: DesktopBridge = {
   getWorkspaceInfo: () => ipcRenderer.invoke('desktop:get-workspace-info'),
   pickWorkspaceDirectory: () => ipcRenderer.invoke('desktop:pick-workspace-directory'),
   pickOpenFile: (accept) => ipcRenderer.invoke('desktop:pick-open-file', accept),
-  setWorkspaceRoot: (workspaceRoot) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot),
+  setWorkspaceRoot: (workspaceRoot, options) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot, options),
   finishWorkspaceSetup: (workspaceRoot) =>
     ipcRenderer.invoke('desktop:finish-workspace-setup', workspaceRoot),
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),

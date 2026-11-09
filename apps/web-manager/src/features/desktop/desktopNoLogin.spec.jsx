@@ -163,6 +163,48 @@ describe('desktop app without an app login', () => {
     expect(window.desktopBridge.setWorkspaceRoot).toHaveBeenCalledWith('/ws-other');
   });
 
+  it('goes back to the dashboard when the main process finds it is the folder in use', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(false, true);
+    window.desktopBridge.setWorkspaceRoot.mockResolvedValue({ ok: true, unchanged: true });
+    await renderWorkspacePage();
+    await typeInto(input(), '/private/ws');
+    await act(async () => saveButton().click());
+    expect(container.textContent).toContain('DASHBOARD');
+  });
+
+  it('asks before switching when the running jobs could not be checked, and switches only if told', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(false, true);
+    const unknown = new Error("Error invoking remote method 'desktop:set-workspace-root': Error: WORKSPACE_JOBS_UNKNOWN");
+    window.desktopBridge.setWorkspaceRoot.mockImplementation(async (_root, options) => {
+      if (!options?.ignoreUnknownJobs) throw unknown;
+      return { ok: true };
+    });
+    await renderWorkspacePage();
+    await typeInto(input(), '/ws-other');
+    await act(async () => saveButton().click());
+    expect(document.body.textContent).toContain(CM.workspaceJobsUnknownDesc);
+
+    await act(async () => document.querySelector('[data-testid="workspace-jobs-unknown-cancel-btn"]').click());
+    expect(window.desktopBridge.setWorkspaceRoot).toHaveBeenCalledTimes(1);
+
+    await act(async () => saveButton().click());
+    await act(async () => document.querySelector('[data-testid="workspace-jobs-unknown-confirm-btn"]').click());
+    expect(window.desktopBridge.setWorkspaceRoot).toHaveBeenLastCalledWith('/ws-other', { ignoreUnknownJobs: true });
+  });
+
+  it('shows no back link until it knows this is not the first-run setup', async () => {
+    window.desktopConfig = { isDesktop: true };
+    let answer;
+    window.desktopBridge = workspaceBridge(false, true);
+    window.desktopBridge.isWorkspaceSetupRequired = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    await renderWorkspacePage();
+    expect(container.querySelector('[data-testid="workspace-back-link"]')).toBeNull();
+    await act(async () => answer(false));
+    expect(container.querySelector('[data-testid="workspace-back-link"]')).not.toBeNull();
+  });
+
   it('has no button that resets to the default workspace', async () => {
     window.desktopConfig = { isDesktop: true };
     window.desktopBridge = workspaceBridge(false, true);

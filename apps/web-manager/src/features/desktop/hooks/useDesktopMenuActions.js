@@ -6,11 +6,15 @@ import {
   NO_DASHBOARD_MENU_ACTIONS,
   getMenuActionEnabled,
   runMenuAction,
+  MENU_ACTIONS,
 } from '../../layout/menuActions';
+import { isAnyModalOpen, useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 // App routes rendered without DashboardLayout (see App.jsx). A stored token
 // keeps isAuthenticated true on /login too, e.g. after the desktop app
 // crashed, since main always opens /login on startup.
+const NO_TABS = [];
+
 const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 
 /**
@@ -35,18 +39,25 @@ export function useDesktopMenuActions() {
     shallowEqual
   );
 
+  const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
+  const anyModalOpen = useAnyModalOpen();
+
   const { pathname } = useLocation();
   const isDashboardShown = isAuthenticated
     && !NO_DASHBOARD_PATHS.includes(pathname.replace(/\/+$/, '') || '/');
 
   const enabled = isDashboardShown
-    ? getMenuActionEnabled({ selectedHostUid, authorizedHosts })
+    ? {
+      ...getMenuActionEnabled({ selectedHostUid, authorizedHosts }),
+      // Not over an open modal (it would close with what it holds).
+      [MENU_ACTIONS.switchWorkspace]: !anyModalOpen,
+    }
     : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 
   const latest = useRef(null);
-  latest.current = { dispatch, CM, selectedHostUid, navigate, enabled: stableEnabled };
+  latest.current = { dispatch, CM, selectedHostUid, navigate, dirtyTabs, enabled: stableEnabled };
 
   useEffect(() => {
     const setMenuState = window.desktopBridge?.setMenuState;
@@ -63,7 +74,7 @@ export function useDesktopMenuActions() {
       const ctx = latest.current;
       // Main may still show the previous menu for a moment after a state change.
       if (!ctx.enabled[actionId]) return;
-      runMenuAction(actionId, ctx);
+      runMenuAction(actionId, { ...ctx, anyModalOpen: isAnyModalOpen() });
     });
   }, []);
 }

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { isDesktopApp } from '../isDesktopApp';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
+import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 
 // For comparing workspace folders as typed: no surrounding spaces or
 // trailing separator ("/ws/" is "/ws").
@@ -36,6 +37,9 @@ export default function DesktopWorkspaceSettingsPage() {
   const [info, setInfo] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  // The server could not say whether a job runs: switch only if the user says so.
+  const [askIgnoreUnknownJobs, setAskIgnoreUnknownJobs] = useState(false);
+  const navigate = useNavigate();
 
   const loadInfo = useCallback(async () => {
     if (!bridge) {
@@ -95,17 +99,28 @@ export default function DesktopWorkspaceSettingsPage() {
     setMessage(CM.applyingWorkspaceMsg);
   };
 
-  const handleSave = async () => {
+  const handleSave = async ({ ignoreUnknownJobs = false } = {}) => {
     if (!bridge) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await bridge.setWorkspaceRoot(workspaceRoot);
+      const result = ignoreUnknownJobs
+        ? await bridge.setWorkspaceRoot(workspaceRoot, { ignoreUnknownJobs: true })
+        : await bridge.setWorkspaceRoot(workspaceRoot);
+      // The folder in use, written another way: nothing restarts, back to the dashboard.
+      if (result?.unchanged) {
+        navigate('/home');
+        return;
+      }
       afterWorkspaceApplied();
     } catch (err) {
-      setError(err?.message || CM.workspaceSaveFailedMsg);
       setSaving(false);
+      if (String(err?.message ?? '').includes('WORKSPACE_JOBS_UNKNOWN')) {
+        setAskIgnoreUnknownJobs(true);
+        return;
+      }
+      setError(err?.message || CM.workspaceSaveFailedMsg);
     }
   };
 
@@ -140,8 +155,9 @@ export default function DesktopWorkspaceSettingsPage() {
   return (
     <SettingsShell>
       <div className="mb-8">
-        {/* Opened from a running app (File > Switch Workspace): back to its dashboard. */}
-        {!setupMode && (
+        {/* Opened from a running app (File > Switch Workspace): back to its dashboard.
+            Not before the page knows it is not the first-run setup. */}
+        {!loading && !setupMode && (
           <Link
             to="/home"
             data-testid="workspace-back-link"
@@ -231,6 +247,19 @@ export default function DesktopWorkspaceSettingsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={askIgnoreUnknownJobs}
+        title={CM.switchWorkspace}
+        description={CM.workspaceJobsUnknownDesc}
+        confirmLabel={CM.switchWorkspace}
+        variant="danger"
+        onCancel={() => setAskIgnoreUnknownJobs(false)}
+        onConfirm={() => {
+          setAskIgnoreUnknownJobs(false);
+          void handleSave({ ignoreUnknownJobs: true });
+        }}
+        testId="workspace-jobs-unknown"
+      />
     </SettingsShell>
   );
 }
