@@ -4,7 +4,6 @@ import * as path from 'path';
 import { listActiveJobs } from '../api/active-jobs';
 import { getRunningWorkspacePaths, startApiForWorkspace, stopDesktopApi } from '../api/api-runtime';
 import {
-  clearConfiguredWorkspaceRoot,
   getDesktopSettingsPath,
   isCheckForUpdatesOnStartupEnabled,
   loadDesktopSettings,
@@ -39,15 +38,15 @@ export function setWorkspaceStartupError(error: string | null): void {
 }
 
 /**
- * Moves the app to the workspace at `root` (null: the default one). It is
+ * Moves the app to the workspace at `root`. It is
  * checked first (checkWorkspaceRoot) and refused while a CMS job runs; then
  * the server stops and starts there. Only once it runs is the choice saved
  * and the window reloaded on it. If it does not start, the server goes back
  * to the workspace it was on and the reason is thrown, never a silent
  * fallback.
  */
-async function changeWorkspace(root: string | null): Promise<{ ok: true }> {
-  const paths = await checkWorkspaceRoot(root ?? getDefaultWorkspaceRoot());
+async function changeWorkspace(root: string): Promise<{ ok: true }> {
+  const paths = await checkWorkspaceRoot(root);
   const running = getRunningWorkspacePaths();
   if (running && (await listActiveJobs(running.socketPath)).length > 0) {
     throw new WorkspaceError('WORKSPACE_JOBS_RUNNING');
@@ -65,11 +64,7 @@ async function changeWorkspace(root: string | null): Promise<{ ok: true }> {
     throw error;
   }
 
-  if (root === null) {
-    clearConfiguredWorkspaceRoot();
-  } else {
-    setWorkspaceRoot(paths.workspaceRoot);
-  }
+  setWorkspaceRoot(paths.workspaceRoot);
   const window = getMainWindow();
   if (window && !window.isDestroyed()) {
     // After this reply reaches the page: everything on it belonged to the old workspace.
@@ -162,8 +157,6 @@ export function registerDesktopIpcHandlers(): void {
   ipcMain.handle('desktop:set-workspace-root', (_event, workspaceRoot: string) =>
     changeWorkspace(workspaceRoot?.trim() ?? '')
   );
-
-  ipcMain.handle('desktop:reset-workspace-root', () => changeWorkspace(null));
 
   // First run, or the configured workspace failed at launch: no server runs
   // yet, so this only checks and saves; main.ts then starts the server.

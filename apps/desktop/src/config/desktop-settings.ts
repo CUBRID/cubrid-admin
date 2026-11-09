@@ -98,16 +98,6 @@ export function setWorkspaceRoot(workspaceRoot: string): DesktopSettings {
   return settings;
 }
 
-export function clearConfiguredWorkspaceRoot(): DesktopSettings {
-  const current = loadDesktopSettings();
-  const settings: DesktopSettings = {
-    ...withoutWorkspaceRoot(current),
-    workspaceSetupComplete: current.workspaceSetupComplete ?? true,
-  };
-  saveDesktopSettings(settings);
-  return settings;
-}
-
 export function getDesktopSettingsPath(): string {
   return getSettingsFilePath();
 }

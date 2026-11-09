@@ -32,6 +32,12 @@ afterEach(async () => {
   vi.resetModules();
 });
 
+// Types into a controlled input the way a user does (React reads the value setter).
+const typeInto = (input, value) => act(async () => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
 const store = () => configureStore({
   reducer: {
     auth: (state = { isAuthenticated: true, user: { id: 'desktop' }, loading: false, error: null }) => state,
@@ -82,18 +88,18 @@ describe('desktop app without an app login', () => {
     ));
     expect(container.textContent).toContain('WORKSPACE_NOT_WRITABLE: EACCES');
 
+    await typeInto(container.querySelector('[data-testid="workspace-root-input"] input, input[data-testid="workspace-root-input"]'), '/ws2');
     await act(async () => container.querySelector('[data-testid="workspace-save-btn"]').click());
-    expect(window.desktopBridge.setWorkspaceRoot).toHaveBeenCalledWith('/ws');
+    expect(window.desktopBridge.setWorkspaceRoot).toHaveBeenCalledWith('/ws2');
     expect(container.textContent).toContain(CM.applyingWorkspaceMsg);
     expect(container.textContent).not.toContain('LOGIN PAGE');
   });
 
-  const workspaceBridge = (setupRequired) => ({
-    getWorkspaceInfo: vi.fn().mockResolvedValue({ workspaceRoot: '/ws', defaultWorkspaceRoot: '/ws', isCustomWorkspace: false, settingsFilePath: '/s.json' }),
+  const workspaceBridge = (setupRequired, isCustomWorkspace = false) => ({
+    getWorkspaceInfo: vi.fn().mockResolvedValue({ workspaceRoot: '/ws', defaultWorkspaceRoot: '/ws', isCustomWorkspace, settingsFilePath: '/s.json' }),
     isWorkspaceSetupRequired: vi.fn().mockResolvedValue(setupRequired),
     getWorkspaceStartupError: vi.fn().mockResolvedValue(null),
     setWorkspaceRoot: vi.fn().mockResolvedValue({ ok: true }),
-    resetWorkspaceRoot: vi.fn().mockResolvedValue({ ok: true }),
     finishWorkspaceSetup: vi.fn().mockResolvedValue({ ok: true }),
   });
   const renderWorkspacePage = () => act(async () => root.render(
@@ -122,7 +128,6 @@ describe('desktop app without an app login', () => {
     expect(container.textContent).toContain('DASHBOARD');
     expect(container.textContent).not.toContain('LOGIN PAGE');
     expect(window.desktopBridge.setWorkspaceRoot).not.toHaveBeenCalled();
-    expect(window.desktopBridge.resetWorkspaceRoot).not.toHaveBeenCalled();
     expect(window.desktopBridge.finishWorkspaceSetup).not.toHaveBeenCalled();
   });
 
@@ -133,5 +138,49 @@ describe('desktop app without an app login', () => {
     expect(container.querySelector('[data-testid="workspace-continue-btn"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="workspace-back-link"]')).toBeNull();
     expect(container.querySelector('a')).toBeNull();
+  });
+
+  const input = () => container.querySelector('input[data-testid="workspace-root-input"], [data-testid="workspace-root-input"] input');
+  const saveButton = () => container.querySelector('[data-testid="workspace-save-btn"]');
+
+  it('saves only a folder other than the current workspace', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(false, true);
+    await renderWorkspacePage();
+    expect(input().value).toBe('/ws');
+    expect(saveButton().disabled).toBe(true);
+
+    for (const same of ['/ws/', '  /ws  ', '/ws//']) {
+      await typeInto(input(), same);
+      expect(saveButton().disabled).toBe(true);
+    }
+    await typeInto(input(), '');
+    expect(saveButton().disabled).toBe(true);
+
+    await typeInto(input(), '/ws-other');
+    expect(saveButton().disabled).toBe(false);
+    await act(async () => saveButton().click());
+    expect(window.desktopBridge.setWorkspaceRoot).toHaveBeenCalledWith('/ws-other');
+  });
+
+  it('has no button that resets to the default workspace', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(false, true);
+    await renderWorkspacePage();
+    expect(saveButton()).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-reset-btn"]')).toBeNull();
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent.trim()))
+      .toEqual([CM.selectFolderEllipsis, CM.save]);
+  });
+
+  it('lets first run continue with the default folder as offered', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(true);
+    await renderWorkspacePage();
+    const continueButton = container.querySelector('[data-testid="workspace-continue-btn"]');
+    expect(input().value).toBe('/ws');
+    expect(continueButton.disabled).toBe(false);
+    await act(async () => continueButton.click());
+    expect(window.desktopBridge.finishWorkspaceSetup).toHaveBeenCalledWith('/ws');
   });
 });

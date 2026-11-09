@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  clearConfiguredWorkspaceRoot,
   getDismissedUpdateVersion,
   getLastUpdateCheckAt,
   isCheckForUpdatesOnStartupEnabled,
   loadDesktopSettings,
+  setWorkspaceRoot,
 } from './desktop-settings';
 
 jest.mock('electron', () => ({ app: { isPackaged: false } }));
@@ -39,25 +39,20 @@ describe('desktop settings', () => {
     return JSON.parse(fs.readFileSync(path.join(root, 'desktop-settings.json'), 'utf8'));
   }
 
-  it('keeps update preferences when the workspace is reset to the default', () => {
+  it('keeps update preferences when the workspace is switched', () => {
     writeSettings({
       workspaceRoot: path.join(root, 'custom-workspace'),
       workspaceSetupComplete: true,
       ...updateSettings,
     });
 
-    clearConfiguredWorkspaceRoot();
+    const next = path.join(root, 'other-workspace');
+    setWorkspaceRoot(next);
 
-    expect(readSettingsFile()).toEqual({ workspaceSetupComplete: true, ...updateSettings });
+    expect(readSettingsFile()).toEqual({ workspaceRoot: next, workspaceSetupComplete: true, ...updateSettings });
     expect(isCheckForUpdatesOnStartupEnabled()).toBe(false);
     expect(getLastUpdateCheckAt()).toBe(updateSettings.lastUpdateCheckAt);
     expect(getDismissedUpdateVersion()).toBe(updateSettings.dismissedUpdateVersion);
-  });
-
-  it('marks setup complete when resetting a workspace that never finished setup', () => {
-    writeSettings({ workspaceRoot: path.join(root, 'custom-workspace') });
-
-    expect(clearConfiguredWorkspaceRoot()).toEqual({ workspaceSetupComplete: true });
   });
 
   it.each([

@@ -6,6 +6,14 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
 
+// For comparing workspace folders as typed: no surrounding spaces or
+// trailing separator ("/ws/" is "/ws").
+function normalizeWorkspacePath(value) {
+  const trimmed = (value ?? '').trim();
+  const stripped = trimmed.replace(/[\\/]+$/, '');
+  return stripped || trimmed.slice(0, 1);
+}
+
 function SettingsShell({ children }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-[#070709] font-sans selection:bg-amber-500/20 relative overflow-hidden">
@@ -101,21 +109,9 @@ export default function DesktopWorkspaceSettingsPage() {
     }
   };
 
-  const handleReset = async () => {
-    if (!bridge || !info) return;
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      await bridge.resetWorkspaceRoot();
-      setWorkspaceRoot(info.defaultWorkspaceRoot);
-      await loadInfo();
-      afterWorkspaceApplied();
-    } catch (err) {
-      setError(err?.message || CM.workspaceResetFailedMsg);
-      setSaving(false);
-    }
-  };
+  // Saving the folder the app already runs on would restart it for nothing.
+  const unchanged = Boolean(info)
+    && normalizeWorkspacePath(workspaceRoot) === normalizeWorkspacePath(info.workspaceRoot);
 
   if (!inDesktopApp) {
     return (
@@ -222,28 +218,15 @@ export default function DesktopWorkspaceSettingsPage() {
                 {CM.continueBtn}
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  data-testid="workspace-save-btn"
-                  disabled={saving || !workspaceRoot.trim()}
-                  onClick={() => void handleSave()}
-                  className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
-                >
-                  {CM.save}
-                </button>
-                {info?.isCustomWorkspace && (
-                  <button
-                    type="button"
-                    data-testid="workspace-reset-btn"
-                    disabled={saving}
-                    onClick={() => void handleReset()}
-                    className="h-10 px-4 text-15 font-semibold rounded-xl text-slate-600 dark:text-slate-300"
-                  >
-                    {CM.defaultLocationBtn}
-                  </button>
-                )}
-              </>
+              <button
+                type="button"
+                data-testid="workspace-save-btn"
+                disabled={saving || !workspaceRoot.trim() || unchanged}
+                onClick={() => void handleSave()}
+                className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+              >
+                {CM.save}
+              </button>
             )}
           </div>
         </div>
