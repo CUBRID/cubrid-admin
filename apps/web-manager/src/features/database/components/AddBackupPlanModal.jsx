@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeAddBackupPlanModal, addBackupSchedule, fetchBackupSchedule, fetchBackupDbInfo } from '../databaseSlice';
 import { dbKey } from '../dbKey';
@@ -81,11 +81,19 @@ export default function AddBackupPlanModal() {
   });
   const [errors, setErrors] = useState({});
 
+  // Where the database lives, from the list or an earlier backup-info read.
+  const knownDbdir = currentDb?.dbdir || databaseBackupInfo?.[dbKey(selectedHostUid, selectedDatabase)]?.dbdir;
+  // Read when the dialog opens; later changes (a list refresh, the database
+  // starting or stopping) must not reset what the user typed.
+  const atOpen = useRef({});
+  atOpen.current = { knownDbdir, isDbRunning };
+
   useEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
+      const { knownDbdir: dbdirAtOpen, isDbRunning: runningAtOpen } = atOpen.current;
       resetAction();
       setErrors({});
-      const initialPath = deriveBackupDir(currentDb?.dbdir || databaseBackupInfo?.[dbKey(selectedHostUid, selectedDatabase)]?.dbdir);
+      const initialPath = deriveBackupDir(dbdirAtOpen);
       setFormData({
         backupLevel: '0',
         backupPath: initialPath,
@@ -99,7 +107,7 @@ export default function AddBackupPlanModal() {
         useCompression: false,
         threads: 0,
         backupsToKeep: 1,
-        onlineType: isDbRunning ? 'online' : 'offline'
+        onlineType: runningAtOpen ? 'online' : 'offline'
       });
 
       if (selectedHostUid && !initialPath) {
@@ -113,7 +121,21 @@ export default function AddBackupPlanModal() {
           .catch(() => undefined);
       }
     }
-  }, [isAddBackupPlanModalOpen, selectedDatabase, currentDb, selectedHostUid, databaseBackupInfo, isDbRunning, dispatch, resetAction]);
+  }, [isAddBackupPlanModalOpen, selectedDatabase, selectedHostUid, dispatch, resetAction]);
+
+  // The database stopped while the dialog is open: online is no longer a choice.
+  useEffect(() => {
+    if (isAddBackupPlanModalOpen && onlineDisabled) {
+      setFormData((prev) => (prev.onlineType === 'online' ? { ...prev, onlineType: 'offline' } : prev));
+    }
+  }, [isAddBackupPlanModalOpen, onlineDisabled]);
+
+  // The folder became known after the dialog opened: fill an empty path only.
+  useEffect(() => {
+    if (isAddBackupPlanModalOpen && knownDbdir) {
+      setFormData((prev) => (prev.backupPath ? prev : { ...prev, backupPath: deriveBackupDir(knownDbdir) }));
+    }
+  }, [isAddBackupPlanModalOpen, knownDbdir]);
 
   if (!isAddBackupPlanModalOpen) return null;
 

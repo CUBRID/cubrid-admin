@@ -56,9 +56,13 @@ const render = async (ui, { running }) => {
     user: { preferences: { uiLocale: 'en' } },
     layout: { statusModal: { isOpen: false } },
   };
-  const store = configureStore({ reducer: (s = state) => s });
+  // 'test/database' stands in for a database list or start-info refresh.
+  const store = configureStore({
+    reducer: (s = state, action) => (action.type === 'test/database' ? { ...s, database: { ...s.database, ...action.payload } } : s),
+  });
   await act(async () => root.render(<Provider store={store}>{ui}</Provider>));
   await act(() => Promise.resolve());
+  return store;
 };
 const mode = (value) => container.querySelector(`[data-testid="backup-plan-mode-${value}"]`);
 const checked = (value) => mode(value).getAttribute('aria-checked') === 'true';
@@ -77,6 +81,35 @@ describe('new backup plan', () => {
     expect(checked('offline')).toBe(true);
     expect(mode('online').disabled).toBe(true);
     expect(mode('offline').disabled).toBe(false);
+  });
+
+  it('keeps what the user typed when the database stops or the list refreshes, and only moves online to offline', async () => {
+    const store = await render(<AddBackupPlanModal />, { running: true });
+    const keep = () => container.querySelector('[data-testid="backup-plan-keep-input"] input, input[data-testid="backup-plan-keep-input"]');
+    const backupId = () => [...container.querySelectorAll('input')].find((i) => i.value.startsWith('backup_demodb_')).value;
+    const id = backupId();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(keep(), '5');
+      keep().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(keep().value).toBe('5');
+
+    // Stopped, in a refreshed list (new objects).
+    await act(async () => store.dispatch({ type: 'test/database', payload: {
+      activeDatabasesByHost: { h1: [] },
+      databasesByHost: { h1: [{ dbname: 'demodb', dbdir: '/data/demodb' }] },
+    } }));
+    expect(checked('offline')).toBe(true);
+    expect(mode('online').disabled).toBe(true);
+    expect(keep().value).toBe('5');
+    expect(backupId()).toBe(id);
+
+    // Started again: online is a choice again, offline stays chosen.
+    await act(async () => store.dispatch({ type: 'test/database', payload: { activeDatabasesByHost: { h1: ['demodb'] } } }));
+    expect(checked('offline')).toBe(true);
+    expect(mode('online').disabled).toBe(false);
+    expect(keep().value).toBe('5');
+    expect(backupId()).toBe(id);
   });
 });
 
