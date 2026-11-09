@@ -417,6 +417,8 @@ export const CM_KO = {
   serviceDashboard: '서비스 대시보드',
 
   file: '파일',
+  switchWorkspace: '워크스페이스 전환…',
+  quit: '종료',
   view: '보기',
   service: '서비스',
   database: '데이터베이스',
