@@ -9,7 +9,7 @@ vi.hoisted(() => {
   window.matchMedia ??= () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
 
-const mocks = vi.hoisted(() => ({ schedules: [] }));
+const mocks = vi.hoisted(() => ({ schedules: [], submitBackup: vi.fn() }));
 const { thunk } = vi.hoisted(() => ({
   thunk: (result) => () => {
     const promise = Promise.resolve(typeof result === 'function' ? result() : result);
@@ -23,16 +23,23 @@ vi.mock('../databaseSlice', () => ({
   addBackupSchedule: thunk({}),
   editBackupSchedule: thunk({}),
   fetchBackupSchedule: thunk(() => ({ schedules: mocks.schedules })),
+  closeBackupDatabaseModal: () => ({ type: 'test/close' }),
+  setPendingBackupJob: () => ({ type: 'test/pending' }),
+  clearPendingBackupJob: () => ({ type: 'test/pending' }),
 }));
+vi.mock('../databaseJobApi', () => ({ databaseJobApi: { submitBackup: mocks.submitBackup } }));
+vi.mock('../../../infrastructure/hooks/useCmsJobs', () => ({ useCmsJobs: () => ({ trackJob: vi.fn() }) }));
 
 import AddBackupPlanModal from './AddBackupPlanModal';
 import EditBackupPlanModal from './EditBackupPlanModal';
+import BackupDatabaseModal from './BackupDatabaseModal';
 
 let container;
 let root;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   mocks.schedules = [];
+  mocks.submitBackup.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -43,13 +50,14 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = async (ui, { running }) => {
+const render = async (ui, { running, ha = false }) => {
   const state = {
-    databaseUI: { isAddBackupPlanModalOpen: true, isEditBackupPlanModalOpen: true, selectedBackupId: 'p1' },
+    databaseUI: { isAddBackupPlanModalOpen: true, isEditBackupPlanModalOpen: true, isBackupDatabaseModalOpen: true, selectedBackupId: 'p1' },
     database: {
       selectedDatabase: 'demodb',
       databasesByHost: { h1: [{ dbname: 'demodb', dbdir: '/data/demodb' }] },
       activeDatabasesByHost: running ? { h1: ['demodb'] } : { h1: [] },
+      haDbNamesByHost: ha ? { h1: ['demodb'] } : {},
     },
     databaseOperation: { backupDbInfo: {} },
     host: { selectedHostUid: 'h1' },
@@ -133,5 +141,84 @@ describe('editing a backup plan', () => {
     await render(<EditBackupPlanModal />, { running: false });
     expect(checked('offline')).toBe(true);
     expect(mode('online').disabled).toBe(false);
+  });
+});
+
+// An offline run stops the database (cub_auto) and backupdb backs a stopped
+// one up offline (--SA-mode): neither may happen to an HA database.
+const modeError = () => container.querySelector('[data-testid="backup-plan-mode-error"]')?.textContent ?? null;
+const click = (el) => act(async () => el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+describe('backup plan of an HA database', () => {
+  it('new plan: online only for a running database', async () => {
+    await render(<AddBackupPlanModal />, { running: true, ha: true });
+    expect(checked('online')).toBe(true);
+    expect(mode('offline').disabled).toBe(true);
+    expect(modeError()).toBe(null);
+    expect(container.querySelector('[data-testid="add-backup-plan-save-btn"]').disabled).toBe(false);
+  });
+
+  it('new plan: not saved for a stopped database, and says why', async () => {
+    await render(<AddBackupPlanModal />, { running: false, ha: true });
+    expect(checked('online')).toBe(true);
+    expect(mode('online').disabled).toBe(true);
+    expect(mode('offline').disabled).toBe(true);
+    expect(modeError()).toBe('The database is stopped. HA databases can only be backed up online.');
+    expect(container.querySelector('[data-testid="add-backup-plan-save-btn"]').disabled).toBe(true);
+  });
+
+  it('saved offline plan: shows offline until changed, and saves only as online', async () => {
+    mocks.schedules = plan('OFF');
+    await render(<EditBackupPlanModal />, { running: true, ha: true });
+    const save = () => container.querySelector('[data-testid="edit-backup-plan-save-btn"]');
+    expect(checked('offline')).toBe(true);
+    expect(mode('offline').disabled).toBe(true);
+    expect(mode('online').disabled).toBe(false);
+    expect(modeError()).toBe('HA databases can only be backed up online.');
+    expect(save().disabled).toBe(true);
+
+    await click(mode('online'));
+    expect(checked('online')).toBe(true);
+    expect(modeError()).toBe(null);
+    expect(save().disabled).toBe(false);
+  });
+
+  it('saved online plan of a stopped database: not saved, and says why', async () => {
+    mocks.schedules = plan('ON');
+    await render(<EditBackupPlanModal />, { running: false, ha: true });
+    expect(checked('online')).toBe(true);
+    expect(mode('online').disabled).toBe(true);
+    expect(mode('offline').disabled).toBe(true);
+    expect(modeError()).toBe('The database is stopped. HA databases can only be backed up online.');
+    expect(container.querySelector('[data-testid="edit-backup-plan-save-btn"]').disabled).toBe(true);
+  });
+});
+
+describe('backing up an HA database now', () => {
+  const run = () => container.querySelector('[data-testid="backup-database-run-btn"]');
+
+  it('is refused while it is stopped (CMS would back it up offline), with the reason', async () => {
+    await render(<BackupDatabaseModal />, { running: false, ha: true });
+    expect(container.textContent).toContain('The database is stopped. HA databases can only be backed up online.');
+    expect(run().disabled).toBe(true);
+    // Enter in a text field submits on its own path.
+    const dir = container.querySelector('[data-testid="backup-database-dir-input"]');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(dir, '/backup');
+      dir.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => dir.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    expect(mocks.submitBackup).not.toHaveBeenCalled();
+  });
+
+  it('runs as before while it is running', async () => {
+    await render(<BackupDatabaseModal />, { running: true, ha: true });
+    expect(container.textContent).not.toContain('HA databases can only be backed up online');
+    expect(run().disabled).toBe(false);
+  });
+
+  it('runs a stopped non-HA database as before', async () => {
+    await render(<BackupDatabaseModal />, { running: false });
+    expect(run().disabled).toBe(false);
   });
 });

@@ -42,7 +42,7 @@ export default function AddBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isAddBackupPlanModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databasesByHost, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, activeDatabasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { backupDbInfo: databaseBackupInfo } = useSelector((state) => state.databaseOperation, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const databases = databasesByHost[selectedHostUid] || [];
@@ -51,6 +51,10 @@ export default function AddBackupPlanModal() {
   // can only be backed up offline.
   const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const onlineDisabled = !isDbRunning;
+  // An offline run stops the database first (cub_auto), which an HA
+  // database must not be: online only, and a stopped one gets no plan.
+  const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const offlineDisabled = isHaDb;
 
   const { 
     error: actionError, 
@@ -86,11 +90,11 @@ export default function AddBackupPlanModal() {
   // Read when the dialog opens; later changes (a list refresh, the database
   // starting or stopping) must not reset what the user typed.
   const atOpen = useRef({});
-  atOpen.current = { knownDbdir, isDbRunning };
+  atOpen.current = { knownDbdir, isDbRunning, isHaDb };
 
   useEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
-      const { knownDbdir: dbdirAtOpen, isDbRunning: runningAtOpen } = atOpen.current;
+      const { knownDbdir: dbdirAtOpen, isDbRunning: runningAtOpen, isHaDb: haAtOpen } = atOpen.current;
       resetAction();
       setErrors({});
       const initialPath = deriveBackupDir(dbdirAtOpen);
@@ -107,7 +111,7 @@ export default function AddBackupPlanModal() {
         useCompression: false,
         threads: 0,
         backupsToKeep: 1,
-        onlineType: runningAtOpen ? 'online' : 'offline'
+        onlineType: runningAtOpen || haAtOpen ? 'online' : 'offline'
       });
 
       if (selectedHostUid && !initialPath) {
@@ -123,12 +127,20 @@ export default function AddBackupPlanModal() {
     }
   }, [isAddBackupPlanModalOpen, selectedDatabase, selectedHostUid, dispatch, resetAction]);
 
-  // The database stopped while the dialog is open: online is no longer a choice.
+  // The database stopped while the dialog is open: online is no longer a
+  // choice. An HA database stays online (saving is refused while stopped).
   useEffect(() => {
-    if (isAddBackupPlanModalOpen && onlineDisabled) {
+    if (isAddBackupPlanModalOpen && onlineDisabled && !isHaDb) {
       setFormData((prev) => (prev.onlineType === 'online' ? { ...prev, onlineType: 'offline' } : prev));
     }
-  }, [isAddBackupPlanModalOpen, onlineDisabled]);
+  }, [isAddBackupPlanModalOpen, onlineDisabled, isHaDb]);
+
+  // Known as an HA database after the dialog opened: offline is no choice.
+  useEffect(() => {
+    if (isAddBackupPlanModalOpen && isHaDb) {
+      setFormData((prev) => (prev.onlineType === 'offline' ? { ...prev, onlineType: 'online' } : prev));
+    }
+  }, [isAddBackupPlanModalOpen, isHaDb]);
 
   // The folder became known after the dialog opened: fill an empty path only.
   useEffect(() => {
@@ -148,7 +160,11 @@ export default function AddBackupPlanModal() {
       ? checkMonthDays(Array.isArray(formData.periodDetail) ? formData.periodDetail.join(',') : '')
       : null,
   };
-  const hasPlanIssue = Object.values(planIssues).some(Boolean);
+  const modeIssue = !isHaDb ? null
+    : formData.onlineType !== 'online' ? CM.haBackupOnlineOnlyMsg
+    : onlineDisabled ? CM.haBackupDbStoppedMsg
+    : null;
+  const hasPlanIssue = Object.values(planIssues).some(Boolean) || Boolean(modeIssue);
 
   const validate = () => {
     const errs = {};
@@ -478,7 +494,7 @@ export default function AddBackupPlanModal() {
               type="button"
               key={mode.value}
               onClick={() => handleInputChange('onlineType', mode.value)}
-              disabled={mode.value === 'online' && onlineDisabled}
+              disabled={mode.value === 'online' ? onlineDisabled : offlineDisabled}
               data-testid={`backup-plan-mode-${mode.value}`}
               role="radio"
               aria-checked={formData.onlineType === mode.value}
@@ -498,6 +514,9 @@ export default function AddBackupPlanModal() {
             </button>
           ))}
           </div>
+          {modeIssue && (
+            <p role="alert" data-testid="backup-plan-mode-error" className="text-12 text-rose-500">{modeIssue}</p>
+          )}
         </FormSection>
 
         <details className="group rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/4">

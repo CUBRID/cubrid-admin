@@ -733,6 +733,8 @@ export const CM = {
   existingBackupWarningMsg: (level) =>
     `A level ${level} backup already exists in this directory. Running the backup again will overwrite it.`,
   backupPlanIdRequiredMsg: 'A Plan ID is required.',
+  haBackupOnlineOnlyMsg: 'HA databases can only be backed up online.',
+  haBackupDbStoppedMsg: 'The database is stopped. HA databases can only be backed up online.',
   databaseBackedUpMsg: (db, dir) => `Database "${db}" has been successfully backed up to "${dir}".`,
   restoringDatabase: 'Restoring Database',
   reconstructingInstance: 'Restoring Database',

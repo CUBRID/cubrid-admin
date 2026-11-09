@@ -40,7 +40,7 @@ export default function EditBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isEditBackupPlanModalOpen, selectedBackupId } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
@@ -76,6 +76,11 @@ export default function EditBackupPlanModal() {
   const [savedOnline, setSavedOnline] = useState(false);
   const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const onlineDisabled = savedOnline && !isDbRunning;
+  // An offline run stops the database first (cub_auto), which an HA
+  // database must not be: a saved offline plan still shows offline, but
+  // only online can be chosen and saved.
+  const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const offlineDisabled = isHaDb;
 
   useEffect(() => {
     if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
@@ -172,7 +177,11 @@ export default function EditBackupPlanModal() {
       ? checkMonthDays(Array.isArray(formData.periodDetail) ? formData.periodDetail.join(',') : '')
       : null,
   };
-  const hasPlanIssue = Object.values(planIssues).some(Boolean);
+  const modeIssue = !isHaDb || !formLoaded ? null
+    : formData.onlineType !== 'online' ? CM.haBackupOnlineOnlyMsg
+    : onlineDisabled ? CM.haBackupDbStoppedMsg
+    : null;
+  const hasPlanIssue = Object.values(planIssues).some(Boolean) || Boolean(modeIssue);
 
   const handleSave = async () => {
     if (!selectedDatabase || !selectedHostUid || hasPlanIssue) return;
@@ -471,7 +480,7 @@ export default function EditBackupPlanModal() {
                 type="button"
                 key={mode.value}
                 onClick={() => handleInputChange('onlineType', mode.value)}
-                disabled={mode.value === 'online' && onlineDisabled}
+                disabled={mode.value === 'online' ? onlineDisabled : offlineDisabled}
                 data-testid={`backup-plan-mode-${mode.value}`}
                 role="radio"
                 aria-checked={formData.onlineType === mode.value}
@@ -494,6 +503,9 @@ export default function EditBackupPlanModal() {
               </button>
             ))}
           </div>
+          {modeIssue && (
+            <p role="alert" data-testid="backup-plan-mode-error" className="text-12 text-rose-500">{modeIssue}</p>
+          )}
         </FormSection>
 
         <details className="group rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/4">

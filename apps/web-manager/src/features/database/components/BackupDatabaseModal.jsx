@@ -50,9 +50,14 @@ export default function BackupDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isBackupDatabaseModalOpen, pendingBackupJob } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { backupDbInfo: databaseBackupInfo } = useSelector((state) => state.databaseOperation, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  // CMS backs up a stopped database offline (backupdb --SA-mode), which an
+  // HA database must not be; a running one is backed up online.
+  const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const haStoppedIssue = isHaDb && !isDbRunning ? CM.haBackupDbStoppedMsg : null;
 
   const {
     error,
@@ -194,7 +199,7 @@ export default function BackupDatabaseModal() {
   const threadsIssue = formData.parallelBackup === '' ? null : checkIntInRange(formData.parallelBackup, BACKUP_THREAD_COUNT_MIN);
 
   const handleBackup = async () => {
-    if (threadsIssue) return;
+    if (threadsIssue || haStoppedIssue) return;
     if (!formData.backupDir) {
       endError(CM.backupDirRequiredMsg);
       return;
@@ -288,6 +293,14 @@ export default function BackupDatabaseModal() {
         <CaDialogField fullWidth>
           <InfoBanner variant="warning" title={CM.warning} icon="warning">
             {CM.backupDirFetchError}
+          </InfoBanner>
+        </CaDialogField>
+      )}
+
+      {haStoppedIssue && (
+        <CaDialogField fullWidth>
+          <InfoBanner variant="danger" title={CM.warning} icon="warning">
+            {haStoppedIssue}
           </InfoBanner>
         </CaDialogField>
       )}
@@ -397,7 +410,7 @@ export default function BackupDatabaseModal() {
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="backup-database-cancel-btn" variant="secondary" onClick={handleClose}>{CM.cancel}</Button>
-          <Button data-testid="backup-database-run-btn" variant="primary" onClick={handleBackup} disabled={Boolean(threadsIssue)} icon="play_circle" className="min-w-[140px]">
+          <Button data-testid="backup-database-run-btn" variant="primary" onClick={handleBackup} disabled={Boolean(threadsIssue || haStoppedIssue)} icon="play_circle" className="min-w-[140px]">
             {CM.ok}
           </Button>
         </div>
