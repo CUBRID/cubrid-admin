@@ -51,12 +51,15 @@ export default function ServerVersionModal() {
   if (!isServerVersionModalOpen) return null;
 
   const currentHost = hosts.find(h => h.uid === serverVersionHostUid);
+  // The host the info is read from, named as the host list names it: the
+  // menu reads the selected host, which may not be the highlighted row.
+  const hostName = currentHost?.alias || currentHost?.address;
 
   return (
     <Modal
       isOpen={isServerVersionModalOpen}
       onClose={() => dispatch(closeServerVersionModal())}
-      title={CM.serverVersion}
+      title={hostName ? `${CM.serverVersion} — ${hostName}` : CM.serverVersion}
       icon="info"
       loading={loading}
       maxWidth="420px"

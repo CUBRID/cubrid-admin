@@ -62,3 +62,18 @@ it('does not ask a host that is not connected, and says so', async () => {
   expect(text()).not.toContain('11.4.5.1908');
   expect(text()).toContain('Disconnected');
 });
+
+it('names the host the info belongs to in the title', async () => {
+  hostApi.getHostEnv.mockResolvedValue({ CUBRIDVER: '11.4.5.1908' });
+  await render({
+    hosts: [...hosts, { uid: 'c', id: 'admin', alias: '', address: '10.0.0.9' }],
+    authorizedHosts: ['a', 'c'],
+    isServerVersionModalOpen: false,
+    serverVersionHostUid: null,
+  });
+  await open('a');
+  expect(document.body.textContent).toContain('Host Engine Version — Alpha');
+  await close();
+  await open('c');
+  expect(document.body.textContent).toContain('Host Engine Version — 10.0.0.9');
+});
