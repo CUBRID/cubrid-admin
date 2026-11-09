@@ -1514,7 +1514,6 @@ export const CM_KO = {
   workspaceSettingsLoadFailedMsg: '워크스페이스 설정을 불러오지 못했습니다.',
   applyingWorkspaceMsg: '워크스페이스를 적용하는 중…',
   workspaceSaveFailedMsg: '워크스페이스를 저장하지 못했습니다.',
-  workspaceAppliedRelogMsg: '워크스페이스가 적용되었습니다. 다시 로그인하세요.',
   workspaceDesktopOnlyDesc: '워크스페이스 설정은 CUBRID Admin 데스크톱 앱에서 사용할 수 있습니다.',
   desktopConnectFailedMsg: '데스크톱 앱에 연결할 수 없습니다. 종료 후 다음 명령으로 다시 실행하세요:',
   selectWorkspaceTitle: '워크스페이스 선택',
@@ -2130,6 +2129,9 @@ export const CM_KO = {
   // Breadcrumb
   unsavedChangesTitle: '저장하지 않은 변경 사항',
   unsavedChangesDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 닫으면 변경 사항이 사라집니다.`,
+  switchWorkspaceUnsavedDesc: '저장하지 않은 변경이 있습니다. 워크스페이스를 바꾸면 변경 내용이 사라집니다.',
+  workspaceJobsUnknownDesc: '실행 중인 작업이 있는지 확인하지 못했습니다. 그래도 워크스페이스를 바꿀까요?',
+  switchWorkspaceConfirmBtn: '전환',
   unsavedReloadDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 다시 불러오면 변경 사항이 사라집니다.`,
 
   // Footer

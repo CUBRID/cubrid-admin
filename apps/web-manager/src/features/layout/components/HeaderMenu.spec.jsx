@@ -1,6 +1,8 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
+// HeaderMenu uses react-router (Switch Workspace navigates), so it renders inside a router.
+import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -39,7 +41,7 @@ const render = (hostId) => act(async () => {
     host: { selectedHostUid: 'h1', authorizedHosts: ['h1'], hosts: [{ uid: 'h1', id: hostId }] },
     user: { preferences: { uiLocale: 'ko' } },
   };
-  root.render(<Provider store={configureStore({ reducer: () => state })}><HeaderMenu /></Provider>);
+  root.render(<Provider store={configureStore({ reducer: () => state })}><MemoryRouter><HeaderMenu /></MemoryRouter></Provider>);
 });
 const cmsAccounts = () => [...container.querySelectorAll('button')].find((b) => b.textContent === KO.cmsAccountManagement);
 
