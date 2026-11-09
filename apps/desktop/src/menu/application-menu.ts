@@ -78,6 +78,13 @@ export const MENU_LABELS = {
     serverVersion: 'Host Engine Version',
     aboutCubridAdmin: 'About CUBRID Admin',
     openSettingsFileLocation: 'Open Settings File Location',
+    // Asked when a page with unsaved changes is closed or reloaded.
+    unsavedChangesMessage: 'You have unsaved changes.',
+    unsavedQuitDetail: 'Quit anyway? Your changes will be lost.',
+    unsavedLeaveDetail: 'Leave this page anyway? Your changes will be lost.',
+    unsavedQuitButton: 'Quit',
+    unsavedLeaveButton: 'Leave',
+    unsavedCancelButton: 'Cancel',
   },
   ko: {
     file: '파일',
@@ -121,6 +128,12 @@ export const MENU_LABELS = {
     serverVersion: '호스트 엔진 버전',
     aboutCubridAdmin: 'CUBRID Admin 정보',
     openSettingsFileLocation: '설정 파일 위치 열기',
+    unsavedChangesMessage: '저장하지 않은 변경이 있습니다.',
+    unsavedQuitDetail: '종료할까요? 변경 내용은 사라집니다.',
+    unsavedLeaveDetail: '이 화면을 떠날까요? 변경 내용은 사라집니다.',
+    unsavedQuitButton: '종료',
+    unsavedLeaveButton: '떠나기',
+    unsavedCancelButton: '취소',
   },
 } satisfies Record<MenuLanguage, Record<string, string>>;
 
