@@ -29,7 +29,8 @@ export default function ServerListItem({
 }) {
   const CM = useCM();
 
-  const haRole = haInfo?.isHA ? haInfo.currentNodeType : null;
+  // The HA role is only known while the host is connected.
+  const haRole = isAuthorized && haInfo?.isHA ? haInfo.currentNodeType : null;
   const roleConfig = haRole ? HA_ROLE_CONFIG[haRole] : null;
 
   // Shown as stored: a user-typed alias may itself end in "(master)"; the HA

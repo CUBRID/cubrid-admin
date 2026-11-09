@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useDispatch, useSelector, useStore, shallowEqual } from 'react-redux';
 import { loginToHostWithSideEffects, fetchHostEnv, openEditHostModal, setSelectedHost } from './hostSlice';
 import { resetDatabaseState, fetchDatabaseStartInfo } from '../database/databaseCoreSlice';
 import { resetBrokerState, fetchBrokerList } from '../broker/brokerSlice';
@@ -18,7 +18,8 @@ import { isHostPasswordError } from './hostLoginError';
  */
 export function useHostActivation() {
   const dispatch = useDispatch();
-  const { authorizedHosts, selectedHostUid, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const store = useStore();
+  const { authorizedHosts, selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const loginInProgressRef = useRef(false);
 
   // Sidebar's per-database HA gates (Load/Rename/Restore/Delete Database)
@@ -26,13 +27,15 @@ export function useHostActivation() {
   // fetching it unless the Server Dashboard tab happened to be open — so
   // right-clicking a database straight from the tree saw no heartbeat data
   // and never disabled those items. Kick this off as soon as the host is
-  // known to be HA (haInfo is set at login and persisted across sessions),
-  // so it's populated well before the user reaches a context menu.
+  // known to be HA (haInfo is set at login, and for a reload-restored host
+  // by loadHosts), so it's populated well before the user reaches a context
+  // menu. Read from the store at call time: right after a login, the haInfo
+  // this render saw is from before it (logout clears it).
   const primeHaHeartbeat = useCallback((uid) => {
-    if (haInfo[uid]?.isHA) {
+    if (store.getState().host.haInfo?.[uid]?.isHA) {
       dispatch(fetchHaHeartbeatOnly(uid));
     }
-  }, [dispatch, haInfo]);
+  }, [dispatch, store]);
 
   // `openDashboard: false` (a single click in the host list) switches the
   // host the sidebar shows without bringing up its dashboard: the dashboard

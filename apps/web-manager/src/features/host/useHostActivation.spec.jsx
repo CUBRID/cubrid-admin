@@ -75,3 +75,14 @@ it('opens Edit Host with the password kept when the login failed for another rea
   await act(async () => activate('h1'));
   expect(of('test/edit').map((a) => a.payload)).toEqual([{ hostUid: 'h1', passwordRejected: false }]);
 });
+
+it('reads the HA heartbeat of an HA host right after logging in to it', async () => {
+  // Logged out: no HA role known until the login answers.
+  login.result = (dispatch) => {
+    dispatch({ type: 'test/loggedIn', payload: { uid: 'h1', haInfo: { isHA: true, currentNodeType: 'master' } } });
+    return Promise.resolve('h1');
+  };
+  await render();
+  await act(async () => activate('h1'));
+  expect(of('test/hb').map((a) => a.payload)).toEqual(['h1']);
+});
