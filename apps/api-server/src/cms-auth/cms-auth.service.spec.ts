@@ -8,6 +8,7 @@ import { HostService } from '@host';
 import { CONNECT_LOGIN_DEADLINE_MS, CmsAuthService } from './cms-auth.service';
 import { HostInfo, User } from '@type/index';
 import { getHost } from '@host/host-group.util';
+import { CmsError } from '@error/cms/cms-error';
 
 describe('CMSAuthService', () => {
   let service: CmsAuthService;
@@ -241,6 +242,30 @@ describe('CMSAuthService', () => {
         it('counts the password given again unchanged as unchanged', async () => {
           await service.connect('u1', 'h1', { password: 'pw' });
           expect(client.postPublic).not.toHaveBeenCalled();
+        });
+
+        it('logs in when CMS no longer knows the session, instead of answering connected', async () => {
+          const restore = moduleRef.get(DatabaseUserService).restoreDbLoginsAfterHostLogin as jest.Mock;
+          jest.spyOn(service, 'getHaInfo')
+            .mockRejectedValueOnce(CmsError.InvalidToken())
+            .mockResolvedValue({ success: true, isHA: false });
+
+          await expect(service.connect('u1', 'h1', { alias: 'renamed' })).resolves.toEqual({ success: true, isHA: false });
+
+          expect(client.postPublic).toHaveBeenCalledTimes(1);
+          expect(saved()).toMatchObject({ alias: 'renamed', token: 'new-token' });
+          expect(restore).toHaveBeenCalledWith('u1', 'h1', 'new-token');
+        });
+
+        it('keeps the session and only flags the HA details when they fail for another reason', async () => {
+          jest.spyOn(service, 'getHaInfo').mockRejectedValue(new Error('heartbeatlist failed'));
+
+          await expect(service.connect('u1', 'h1', { alias: 'renamed' })).resolves.toEqual({
+            success: true, isHA: false, haInfoUnavailable: true,
+          });
+
+          expect(client.postPublic).not.toHaveBeenCalled();
+          expect(saved()).toMatchObject({ alias: 'renamed', token: 'old-token' });
         });
 
         it('logs in once when the password changes', async () => {
