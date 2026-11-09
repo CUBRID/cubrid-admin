@@ -338,8 +338,9 @@ export class DatabaseBackupService extends BaseService {
     request: BackupDbClientRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<BackupDbClientResponse> {
-    // backupdb backs a stopped database up offline (--SA-mode).
-    if ((await this.isListedHaDb(userId, hostUid, dbname)) && !(await this.isDbRunning(userId, hostUid, dbname))) {
+    // backupdb backs a stopped database up offline (--SA-mode). cubrid_ha.conf
+    // is read only then, so a running database's backup reads no conf.
+    if (!(await this.isDbRunning(userId, hostUid, dbname)) && (await this.isListedHaDb(userId, hostUid, dbname))) {
       throw DatabaseError.OfflineBackupNotSupportedForHaDatabase({ dbname, reason: 'DATABASE_STOPPED' });
     }
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);

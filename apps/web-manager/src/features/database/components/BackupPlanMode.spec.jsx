@@ -167,6 +167,28 @@ describe('backup plan of an HA database', () => {
     expect(container.querySelector('[data-testid="add-backup-plan-save-btn"]').disabled).toBe(true);
   });
 
+  it('new plan: moves offline to online when the database is known as HA after the dialog opened', async () => {
+    // Stopped, not yet known as HA: offline.
+    const store = await render(<AddBackupPlanModal />, { running: false });
+    expect(checked('offline')).toBe(true);
+    await act(async () => store.dispatch({ type: 'test/database', payload: { haDbNamesByHost: { h1: ['demodb'] } } }));
+    expect(checked('online')).toBe(true);
+    expect(mode('offline').disabled).toBe(true);
+    expect(modeError()).toBe('The database is stopped. HA databases can only be backed up online.');
+    expect(container.querySelector('[data-testid="add-backup-plan-save-btn"]').disabled).toBe(true);
+  });
+
+  it('new plan: moves a chosen offline to online when the running database is known as HA later', async () => {
+    const store = await render(<AddBackupPlanModal />, { running: true });
+    await click(mode('offline'));
+    expect(checked('offline')).toBe(true);
+    await act(async () => store.dispatch({ type: 'test/database', payload: { haDbNamesByHost: { h1: ['demodb'] } } }));
+    expect(checked('online')).toBe(true);
+    expect(mode('offline').disabled).toBe(true);
+    expect(modeError()).toBe(null);
+    expect(container.querySelector('[data-testid="add-backup-plan-save-btn"]').disabled).toBe(false);
+  });
+
   it('saved offline plan: shows offline until changed, and saves only as online', async () => {
     mocks.schedules = plan('OFF');
     await render(<EditBackupPlanModal />, { running: true, ha: true });

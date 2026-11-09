@@ -671,6 +671,13 @@ describe('DatabaseBackupService', () => {
       expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ task: 'backupdb' }), expect.anything());
     });
 
+    it('reads cubrid_ha.conf only for a stopped database, so a running one is backed up even when it cannot be read', async () => {
+      running([mockDbname]);
+      databaseInfoService.getListedHaDbNames.mockRejectedValue(new Error('haconf read failed'));
+      await expect(service.backupDb(mockUserId, mockHostUid, mockDbname, backupNow)).resolves.toEqual({ success: true });
+      expect(databaseInfoService.getListedHaDbNames).not.toHaveBeenCalled();
+    });
+
     it('leaves a database not in ha_db_list as before: offline plans, and a stopped one backed up', async () => {
       databaseInfoService.getListedHaDbNames.mockResolvedValue(new Set(['otherdb']));
       running([]);
