@@ -251,7 +251,7 @@ export default function DesktopWorkspaceSettingsPage() {
         isOpen={askIgnoreUnknownJobs}
         title={CM.switchWorkspace}
         description={CM.workspaceJobsUnknownDesc}
-        confirmLabel={CM.switchWorkspace}
+        confirmLabel={CM.switchWorkspaceConfirmBtn}
         variant="danger"
         onCancel={() => setAskIgnoreUnknownJobs(false)}
         onConfirm={() => {

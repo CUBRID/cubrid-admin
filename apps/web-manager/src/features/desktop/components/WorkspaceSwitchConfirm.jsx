@@ -21,7 +21,7 @@ export default function WorkspaceSwitchConfirm() {
       isOpen={isOpen}
       title={CM.unsavedChangesTitle}
       description={CM.switchWorkspaceUnsavedDesc}
-      confirmLabel={CM.switchWorkspace}
+      confirmLabel={CM.switchWorkspaceConfirmBtn}
       variant="danger"
       onCancel={() => dispatch(closeWorkspaceSwitchConfirm())}
       onConfirm={() => {
