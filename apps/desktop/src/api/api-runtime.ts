@@ -9,6 +9,11 @@ import { waitForApiReady } from './wait-for-api';
 
 let apiProcess: ApiProcessHandle | null = null;
 let apiPaths: WorkspacePaths | null = null;
+// Spawned but not answering yet: a quit in that time must stop it too.
+let startingProcess: ApiProcessHandle | null = null;
+// Set on quit: no server starts after it (a switch that fails then would
+// otherwise restart the previous workspace's server).
+let quitting = false;
 
 export function getApiProcess(): ApiProcessHandle | null {
   return apiProcess;
@@ -27,6 +32,9 @@ export function getRunningWorkspacePaths(): WorkspacePaths | null {
  * ends or does not answer in time.
  */
 export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiProcessHandle> {
+  if (quitting) {
+    throw new WorkspaceError('WORKSPACE_API_START_FAILED', 'The app is quitting.');
+  }
   try {
     ensureWorkspaceDirectories(paths);
   } catch (error) {
@@ -36,9 +44,20 @@ export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiPr
   let handle: ApiProcessHandle | null = null;
   try {
     handle = startApiServer(paths, loadOrCreateDesktopSecrets(paths.dataDir));
+    startingProcess = handle;
     setAppProtocolApiSocket(paths.socketPath);
     await waitForApiReady(paths.socketPath, handle.exited);
+    if (startingProcess !== handle) {
+      throw new Error('The server was stopped while it started.');
+    }
+    startingProcess = null;
   } catch (error) {
+    const stoppedWhileStarting = handle !== null && startingProcess !== handle;
+    if (startingProcess === handle) startingProcess = null;
+    // Stopped by a quit: the stop already gave the workspace back.
+    if (stoppedWhileStarting) {
+      throw new WorkspaceError('WORKSPACE_API_START_FAILED', 'The server was stopped while it started.');
+    }
     const reason = handle?.stderrTail() || (error instanceof Error ? error.message : String(error));
     if (handle) await stopAndWait(handle);
     setAppProtocolApiSocket(undefined);
@@ -52,16 +71,27 @@ export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiPr
 }
 
 /**
- * Stops the server and gives its workspace back at once (also on quit);
- * the promise resolves once the process is gone.
+ * Stops the server, and one still starting, and gives its workspace back at
+ * once; the promise resolves once the processes are gone.
  */
 export function stopDesktopApi(): Promise<void> {
-  const handle = apiProcess;
+  const handles = [apiProcess, startingProcess].filter((h): h is ApiProcessHandle => h !== null);
   apiProcess = null;
   apiPaths = null;
+  startingProcess = null;
   setAppProtocolApiSocket(undefined);
   releaseWorkspaceLock();
-  return handle ? stopAndWait(handle) : Promise.resolve();
+  return Promise.all(handles.map(stopAndWait)).then(() => undefined);
+}
+
+/** On quit: stops every server, and none starts after it. */
+export function stopDesktopApiOnQuit(): Promise<void> {
+  quitting = true;
+  return stopDesktopApi();
+}
+
+export function isDesktopApiQuitting(): boolean {
+  return quitting;
 }
 
 async function stopAndWait(handle: ApiProcessHandle): Promise<void> {

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, session } from 'electron';
-import { startApiForWorkspace, stopDesktopApi } from './api/api-runtime';
+import { isDesktopApiQuitting, startApiForWorkspace, stopDesktopApiOnQuit } from './api/api-runtime';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
 import { getPortableAppRoot } from './config/portable-root';
@@ -44,6 +44,8 @@ async function startApiOrAskForWorkspace(window: BrowserWindow): Promise<void> {
       setWorkspaceStartupError(null);
       return;
     } catch (error) {
+      // Quit while the server started: the window is closing, nothing to ask.
+      if (isDesktopApiQuitting()) return;
       console.error('[desktop] could not start on the workspace', error);
       setWorkspaceStartupError(error instanceof Error ? error.message : String(error));
       await loadRoute(window, 'desktop/workspace');
@@ -126,6 +128,7 @@ async function bootstrap(): Promise<void> {
   }
 
   await startApiOrAskForWorkspace(mainWindow);
+  if (isDesktopApiQuitting() || mainWindow.isDestroyed()) return;
 
   await loadRoute(mainWindow, '');
   mainWindow.show();
@@ -146,7 +149,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
-  void stopDesktopApi();
+  void stopDesktopApiOnQuit();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
