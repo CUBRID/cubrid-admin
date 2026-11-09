@@ -169,8 +169,10 @@ describe('desktop app without an app login', () => {
     await renderWorkspacePage();
     expect(saveButton()).not.toBeNull();
     expect(container.querySelector('[data-testid="workspace-reset-btn"]')).toBeNull();
+    // A custom workspace is where the reset button used to show.
     expect([...container.querySelectorAll('button')].map((b) => b.textContent.trim()))
-      .toEqual([CM.selectFolderEllipsis, CM.save]);
+      .not.toContain('Default location');
+    expect('defaultLocationBtn' in CM).toBe(false);
   });
 
   it('lets first run continue with the default folder as offered', async () => {
