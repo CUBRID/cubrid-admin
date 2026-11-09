@@ -60,7 +60,7 @@ export const stopAllBrokersAndRefresh = (hostUid) => async (dispatch) => {
 };
 
 // ON or SUSPENDED: the broker process is up (CMS maps the engine's
-// FLAG_SUSPEND to SUSPENDED). Same test as isBrokerRunning in brokerState.js.
+// FLAG_SUSPEND to SUSPENDED). Case and spaces in the state are ignored.
 const isRunningBroker = (broker) => {
   const raw = broker?.state ?? broker?.status;
   const state = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
