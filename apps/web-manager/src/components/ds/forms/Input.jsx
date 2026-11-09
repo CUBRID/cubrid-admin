@@ -20,6 +20,9 @@ export const Input = forwardRef(({
   inputClassName = '',
   id,
   onStepChange,
+  // Ids of text elsewhere that also describes the input (a hint shown
+  // below a row of fields rather than above this one).
+  describedBy,
   ...props
 }, ref) => {
   const generatedId = useId();
@@ -90,7 +93,7 @@ export const Input = forwardRef(({
             if (onChange) onChange(e);
           }}
           aria-invalid={error ? 'true' : undefined}
-          aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
+          aria-describedby={[descriptionId, describedBy, errorId].filter(Boolean).join(' ') || undefined}
           className={`w-full ${isSm ? 'h-8 text-14' : 'h-10 text-15'} font-medium bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl focus:outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${
             icon ? 'pl-12' : 'pl-3'
           } ${

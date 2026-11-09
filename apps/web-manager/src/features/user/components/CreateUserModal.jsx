@@ -246,8 +246,12 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
             </Typography>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" description={isEditMode ? CM.dbPasswordKeepHint(DB_PASSWORD_MAX_BYTES) : CM.dbPasswordRuleHint(DB_PASSWORD_MAX_BYTES, true)} />
+            <Input data-testid="create-user-password-input" label={CM.newPassword} type="password" name="password" value={formData.password} onChange={handleInputChange} error={errors.password} placeholder="••••••••" describedBy="create-user-password-hint" />
             <Input data-testid="create-user-confirm-password-input" label={CM.passwordConfirm} type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} error={errors.confirmPassword} placeholder="••••••••" />
+            {/* Below both fields, so the two inputs stay level. */}
+            <Typography id="create-user-password-hint" data-testid="create-user-password-hint" variant="p" className="col-span-2 -mt-2 ml-0.5 text-12 font-medium leading-tight text-slate-400 dark:text-slate-500">
+              {isEditMode ? CM.dbPasswordKeepHint(DB_PASSWORD_MAX_BYTES) : CM.dbPasswordRuleHint(DB_PASSWORD_MAX_BYTES, true)}
+            </Typography>
           </div>
           {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
             <div className="flex items-center gap-2 text-13 text-rose-500 font-bold px-1">

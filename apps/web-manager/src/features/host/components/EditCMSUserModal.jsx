@@ -12,6 +12,7 @@ import {
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { Typography } from '../../../components/ds/foundation/Typography';
 import PasswordChangeLink from './PasswordChangeLink';
 import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
@@ -227,7 +228,7 @@ export default function EditCMSUserModal() {
                 icon="lock"
                 required={settingPassword}
                 disabled={!settingPassword}
-                description={settingPassword ? CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES) : null}
+                describedBy={settingPassword ? 'edit-cms-user-password-hint' : undefined}
                 labelAction={isEditMode ? (
                   <PasswordChangeLink
                     testId="edit-cms-user-change-password-toggle"
@@ -249,6 +250,12 @@ export default function EditCMSUserModal() {
                 disabled={!settingPassword}
                 error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
               />
+              {/* Below both fields, so the two inputs stay level. */}
+              {settingPassword && (
+                <Typography id="edit-cms-user-password-hint" data-testid="edit-cms-user-password-hint" variant="p" className="col-span-2 -mt-2 ml-0.5 text-12 font-medium leading-tight text-slate-400 dark:text-slate-500">
+                  {CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES)}
+                </Typography>
+              )}
             </div>
           </div>
         </section>

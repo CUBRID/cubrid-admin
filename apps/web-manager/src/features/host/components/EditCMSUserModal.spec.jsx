@@ -82,3 +82,20 @@ it('names the password fields as new ones when editing', async () => {
   expect(q('edit-cms-user-password-input').placeholder).toBe('New Password');
   expect(document.body.textContent).toContain('Confirm New Password');
 });
+
+it('shows the password rule below both password fields, so the two inputs stay level', async () => {
+  await render();
+  expect(q('edit-cms-user-password-hint')).toBeNull();
+  await act(async () => q('edit-cms-user-change-password-toggle').click());
+
+  const hint = q('edit-cms-user-password-hint');
+  const password = q('edit-cms-user-password-input');
+  const confirm = q('edit-cms-user-confirm-password-input');
+  // Nothing between a field's label and its input on one side only.
+  expect(password.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(confirm.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(hint.className).toContain('col-span-2');
+  expect(password.closest('.grid').contains(hint)).toBe(true);
+  expect(password.getAttribute('aria-describedby')).toContain('edit-cms-user-password-hint');
+});
+
