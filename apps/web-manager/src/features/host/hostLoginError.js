@@ -15,6 +15,8 @@ export function hostLoginErrorMessage(err, CM) {
 }
 
 // CMS answers a wrong password with "Incorrect password" (cm_auto_task.cpp).
+// Its other login errors that name the password ("password file open error"
+// when cm.pass cannot be read, a request without one) are not the user's.
 export function isHostPasswordError(message) {
-  return /password/i.test(String(message || ''));
+  return /incorrect password/i.test(String(message || ''));
 }
