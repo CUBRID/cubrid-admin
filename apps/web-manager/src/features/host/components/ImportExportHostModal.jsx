@@ -15,6 +15,8 @@ import { exportHostsToXml,
   exportHostGroupsToJson,
   parseHostsImportFile,
   buildImportPreviewList,
+  importRowBlockedReason,
+  pickImportRows,
   validateSelectedImportRows,
   partitionImportRows,
 } from '../hostImportExport';
@@ -70,18 +72,23 @@ export default function ImportExportHostModal() {
 
   if (!isImportExportModalOpen) return null;
 
+  // A row clashing with a picked row of the file (same connection or alias)
+  // waits until that row is unpicked.
   const handleToggleHost = (uid) => {
-    setSelectedHosts(prev =>
-      prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
-    );
+    setSelectedHosts((prev) => {
+      if (prev.includes(uid)) return prev.filter((id) => id !== uid);
+      const row = importList.find((h) => h.rowId === uid);
+      return row && importRowBlockedReason(row, prev) ? prev : [...prev, uid];
+    });
   };
 
+  // Every row that can go in, keeping the rows already picked: of rows that
+  // clash only one is picked.
   const handleToggleAll = () => {
-    const selectable = importList.filter(h => h.isSelectable);
-    if (selectedHosts.length === selectable.length) {
+    if (isAllSelected) {
       setSelectedHosts([]);
     } else {
-      setSelectedHosts(selectable.map(h => h.rowId));
+      setSelectedHosts(pickImportRows(importList, [...selectedHosts, ...importList.map((h) => h.rowId)]));
     }
   };
 
@@ -106,7 +113,7 @@ export default function ImportExportHostModal() {
         const listWithStatus = buildImportPreviewList(parsed, hosts);
 
         setImportList(listWithStatus);
-        setSelectedHosts(listWithStatus.filter(h => h.isSelectable).map(h => h.rowId));
+        setSelectedHosts(pickImportRows(listWithStatus, listWithStatus.map((h) => h.rowId)));
       } catch (err) {
         dispatch(showStatusModal({
           type: 'error',
@@ -433,8 +440,12 @@ export default function ImportExportHostModal() {
   const icon = importExportMode === 'export' ? 'file_upload' : 'file_download';
 
   const selectable = importList.filter(h => h.isSelectable);
-  const isAllSelected = selectable.length > 0 && selectedHosts.length === selectable.length;
-  const isSomeSelected = selectedHosts.length > 0 && selectedHosts.length < selectable.length;
+  // As many rows as can go in together (one of each clashing set).
+  const pickableCount = pickImportRows(importList, importList.map((h) => h.rowId)).length;
+  const isAllSelected = pickableCount > 0 && selectedHosts.length === pickableCount;
+  const isSomeSelected = selectedHosts.length > 0 && selectedHosts.length < pickableCount;
+  const blockedReason = (host) => importRowBlockedReason(host, selectedHosts);
+  const canPick = (host) => host.isSelectable && !blockedReason(host);
   const hasValidationErrors = importList.some((h) => h.validationError && !h.isDuplicate);
   const fileHasPrefsGroups = importList.some((row) => row.hasPrefsGroups);
 
@@ -720,8 +731,8 @@ export default function ImportExportHostModal() {
                           >
                             <Checkbox
                               checked={isSelected}
-                              onChange={() => host.isSelectable && handleToggleHost(rowId)}
-                              disabled={!host.isSelectable}
+                              onChange={() => (isSelected || canPick(host)) && handleToggleHost(rowId)}
+                              disabled={!isSelected && !canPick(host)}
                             />
                           </div>
                         );
@@ -743,9 +754,9 @@ export default function ImportExportHostModal() {
                               <Badge variant="secondary" size="xs">{CM.invalidLabel}</Badge>
                             )}
                           </div>
-                          {host.validationError && (
+                          {(host.validationError || blockedReason(host)) && (
                             <Typography variant="caption" className="text-12 text-amber-600 dark:text-amber-400">
-                              {host.validationError}
+                              {host.validationError || blockedReason(host)}
                             </Typography>
                           )}
                         </div>
@@ -766,13 +777,13 @@ export default function ImportExportHostModal() {
                   data={importList}
                   showEmptyStateAsRow
                   onRowClick={(host) => {
-                    if (host.isSelectable) handleToggleHost(host.rowId);
+                    if (selectedHosts.includes(host.rowId) || canPick(host)) handleToggleHost(host.rowId);
                   }}
                   rowClassName={(host) => {
                     const isSelected = selectedHosts.includes(host.rowId);
                     return `
                       ${isSelected ? 'bg-bk-yellow/3' : ''}
-                      ${host.isSelectable ? 'cursor-pointer' : 'opacity-60 grayscale-[0.35]'}
+                      ${isSelected || canPick(host) ? 'cursor-pointer' : 'opacity-60 grayscale-[0.35]'}
                     `;
                   }}
                />

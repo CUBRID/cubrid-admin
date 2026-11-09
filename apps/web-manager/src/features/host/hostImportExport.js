@@ -337,10 +337,14 @@ export function parseImportPort(value, defaultPort = DEFAULT_IMPORT_PORT) {
   return { valid: true, port };
 }
 
+// The server's rule (findDuplicateHost): the same address, port and CMS user,
+// compared as they are sent. The same address and port with another CMS user
+// is another connection.
 function sameConnection(a, b) {
   return (
-    String(a.address).trim() === String(b.address).trim() &&
-    String(a.port) === String(b.port)
+    String(a.address ?? '') === String(b.address ?? '') &&
+    Number(a.port) === Number(b.port) &&
+    String(a.id ?? '') === String(b.id ?? '')
   );
 }
 
@@ -353,10 +357,13 @@ function sameAlias(a, b) {
 const problem = (code, message) => ({ code, message });
 
 /**
+ * What is wrong with the row on its own or against the hosts already there.
+ * Rows of the file that clash with each other are not wrong: one of them can
+ * be imported (importFileConflicts).
  * @returns {{ code: string, message: string }|null} what is wrong with the
  *   row (code) and how to say it in the UI language (message)
  */
-export function validateImportHostEntry(entry, { existingHosts = [], batchPeers = [] } = {}) {
+export function validateImportHostEntry(entry, { existingHosts = [] } = {}) {
   const alias = String(entry.alias ?? '').trim();
   const address = String(entry.address ?? '').trim();
   const id = String(entry.id ?? '').trim();
@@ -369,28 +376,72 @@ export function validateImportHostEntry(entry, { existingHosts = [], batchPeers 
   if (!id) return problem('USERNAME_REQUIRED', labels().usernameRequired);
   if (!portResult.valid) return problem('PORT_INVALID', portResult.error);
 
-  const normalized = { alias, address, id, port: portResult.port };
+  const connection = { address: entry.address, port: portResult.port, id: entry.id };
 
   for (const existing of existingHosts) {
-    if (sameConnection(normalized, existing)) {
+    if (sameConnection(connection, existing)) {
       return problem('ALREADY_REGISTERED', labels().importAlreadyRegisteredMsg);
     }
-    if (sameAlias(normalized, existing)) {
+    if (sameAlias({ alias }, existing)) {
       return problem('ALIAS_IN_USE', labels().importAliasInUseMsg);
     }
   }
 
-  for (const peer of batchPeers) {
-    if (peer.rowId != null && peer.rowId === entry.rowId) continue;
-    if (sameConnection(normalized, peer)) {
-      return problem('DUPLICATE_CONNECTION_IN_FILE', labels().importDuplicateConnectionMsg);
-    }
-    if (sameAlias(normalized, peer)) {
-      return problem('DUPLICATE_ALIAS_IN_FILE', labels().importDuplicateAliasMsg);
+  return null;
+}
+
+/**
+ * The other rows of the file this row cannot be imported with: the same
+ * connection, or the same alias. Only rows that can be imported count.
+ * @returns {{ rowId: string, code: string }[]}
+ */
+function importFileConflicts(row, rows) {
+  const conflicts = [];
+  for (const other of rows) {
+    if (other.rowId === row.rowId || !other.isSelectable) continue;
+    if (sameConnection(
+      { address: row.address, port: row.portNumber, id: row.id },
+      { address: other.address, port: other.portNumber, id: other.id },
+    )) {
+      conflicts.push({ rowId: other.rowId, code: 'DUPLICATE_CONNECTION_IN_FILE' });
+    } else if (sameAlias(row, other)) {
+      conflicts.push({ rowId: other.rowId, code: 'DUPLICATE_ALIAS_IN_FILE' });
     }
   }
+  return conflicts;
+}
 
-  return null;
+const conflictMessage = (code) => (code === 'DUPLICATE_CONNECTION_IN_FILE'
+  ? labels().importDuplicateConnectionMsg
+  : labels().importDuplicateAliasMsg);
+
+/**
+ * Why the row cannot be picked while these rows are: another row of the file
+ * with the same connection or alias is picked. Unpicking that row frees it.
+ * @returns {string|null} the reason, in the UI language
+ */
+export function importRowBlockedReason(row, selectedRowIds) {
+  const picked = new Set(selectedRowIds);
+  if (picked.has(row.rowId)) return null;
+  const clash = (row.fileConflicts ?? []).find((conflict) => picked.has(conflict.rowId));
+  return clash ? conflictMessage(clash.code) : null;
+}
+
+/**
+ * The rows to pick from `rowIds`, in their order, that can be imported
+ * together: a row clashing with one picked before it is left out (Select all,
+ * the selection a file opens with).
+ * @returns {string[]} row ids
+ */
+export function pickImportRows(rows, rowIds) {
+  const byId = new Map(rows.map((row) => [row.rowId, row]));
+  const picked = [];
+  for (const rowId of rowIds) {
+    const row = byId.get(rowId);
+    if (!row?.isSelectable || picked.includes(rowId) || importRowBlockedReason(row, picked)) continue;
+    picked.push(rowId);
+  }
+  return picked;
 }
 
 export function buildImportPreviewList(parsed, existingHosts) {
@@ -422,21 +473,8 @@ export function buildImportPreviewList(parsed, existingHosts) {
     };
   });
 
-  return baseRows.map((row) => {
-    const batchPeers = baseRows
-      .filter((other) => other.rowId !== row.rowId)
-      .map((other) => {
-        const peerPort = parseImportPort(other.port);
-        return {
-          rowId: other.rowId,
-          alias: String(other.alias ?? '').trim(),
-          address: String(other.address ?? '').trim(),
-          port: peerPort.valid ? peerPort.port : other.port,
-        };
-      });
-
-    const invalid = validateImportHostEntry(row, { existingHosts, batchPeers });
-
+  const checkedRows = baseRows.map((row) => {
+    const invalid = validateImportHostEntry(row, { existingHosts });
     return {
       ...row,
       validationError: invalid?.message ?? null,
@@ -444,21 +482,27 @@ export function buildImportPreviewList(parsed, existingHosts) {
       isSelectable: !invalid,
     };
   });
+
+  return checkedRows.map((row) => (row.isSelectable
+    ? { ...row, fileConflicts: importFileConflicts(row, checkedRows) }
+    : row));
 }
 
 /**
  * @returns {{ ok: true } | { ok: false, messages: string[] }}
  */
 export function validateSelectedImportRows(rows) {
-  const invalid = rows.filter((row) => row.validationError && !row.isDuplicate);
-  if (invalid.length === 0) {
-    return { ok: true };
-  }
-
-  const messages = invalid.map((row) =>
-    `${row.alias || row.address || row.rowId}: ${row.validationError}`
-  );
-  return { ok: false, messages };
+  const name = (row) => row.alias || row.address || row.rowId;
+  const messages = rows
+    .filter((row) => row.validationError && !row.isDuplicate)
+    .map((row) => `${name(row)}: ${row.validationError}`);
+  // Two rows of the file with the same connection or alias, both picked.
+  const pickedIds = rows.map((row) => row.rowId);
+  rows.forEach((row, index) => {
+    const reason = importRowBlockedReason(row, pickedIds.slice(0, index));
+    if (reason) messages.push(`${name(row)}: ${reason}`);
+  });
+  return messages.length === 0 ? { ok: true } : { ok: false, messages };
 }
 
 /**

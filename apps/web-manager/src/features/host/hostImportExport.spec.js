@@ -3,7 +3,9 @@ import {
   buildGroupedExportPayload,
   buildImportPreviewList,
   exportHostGroupsToNativeXml,
+  importRowBlockedReason,
   parseHostsImportFile,
+  pickImportRows,
   partitionImportRows,
   validateImportHostEntry,
   validateSelectedImportRows,
@@ -92,8 +94,56 @@ describe('validateImportHostEntry', () => {
 
   it('marks a host already registered as a duplicate in Korean too', () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
-    const [row] = buildImportPreviewList([{ ...entry, rowId: 'r1' }], [{ alias: 'old', address: '10.0.0.9', port: 8001 }]);
-    expect(row).toMatchObject({ validationError: '이미 등록된 호스트입니다(주소 + 포트).', isDuplicate: true, isSelectable: false });
+    const [row] = buildImportPreviewList([{ ...entry, rowId: 'r1' }], [{ alias: 'old', address: '10.0.0.9', port: 8001, id: 'admin' }]);
+    expect(row).toMatchObject({ validationError: '이미 등록된 호스트입니다(주소 + 포트 + 사용자 이름).', isDuplicate: true, isSelectable: false });
     expect(validateSelectedImportRows([row])).toEqual({ ok: true });
+  });
+
+  it('imports a host with the same address and port as a registered one but another CMS user, as the server allows', () => {
+    const [row] = buildImportPreviewList([{ ...entry }], [{ alias: 'old', address: '10.0.0.9', port: 8001, id: 'other' }]);
+    expect(row).toMatchObject({ validationError: null, isDuplicate: false, isSelectable: true });
+  });
+});
+
+describe('rows of the file that clash', () => {
+  afterEach(() => localStorage.removeItem(LOCALE_STORAGE_KEY));
+  const row = (alias, address, id = 'admin') => ({ alias, address, port: '8001', id });
+
+  it('keeps every clashing row selectable, and picks one of each clash when the file opens or on Select all', () => {
+    const rows = buildImportPreviewList([
+      row('web1', '10.0.0.9'), row('web2', '10.0.0.9'), // same connection
+      row('web3', '10.0.0.8'), row('web3', '10.0.0.7'), // same alias
+      row('web5', '10.0.0.9', 'other'), // same address and port, another user
+    ], []);
+    expect(rows.every((r) => r.isSelectable && !r.validationError)).toBe(true);
+    const all = rows.map((r) => r.rowId);
+    expect(pickImportRows(rows, all)).toEqual([all[0], all[2], all[4]]);
+    // The rows already picked stay picked.
+    expect(pickImportRows(rows, [all[1], ...all])).toEqual([all[1], all[2], all[4]]);
+  });
+
+  it('says why a row cannot be picked while its twin is, and frees it once the twin is unpicked', () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
+    const rows = buildImportPreviewList([row('web1', '10.0.0.9'), row('web2', '10.0.0.9'), row('web3', '10.0.0.8'), row('web3', '10.0.0.7')], []);
+    const [a, b, c, d] = rows;
+    expect(importRowBlockedReason(b, [a.rowId])).toBe('가져오기 파일 안에 주소 + 포트 + 사용자 이름이 겹칩니다.');
+    expect(importRowBlockedReason(d, [c.rowId])).toBe('가져오기 파일 안에 이름이 겹칩니다.');
+    expect(importRowBlockedReason(b, [])).toBeNull();
+    expect(importRowBlockedReason(b, [c.rowId])).toBeNull();
+  });
+
+  it('refuses two clashing rows sent together', () => {
+    const [a, b, c] = buildImportPreviewList([row('web1', '10.0.0.9'), row('web2', '10.0.0.9'), row('web3', '10.0.0.8')], []);
+    expect(validateSelectedImportRows([a, c])).toEqual({ ok: true });
+    expect(validateSelectedImportRows([a, b, c])).toEqual({
+      ok: false, messages: ['web2: Duplicate address + port + username in import file'],
+    });
+  });
+
+  it('lets a row clash only with rows that can be imported', () => {
+    const rows = buildImportPreviewList([row('web1', '10.0.0.9'), row('web2', '10.0.0.9')], [{ alias: 'web1', address: '1.1.1.1', port: 8001, id: 'x' }]);
+    // web1 is taken already, so web2 is free.
+    expect(rows[0].isSelectable).toBe(false);
+    expect(pickImportRows(rows, rows.map((r) => r.rowId))).toEqual([rows[1].rowId]);
   });
 });
