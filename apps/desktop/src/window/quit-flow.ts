@@ -50,7 +50,8 @@ export type QuitQuestions = {
  * page's refusal to unload that follows is not asked again.
  */
 export function createQuitFlow(questions: QuitQuestions, hasUnsavedChanges: () => boolean) {
-  // 'plain' or 'unsaved': the user said quit, to that question.
+  // 'plain' or 'unsaved': the user said quit, to that question ('unsaved'
+  // also for a quit that asks nothing).
   let answered: 'no' | 'plain' | 'unsaved' = 'no';
 
   return {
@@ -63,9 +64,12 @@ export function createQuitFlow(questions: QuitQuestions, hasUnsavedChanges: () =
       return quit;
     },
 
-    /** Quit with no question (SIGINT, SIGTERM). Unsaved changes are still asked. */
+    /**
+     * Quit with no question at all (SIGINT, SIGTERM: a logout or shutdown
+     * must not wait on a box), unsaved changes included.
+     */
     quitWithoutAsking(): void {
-      if (answered === 'no') answered = 'plain';
+      answered = 'unsaved';
     },
 
     /** The page refused to unload (unsaved changes). Returns true to unload. */

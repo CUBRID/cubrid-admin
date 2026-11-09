@@ -88,6 +88,15 @@ describe('createQuitFlow', () => {
     expect(asked()).toBe(0);
   });
 
+  it('asks nothing on SIGINT/SIGTERM with unsaved changes either, and the page unloads', () => {
+    const { flow, asked, setUnsaved } = setup();
+    setUnsaved(true);
+    flow.quitWithoutAsking();
+    expect(flow.onWindowClose()).toBe(true);
+    expect(flow.onPreventUnload()).toBe(true);
+    expect(asked()).toBe(0);
+  });
+
   it('asks to leave the page on a reload with unsaved changes', () => {
     const { flow, questions } = setup({ leaveUnsaved: false });
     expect(flow.onPreventUnload()).toBe(false);
