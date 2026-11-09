@@ -21,10 +21,22 @@ describe('isSameWorkspaceFolder', () => {
     expect(isSameWorkspaceFolder(link, ws)).toBe(true);
   });
 
-  it('expands ~ and ignores case where the file system does', () => {
+  it('expands ~, and takes case as the volume does', () => {
     expect(isSameWorkspaceFolder('~', os.homedir())).toBe(true);
-    expect(isSameWorkspaceFolder(ws.toUpperCase(), ws, 'darwin')).toBe(true);
-    expect(isSameWorkspaceFolder('/x/WS', '/x/ws', 'linux')).toBe(false);
+    // Folders "Case" and "case": two folders on a case-sensitive volume
+    // (Linux, case-sensitive APFS), one on a case-insensitive one.
+    const upper = path.join(base, 'Case');
+    const lower = path.join(base, 'case');
+    fs.mkdirSync(upper);
+    let caseSensitive = true;
+    try {
+      fs.mkdirSync(lower);
+    } catch {
+      caseSensitive = false;
+    }
+    expect(isSameWorkspaceFolder(upper, lower)).toBe(!caseSensitive);
+    // Not there: compared as written.
+    expect(isSameWorkspaceFolder(path.join(base, 'none', 'WS'), path.join(base, 'none', 'ws'))).toBe(false);
   });
 
   it('tells two different folders apart', () => {

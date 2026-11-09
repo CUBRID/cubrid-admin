@@ -69,25 +69,32 @@ export function assertWorkspaceWritable(workspaceRoot: string): void {
 }
 
 /**
- * Whether two workspace folders are the same folder: resolved against the
- * current directory, with symbolic links followed (/tmp and /private/tmp on
- * macOS), '~' expanded, and case ignored where the file system usually does
- * (macOS, Windows; there C:/ and C:\ are one). A folder that does not exist
- * yet is compared by its resolved path.
+ * Whether two workspace folders are the same folder, as the file system sees
+ * it: two existing folders are the same when they are one directory (same
+ * device and inode), so symbolic links (/tmp and /private/tmp on macOS) and
+ * case follow the volume (case-insensitive by default on macOS and Windows,
+ * case-sensitive APFS kept apart). '~' is expanded and relative paths are
+ * resolved against the current directory. A folder that does not exist yet
+ * is compared by its resolved path.
  */
-export function isSameWorkspaceFolder(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
-  const canonical = (value: string) => {
+export function isSameWorkspaceFolder(a: string, b: string): boolean {
+  const resolve = (value: string) => {
     const expanded = value.trim().replace(/^~(?=$|[\\/])/, os.homedir());
-    const resolved = path.resolve(expanded);
-    let real = resolved;
-    try {
-      real = fs.realpathSync.native(resolved);
-    } catch {
-      // Not there yet: the resolved path is all there is.
-    }
-    const normalized = path.normalize(real).replace(/[\\/]+$/, '') || path.sep;
-    return platform === 'darwin' || platform === 'win32' ? normalized.toLowerCase() : normalized;
+    return path.resolve(expanded);
   };
-  return canonical(a) === canonical(b);
+  const ra = resolve(a);
+  const rb = resolve(b);
+  const statOf = (p: string) => {
+    try {
+      return fs.statSync(p, { bigint: true });
+    } catch {
+      return null;
+    }
+  };
+  const sa = statOf(ra);
+  const sb = statOf(rb);
+  if (sa && sb) return sa.dev === sb.dev && sa.ino === sb.ino;
+  const trim = (p: string) => path.normalize(p).replace(/[\\/]+$/, '') || path.sep;
+  return trim(ra) === trim(rb);
 }
 
