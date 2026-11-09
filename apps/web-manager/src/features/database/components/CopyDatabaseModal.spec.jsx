@@ -45,11 +45,13 @@ beforeEach(() => {
   root = createRoot(container);
   const fixed = {
     auth: { isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } },
-    host: { selectedHostUid: 'host-1' },
   };
   store = configureStore({
     reducer: {
       ...Object.fromEntries(Object.entries(fixed).map(([key, value]) => [key, () => value])),
+      // 'test/select-host' switches the host, as a click on another host does.
+      host: (state = { selectedHostUid: 'host-1' }, action) =>
+        action.type === 'test/select-host' ? { ...state, selectedHostUid: action.payload } : state,
       database: databaseCoreReducer,
       databaseUI: uiReducer,
     },
@@ -171,6 +173,24 @@ it('still supports normal copy without volume metadata', async () => {
   await click(execute());
   expect(mocks.submitCopy).toHaveBeenCalledWith('host-1', expect.objectContaining({ advanced: 'off' }));
   expect(mocks.submitCopy.mock.calls[0][1]).not.toHaveProperty('volume');
+});
+
+it('reads the database list of the host it copied on, also when the job was backgrounded and another host is selected since', async () => {
+  mocks.getVolumeInfo.mockResolvedValue({ spaceinfo: [] });
+  let finish;
+  mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  await render();
+  await typeNewName('clone');
+  await click(execute());
+  const backgroundBtn = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Confirm'));
+  await click(backgroundBtn);
+  expect(store.getState().databaseUI.isCopyDatabaseModalOpen).toBe(false);
+  await act(async () => store.dispatch({ type: 'test/select-host', payload: 'host-2' }));
+  mocks.getStartInfo.mockClear();
+
+  await act(async () => finish(job));
+
+  expect(mocks.getStartInfo.mock.calls).toEqual([['host-1']]);
 });
 
 it.each([false, true])('blocks the source name before submission (individual copy: %s)', async individualCopy => {

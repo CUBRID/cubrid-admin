@@ -273,6 +273,7 @@ export default function CopyDatabaseModal() {
     if (!canSubmit) return;
 
     startAction();
+    const hostUid = selectedHostUid;
     const advanced = formData.copyIndividual ? 'on' : 'off';
     const volumeList = formData.copyIndividual ? buildCopyVolumeMappings(copyVolumes) : undefined;
 
@@ -290,11 +291,13 @@ export default function CopyDatabaseModal() {
 
     try {
       const job = await runJob(
-        () => databaseJobApi.submitCopy(selectedHostUid, payload),
+        () => databaseJobApi.submitCopy(hostUid, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
+      // The host's database list shows the copy, also when the job ran in
+      // the background (as after a delete).
+      dispatch(fetchDatabaseStartInfo(hostUid));
       if (!wasBackgrounded()) {
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
         setWarnings(job?.warnings ?? []);
         endSuccess(`${CM.copyCompleted}: ${formData.destName}`);
       }

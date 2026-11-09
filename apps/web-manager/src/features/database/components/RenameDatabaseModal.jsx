@@ -99,13 +99,15 @@ export default function RenameDatabaseModal() {
       // if backgrounded — it uses the names captured at submit time above.
       dispatch(clearDatabaseLogin({ hostUid, dbname: oldName }));
       dispatch(clearDatabaseLogin({ hostUid, dbname: renameTo }));
+      // The host's database list shows the new name, also when the job ran
+      // in the background (as after a delete).
+      dispatch(fetchDatabaseStartInfo(hostUid));
       // This job may have been backgrounded (and the modal reopened for a
       // different database) by the time it settles — its outcome then
       // belongs to the global job tray, not this now-reused modal instance.
       if (!wasBackgrounded()) {
         setWarnings(job.warnings ?? []);
         setRenamedFromDb(selectedDatabase);
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
         endSuccess(CM.databaseRenamedMsg(selectedDatabase, newDbName.trim()));
       }
     } catch (err) {

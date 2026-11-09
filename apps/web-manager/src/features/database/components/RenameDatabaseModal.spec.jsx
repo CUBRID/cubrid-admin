@@ -44,11 +44,13 @@ beforeEach(() => {
   root = createRoot(container);
   const fixed = {
     auth: { isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } },
-    host: { selectedHostUid: 'host-1' },
   };
   store = configureStore({
     reducer: {
       ...Object.fromEntries(Object.entries(fixed).map(([key, value]) => [key, () => value])),
+      // 'test/select-host' switches the host, as a click on another host does.
+      host: (state = { selectedHostUid: 'host-1' }, action) =>
+        action.type === 'test/select-host' ? { ...state, selectedHostUid: action.payload } : state,
       database: databaseCoreReducer,
       databaseUI: uiReducer,
     },
@@ -119,6 +121,22 @@ it('still clears both names when the job was backgrounded and finishes later', a
   await act(async () => finish(job));
 
   expect(store.getState().database.loggedInDatabases).toEqual(['host-1:otherdb']);
+});
+
+it('reads the database list of the host it renamed on, also when the job was backgrounded and another host is selected since', async () => {
+  let finish;
+  mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  await render();
+  await typeNewName('newdb');
+  await click(container.querySelector('[data-testid="rename-database-execute-btn"]'));
+  const backgroundBtn = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Confirm'));
+  await click(backgroundBtn);
+  await act(async () => store.dispatch({ type: 'test/select-host', payload: 'host-2' }));
+  mocks.getStartInfo.mockClear();
+
+  await act(async () => finish(job));
+
+  expect(mocks.getStartInfo.mock.calls).toEqual([['host-1']]);
 });
 
 it('leaves login state alone when the rename job fails', async () => {
