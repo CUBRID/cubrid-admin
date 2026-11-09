@@ -43,6 +43,7 @@ const desktopBridge: DesktopBridge = {
     };
   },
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
+  quitApp: () => ipcRenderer.invoke('desktop:quit'),
   getAppVersion: () => ipcRenderer.invoke('desktop:get-app-version'),
   getUpdateStatus: () => ipcRenderer.invoke('desktop:get-update-status'),
   getStartupUpdateNotice: () => ipcRenderer.invoke('desktop:get-startup-update-notice'),

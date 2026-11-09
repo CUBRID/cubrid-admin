@@ -19,6 +19,7 @@ export const MENU_ACTION_IDS = [
   'edit-host',
   'export-hosts',
   'import-hosts',
+  'switch-workspace',
   'service-dashboard',
   'cms-account-management',
   'edit-cubrid-config',
@@ -41,6 +42,7 @@ export const MENU_LABELS = {
     editHost: 'Edit Host',
     exportHost: 'Export Host',
     importHost: 'Import Host',
+    switchWorkspace: 'Switch Workspace…',
     quit: 'Quit',
     hostServiceManagement: 'Host Service Management',
     serviceDashboard: 'Service Dashboard',
@@ -83,6 +85,7 @@ export const MENU_LABELS = {
     editHost: '호스트 편집',
     exportHost: '호스트 내보내기',
     importHost: '호스트 가져오기',
+    switchWorkspace: '워크스페이스 전환…',
     quit: '종료',
     hostServiceManagement: '호스트 서비스 관리',
     serviceDashboard: '서비스 대시보드',
@@ -231,9 +234,11 @@ export function buildApplicationMenuTemplate(
         action('edit-host', L.editHost),
         action('export-hosts', L.exportHost),
         action('import-hosts', L.importHost),
-        ...(isMac
-          ? []
-          : [{ type: 'separator' as const }, { role: 'quit' as const, label: L.quit }]),
+        { type: 'separator' },
+        action('switch-workspace', L.switchWorkspace),
+        { type: 'separator' },
+        // On every platform; macOS also keeps it in the app-name menu.
+        { role: 'quit', label: L.quit },
       ],
     },
     {

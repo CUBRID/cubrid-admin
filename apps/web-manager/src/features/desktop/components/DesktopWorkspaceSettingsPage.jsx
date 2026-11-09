@@ -144,10 +144,15 @@ export default function DesktopWorkspaceSettingsPage() {
   return (
     <SettingsShell>
       <div className="mb-8">
+        {/* Opened from a running app (File > Switch Workspace): back to its dashboard. */}
         {!setupMode && (
-          <Link to="/login" className="inline-flex items-center gap-1 text-14 text-slate-500 hover:text-amber-500 mb-4">
+          <Link
+            to="/home"
+            data-testid="workspace-back-link"
+            className="inline-flex items-center gap-1 text-14 text-slate-500 hover:text-amber-500 mb-4"
+          >
             <Icon name="arrow_back" size="sm" weight={300} />
-            {CM.signIn}
+            {CM.backBtn}
           </Link>
         )}
         <h1 data-testid="workspace-setup-title" className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">

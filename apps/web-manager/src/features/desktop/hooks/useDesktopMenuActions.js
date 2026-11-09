@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCM } from '../../../constants/useCM';
 import {
   NO_DASHBOARD_MENU_ACTIONS,
@@ -25,6 +25,7 @@ const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 export function useDesktopMenuActions() {
   const CM = useCM();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const isAuthenticated = useSelector((state) => state.auth?.isAuthenticated, shallowEqual);
   const { selectedHostUid, authorizedHosts } = useSelector(
     (state) => ({
@@ -45,7 +46,7 @@ export function useDesktopMenuActions() {
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 
   const latest = useRef(null);
-  latest.current = { dispatch, CM, selectedHostUid, enabled: stableEnabled };
+  latest.current = { dispatch, CM, selectedHostUid, navigate, enabled: stableEnabled };
 
   useEffect(() => {
     const setMenuState = window.desktopBridge?.setMenuState;

@@ -204,6 +204,12 @@ export function registerDesktopIpcHandlers(): void {
     return { ok: true };
   });
 
+  // File > Quit in the window's header menu: the same as the native Quit
+  // (app.quit); `before-quit` in main.ts stops the server.
+  ipcMain.handle('desktop:quit', () => {
+    app.quit();
+  });
+
   ipcMain.handle('desktop:close-window', async () => {
     const window = getMainWindow();
     if (window && !window.isDestroyed()) {

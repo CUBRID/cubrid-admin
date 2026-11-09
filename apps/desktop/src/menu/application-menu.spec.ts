@@ -1,4 +1,6 @@
 import type { MenuItemConstructorOptions } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const send = jest.fn();
 const getZoomLevel = jest.fn(() => 0);
@@ -41,7 +43,14 @@ beforeEach(() => jest.clearAllMocks());
 it('mirrors the header menu in English and Korean', () => {
   const en = buildApplicationMenuTemplate('en', false, allEnabled);
   expect(labels(en)).toEqual(['File', 'Host Service Management', 'Edit', 'View', 'Help']);
-  expect(labels(top(en, 'File'))).toEqual(['Add Host', 'Edit Host', 'Export Host', 'Import Host', 'Quit']);
+  expect(labels(top(en, 'File'))).toEqual([
+    'Add Host',
+    'Edit Host',
+    'Export Host',
+    'Import Host',
+    'Switch Workspace…',
+    'Quit',
+  ]);
   expect(labels(top(en, 'Host Service Management'))).toEqual([
     'Service Dashboard',
     'CMS Account Management',
@@ -65,16 +74,49 @@ it('mirrors the header menu in English and Korean', () => {
     '호스트 편집',
     '호스트 내보내기',
     '호스트 가져오기',
+    '워크스페이스 전환…',
     '종료',
   ]);
   expect(labels(top(ko, '도움말'))).toContain('설정 파일 위치 열기');
 });
 
-it('adds the macOS app menu and keeps Quit out of File there', () => {
+it('ends File with Switch Workspace and Quit on every platform, macOS keeping Quit in its app menu too', () => {
+  for (const isMac of [false, true]) {
+    const file = top(buildApplicationMenuTemplate('en', isMac, allEnabled), 'File');
+    expect(file.slice(-4).map((item) => item.type ?? item.label)).toEqual([
+      'separator',
+      'Switch Workspace…',
+      'separator',
+      'Quit',
+    ]);
+    expect(file[file.length - 1].role).toBe('quit');
+  }
+
   const mac = buildApplicationMenuTemplate('en', true, allEnabled);
   expect(mac[0].label).toBe('Next CUBRID Admin');
-  expect(labels(top(mac, 'File'))).not.toContain('Quit');
+  expect(submenu(mac[0]).map((item) => item.role)).toContain('quit');
   expect(labels(mac)).not.toContain('Window');
+});
+
+it('opens the workspace through the renderer, enabled only while the dashboard is shown', () => {
+  const switchItem = (state?: MenuActionState) =>
+    flatten(buildApplicationMenuTemplate('en', true, state)).find((item) => item.label === 'Switch Workspace…') as Item;
+  expect(switchItem().enabled).toBe(false);
+  expect(switchItem(allEnabled).enabled).toBe(true);
+  (switchItem(allEnabled).click as () => void)();
+  expect(send).toHaveBeenCalledWith('desktop:menu-action', 'switch-workspace');
+});
+
+it('uses the same action ids as the renderer (MENU_ACTIONS in menuActions.js)', () => {
+  // Read as text: importing it would pull in the renderer's store.
+  const source = fs.readFileSync(
+    path.join(__dirname, '../../../web-manager/src/features/layout/menuActions.js'),
+    'utf8'
+  );
+  const block = /export const MENU_ACTIONS = Object\.freeze\(\{([\s\S]*?)\}\);/.exec(source)?.[1] ?? '';
+  const rendererIds = [...block.matchAll(/:\s*'([^']+)'/g)].map((match) => match[1]);
+  expect(rendererIds.length).toBeGreaterThan(0);
+  expect([...rendererIds].sort()).toEqual([...MENU_ACTION_IDS].sort());
 });
 
 it('keeps the Edit roles, shows only the OS editing items, and binds no accelerator of its own', () => {

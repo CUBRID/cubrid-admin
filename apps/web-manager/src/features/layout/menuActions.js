@@ -18,6 +18,7 @@ export const MENU_ACTIONS = Object.freeze({
   editHost: 'edit-host',
   exportHosts: 'export-hosts',
   importHosts: 'import-hosts',
+  switchWorkspace: 'switch-workspace',
   serviceDashboard: 'service-dashboard',
   cmsAccountManagement: 'cms-account-management',
   editCubridConfig: 'edit-cubrid-config',
@@ -54,6 +55,8 @@ export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [] }) 
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
     [MENU_ACTIONS.exportHosts]: true,
     [MENU_ACTIONS.importHosts]: true,
+    // Desktop app only; the header shows it only there.
+    [MENU_ACTIONS.switchWorkspace]: true,
     [MENU_ACTIONS.serviceDashboard]: true,
     [MENU_ACTIONS.cmsAccountManagement]:
       Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid),
@@ -75,11 +78,15 @@ function openHostTab(dispatch, CM, selectedHostUid, tabId) {
   }
 }
 
+/** The desktop app's workspace page (App.jsx route). */
+export const DESKTOP_WORKSPACE_PATH = '/desktop/workspace';
+
 /**
  * Runs one menu action. Callers check the enabled flag first.
+ * `navigate` is react-router's, for actions that leave the dashboard.
  * @returns {boolean} false when the id is unknown
  */
-export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
+export function runMenuAction(id, { dispatch, CM, selectedHostUid, navigate }) {
   switch (id) {
     case MENU_ACTIONS.addHost:
       dispatch(openAddHostModal());
@@ -92,6 +99,9 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
       return true;
     case MENU_ACTIONS.importHosts:
       dispatch(openImportExportModal('import'));
+      return true;
+    case MENU_ACTIONS.switchWorkspace:
+      navigate(DESKTOP_WORKSPACE_PATH);
       return true;
     case MENU_ACTIONS.serviceDashboard:
       dispatch(openTab('service_dashboard'));

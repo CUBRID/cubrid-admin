@@ -32,6 +32,8 @@ export type DesktopBridge = {
   onRefreshView: (callback: () => void) => () => void;
   onCloseActiveTab: (callback: () => void) => () => void;
   closeWindow: () => Promise<void>;
+  /** Quits the app, as File > Quit in the native menu does. */
+  quitApp: () => Promise<void>;
   getAppVersion: () => Promise<string>;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getStartupUpdateNotice: () => Promise<UpdateStatus | null>;

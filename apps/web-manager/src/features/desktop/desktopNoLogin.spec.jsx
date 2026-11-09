@@ -87,4 +87,51 @@ describe('desktop app without an app login', () => {
     expect(container.textContent).toContain(CM.applyingWorkspaceMsg);
     expect(container.textContent).not.toContain('LOGIN PAGE');
   });
+
+  const workspaceBridge = (setupRequired) => ({
+    getWorkspaceInfo: vi.fn().mockResolvedValue({ workspaceRoot: '/ws', defaultWorkspaceRoot: '/ws', isCustomWorkspace: false, settingsFilePath: '/s.json' }),
+    isWorkspaceSetupRequired: vi.fn().mockResolvedValue(setupRequired),
+    getWorkspaceStartupError: vi.fn().mockResolvedValue(null),
+    setWorkspaceRoot: vi.fn().mockResolvedValue({ ok: true }),
+    resetWorkspaceRoot: vi.fn().mockResolvedValue({ ok: true }),
+    finishWorkspaceSetup: vi.fn().mockResolvedValue({ ok: true }),
+  });
+  const renderWorkspacePage = () => act(async () => root.render(
+    <Provider store={store()}>
+      <MemoryRouter initialEntries={['/desktop/workspace']}>
+        <Routes>
+          <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
+          <Route path="/home" element={<div>DASHBOARD</div>} />
+          <Route path="/login" element={<div>LOGIN PAGE</div>} />
+        </Routes>
+      </MemoryRouter>
+    </Provider>
+  ));
+
+  it('goes back to the dashboard, not the login page, from the workspace page of a running app, changing nothing', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(false);
+    await renderWorkspacePage();
+    expect(container.querySelector('a[href="/login"]')).toBeNull();
+    expect(container.textContent).not.toContain(CM.signIn);
+    const back = container.querySelector('[data-testid="workspace-back-link"]');
+    expect(back.getAttribute('href')).toBe('/home');
+    expect(back.textContent).toContain(CM.backBtn);
+
+    await act(async () => back.click());
+    expect(container.textContent).toContain('DASHBOARD');
+    expect(container.textContent).not.toContain('LOGIN PAGE');
+    expect(window.desktopBridge.setWorkspaceRoot).not.toHaveBeenCalled();
+    expect(window.desktopBridge.resetWorkspaceRoot).not.toHaveBeenCalled();
+    expect(window.desktopBridge.finishWorkspaceSetup).not.toHaveBeenCalled();
+  });
+
+  it('offers no way back on first run, when no workspace is set up yet', async () => {
+    window.desktopConfig = { isDesktop: true };
+    window.desktopBridge = workspaceBridge(true);
+    await renderWorkspacePage();
+    expect(container.querySelector('[data-testid="workspace-continue-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-back-link"]')).toBeNull();
+    expect(container.querySelector('a')).toBeNull();
+  });
 });

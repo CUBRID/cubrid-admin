@@ -94,6 +94,17 @@ describe('runMenuAction', () => {
     expect(run('bogus')).toEqual({ handled: false, actions: [] });
   });
 
+  it('opens the desktop workspace page on Switch Workspace, and is enabled with the dashboard only', () => {
+    const navigate = vi.fn();
+    const dispatch = vi.fn();
+    expect(runMenuAction(MENU_ACTIONS.switchWorkspace, { dispatch, CM, selectedHostUid: null, navigate })).toBe(true);
+    expect(navigate).toHaveBeenCalledWith('/desktop/workspace');
+    expect(dispatch).not.toHaveBeenCalled();
+
+    expect(getMenuActionEnabled({ selectedHostUid: null })[MENU_ACTIONS.switchWorkspace]).toBe(true);
+    expect(NO_DASHBOARD_MENU_ACTIONS[MENU_ACTIONS.switchWorkspace]).toBe(false);
+  });
+
   it('opens the update check', () => {
     const { handled, actions } = run(MENU_ACTIONS.checkForUpdates);
     expect(handled).toBe(true);
