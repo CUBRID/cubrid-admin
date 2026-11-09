@@ -15,6 +15,7 @@ import { exportHostsToXml,
   exportHostGroupsToJson,
   parseHostsImportFile,
   buildImportPreviewList,
+  canPickMoreImportRows,
   importRowBlockedReason,
   pickImportRows,
   validateSelectedImportRows,
@@ -440,10 +441,10 @@ export default function ImportExportHostModal() {
   const icon = importExportMode === 'export' ? 'file_upload' : 'file_download';
 
   const selectable = importList.filter(h => h.isSelectable);
-  // As many rows as can go in together (one of each clashing set).
-  const pickableCount = pickImportRows(importList, importList.map((h) => h.rowId)).length;
-  const isAllSelected = pickableCount > 0 && selectedHosts.length === pickableCount;
-  const isSomeSelected = selectedHosts.length > 0 && selectedHosts.length < pickableCount;
+  // All selected: no other row can be added (of clashing rows only one goes
+  // in, whichever was picked).
+  const isAllSelected = selectedHosts.length > 0 && !canPickMoreImportRows(importList, selectedHosts);
+  const isSomeSelected = selectedHosts.length > 0 && !isAllSelected;
   const blockedReason = (host) => importRowBlockedReason(host, selectedHosts);
   const canPick = (host) => host.isSelectable && !blockedReason(host);
   const hasValidationErrors = importList.some((h) => h.validationError && !h.isDuplicate);

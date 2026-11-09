@@ -428,6 +428,14 @@ export function importRowBlockedReason(row, selectedRowIds) {
 }
 
 /**
+ * Whether another row can still be added to the picked ones (Select all is
+ * then not fully on). Picking B, which clashes with both A and C, leaves none.
+ */
+export function canPickMoreImportRows(rows, selectedRowIds) {
+  return pickImportRows(rows, [...selectedRowIds, ...rows.map((row) => row.rowId)]).length > selectedRowIds.length;
+}
+
+/**
  * The rows to pick from `rowIds`, in their order, that can be imported
  * together: a row clashing with one picked before it is left out (Select all,
  * the selection a file opens with).

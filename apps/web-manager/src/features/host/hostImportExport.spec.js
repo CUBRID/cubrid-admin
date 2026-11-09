@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildGroupedExportPayload,
   buildImportPreviewList,
+  canPickMoreImportRows,
   exportHostGroupsToNativeXml,
   importRowBlockedReason,
   parseHostsImportFile,
@@ -130,6 +131,14 @@ describe('rows of the file that clash', () => {
     expect(importRowBlockedReason(d, [c.rowId])).toBe('가져오기 파일 안에 이름이 겹칩니다.');
     expect(importRowBlockedReason(b, [])).toBeNull();
     expect(importRowBlockedReason(b, [c.rowId])).toBeNull();
+  });
+
+  it('counts as all picked when no row can be added, even if another choice would pick more', () => {
+    // B clashes with A (connection) and with C (alias); A and C do not clash.
+    const [a, b, c] = buildImportPreviewList([row('web1', '10.0.0.9'), row('web3', '10.0.0.9'), row('web3', '10.0.0.8')], []);
+    expect(canPickMoreImportRows([a, b, c], [b.rowId])).toBe(false);
+    expect(canPickMoreImportRows([a, b, c], [a.rowId])).toBe(true);
+    expect(canPickMoreImportRows([a, b, c], [a.rowId, c.rowId])).toBe(false);
   });
 
   it('refuses two clashing rows sent together', () => {
