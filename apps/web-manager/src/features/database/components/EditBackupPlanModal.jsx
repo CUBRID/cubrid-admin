@@ -40,7 +40,7 @@ export default function EditBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isEditBackupPlanModalOpen, selectedBackupId } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
@@ -71,11 +71,17 @@ export default function EditBackupPlanModal() {
   });
 
   const [formLoaded, setFormLoaded] = useState(false);
+  // As in CA: a plan saved as online, for a database that is stopped, can be
+  // switched to offline but not back; an offline plan keeps both choices.
+  const [savedOnline, setSavedOnline] = useState(false);
+  const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const onlineDisabled = savedOnline && !isDbRunning;
 
   useEffect(() => {
     if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
       resetAction();
       setFormLoaded(false);
+      setSavedOnline(false);
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: selectedDatabase }))
         .unwrap()
         .then((data) => {
@@ -114,6 +120,7 @@ export default function EditBackupPlanModal() {
                 backupsToKeep: Math.max(BACKUPS_TO_KEEP_MIN, parseInt(info.bknum) || 0),
                 onlineType: info.onoff === 'ON' ? 'online' : 'offline'
               });
+              setSavedOnline(info.onoff === 'ON');
             }
           }
         })
@@ -464,9 +471,11 @@ export default function EditBackupPlanModal() {
                 type="button"
                 key={mode.value}
                 onClick={() => handleInputChange('onlineType', mode.value)}
+                disabled={mode.value === 'online' && onlineDisabled}
+                data-testid={`backup-plan-mode-${mode.value}`}
                 role="radio"
                 aria-checked={formData.onlineType === mode.value}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left ${
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${
                   formData.onlineType === mode.value
                     ? 'bg-amber-500/8 border-amber-500/50'
                     : 'bg-slate-50 dark:bg-white/4 border-slate-200 dark:border-white/10 hover:border-amber-500/40'

@@ -42,11 +42,15 @@ export default function AddBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isAddBackupPlanModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { backupDbInfo: databaseBackupInfo } = useSelector((state) => state.databaseOperation, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
+  // As in CA: a running database defaults to an online backup; a stopped one
+  // can only be backed up offline.
+  const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const onlineDisabled = !isDbRunning;
 
   const { 
     error: actionError, 
@@ -95,7 +99,7 @@ export default function AddBackupPlanModal() {
         useCompression: false,
         threads: 0,
         backupsToKeep: 1,
-        onlineType: 'offline'
+        onlineType: isDbRunning ? 'online' : 'offline'
       });
 
       if (selectedHostUid && !initialPath) {
@@ -109,7 +113,7 @@ export default function AddBackupPlanModal() {
           .catch(() => undefined);
       }
     }
-  }, [isAddBackupPlanModalOpen, selectedDatabase, currentDb, selectedHostUid, databaseBackupInfo, dispatch, resetAction]);
+  }, [isAddBackupPlanModalOpen, selectedDatabase, currentDb, selectedHostUid, databaseBackupInfo, isDbRunning, dispatch, resetAction]);
 
   if (!isAddBackupPlanModalOpen) return null;
 
@@ -452,9 +456,11 @@ export default function AddBackupPlanModal() {
               type="button"
               key={mode.value}
               onClick={() => handleInputChange('onlineType', mode.value)}
+              disabled={mode.value === 'online' && onlineDisabled}
+              data-testid={`backup-plan-mode-${mode.value}`}
               role="radio"
               aria-checked={formData.onlineType === mode.value}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left ${
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${
                 formData.onlineType === mode.value 
                   ? 'bg-amber-500/8 border-amber-500/50'
                   : 'bg-slate-50 dark:bg-white/4 border-slate-200 dark:border-white/10 hover:border-amber-500/40'
