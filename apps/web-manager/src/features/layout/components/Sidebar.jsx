@@ -1388,7 +1388,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             disabled={!(selectedHostUid === contextMenu.hostUid && authorizedHosts.includes(contextMenu.hostUid))}
             onClick={() => { dispatch(openCmsUserManagementModal()); setContextMenu(null); }} 
           />
-          <MenuItem icon="info" label={CM.serverVersion} onClick={() => { dispatch(openServerVersionModal(contextMenu.hostUid)); setContextMenu(null); }} />
+          <MenuItem icon="info" label={CM.serverVersion} disabled={!authorizedHosts.includes(contextMenu.hostUid)} onClick={() => { dispatch(openServerVersionModal(contextMenu.hostUid)); setContextMenu(null); }} />
         </ContextMenuWrapper>
       )}
 
