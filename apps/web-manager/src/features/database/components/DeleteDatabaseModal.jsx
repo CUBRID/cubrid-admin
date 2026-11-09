@@ -4,6 +4,7 @@ import { closeDeleteDatabaseModal, fetchDatabaseStartInfo } from '../databaseSli
 import { clearDatabaseLogin } from '../databaseCoreSlice';
 import { databaseApi } from '../databaseApi';
 import { databaseJobApi } from '../databaseJobApi';
+import { volumeDirectory } from '../volumePath';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
@@ -84,7 +85,7 @@ export default function DeleteDatabaseModal() {
               res.spaceinfo.map(item => ({
                 name: item?.name || item?.spacename || '—',
                 type: item?.type || '—',
-                path: item?.path || item?.location || '—',
+                path: item?.path || volumeDirectory(item) || '—',
                 sizeMB: item?.totalpage
                   ? ((parseInt(item.totalpage) * pageSize) / (1024 * 1024)).toFixed(1)
                   : '—',

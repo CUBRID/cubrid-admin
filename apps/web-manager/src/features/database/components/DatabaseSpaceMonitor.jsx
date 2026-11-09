@@ -13,6 +13,7 @@ import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
 import { isLogVolume, pageCount } from '../volumePages';
+import { volumeDirectory } from '../volumePath';
 
 // ── Helpers ──
 const TYPE_BADGE = (val = '') => {
@@ -363,12 +364,15 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
           { 
             header: CM.path, 
             accessor: 'location',
-            render: (val) => (
-              <div className="flex items-center gap-1 group min-w-0">
-                <Icon name="folder" size="xs" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-amber-500/50 transition-colors" />
-                <span className="text-12 text-slate-400 font-mono truncate" title={val}>{val?.toString().trim()}</span>
-              </div>
-            )
+            render: (_, row) => {
+              const folder = volumeDirectory(row);
+              return (
+                <div className="flex items-center gap-1 group min-w-0">
+                  <Icon name="folder" size="xs" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-amber-500/50 transition-colors" />
+                  <span className="text-12 text-slate-400 font-mono truncate" title={folder}>{folder.trim()}</span>
+                </div>
+              );
+            }
           }
         ]}
         data={spaceinfo || []}

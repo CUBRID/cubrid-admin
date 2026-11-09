@@ -1,6 +1,5 @@
 import { copyVolumePathKey } from '@api-interfaces/copy-volume-path';
-
-const isAbsolutePath = (path) => /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path);
+import { isAbsolutePath, lastPathSeparator } from './volumePath';
 
 export const joinVolumePath = (directory, name) => {
   const separator = directory.includes('\\') ? '\\' : '/';
@@ -18,7 +17,7 @@ export function normalizeCopyVolumes(spaceinfo = []) {
     const name = typeof space.spacename === 'string' ? space.spacename : '';
     const location = typeof space.location === 'string' ? space.location : '';
     const fullPath = isAbsolutePath(name) ? name : location && name ? joinVolumePath(location, name) : '';
-    const split = Math.max(fullPath.lastIndexOf('/'), fullPath.lastIndexOf('\\'));
+    const split = lastPathSeparator(fullPath);
     const id = space.volid;
     return {
       fullPath,
