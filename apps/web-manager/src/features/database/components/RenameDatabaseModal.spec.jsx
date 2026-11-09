@@ -155,3 +155,12 @@ it("refuses a new name the host's database list already has, replica ones too (c
   expect(execute().disabled).toBe(false);
   expect(container.textContent).not.toContain('already exists');
 });
+
+it('does not refuse a listed name when the database list could not be read again (it may have been deleted since)', async () => {
+  mocks.getStartInfo.mockRejectedValue(new Error('no answer'));
+  await render();
+  const execute = () => container.querySelector('[data-testid="rename-database-execute-btn"]');
+  await typeNewName('otherdb');
+  expect(container.textContent).not.toContain('already exists');
+  expect(execute().disabled).toBe(false);
+});

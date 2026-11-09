@@ -37,6 +37,7 @@ import {
 import SelectDatabasesModal from '../../database/components/SelectDatabasesModal';
 import { hostLoginResultStatusModal } from '../../host/hostLoginReport';
 import { dbKey } from '../../database/dbKey';
+import { refreshNavigatorDatabases } from '../../database/navigatorRefresh';
 
 import { fetchDatabaseSpaceInfo
 } from '../../database/databaseMonitoringSlice';
@@ -1848,7 +1849,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             icon="refresh"
             label={CM.refresh}
             onClick={() => {
-              dispatch(fetchDatabaseStartInfo(selectedHostUid));
+              dispatch(refreshNavigatorDatabases(selectedHostUid, { dbname: dbContextMenu.db }));
               setDbContextMenu(null);
             }}
           />
@@ -2084,7 +2085,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             label={CM.refresh}
             onClick={() => {
               setDbRootContextMenu(null);
-              dispatch(fetchDatabaseStartInfo(selectedHostUid));
+              dispatch(refreshNavigatorDatabases(selectedHostUid));
             }}
           />
           <MenuDivider />

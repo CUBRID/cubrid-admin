@@ -22,6 +22,7 @@ import {
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
+import { useFreshDbList } from '../useFreshDbList';
 import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
 
@@ -45,6 +46,7 @@ export default function CopyDatabaseModal() {
   // and the peers still name it, like a rename or delete (both blocked for HA).
   const isSourceHa = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const databases = databasesByHost[selectedHostUid] || [];
+  const dbListFresh = useFreshDbList(selectedHostUid, isCopyDatabaseModalOpen);
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
@@ -189,7 +191,7 @@ export default function CopyDatabaseModal() {
   const individualVolumesValid = !volInfoLoading && canCopyIndividualVolumes(copyVolumes);
   const isDestinationSameAsSource = !!formData.destName.trim() && formData.destName.trim() === selectedDatabase;
   const destNameIssue = formData.destName.trim()
-    ? newDbNameIssue(formData.destName.trim(), takenDbNames(databases, selectedDatabase))
+    ? newDbNameIssue(formData.destName.trim(), dbListFresh ? takenDbNames(databases, selectedDatabase) : null)
     : null;
   const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource && !destNameIssue &&
     (!formData.copyIndividual || individualVolumesValid);

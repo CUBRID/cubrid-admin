@@ -9,6 +9,7 @@ import { UserRepositoryService } from '@repository';
 import { DatabaseUserService } from '@database/user/database-user.service';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
+import { CmsErrorCode } from '@error/cms/cms-error-code';
 import type { CmsHostLoginClientResponse, UpdateHostRequest } from '@api-interfaces';
 import { CMS_CONFNAME_CM, CMS_CONFNAME_CUBRID } from '@database/database.constants';
 import { closeCmsToken, cmsSessionExpiresAt, forgetCmsToken, parseTokenActiveTime } from '@cms-https-client/cms-token-activity';
@@ -134,8 +135,14 @@ export class CmsAuthService {
           () => new Error(`not finished within ${CONNECT_ANSWER_DEADLINE_MS}ms`)
         );
       } catch (err) {
-        this.logger.warn(`Saved the settings of connected host ${uid}, but could not read its HA details: ${err}`);
-        return { success: true, isHA: false, haInfoUnavailable: true, ...defaultPasswordFlag(host) };
+        // CMS no longer knows the session (CMS restarted, or the same CMS
+        // user logged in elsewhere): log in below as for a host that is not
+        // connected, instead of answering "connected" and leaving the next
+        // request to find the session gone. The DB logins ended with it.
+        if (!(err instanceof CmsError && err.code === CmsErrorCode.INVALID_TOKEN)) {
+          this.logger.warn(`Saved the settings of connected host ${uid}, but could not read its HA details: ${err}`);
+          return { success: true, isHA: false, haInfoUnavailable: true, ...defaultPasswordFlag(host) };
+        }
       }
     }
 

@@ -19,6 +19,7 @@ import {
 import { useCM } from '../../../constants/useCM';
 import { inputIssueText } from '../inputIssueText';
 import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
+import { useFreshDbList } from '../useFreshDbList';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 
 
@@ -29,6 +30,7 @@ export default function RenameDatabaseModal() {
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const hostDbs = useSelector((state) => state.database.databasesByHost[selectedHostUid]);
+  const dbListFresh = useFreshDbList(selectedHostUid, isRenameDatabaseModalOpen);
 
   const {
     error,
@@ -123,7 +125,7 @@ export default function RenameDatabaseModal() {
 
   // The shared new-name rule (also used by create and copy, and the server),
   // and no other database on the host by that name.
-  const nameIssue = newDbNameIssue(newDbName, takenDbNames(hostDbs, selectedDatabase));
+  const nameIssue = newDbNameIssue(newDbName, dbListFresh ? takenDbNames(hostDbs, selectedDatabase) : null);
   const isNameValid = nameIssue === null;
   const isNameChanged = newDbName.trim() !== selectedDatabase;
 
