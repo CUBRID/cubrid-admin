@@ -20,7 +20,9 @@ export { isHaPostLoginModalOpen, clearHaClusterLinkSessionNotices } from './haPe
 
 // A change of the selected host moves the host list's highlight with it, as
 // the list did on its own before (the highlight may differ: a click on a host
-// that is not connected highlights it without selecting it).
+// that is not connected highlights it without selecting it). Keeping the same
+// host (a group click, a list update) leaves the highlight; choosing a host
+// on purpose (setSelectedHost) always moves it.
 function selectHostUid(state, hostUid) {
   if (state.selectedHostUid !== hostUid) state.highlightedHostUid = hostUid;
   state.selectedHostUid = hostUid;
@@ -70,6 +72,11 @@ function applyHostGroupsResponse(state, hostGroups) {
   }
   for (const uid of Object.keys(state.hostAuthErrors)) {
     if (!validUids.has(uid)) delete state.hostAuthErrors[uid];
+  }
+  // A highlighted host that is gone (deleted without being selected): back
+  // to the selected host, whose row is then highlighted again.
+  if (state.highlightedHostUid && !validUids.has(state.highlightedHostUid)) {
+    state.highlightedHostUid = validUids.has(state.selectedHostUid) ? state.selectedHostUid : null;
   }
   syncHaInfoStorage(state);
 }
@@ -531,8 +538,11 @@ const hostSlice = createSlice({
       state.isAddHostModalOpen = false;
       state.initialHostData = null;
     },
+    // A host chosen on purpose (its tab, a click, the dashboard): highlighted
+    // too, even when it was selected already.
     setSelectedHost: (state, action) => {
       selectHostUid(state, action.payload);
+      state.highlightedHostUid = action.payload;
       const gid = findGroupIdForHost(state.hostGroups, action.payload);
       if (gid) state.selectedGroupUid = gid;
     },
