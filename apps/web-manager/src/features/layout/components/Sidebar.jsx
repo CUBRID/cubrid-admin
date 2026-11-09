@@ -119,6 +119,9 @@ const keepOnly = (namesText) => (prev) => {
   return next.size === prev.size ? prev : next;
 };
 
+// Stable fallback for a store without reconnectQueue.
+const NO_RECONNECT = [];
+
 export default function Sidebar({ isCollapsed, onAddHost }) {
   const CM = useCM();
   const {
@@ -231,7 +234,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // { initialSelected: dbname[] } while the database selection modal is open.
   const [selectDatabasesModal, setSelectDatabasesModal] = useState(null);
 
-  const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo, reconnectQueue = NO_RECONNECT } = useSelector((state) => state.host, shallowEqual);
   const { databasesByHost, loggedInDatabases, haDbNamesByHost, navigatorDatabasesByHost, navigatorActiveDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { brokersByHost, navigatorBrokersByHost } = useSelector((state) => state.broker, shallowEqual);
   // The lists the trees show; a multi-selection is kept within them.
@@ -1389,7 +1392,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
             disabled={!(selectedHostUid === contextMenu.hostUid && authorizedHosts.includes(contextMenu.hostUid))}
             onClick={() => { dispatch(openCmsUserManagementModal()); setContextMenu(null); }} 
           />
-          <MenuItem icon="info" label={CM.serverVersion} disabled={!authorizedHosts.includes(contextMenu.hostUid)} onClick={() => { dispatch(openServerVersionModal(contextMenu.hostUid)); setContextMenu(null); }} />
+          <MenuItem icon="info" label={CM.serverVersion} disabled={!authorizedHosts.includes(contextMenu.hostUid) || reconnectQueue.includes(contextMenu.hostUid)} onClick={() => { dispatch(openServerVersionModal(contextMenu.hostUid)); setContextMenu(null); }} />
         </ContextMenuWrapper>
       )}
 

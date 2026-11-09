@@ -47,8 +47,17 @@ export const NO_DASHBOARD_MENU_ACTIONS = Object.freeze({
   [MENU_ACTIONS.about]: true,
 });
 
+/**
+ * The host Host Engine Version reads: the one highlighted in the host list,
+ * which a click on a host that is not connected moves without selecting it.
+ */
+export function engineVersionHostUid({ selectedHostUid, highlightedHostUid }) {
+  return highlightedHostUid ?? selectedHostUid ?? null;
+}
+
 /** @returns {Record<string, boolean>} enabled flag per action id */
-export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [] }) {
+export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [] }) {
+  const versionHostUid = engineVersionHostUid({ selectedHostUid, highlightedHostUid });
   return {
     [MENU_ACTIONS.addHost]: true,
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
@@ -62,8 +71,10 @@ export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [] }) 
     [MENU_ACTIONS.editBrokerConfig]: true,
     [MENU_ACTIONS.editCmConfig]: true,
     [MENU_ACTIONS.checkForUpdates]: true,
-    // Read from the host's CMS, so only for a connected host.
-    [MENU_ACTIONS.serverVersion]: Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid),
+    // Read from the host's CMS, so only for a connected host, and not while
+    // it waits to reconnect.
+    [MENU_ACTIONS.serverVersion]: Boolean(versionHostUid)
+      && authorizedHosts.includes(versionHostUid) && !reconnectQueue.includes(versionHostUid),
     [MENU_ACTIONS.about]: true,
   };
 }
@@ -80,7 +91,7 @@ function openHostTab(dispatch, CM, selectedHostUid, tabId) {
  * Runs one menu action. Callers check the enabled flag first.
  * @returns {boolean} false when the id is unknown
  */
-export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
+export function runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid }) {
   switch (id) {
     case MENU_ACTIONS.addHost:
       dispatch(openAddHostModal());
@@ -113,7 +124,7 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
       dispatch(openUpdateCheck({ source: 'manual' }));
       return true;
     case MENU_ACTIONS.serverVersion:
-      dispatch(openServerVersionModal(selectedHostUid));
+      dispatch(openServerVersionModal(engineVersionHostUid({ selectedHostUid, highlightedHostUid })));
       return true;
     case MENU_ACTIONS.about:
       dispatch(setAboutCubrid(true));

@@ -18,6 +18,14 @@ import { findHaPeersNeedingMerge,
 
 export { isHaPostLoginModalOpen, clearHaClusterLinkSessionNotices } from './haPeerUtils';
 
+// A change of the selected host moves the host list's highlight with it, as
+// the list did on its own before (the highlight may differ: a click on a host
+// that is not connected highlights it without selecting it).
+function selectHostUid(state, hostUid) {
+  if (state.selectedHostUid !== hostUid) state.highlightedHostUid = hostUid;
+  state.selectedHostUid = hostUid;
+}
+
 function purgeHostClientState(state, hostUid) {
   state.authorizedHosts = state.authorizedHosts.filter((uid) => uid !== hostUid);
   delete state.haInfo[hostUid];
@@ -73,7 +81,7 @@ function syncHostSelection(state) {
     if (groupId) {
       state.selectedGroupUid = groupId;
     } else {
-      state.selectedHostUid = null;
+      selectHostUid(state, null);
     }
   }
 
@@ -479,6 +487,9 @@ const initialState = {
   hostsAwaitingHaLogin: [], // Host UIDs pending first HA post-login side effects (import/add batch)
   initialHostData: null, // Data to pre-fill AddHostModal
   selectedHostUid: null,
+  // The row highlighted in the host list. A click on a host that is not
+  // connected highlights it without selecting it (that takes a login).
+  highlightedHostUid: null,
   selectedGroupUid: null,
   loading: false,
   isLoggingIntoHost: false,
@@ -521,18 +532,17 @@ const hostSlice = createSlice({
       state.initialHostData = null;
     },
     setSelectedHost: (state, action) => {
-      state.selectedHostUid = action.payload;
+      selectHostUid(state, action.payload);
       const gid = findGroupIdForHost(state.hostGroups, action.payload);
       if (gid) state.selectedGroupUid = gid;
+    },
+    setHighlightedHost: (state, action) => {
+      state.highlightedHostUid = action.payload ?? null;
     },
     setSelectedGroup: (state, action) => {
       const { groupId, hostUid } = action.payload;
       state.selectedGroupUid = groupId;
-      if (hostUid) {
-        state.selectedHostUid = hostUid;
-      } else {
-        state.selectedHostUid = null;
-      }
+      selectHostUid(state, hostUid || null);
     },
     setServiceProgressMessage: (state, action) => {
       state.serviceProgressMessage = action.payload;
@@ -787,7 +797,7 @@ const hostSlice = createSlice({
             state.hostsAwaitingHaLogin.push(newHost.uid);
           }
           if (!state.skipAutoHostLogin) {
-            state.selectedHostUid = newHost.uid;
+            selectHostUid(state, newHost.uid);
             state.selectedGroupUid = findGroupIdForHost(state.hostGroups, newHost.uid);
           }
         }
@@ -991,7 +1001,7 @@ const hostSlice = createSlice({
         applyHostGroupsResponse(state, hostGroups);
         const removedSet = new Set(removedHostUids);
         if (removedSet.has(state.selectedHostUid)) {
-          state.selectedHostUid = null;
+          selectHostUid(state, null);
         }
         syncHostSelection(state);
         removedHostUids.forEach((uid) => purgeHostClientState(state, uid));
@@ -1081,6 +1091,7 @@ export const {
   openAddHostModal,
   closeAddHostModal,
   setSelectedHost,
+  setHighlightedHost,
   setSelectedGroup,
   revokeHostLogin,
   openDeleteHostModal,
