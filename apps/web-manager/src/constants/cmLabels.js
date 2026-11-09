@@ -246,6 +246,7 @@ export const CM = {
   selectedTables: 'Selected tables',
   useDelimitedIdentifier: 'Use delimited identifier ("")',
   includeReferencedTables: 'Include referenced tables',
+  includeReferencedTablesSchemaNote: 'The schema of every table is unloaded too.',
   prefixOutputFiles: 'Prefix for output files',
   fileForHash: 'File for hash',
   numCachedPages: 'Number of cached pages',

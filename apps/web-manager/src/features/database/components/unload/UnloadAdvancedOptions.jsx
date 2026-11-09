@@ -55,6 +55,7 @@ export default function UnloadAdvancedOptions({ formData, handleInputChange, num
         <Checkbox
           name="includeReferencedTables"
           label={CM.includeReferencedTables}
+          description={CM.includeReferencedTablesSchemaNote}
           checked={Boolean(formData.includeReferencedTables && !isRefDisabled)}
           onChange={handleInputChange}
           disabled={isRefDisabled}

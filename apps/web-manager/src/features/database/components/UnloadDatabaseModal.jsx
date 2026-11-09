@@ -11,6 +11,7 @@ import { useCM } from '../../../constants/useCM';
 import UnloadConfigSection from './unload/UnloadConfigSection';
 import UnloadContentSection from './unload/UnloadContentSection';
 import UnloadAdvancedOptions from './unload/UnloadAdvancedOptions';
+import { unloadClassFlags } from './unload/unloadClassFlags';
 
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -170,7 +171,7 @@ export default function UnloadDatabaseModal() {
     try {
       const isSchemaIncluded = formData.schemaScope !== 'none';
       const isDataIncluded = formData.dataScope !== 'none';
-      const classonly = formData.schemaScope !== 'all' ? 'yes' : 'no';
+      const { ref, classonly } = unloadClassFlags(formData);
 
       const payload = {
         targetdir: formData.targetDirectory,
@@ -190,7 +191,7 @@ export default function UnloadDatabaseModal() {
         class: formData.schemaScope === 'all'
           ? []
           : formData.selectedTables.map((t) => ({ classname: t })),
-        ref: (formData.schemaScope === 'selected' && formData.includeReferencedTables) ? 'yes' : 'no',
+        ref,
         classonly,
         delimit: formData.useDelimitedIdentifier ? 'yes' : 'no',
         estimate: formData.useEstimateInstances ? String(formData.estimateInstances) : '',
