@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseSpaceInfo } from '../databaseSlice';
+import { volumeDirectory } from '../volumePath';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -10,7 +11,6 @@ import { PageLoader } from '../../../components/ds/feedback/PageLoader';
 import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { useCM } from '../../../constants/useCM';
 import { isLogVolume, pageCount } from '../volumePages';
-import { volumeDirectory } from '../volumePath';
 
 const parseNumber = (value) => {
   if (typeof value === 'number') return value;

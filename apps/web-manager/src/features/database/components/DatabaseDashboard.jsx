@@ -3,6 +3,7 @@ import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 import React, { useState } from 'react';
 import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
+import { volumeDirectory } from '../volumePath';
 import DBPerformanceSection from './dashboard/DBPerformanceSection';
 import DBVolumesSection from './dashboard/DBVolumesSection';
 import DBSpaceInfoSection from './dashboard/DBSpaceInfoSection';
@@ -13,7 +14,6 @@ import CASLogModal from './CASLogModal';
 import { isDatabaseInHa } from '../../host/haPeerUtils';
 import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
-import { volumeDirectory } from '../volumePath';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';

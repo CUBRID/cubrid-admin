@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useState, useMemo, memo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { databaseApi } from '../databaseApi';
+import { volumeDirectory } from '../volumePath';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { formatSize } from '../../../infrastructure/utils/format';
@@ -13,7 +14,6 @@ import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
 import { isLogVolume, pageCount } from '../volumePages';
-import { volumeDirectory } from '../volumePath';
 
 // ── Helpers ──
 const TYPE_BADGE = (val = '') => {
