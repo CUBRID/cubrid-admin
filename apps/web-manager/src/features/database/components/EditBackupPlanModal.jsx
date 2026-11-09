@@ -177,10 +177,9 @@ export default function EditBackupPlanModal() {
       ? checkMonthDays(Array.isArray(formData.periodDetail) ? formData.periodDetail.join(',') : '')
       : null,
   };
-  const modeIssue = !isHaDb || !formLoaded ? null
-    : formData.onlineType !== 'online' ? CM.haBackupOnlineOnlyMsg
-    : onlineDisabled ? CM.haBackupDbStoppedMsg
-    : null;
+  // A saved online plan of a stopped database still saves, as for any
+  // database: cub_auto skips an online run while the database is stopped.
+  const modeIssue = isHaDb && formLoaded && formData.onlineType !== 'online' ? CM.haBackupOnlineOnlyMsg : null;
   const hasPlanIssue = Object.values(planIssues).some(Boolean) || Boolean(modeIssue);
 
   const handleSave = async () => {

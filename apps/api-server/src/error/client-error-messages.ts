@@ -319,6 +319,10 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
           ? `"${dbname}" is an HA database — Restore Database would desync its replication apply position from the HA peer, so it is not supported here.`
           : 'Restore Database is not supported for HA databases — it would desync replication with the HA peer.';
       }
+      case DatabaseErrorCode.OFFLINE_BACKUP_NOT_SUPPORTED_FOR_HA_DATABASE:
+        return additionalData?.reason === 'DATABASE_STOPPED'
+          ? 'The database is stopped. HA databases can only be backed up online.'
+          : 'HA databases can only be backed up online.';
       case DatabaseErrorCode.INTERNAL_ERROR:
       case DatabaseErrorCode.UNKNOWN:
       default:

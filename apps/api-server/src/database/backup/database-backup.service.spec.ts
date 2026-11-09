@@ -13,12 +13,14 @@ import { DatabaseUserService } from '@database/user/database-user.service';
 import { DatabaseInfoService } from '@database/info/database-info.service';
 import { HostError } from '@error/index';
 import { CmsError } from '@error/cms/cms-error';
+import { getPublicClientErrorMessage } from '@error/client-error-messages';
 
 
 describe('DatabaseBackupService', () => {
   let service: DatabaseBackupService;
   let hostService: jest.Mocked<HostService>;
   let cmsClient: jest.Mocked<CmsHttpsClientService>;
+  let databaseInfoService: { getListedHaDbNames: jest.Mock; startInfoInternal: jest.Mock };
 
   const mockHost = {
     uid: 'host-uid-1',
@@ -51,6 +53,8 @@ describe('DatabaseBackupService', () => {
 
     const mockDatabaseInfoService = {
       effectiveHaDbForDbname: jest.fn().mockResolvedValue(false),
+      getListedHaDbNames: jest.fn().mockResolvedValue(new Set<string>()),
+      startInfoInternal: jest.fn().mockResolvedValue({ activelist: [{ active: [] }], dblist: null }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -78,6 +82,7 @@ describe('DatabaseBackupService', () => {
     service = module.get<DatabaseBackupService>(DatabaseBackupService);
     hostService = module.get(HostService);
     cmsClient = module.get(CmsHttpsClientService);
+    databaseInfoService = module.get(DatabaseInfoService);
 
     // Setup default mocks
     hostService.findHostInternal.mockResolvedValue(mockHost);
@@ -616,6 +621,71 @@ describe('DatabaseBackupService', () => {
       await expect(
         service.getAutoBackupDbErrLog(mockUserId, mockHostUid, mockRequest)
       ).rejects.toThrow(CmsError);
+    });
+  });
+  // cub_auto stops the database for an offline plan, and backupdb backs a
+  // stopped database up offline: refused for an ha_db_list database.
+  describe('HA database backups', () => {
+    const plan = (onoff: 'ON' | 'OFF'): AddBackupInfoClientRequest => ({
+      dbname: mockDbname, backupid: 'p1', path: '/b', period_type: 'Daily', period_date: 'none', time: '0130',
+      level: '0', archivedel: 'OFF', updatestatus: 'OFF', storeold: 'OFF', onoff, zip: 'n', check: 'n', mt: '0', bknum: '1',
+    });
+    const backupNow = { level: '0' as const, backupdir: '/b' };
+    const refused = (reason: string) => expect.objectContaining({
+      code: 'OFFLINE_BACKUP_NOT_SUPPORTED_FOR_HA_DATABASE',
+      additionalData: expect.objectContaining({ dbname: mockDbname, reason }),
+    });
+    const running = (names: string[]) =>
+      databaseInfoService.startInfoInternal.mockResolvedValue({ activelist: [{ active: names.map((dbname) => ({ dbname })) }], dblist: null });
+
+    beforeEach(() => {
+      databaseInfoService.getListedHaDbNames.mockResolvedValue(new Set([mockDbname]));
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', note: 'none' });
+    });
+
+    it('refuses to add or change a plan to offline, before anything reaches CMS', async () => {
+      await expect(service.addBackupSchedule(mockUserId, mockHostUid, mockDbname, plan('OFF'))).rejects.toEqual(refused('BACKUP_PLAN_OFFLINE'));
+      await expect(service.setBackupSchedule(mockUserId, mockHostUid, mockDbname, plan('OFF') as SetBackupInfoClientRequest))
+        .rejects.toEqual(refused('BACKUP_PLAN_OFFLINE'));
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('saves an online plan, also while the database is stopped', async () => {
+      running([]);
+      await expect(service.addBackupSchedule(mockUserId, mockHostUid, mockDbname, plan('ON'))).resolves.toEqual({ success: true });
+      await expect(service.setBackupSchedule(mockUserId, mockHostUid, mockDbname, plan('ON') as SetBackupInfoClientRequest))
+        .resolves.toEqual({ success: true });
+    });
+
+    it('refuses a backup now while the database is stopped', async () => {
+      running(['otherdb']);
+      await expect(service.backupDb(mockUserId, mockHostUid, mockDbname, backupNow)).rejects.toEqual(refused('DATABASE_STOPPED'));
+      databaseInfoService.startInfoInternal.mockResolvedValue({ activelist: null, dblist: null });
+      await expect(service.backupDb(mockUserId, mockHostUid, mockDbname, backupNow)).rejects.toEqual(refused('DATABASE_STOPPED'));
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('backs up a running HA database as before', async () => {
+      running([mockDbname]);
+      await expect(service.backupDb(mockUserId, mockHostUid, mockDbname, backupNow)).resolves.toEqual({ success: true });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ task: 'backupdb' }), expect.anything());
+    });
+
+    it('leaves a database not in ha_db_list as before: offline plans, and a stopped one backed up', async () => {
+      databaseInfoService.getListedHaDbNames.mockResolvedValue(new Set(['otherdb']));
+      running([]);
+      await expect(service.addBackupSchedule(mockUserId, mockHostUid, mockDbname, plan('OFF'))).resolves.toEqual({ success: true });
+      await expect(service.backupDb(mockUserId, mockHostUid, mockDbname, backupNow)).resolves.toEqual({ success: true });
+    });
+
+    it('gives the reason as the error text', () => {
+      const text = (reason: string) => getPublicClientErrorMessage({
+        kind: 'DATABASE', code: 'OFFLINE_BACKUP_NOT_SUPPORTED_FOR_HA_DATABASE', additionalData: { dbname: mockDbname, reason },
+      });
+      expect(text('DATABASE_STOPPED'))
+        .toBe('The database is stopped. HA databases can only be backed up online.');
+      expect(text('BACKUP_PLAN_OFFLINE'))
+        .toBe('HA databases can only be backed up online.');
     });
   });
 });

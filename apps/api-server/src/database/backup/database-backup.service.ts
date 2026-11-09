@@ -87,6 +87,7 @@ export class DatabaseBackupService extends BaseService {
     dbname: string,
     backupInfo: AddBackupInfoClientRequest
   ): Promise<AddBackupInfoClientResponse> {
+    await this.refuseOfflinePlanForHaDb(userId, hostUid, dbname, backupInfo.onoff);
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     const cmsRequest: AddBackupInfoCmsRequest = {
@@ -135,6 +136,7 @@ export class DatabaseBackupService extends BaseService {
     dbname: string,
     backupInfo: SetBackupInfoClientRequest
   ): Promise<SetBackupInfoClientResponse> {
+    await this.refuseOfflinePlanForHaDb(userId, hostUid, dbname, backupInfo.onoff);
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     const cmsRequest: SetBackupInfoCmsRequest = {
@@ -336,6 +338,10 @@ export class DatabaseBackupService extends BaseService {
     request: BackupDbClientRequest,
     onUuid?: (uuid: string) => void | Promise<void>
   ): Promise<BackupDbClientResponse> {
+    // backupdb backs a stopped database up offline (--SA-mode).
+    if ((await this.isListedHaDb(userId, hostUid, dbname)) && !(await this.isDbRunning(userId, hostUid, dbname))) {
+      throw DatabaseError.OfflineBackupNotSupportedForHaDatabase({ dbname, reason: 'DATABASE_STOPPED' });
+    }
     await this.databaseUserService.ensureDbLogin(userId, hostUid, dbname);
 
     const cmsRequest: BackupDbCmsRequest = {
@@ -369,6 +375,27 @@ export class DatabaseBackupService extends BaseService {
     );
 
     return { success: true };
+  }
+
+  /**
+   * cub_auto runs a plan that is not ON offline, stopping the database
+   * first (cm_autojob.cpp), which an HA database must not be.
+   */
+  private async refuseOfflinePlanForHaDb(userId: string, hostUid: string, dbname: string, onoff: string): Promise<void> {
+    if (onoff !== 'ON' && (await this.isListedHaDb(userId, hostUid, dbname))) {
+      throw DatabaseError.OfflineBackupNotSupportedForHaDatabase({ dbname, reason: 'BACKUP_PLAN_OFFLINE' });
+    }
+  }
+
+  /** HA as the screen marks it: listed in cubrid_ha.conf ha_db_list. */
+  private async isListedHaDb(userId: string, hostUid: string, dbname: string): Promise<boolean> {
+    return (await this.databaseInfoService.getListedHaDbNames(userId, hostUid)).has(dbname.trim());
+  }
+
+  private async isDbRunning(userId: string, hostUid: string, dbname: string): Promise<boolean> {
+    const info = await this.databaseInfoService.startInfoInternal(userId, hostUid);
+    const active = info.activelist?.[0]?.active ?? [];
+    return active.some((a) => a?.dbname === dbname.trim());
   }
 
   /**

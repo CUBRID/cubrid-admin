@@ -183,14 +183,14 @@ describe('backup plan of an HA database', () => {
     expect(save().disabled).toBe(false);
   });
 
-  it('saved online plan of a stopped database: not saved, and says why', async () => {
+  it('saved online plan of a stopped database: saves as online, like any database', async () => {
     mocks.schedules = plan('ON');
     await render(<EditBackupPlanModal />, { running: false, ha: true });
     expect(checked('online')).toBe(true);
     expect(mode('online').disabled).toBe(true);
     expect(mode('offline').disabled).toBe(true);
-    expect(modeError()).toBe('The database is stopped. HA databases can only be backed up online.');
-    expect(container.querySelector('[data-testid="edit-backup-plan-save-btn"]').disabled).toBe(true);
+    expect(modeError()).toBe(null);
+    expect(container.querySelector('[data-testid="edit-backup-plan-save-btn"]').disabled).toBe(false);
   });
 });
 
