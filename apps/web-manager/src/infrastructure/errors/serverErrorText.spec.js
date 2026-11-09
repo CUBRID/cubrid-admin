@@ -26,6 +26,15 @@ describe('serverErrorText', () => {
     expect(serverErrorText(notLoggedIn, KO)).toBe('데이터베이스 demodb에 로그인하지 않았습니다. 먼저 로그인하세요.');
   });
 
+  it('says an HA offline backup refusal in Korean by its reason', () => {
+    const type = '/errors/database/offline_backup_not_supported_for_ha_database';
+    const plan = body(type, { dbname: 'hadb', reason: 'BACKUP_PLAN_OFFLINE' }, 'HA databases can only be backed up online.');
+    const stopped = body(type, { dbname: 'hadb', reason: 'DATABASE_STOPPED' }, 'The database is stopped. HA databases can only be backed up online.');
+    expect(serverErrorText(plan, KO)).toBe('HA 데이터베이스는 온라인으로만 백업할 수 있습니다.');
+    expect(serverErrorText(stopped, KO)).toBe('데이터베이스가 중지되어 있습니다. HA 데이터베이스는 온라인으로만 백업할 수 있습니다.');
+    expect(serverErrorText(stopped, EN)).toBe('The database is stopped. HA databases can only be backed up online.');
+  });
+
   it('keeps CMS text after the sentence, without its trailing <end>', () => {
     const failed = body('/errors/cms/request_failed', {}, 'Volume path not found <end>');
     expect(serverErrorText(failed, KO)).toBe('CMS 작업이 실패했습니다. (Volume path not found)');

@@ -767,6 +767,8 @@ export const CM_KO = {
   existingBackupWarningMsg: (level) =>
     `이 디렉터리에는 이미 ${level}수준 백업이 있습니다. 다시 백업하면 기존 백업을 덮어씁니다.`,
   backupPlanIdRequiredMsg: 'Plan ID는 필수 입력 항목입니다.',
+  haBackupOnlineOnlyMsg: 'HA 데이터베이스는 온라인으로만 백업할 수 있습니다.',
+  haBackupDbStoppedMsg: '데이터베이스가 중지되어 있습니다. HA 데이터베이스는 온라인으로만 백업할 수 있습니다.',
   backupWrittenMsg: (kind, db, dir) => `${kind}: "${db}"을(를) "${dir}"에 저장했습니다.`,
   backupStartFailedMsg: '백업을 시작하지 못했습니다. 다시 시도하세요.',
   restoringDatabase: '데이터베이스 복구 중',
@@ -1911,6 +1913,8 @@ export const CM_KO = {
     'database/load_not_supported_for_ha_database': (d) => `${d.dbname ? `"${d.dbname}"은(는) HA 데이터베이스입니다. ` : ''}로드는 항상 오프라인으로 실행되어 HA 상대 노드에 복제되지 않으므로 HA 데이터베이스에서는 할 수 없습니다.`,
     'database/rename_not_supported_for_ha_database': (d) => `${d.dbname ? `"${d.dbname}"은(는) HA 데이터베이스입니다. ` : ''}이름을 바꾸면 상대 노드와의 HA 연결이 깨지므로 HA 데이터베이스에서는 할 수 없습니다.`,
     'database/restore_not_supported_for_ha_database': (d) => `${d.dbname ? `"${d.dbname}"은(는) HA 데이터베이스입니다. ` : ''}복구하면 HA 상대 노드와 복제 적용 위치가 어긋나므로 HA 데이터베이스에서는 할 수 없습니다.`,
+    'database/offline_backup_not_supported_for_ha_database': 'HA 데이터베이스는 온라인으로만 백업할 수 있습니다.',
+    'database/offline_backup_not_supported_for_ha_database:DATABASE_STOPPED': '데이터베이스가 중지되어 있습니다. HA 데이터베이스는 온라인으로만 백업할 수 있습니다.',
     'database/invalid_parameter': '입력 값이 올바르지 않습니다.',
     'database/invalid_parameter:HA_HOST_DELETE_DB_BLOCKED': 'HA로 구성된 호스트에서는 데이터베이스를 삭제할 수 없습니다.',
     'database/invalid_parameter:COPY_DEST_SAME_AS_SOURCE': '대상 데이터베이스 이름은 원본과 달라야 합니다.',
