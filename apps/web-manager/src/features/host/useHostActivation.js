@@ -5,6 +5,7 @@ import { resetDatabaseState, fetchDatabaseStartInfo } from '../database/database
 import { resetBrokerState, fetchBrokerList } from '../broker/brokerSlice';
 import { setActiveMainTab } from '../layout/layoutSlice';
 import { fetchHaHeartbeatOnly } from '../server/monitoringSlice';
+import { isHostPasswordError } from './hostLoginError';
 
 /**
  * Logs into a host (if not already authorized) then opens its dashboard tab.
@@ -79,8 +80,9 @@ export function useHostActivation() {
         console.error('Failed to log into host:', err);
         // Likely a bad/missing password (or other stale connection detail) —
         // open the Edit Host modal so the user can fix it right away instead
-        // of just seeing a dead-end error.
-        dispatch(openEditHostModal(uid));
+        // of just seeing a dead-end error. A turned-down password opens the
+        // password field right away.
+        dispatch(openEditHostModal({ hostUid: uid, passwordRejected: isHostPasswordError(err) }));
       })
       .finally(() => {
         loginInProgressRef.current = false;

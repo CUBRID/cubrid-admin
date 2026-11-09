@@ -13,3 +13,8 @@ export function hostLoginErrorMessage(err, CM) {
   if (type === CMS_TLS_ERROR_TYPE) return CM.hostLoginTlsErrorMsg;
   return apiData?.message || apiData?.error || CM.hostLoginFailedMsg;
 }
+
+// CMS answers a wrong password with "Incorrect password" (cm_auto_task.cpp).
+export function isHostPasswordError(message) {
+  return /password/i.test(String(message || ''));
+}

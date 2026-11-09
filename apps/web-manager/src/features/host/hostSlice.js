@@ -453,6 +453,9 @@ const initialState = {
   hostToDeleteUid: null,
   hostToDeleteAlias: null,
   hostToEditUid: null,
+  // Edit Host opened because the host turned down its saved password: the
+  // password field starts open instead of behind "change".
+  editHostPasswordRejected: false,
   isServerVersionModalOpen: false,
   serverVersionHostUid: null,
   hosts: [],
@@ -554,13 +557,20 @@ const hostSlice = createSlice({
       state.hostToDeleteUid = null;
       state.hostToDeleteAlias = null;
     },
+    // Payload: the hostUid, or { hostUid, passwordRejected } when a login
+    // with the saved password was just turned down.
     openEditHostModal: (state, action) => {
+      const { hostUid, passwordRejected = false } = typeof action.payload === 'object' && action.payload !== null
+        ? action.payload
+        : { hostUid: action.payload };
       state.isEditHostModalOpen = true;
-      state.hostToEditUid = action.payload; // Just need the hostUid, we can look up the rest
+      state.hostToEditUid = hostUid; // Just need the hostUid, we can look up the rest
+      state.editHostPasswordRejected = Boolean(passwordRejected);
     },
     closeEditHostModal: (state) => {
       state.isEditHostModalOpen = false;
       state.hostToEditUid = null;
+      state.editHostPasswordRejected = false;
     },
     openCreateGroupModal: (state) => {
       state.isCreateGroupModalOpen = true;

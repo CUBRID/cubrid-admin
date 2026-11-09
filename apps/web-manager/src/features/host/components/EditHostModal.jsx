@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { editHost, moveHost, fetchHosts, loginToHostWithSideEffects, closeEditHostModal, clearHostError, setSelectedHost, fetchHostEnv } from '../hostSlice';
 import { fetchDatabaseStartInfo } from '../../database/databaseSlice';
@@ -19,7 +19,7 @@ import { useCM } from '../../../constants/useCM';
 export default function EditHostModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isEditHostModalOpen, hostToEditUid, hosts, hostGroups, loading, error: apiError, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { isEditHostModalOpen, hostToEditUid, editHostPasswordRejected, hosts, hostGroups, loading, error: apiError, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   // Opened from an HA follow-up of a bulk-login result dialog, which stays
   // open (z-[2100]) underneath — stack above it like the HA modals do.
   const aboveStatusModal = useSelector((state) => state.layout.statusModal.isOpen);
@@ -39,6 +39,7 @@ export default function EditHostModal() {
   const [changePassword, setChangePassword] = useState(false);
   // Test Connection's outcome: null, { testing }, { ok }, or { error }.
   const [connectionTest, setConnectionTest] = useState(null);
+  const passwordInputRef = useRef(null);
 
   const groupOptions = useMemo(() => orderedGroupEntries(hostGroups).map(([groupId, group]) => ({
     value: groupId,
@@ -62,10 +63,18 @@ export default function EditHostModal() {
         });
       }
       setErrors({});
-      setChangePassword(false);
+      setChangePassword(Boolean(editHostPasswordRejected));
       setConnectionTest(null);
     }
   }, [isEditHostModalOpen, hostToEditUid]);
+
+  // Opened for a turned-down password: put the cursor in the password field
+  // once it is enabled, after Modal's own first-field focus (next frame).
+  useEffect(() => {
+    if (!isEditHostModalOpen || !editHostPasswordRejected || !changePassword) return undefined;
+    const frame = requestAnimationFrame(() => passwordInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isEditHostModalOpen, hostToEditUid, editHostPasswordRejected, changePassword]);
 
   if (!isEditHostModalOpen) return null;
 
@@ -352,6 +361,7 @@ export default function EditHostModal() {
                 disabled={loading}
               />
               <Input
+                ref={passwordInputRef}
                 label={CM.password}
                 type="password"
                 name="password"

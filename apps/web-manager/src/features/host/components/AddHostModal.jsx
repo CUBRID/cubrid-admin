@@ -13,6 +13,7 @@ import { fetchBrokerList } from '../../broker/brokerSlice';
 import { setActiveMainTab } from '../../layout/layoutSlice';
 import { hostApi } from '../hostApi';
 import { connectedHostWithSameServer } from '../connectionTestGuard';
+import { isHostPasswordError } from '../hostLoginError';
 import { orderedGroupEntries, UNGROUPED_GROUP_ID, findHostUidByConnection, flattenHostsFromGroups, MAX_HOST_ALIAS_LENGTH } from '../hostGroupUtils';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Input } from '../../../components/ds/forms/Input';
@@ -172,11 +173,11 @@ export default function AddHostModal({ isOpen, onClose }) {
       dispatch(fetchDatabaseStartInfo(newHostUid));
       dispatch(fetchBrokerList(newHostUid));
       dispatch(fetchHostEnv(newHostUid));
-    } catch {
+    } catch (err) {
       // addHost.fulfilled already closed this modal — the host is saved,
       // but login failed (e.g. wrong/missing password). Reopen it in Edit
       // mode so the user can fix the credentials right away.
-      dispatch(openEditHostModal(newHostUid));
+      dispatch(openEditHostModal({ hostUid: newHostUid, passwordRejected: isHostPasswordError(err) }));
     }
   };
 
