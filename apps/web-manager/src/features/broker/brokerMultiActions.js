@@ -1,4 +1,4 @@
-import { startBroker, stopBroker } from './brokerSlice';
+import { markBrokersRestarting, startBroker, stopBroker } from './brokerSlice';
 import { refreshAfterBrokerAction } from './brokerSidebarActions';
 
 export const MULTI_BROKER_ACTIONS = ['start', 'stop', 'restart'];
@@ -29,23 +29,37 @@ const errorText = (err) => (typeof err === 'string' ? err : err?.message || Stri
 export async function runMultiBrokerAction(dispatch, { hostUid, action, names }) {
   const succeeded = [];
   const failed = [];
+  // A restarted broker shows ON while it passes through OFF; each one is
+  // released as soon as its own restart ends, so one whose start failed
+  // shows OFF at once instead of after the whole batch.
+  const marked = new Set(action === 'restart' ? names : []);
+  const release = (brokerName) => {
+    if (!marked.delete(brokerName)) return;
+    dispatch(markBrokersRestarting({ hostUid, names: [brokerName], restarting: false }));
+  };
+  if (marked.size > 0) dispatch(markBrokersRestarting({ hostUid, names, restarting: true }));
   try {
     for (const brokerName of names) {
       const phase = action === 'restart' ? { stop: 'stop', start: 'start' } : {};
       try {
-        if (action !== 'start') await dispatch(stopBroker({ hostUid, brokerName })).unwrap();
-      } catch (err) {
-        failed.push({ dbname: brokerName, error: errorText(err), phase: phase.stop });
-        continue;
-      }
-      try {
-        if (action !== 'stop') await dispatch(startBroker({ hostUid, brokerName })).unwrap();
-        succeeded.push(brokerName);
-      } catch (err) {
-        failed.push({ dbname: brokerName, error: errorText(err), phase: phase.start });
+        try {
+          if (action !== 'start') await dispatch(stopBroker({ hostUid, brokerName })).unwrap();
+        } catch (err) {
+          failed.push({ dbname: brokerName, error: errorText(err), phase: phase.stop });
+          continue;
+        }
+        try {
+          if (action !== 'stop') await dispatch(startBroker({ hostUid, brokerName })).unwrap();
+          succeeded.push(brokerName);
+        } catch (err) {
+          failed.push({ dbname: brokerName, error: errorText(err), phase: phase.start });
+        }
+      } finally {
+        release(brokerName);
       }
     }
   } finally {
+    if (marked.size > 0) dispatch(markBrokersRestarting({ hostUid, names: [...marked], restarting: false }));
     dispatch(refreshAfterBrokerAction(hostUid));
   }
   return { succeeded, failed, skipped: [] };

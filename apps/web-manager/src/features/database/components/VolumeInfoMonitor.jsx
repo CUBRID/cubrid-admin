@@ -9,7 +9,9 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { PageLoader } from '../../../components/ds/feedback/PageLoader';
 import { EmptyState } from '../../../components/ds/feedback/EmptyState';
 import { useCM } from '../../../constants/useCM';
-import { isLogVolume, pageCount } from '../volumePages';
+import { isLogVolume, pageCount, pagesToSize } from '../volumePages';
+import { formatSize } from '../../../infrastructure/utils/format';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 const parseNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -19,7 +21,8 @@ const parseNumber = (value) => {
 
 const formatNumber = (value) => parseNumber(value).toLocaleString();
 
-const formatMegabytes = (value) => `${value.toFixed(2)} MiB`;
+// Sizes in MiB here, shown in the unit that fits (one decimal).
+const formatMegabytes = (value) => formatSize(value * 1024 * 1024, 1);
 
 const clampPercent = (value) => Math.min(100, Math.max(0, value));
 
@@ -38,8 +41,9 @@ export default function VolumeInfoMonitor({ tabId }) {
     (state) => state.databaseMonitoring?.dashboardData?.[`${hostUid}:${dbname}`]?.spaceInfoStatus === 'error'
   );
 
-  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
+  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId,
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: () => () => dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }))
@@ -55,6 +59,8 @@ export default function VolumeInfoMonitor({ tabId }) {
   // database's (potentially different) log page size.
   const logVolume = isLogVolume(volume);
   const pageSize = parseNumber(logVolume ? dbSpace?.logpagesize : dbSpace?.pagesize) || parseNumber(dbSpace?.pagesize) || 4096;
+
+  if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
   if (!dbSpace && !spaceInfoFailed) {
     return (
@@ -106,7 +112,7 @@ export default function VolumeInfoMonitor({ tabId }) {
   const usedPct    = usageKnown && totalPages > 0 ? clampPercent((usedPages / totalPages) * 100) : 0;
   const freePct    = usageKnown && totalPages > 0 ? clampPercent((freePages / totalPages) * 100) : 0;
   const showMegabytes = (value) => (usageKnown ? formatMegabytes(value) : '-');
-  const showPages = (value) => (usageKnown ? formatNumber(value) : '-');
+  const showUsedSize = (value) => (usageKnown ? pagesToSize(value, pageSize) : '-');
 
   const severity = usedPct > 85 ? 'text-rose-500' : usedPct > 60 ? 'text-amber-500' : 'text-emerald-500';
   const barColor = usedPct > 85 ? 'bg-rose-500' : usedPct > 60 ? 'bg-amber-500' : 'bg-emerald-500';
@@ -117,10 +123,9 @@ export default function VolumeInfoMonitor({ tabId }) {
     { label: CM.locationRow,    value: volume.location, icon: 'folder' },
     { label: CM.purposeRow,     value: volume.purpose || '-', icon: 'flag' },
     { label: CM.pageSizeRow,   value: `${formatNumber(pageSize)} B`, icon: 'data_array' },
-    { label: CM.totalPagesRow, value: formatNumber(totalPages), icon: 'article' },
-    { label: CM.usedPagesRow,  value: showPages(usedPages), icon: 'inventory' },
-    { label: CM.freePagesRow,  value: showPages(freePages), icon: 'inventory_2' },
     { label: CM.totalSizeRow,  value: formatMegabytes(totalM), icon: 'straighten' },
+    { label: CM.usedLabel,     value: showMegabytes(usedM), icon: 'inventory' },
+    { label: CM.freeLabel,     value: showMegabytes(freeM), icon: 'inventory_2' },
   ];
 
   return (
@@ -215,7 +220,7 @@ export default function VolumeInfoMonitor({ tabId }) {
                 {CM.allocationLabel}
               </Typography>
               <Typography variant="label" className={`text-12 font-black font-mono ${severity}`}>
-                {usageKnown ? CM.percentUsed.replace('{0}', usedPct.toFixed(2)) : '-'}
+                {usageKnown ? CM.percentUsed.replace('{0}', usedPct.toFixed(1)) : '-'}
               </Typography>
             </div>
             <div className="h-8 w-full bg-slate-100 dark:bg-white/6 border border-slate-200 dark:border-white/6 overflow-hidden rounded-sm flex">
@@ -242,7 +247,7 @@ export default function VolumeInfoMonitor({ tabId }) {
                 </span>
               </div>
               <Typography variant="label" className="text-12 text-slate-400 font-mono ml-auto shrink-0 whitespace-nowrap">
-                {showPages(usedPages)} / {formatNumber(totalPages)} {CM.pagesLabel}
+                {showUsedSize(usedPages)} / {pagesToSize(totalPages, pageSize)}
               </Typography>
             </div>
           </div>

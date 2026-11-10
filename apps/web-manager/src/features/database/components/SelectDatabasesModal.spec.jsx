@@ -85,10 +85,23 @@ it('asks for an account per database without a saved login before logging in', a
   await type(cId, 'public');
 
   await click(q('select-databases-action-login'));
+  // Saving is on by default, as in the single login dialog.
   expect(onAction).toHaveBeenCalledWith('login', expect.any(Array), {
-    b: { id: 'dba', password: 'pw' },
-    c: { id: 'public', password: '' },
+    b: { id: 'dba', password: 'pw', save: true },
+    c: { id: 'public', password: '', save: true },
   });
+});
+
+it('does not save the entered accounts when saving is turned off', async () => {
+  const onAction = vi.fn();
+  await render({ initialSelected: ['b'], onAction });
+  await click(q('select-databases-action-login'));
+  const [bId] = credentialInputs('b');
+  await type(bId, 'dba');
+  await click(q('select-databases-save-credentials'));
+
+  await click(q('select-databases-action-login'));
+  expect(onAction).toHaveBeenCalledWith('login', expect.any(Array), { b: { id: 'dba', password: '', save: false } });
 });
 
 it('copies the first row\'s account to every database', async () => {
@@ -103,8 +116,8 @@ it('copies the first row\'s account to every database', async () => {
   await click(q('select-databases-action-login'));
 
   expect(onAction).toHaveBeenCalledWith('login', expect.any(Array), {
-    b: { id: 'dba', password: 'pw' },
-    c: { id: 'dba', password: 'pw' },
+    b: { id: 'dba', password: 'pw', save: true },
+    c: { id: 'dba', password: 'pw', save: true },
   });
 });
 

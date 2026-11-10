@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { checkIntInRange, UNLOAD_CACHED_PAGES_MIN, UNLOAD_ESTIMATED_SIZE_MIN } from '@api-interfaces';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeUnloadDatabaseModal, openUnloadResultModal, fetchDatabaseStartInfo } from '../databaseSlice';
 import { databaseApi } from '../databaseApi';
@@ -10,6 +11,7 @@ import { useCM } from '../../../constants/useCM';
 import UnloadConfigSection from './unload/UnloadConfigSection';
 import UnloadContentSection from './unload/UnloadContentSection';
 import UnloadAdvancedOptions from './unload/UnloadAdvancedOptions';
+import { unloadClassFlags } from './unload/unloadClassFlags';
 
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -38,8 +40,6 @@ const INITIAL_FORM_DATA = {
   cachedPages: '',
   useEstimateInstances: false,
   estimateInstances: '',
-  useLoFileDirectory: false,
-  loFileDirectory: '',
 };
 
 export default function UnloadDatabaseModal() {
@@ -153,10 +153,16 @@ export default function UnloadDatabaseModal() {
   };
 
   const hasSelectedScope = formData.schemaScope === 'selected' || formData.dataScope === 'selected';
+  // The engine's ranges (db-op-input-limits); an unchecked option is not sent.
+  const numberIssues = {
+    cachedPages: formData.useCachedPages ? checkIntInRange(formData.cachedPages, UNLOAD_CACHED_PAGES_MIN) : null,
+    estimateInstances: formData.useEstimateInstances ? checkIntInRange(formData.estimateInstances, UNLOAD_ESTIMATED_SIZE_MIN) : null,
+  };
   const isFormValid =
     (formData.schemaScope !== 'none' || formData.dataScope !== 'none') &&
     (!hasSelectedScope || formData.selectedTables.length > 0) &&
-    Boolean(formData.targetDirectory);
+    Boolean(formData.targetDirectory) &&
+    !numberIssues.cachedPages && !numberIssues.estimateInstances;
 
   const handleUnloadDatabase = async () => {
     if (!selectedHostUid || !selectedDatabase || !isFormValid) return;
@@ -165,7 +171,7 @@ export default function UnloadDatabaseModal() {
     try {
       const isSchemaIncluded = formData.schemaScope !== 'none';
       const isDataIncluded = formData.dataScope !== 'none';
-      const classonly = formData.schemaScope !== 'all' ? 'yes' : 'no';
+      const { ref, classonly } = unloadClassFlags(formData);
 
       const payload = {
         targetdir: formData.targetDirectory,
@@ -185,13 +191,12 @@ export default function UnloadDatabaseModal() {
         class: formData.schemaScope === 'all'
           ? []
           : formData.selectedTables.map((t) => ({ classname: t })),
-        ref: (formData.schemaScope === 'selected' && formData.includeReferencedTables) ? 'yes' : 'no',
+        ref,
         classonly,
         delimit: formData.useDelimitedIdentifier ? 'yes' : 'no',
         estimate: formData.useEstimateInstances ? String(formData.estimateInstances) : '',
         prefix: formData.usePrefixOutputFile ? formData.prefixOutputFile : '',
         cach: formData.useCachedPages ? String(formData.cachedPages) : '',
-        lofile: formData.useLoFileDirectory ? String(formData.loFileDirectory) : '',
       };
 
       const job = await runJob(
@@ -201,7 +206,7 @@ export default function UnloadDatabaseModal() {
       if (!wasBackgrounded()) {
         resetAction();
         dispatch(closeUnloadDatabaseModal());
-        dispatch(openUnloadResultModal(job.result ?? {}));
+        dispatch(openUnloadResultModal({ result: job.result ?? {}, warnings: job.warnings ?? [] }));
       }
     } catch (err) {
       if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.failure));
@@ -273,7 +278,7 @@ export default function UnloadDatabaseModal() {
           dynamicTables={dynamicTables}
           isTablesLoading={isTablesLoading}
         />
-        <UnloadAdvancedOptions formData={formData} handleInputChange={handleInputChange} />
+        <UnloadAdvancedOptions formData={formData} handleInputChange={handleInputChange} numberIssues={numberIssues} />
       </div>
     </Modal>
   );

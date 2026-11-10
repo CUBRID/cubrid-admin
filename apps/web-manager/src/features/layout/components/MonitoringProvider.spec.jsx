@@ -27,7 +27,11 @@ let releaseStartInfo;
 const initialState = {
   user: { preferences: { dashboardInterval: 10, brokerStatusInterval: 10 } },
   host: { selectedHostUid: 'host1', authorizedHosts: ['host1', 'host2'], reconnectQueue: [] },
-  database: { activeDatabasesByHost: {}, loggedInDatabases: [] },
+  // Two running, logged-in databases: what a volume poll would have read.
+  database: {
+    activeDatabasesByHost: { host1: ['demodb', 'testdb'] },
+    loggedInDatabases: ['host1:demodb', 'host1:testdb'],
+  },
   layout: { activeMainTab: 'db:host1:demodb' },
 };
 
@@ -89,23 +93,32 @@ const setReconnectQueue = (queue) => act(async () => {
   store.dispatch({ type: 'test/setReconnectQueue', payload: queue });
 });
 
+it('reads only the host\'s start-info while a database tab is in front: no volumes, no broker list', async () => {
+  // The database dashboard reads what it shows itself; volume-info for every
+  // logged-in database, and the broker list, fed no screen from here.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30000);
+  });
+  expect(countOf('test/fetchDatabaseStartInfo')).toBe(4);
+  expect(countOf('test/fetchDatabaseVolumes')).toBe(0);
+  expect(countOf('test/fetchBrokerList')).toBe(0);
+  expect(dispatched.every((a) => a.payload.isBackground === true)).toBe(true);
+});
+
 it('does not restart the selected host\'s polling when another host joins or leaves the reconnect queue', async () => {
-  // Initial immediate refresh from both effects.
+  // Initial immediate refresh.
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(1);
-  expect(countOf('test/fetchBrokerList')).toBe(1);
 
   await setReconnectQueue(['host2']);
   await setReconnectQueue([]);
 
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(1);
-  expect(countOf('test/fetchBrokerList')).toBe(1);
 
-  // The original timers keep their phase: next tick lands at the configured interval.
+  // The original timer keeps its phase: next tick lands at the configured interval.
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10000);
   });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-  expect(countOf('test/fetchBrokerList')).toBe(2);
 });
 
 it('pauses polling while the selected host is pending reconnect and resumes when it leaves the queue', async () => {
@@ -114,11 +127,9 @@ it('pauses polling while the selected host is pending reconnect and resumes when
     await vi.advanceTimersByTimeAsync(30000);
   });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(1);
-  expect(countOf('test/fetchBrokerList')).toBe(1);
 
   await setReconnectQueue([]);
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-  expect(countOf('test/fetchBrokerList')).toBe(2);
 });
 
 it('waits for the interval after a failed poll instead of retrying at once', async () => {
@@ -142,7 +153,6 @@ it('keeps dispatching each tick while a read is still waiting on the host', asyn
     await vi.advanceTimersByTimeAsync(30000);
   });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(4);
-  expect(countOf('test/fetchBrokerList')).toBe(4);
   releaseStartInfo = null;
 });
 
@@ -153,11 +163,9 @@ it('stops polling the host while a modal is open and refreshes once when it clos
     await vi.advanceTimersByTimeAsync(30000);
   });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(1);
-  expect(countOf('test/fetchBrokerList')).toBe(1);
 
   await act(async () => { closeModal(); });
   expect(countOf('test/fetchDatabaseStartInfo')).toBe(2);
-  expect(countOf('test/fetchBrokerList')).toBe(2);
 });
 
 it('leaves a host dashboard to its own refresh, so nothing is read twice per interval', async () => {

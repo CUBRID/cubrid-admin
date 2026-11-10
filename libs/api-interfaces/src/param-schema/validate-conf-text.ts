@@ -1,6 +1,6 @@
 import { ParamSchemaEntry } from './param-schema-entry';
 import { parseConfText } from './parse-conf-text';
-import { validateEffectiveParams } from './validate-effective-params';
+import { checkEffectiveParams } from './validate-effective-params';
 import { EngineKnownKeys } from './engine-known-keys';
 import { DEPRECATED_PARAM_REPLACEMENTS } from './deprecated-param-replacements';
 import { validateCmConfText } from './validate-cm-conf-text';
@@ -16,6 +16,21 @@ export interface ConfTextProblem {
   message: string;
   /** `warning` never blocks a save; everything else does. */
   severity?: 'error' | 'warning';
+  /**
+   * What the problem is, for a client that shows its own text: a value check
+   * code (ParamValueIssue: MIN, NOT_ONE_OF, REQUIRED, CROSS_FIELD, ...) or a
+   * file check code — SYNTAX_LINE_TOO_LONG {max}, SYNTAX_NOT_KEY_VALUE,
+   * DEPRECATED_KEY {replacedBy?}, UNKNOWN_KEY {catalogVersion},
+   * UNKNOWN_KEY_UNCATALOGUED, DUPLICATE_KEY {laterLineNo},
+   * MISSING_COMMON_SECTION, BROKER_PORT_DUPLICATE {port, otherSection},
+   * SHM_ID_DUPLICATE {otherSection}, SHM_ID_SAME_AS_MASTER, and cm.conf's
+   * CM_NO_VALUE, CM_NOT_READ, CM_UNKNOWN_KEY, CM_TOO_LONG {max}.
+   */
+  code?: string;
+  /** The values `message` is built from, for `code`. */
+  params?: Record<string, unknown>;
+  /** The section the line is in (cubrid.conf / broker.conf). */
+  section?: string;
 }
 
 const COMMON_SECTION: Record<Exclude<ConfFileKind, 'cmconf'>, string> = { cubridconf: 'common', brokerconf: 'broker' };
@@ -46,7 +61,7 @@ export function validateConfText(
     return validateCmConfText(input, { schema, pending: CM_PENDING_PARAM_SCHEMA, templateOnly: CM_TEMPLATE_ONLY_KEYS });
   }
   const { sections, syntaxErrors } = parseConfText(input);
-  const problems: ConfTextProblem[] = syntaxErrors.map(({ lineNo, message }) => ({ lineNo, message }));
+  const problems: ConfTextProblem[] = syntaxErrors.map(({ lineNo, message, code, params }) => ({ lineNo, message, code, ...(params ? { params } : {}) }));
   const commonSection = COMMON_SECTION[kind];
   const schemaByKey = new Map(schema.map((entry) => [entry.key.toLowerCase(), entry]));
 
@@ -64,13 +79,23 @@ export function validateConfText(
           // The engine loads a deprecated key but reports it (PRM_ERR_DEPRICATED).
           if (deprecated.has(lookup.toLowerCase())) {
             const replacedBy = DEPRECATED_PARAM_REPLACEMENTS[lookup.toLowerCase()];
-            problems.push({ lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — deprecated${replacedBy ? `; use ${replacedBy} instead` : ''}.` });
+            problems.push({
+              lineNo, key, severity: 'warning', code: 'DEPRECATED_KEY', section: section.name ?? commonSection,
+              ...(replacedBy ? { params: { replacedBy } } : {}),
+              message: `[${section.name ?? commonSection}] ${key} — deprecated${replacedBy ? `; use ${replacedBy} instead` : ''}.`,
+            });
           }
           continue;
         }
         problems.push(knownKeys.strict
-          ? { lineNo, key, message: `[${section.name ?? commonSection}] ${key} — not a parameter of CUBRID ${knownKeys.catalogVersion}; the engine refuses to load a file with an unknown key.` }
-          : { lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — not found in any catalogued engine version close to this host's; the engine refuses to load a file with an unknown key, so check the spelling.` });
+          ? {
+            lineNo, key, code: 'UNKNOWN_KEY', section: section.name ?? commonSection, params: { catalogVersion: knownKeys.catalogVersion },
+            message: `[${section.name ?? commonSection}] ${key} — not a parameter of CUBRID ${knownKeys.catalogVersion}; the engine refuses to load a file with an unknown key.`,
+          }
+          : {
+            lineNo, key, severity: 'warning', code: 'UNKNOWN_KEY_UNCATALOGUED', section: section.name ?? commonSection,
+            message: `[${section.name ?? commonSection}] ${key} — not found in any catalogued engine version close to this host's; the engine refuses to load a file with an unknown key, so check the spelling.`,
+          });
       }
     }
     // ini_parser lowercases keys and overwrites a repeated key in the same
@@ -82,7 +107,10 @@ export function validateConfText(
       if (laterLineNo === undefined) {
         lastLineByKey.set(lower, lineNo);
       } else {
-        problems.push({ lineNo, key, severity: 'warning', message: `[${section.name ?? commonSection}] ${key} — set again on line ${laterLineNo}; this line is ignored and the later value is used.` });
+        problems.push({
+          lineNo, key, severity: 'warning', code: 'DUPLICATE_KEY', section: section.name ?? commonSection, params: { laterLineNo },
+          message: `[${section.name ?? commonSection}] ${key} — set again on line ${laterLineNo}; this line is ignored and the later value is used.`,
+        });
       }
     }
     const isCommonSection = section.name === null || section.name === commonSection;
@@ -113,7 +141,7 @@ export function validateConfText(
       sectionLineNos[entry.key] = lineNo;
     }
     const generatedKeys = new Set(generated.map((e) => e.key));
-    const sectionErrors = validateEffectiveParams([...schema, ...generated], sectionValues, {
+    const sectionErrors = checkEffectiveParams([...schema, ...generated], sectionValues, {
       isCommonSection,
       commonSectionLabel: commonSection,
       emptyValueIsError: true,
@@ -121,10 +149,15 @@ export function validateConfText(
       sysprmKeywords: kind === 'cubridconf',
       skipSectionPlacement: kind === 'cubridconf' && section.name !== null && (section.name === 'standalone' || section.name.startsWith('%')),
     });
-    for (const [key, reason] of Object.entries(sectionErrors)) {
+    for (const [key, issue] of Object.entries(sectionErrors)) {
       const lineNo = sectionLineNos[key] ?? section.lineNo;
       const lenient = generatedKeys.has(key) && !knownKeys?.strict;
-      problems.push({ lineNo, key, message: `[${section.name ?? commonSection}] ${key} — ${reason}`, ...(lenient ? { severity: 'warning' as const } : {}) });
+      problems.push({
+        lineNo, key, code: issue.code, section: section.name ?? commonSection,
+        ...(issue.params ? { params: issue.params } : {}),
+        message: `[${section.name ?? commonSection}] ${key} — ${issue.message}`,
+        ...(lenient ? { severity: 'warning' as const } : {}),
+      });
     }
   }
 
@@ -132,7 +165,10 @@ export function validateConfText(
   // load when it's 0 — which is also what a missing [broker] section
   // yields. The per-section checks above never see a section that isn't there.
   if (kind === 'brokerconf' && !sections.some((s) => s.name === commonSection)) {
-    problems.push({ message: `Missing [${commonSection}] section — the broker cannot start without it (MASTER_SHM_ID).` });
+    problems.push({
+      code: 'MISSING_COMMON_SECTION', section: commonSection,
+      message: `Missing [${commonSection}] section — the broker cannot start without it (MASTER_SHM_ID).`,
+    });
   }
 
   if (kind === 'brokerconf') problems.push(...brokerCollisions(sections, commonSection));
@@ -159,16 +195,33 @@ function brokerCollisions(sections: ReturnType<typeof parseConfText>['sections']
     const portValue = port ? parseGuardInt({ base: 0 }, port.value) : null;
     if (port && portValue !== null) {
       const other = seenPorts.get(portValue);
-      if (other) problems.push({ lineNo: port.lineNo, key: 'BROKER_PORT', message: `[${section.name}] BROKER_PORT — ${portValue} is already used by [${other}]; the broker refuses to start with a duplicated port.` });
+      if (other) {
+        problems.push({
+          lineNo: port.lineNo, key: 'BROKER_PORT', code: 'BROKER_PORT_DUPLICATE', section: section.name,
+          params: { port: portValue, otherSection: other },
+          message: `[${section.name}] BROKER_PORT — ${portValue} is already used by [${other}]; the broker refuses to start with a duplicated port.`,
+        });
+      }
       else seenPorts.set(portValue, section.name);
     }
     const shm = lastEntry(section, 'APPL_SERVER_SHM_ID');
     const shmValue = shm ? parseGuardInt({ base: 16 }, shm.value) : null;
     if (shm && shmValue !== null) {
       const other = seenShmIds.get(shmValue);
-      if (other) problems.push({ lineNo: shm.lineNo, key: 'APPL_SERVER_SHM_ID', message: `[${section.name}] APPL_SERVER_SHM_ID — already used by [${other}]; the broker refuses to start with a duplicated shared memory id.` });
+      if (other) {
+        problems.push({
+          lineNo: shm.lineNo, key: 'APPL_SERVER_SHM_ID', code: 'SHM_ID_DUPLICATE', section: section.name,
+          params: { otherSection: other },
+          message: `[${section.name}] APPL_SERVER_SHM_ID — already used by [${other}]; the broker refuses to start with a duplicated shared memory id.`,
+        });
+      }
       else seenShmIds.set(shmValue, section.name);
-      if (shmValue === masterShmId) problems.push({ lineNo: shm.lineNo, key: 'APPL_SERVER_SHM_ID', message: `[${section.name}] APPL_SERVER_SHM_ID — same as MASTER_SHM_ID in [${commonSection}]; the broker refuses to start.` });
+      if (shmValue === masterShmId) {
+        problems.push({
+          lineNo: shm.lineNo, key: 'APPL_SERVER_SHM_ID', code: 'SHM_ID_SAME_AS_MASTER', section: section.name,
+          message: `[${section.name}] APPL_SERVER_SHM_ID — same as MASTER_SHM_ID in [${commonSection}]; the broker refuses to start.`,
+        });
+      }
     }
   }
   return problems;

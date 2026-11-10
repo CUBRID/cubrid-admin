@@ -32,7 +32,8 @@ export const updateAccount = createAsyncThunk(
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
   async (_, { getState, dispatch }) => {
-    const storedRefresh = getState().auth.refreshToken || localStorage.getItem('refreshToken');
+    // Storage has the latest one, also when another tab refreshed.
+    const storedRefresh = localStorage.getItem('refreshToken') || getState().auth.refreshToken;
     try {
       await authApi.logout(storedRefresh);
     } catch {
@@ -88,14 +89,14 @@ const authSlice = createSlice({
       }
       setAuthToken(action.payload.token);
     },
+    // The tokens are already in storage (this tab's refresh stored them, or
+    // another tab's did); the state only follows. Writing them back here put
+    // an older refresh token, read before another tab's new one reached this
+    // tab, over the new one, and the next refresh then reused a spent token.
     sessionRefreshed: (state, action) => {
       state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken ?? state.refreshToken;
+      if (action.payload.refreshToken) state.refreshToken = action.payload.refreshToken;
       state.isAuthenticated = true;
-      localStorage.setItem('token', action.payload.token);
-      if (action.payload.refreshToken) {
-        localStorage.setItem('refreshToken', action.payload.refreshToken);
-      }
       setAuthToken(action.payload.token);
     },
     loginFailure: (state, action) => {

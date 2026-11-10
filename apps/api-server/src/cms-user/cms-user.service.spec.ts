@@ -17,7 +17,8 @@ describe('CmsUserService', () => {
 
   const mockHost = {
     uid: 'host-uid-1',
-    id: 'host-1',
+    // Connected as the CMS admin account: the one that may manage users.
+    id: 'admin',
     address: 'localhost',
     port: 8001,
     password: 'host-password',
@@ -55,6 +56,46 @@ describe('CmsUserService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  // CMS asks only for the DB-create authority on these tasks; CUBRID Admin
+  // allows them on the `admin` account alone, and so does this server.
+  describe('on a host not connected as the CMS admin account', () => {
+    const operator = { ...mockHost, id: 'operator' };
+    const refused = { code: 'CMS_ADMIN_REQUIRED', additionalData: { hostUid: mockHostUid, username: 'operator' } };
+
+    beforeEach(() => {
+      hostService.findHostInternal.mockResolvedValue(operator as any);
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'success', userlist: [], dblist: [] });
+    });
+
+    it('refuses to add, update or delete a user without asking CMS', async () => {
+      const request = { targetid: 'someone', password: 'x', casauth: 'none', dbcreate: 'none', statusmonitorauth: 'none' };
+      await expect(service.addDbmtUser(mockUserId, mockHostUid, request)).rejects.toMatchObject(refused);
+      await expect(service.updateDbmtUser(mockUserId, mockHostUid, { targetid: 'someone', dbauth: [], casauth: 'none', dbcreate: 'none', statusmonitorauth: 'none' })).rejects.toMatchObject(refused);
+      await expect(service.deleteDbmtUser(mockUserId, mockHostUid, 'someone')).rejects.toMatchObject(refused);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('refuses another user\'s password but lets the account change its own', async () => {
+      await expect(service.setDbmtPasswd(mockUserId, mockHostUid, 'someone', 'new')).rejects.toMatchObject(refused);
+      expect(cmsClient.postAuthenticated).not.toHaveBeenCalled();
+
+      await expect(service.setDbmtPasswd(mockUserId, mockHostUid, 'operator', 'new')).resolves.toEqual({ success: true });
+      expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ task: 'setdbmtpasswd', targetid: 'operator' })
+      );
+    });
+
+    it('still reads the user list', async () => {
+      await expect(service.getDbmtUserInfo(mockUserId, mockHostUid)).resolves.toEqual({ dblist: [], userlist: [] });
+    });
+
+    it('is case-sensitive about the admin account, as CUBRID Admin is', async () => {
+      hostService.findHostInternal.mockResolvedValue({ ...mockHost, id: 'ADMIN' } as any);
+      await expect(service.deleteDbmtUser(mockUserId, mockHostUid, 'someone')).rejects.toMatchObject({ code: 'CMS_ADMIN_REQUIRED' });
+    });
   });
 
   describe('addDbmtUser', () => {

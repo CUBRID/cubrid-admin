@@ -7,7 +7,7 @@ const initialState = {
   isCompactDatabaseModalOpen: false,
   isCopyDatabaseModalOpen: false,
   isBackupDatabaseModalOpen: false,
-  pendingBackupJob: null, // { jobId, dbname } — survives modal close for reconnect
+  pendingBackupJob: null, // { jobId, hostUid, dbname, payload } — survives modal close for reconnect
   isRestoreDatabaseModalOpen: false,
   isOptimizeDatabaseModalOpen: false,
   isAddBackupPlanModalOpen: false,
@@ -44,6 +44,7 @@ const initialState = {
   editBackupPlanData: null,
   autoBackupLogData: null,
   unloadResultData: null,
+  unloadResultWarnings: [],
   transactionInfoData: null,
   killTransactionData: null,
 
@@ -122,7 +123,8 @@ const databaseUISlice = createSlice({
     
     openUnloadResultModal: (state, action) => { 
       state.isUnloadResultModalOpen = true; 
-      state.unloadResultData = action.payload;
+      state.unloadResultData = action.payload?.result ?? null;
+      state.unloadResultWarnings = action.payload?.warnings ?? [];
     },
     closeUnloadResultModal: (state) => { state.isUnloadResultModalOpen = false; },
     

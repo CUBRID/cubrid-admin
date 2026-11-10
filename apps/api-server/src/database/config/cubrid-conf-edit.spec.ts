@@ -79,10 +79,25 @@ describe('editServerList', () => {
     expect(removeAutostart(['[service]', 'server=gone # only'], 'gone')).toEqual(['[service]', 'server= # only']);
   });
 
+  it('splits the list on spaces, commas and colons, as the engine does, keeping each separator', () => {
+    expect(renameAutostart(['[service]', 'server=a old:b'], 'old', 'new')).toEqual(['[service]', 'server=a new:b']);
+    expect(removeAutostart(['[service]', 'server=a gone:b,, c'], 'gone')).toEqual(['[service]', 'server=a b:c']);
+    expect(editServerList(['[service]', 'server=a b'], add('c'))).toEqual(['[service]', 'server=a b c']);
+  });
+
+  it('drops separators left before the first or after the last name', () => {
+    expect(removeAutostart(['[service]', 'server=,gone,a,'], 'gone')).toEqual(['[service]', 'server=a']);
+  });
+
   it('tells whether a name is in a [service] server= list, as the engine reads it', () => {
     expect(isAutostart(['[service]', 'server=a,\\', ' b'], 'b')).toBe(true);
     expect(isAutostart(['[service]', '#server=b'], 'b')).toBe(false);
     expect(isAutostart(['[common]', 'server=b'], 'b')).toBe(false);
+  });
+
+  it('splits the list on spaces, commas and colons, as the engine does', () => {
+    expect(isAutostart(['[service]', 'server=a b:c'], 'b')).toBe(true);
+    expect(isAutostart(['[service]', 'server=a b:c'], 'c')).toBe(true);
   });
 
   it('reads only the last server= key, as the engine does, when [service] has several', () => {

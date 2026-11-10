@@ -33,8 +33,9 @@ export const monitoringApi = {
    * @param {string} hostUid
    * @returns {Promise<any>}
    */
-  getHaHeartbeatList: (hostUid) =>
-    apiClient.post(`/${hostUid}/ha/heartbeat-list`, { dbmodeall: 'y' }),
+  getHaHeartbeatList: (hostUid, { nodesOnly = false } = {}) =>
+    // 'n' skips CMS's `cubrid changemode` run per database: nodes only, no hadbinfolist.
+    apiClient.post(`/${hostUid}/ha/heartbeat-list`, { dbmodeall: nodesOnly ? 'n' : 'y' }),
 };
 
 export default monitoringApi;

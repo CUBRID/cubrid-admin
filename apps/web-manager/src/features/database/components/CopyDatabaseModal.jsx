@@ -21,6 +21,9 @@ import {
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
+import { useFreshDbList } from '../useFreshDbList';
+import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
@@ -43,6 +46,7 @@ export default function CopyDatabaseModal() {
   // and the peers still name it, like a rename or delete (both blocked for HA).
   const isSourceHa = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const databases = databasesByHost[selectedHostUid] || [];
+  const dbListFresh = useFreshDbList(selectedHostUid, isCopyDatabaseModalOpen);
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
 
   const { 
@@ -186,7 +190,10 @@ export default function CopyDatabaseModal() {
   }));
   const individualVolumesValid = !volInfoLoading && canCopyIndividualVolumes(copyVolumes);
   const isDestinationSameAsSource = !!formData.destName.trim() && formData.destName.trim() === selectedDatabase;
-  const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource &&
+  const destNameIssue = formData.destName.trim()
+    ? newDbNameIssue(formData.destName.trim(), dbListFresh ? takenDbNames(databases, selectedDatabase) : null)
+    : null;
+  const canSubmit = !!formData.destName.trim() && !isDestinationSameAsSource && !destNameIssue &&
     (!formData.copyIndividual || individualVolumesValid);
 
   if (!isCopyDatabaseModalOpen) return null;
@@ -266,6 +273,7 @@ export default function CopyDatabaseModal() {
     if (!canSubmit) return;
 
     startAction();
+    const hostUid = selectedHostUid;
     const advanced = formData.copyIndividual ? 'on' : 'off';
     const volumeList = formData.copyIndividual ? buildCopyVolumeMappings(copyVolumes) : undefined;
 
@@ -283,11 +291,13 @@ export default function CopyDatabaseModal() {
 
     try {
       const job = await runJob(
-        () => databaseJobApi.submitCopy(selectedHostUid, payload),
+        () => databaseJobApi.submitCopy(hostUid, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
+      // The host's database list shows the copy, also when the job ran in
+      // the background (as after a delete).
+      dispatch(fetchDatabaseStartInfo(hostUid));
       if (!wasBackgrounded()) {
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
         setWarnings(job?.warnings ?? []);
         endSuccess(`${CM.copyCompleted}: ${formData.destName}`);
       }
@@ -436,7 +446,7 @@ export default function CopyDatabaseModal() {
                 <Input
                   data-testid="copy-database-dest-name-input"
                   value={formData.destName}
-                  error={isDestinationSameAsSource ? CM.copyDestinationSameAsSource : undefined}
+                  error={isDestinationSameAsSource ? CM.copyDestinationSameAsSource : inputIssueText(destNameIssue, CM) ?? undefined}
                   onChange={e => handleInputChange('destName', e.target.value)}
                   placeholder="e.g. demodb_copy"
                   autoFocus

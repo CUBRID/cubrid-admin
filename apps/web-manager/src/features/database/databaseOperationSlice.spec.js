@@ -5,11 +5,13 @@ vi.mock('./databaseApi', () => ({
   databaseApi: {
     getBackupSchedule: vi.fn(),
     getQueryPlan: vi.fn(),
+    getLockInfo: vi.fn(),
+    getTransactionInfo: vi.fn(),
   },
 }));
 
 import { databaseApi } from './databaseApi';
-import reducer, { fetchBackupSchedule, fetchQueryPlan } from './databaseOperationSlice';
+import reducer, { fetchBackupSchedule, fetchQueryPlan, fetchLockInfo, fetchTransactionInfo } from './databaseOperationSlice';
 
 const HOST = 'host1';
 const DB = 'demodb';
@@ -58,5 +60,21 @@ describe('job automation list status', () => {
     databaseApi.getBackupSchedule.mockResolvedValueOnce({ backups: [] });
     await store.dispatch(fetchBackupSchedule({ hostUid: HOST, dbname: DB }));
     expect(op(store).backupSchedulesError[KEY]).toBeUndefined();
+  });
+});
+
+describe('lock and transaction info of a same-named database on two hosts', () => {
+  it('keeps each host its own value', async () => {
+    databaseApi.getLockInfo.mockImplementation(async (hostUid) => ({ from: hostUid }));
+    databaseApi.getTransactionInfo.mockImplementation(async (hostUid) => ({ from: hostUid }));
+    const store = makeStore();
+    for (const hostUid of ['hostA', 'hostB']) {
+      await store.dispatch(fetchLockInfo({ hostUid, dbname: DB }));
+      await store.dispatch(fetchTransactionInfo({ hostUid, dbname: DB }));
+    }
+    expect(op(store).lockInfo['hostA:demodb']).toEqual({ from: 'hostA' });
+    expect(op(store).lockInfo['hostB:demodb']).toEqual({ from: 'hostB' });
+    expect(op(store).transactionInfo['hostA:demodb']).toEqual({ from: 'hostA' });
+    expect(op(store).transactionInfo['hostB:demodb']).toEqual({ from: 'hostB' });
   });
 });

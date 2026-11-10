@@ -11,11 +11,15 @@ vi.mock('./brokerApi', () => ({
     getBrokerList: vi.fn(),
     getBrokerStatus: vi.fn(),
     getBrokerStatusBulk: vi.fn(),
+    getBrokerLogs: vi.fn(),
+    viewLog: vi.fn(),
   },
 }));
 
 import { brokerApi } from './brokerApi';
-import reducer, { fetchBrokerList, readSharedBrokerList } from './brokerSlice';
+import reducer, { fetchBrokerList, readSharedBrokerList, fetchDetailedBrokerStatus, fetchBrokerLogs, fetchLogContent } from './brokerSlice';
+import { hostKey } from '../host/hostKey';
+import { closeTab } from '../layout/layoutSlice';
 import apiClient from '../../api/apiClient';
 import { closeHostTabs } from '../layout/layoutSlice';
 
@@ -482,5 +486,51 @@ describe('readSharedBrokerList', () => {
     brokerApi.getBrokerList.mockRejectedValue(new Error('No response was received from CMS'));
 
     await expect(readSharedBrokerList('host1')).rejects.toThrow('No response was received from CMS');
+  });
+});
+
+describe('same broker name and log path on two hosts', () => {
+  const PATH = '/home/cubrid/CUBRID/log/broker/query_editor.err';
+
+  it('keeps each host its own broker status, log list and log content', async () => {
+    const store = makeStore();
+    brokerApi.getBrokerStatus.mockImplementation(async (hostUid) => ({ asinfo: [{ as_id: hostUid }] }));
+    brokerApi.getBrokerLogs.mockImplementation(async (hostUid) => ({ logfileinfo: [{ logfile: [{ path: `${hostUid}.err` }] }] }));
+    brokerApi.viewLog.mockImplementation(async (hostUid) => ({ total: hostUid === 'hostA' ? '1' : '2' }));
+
+    for (const hostUid of ['hostA', 'hostB']) {
+      await store.dispatch(fetchDetailedBrokerStatus({ hostUid, brokerName: 'query_editor' }));
+      await store.dispatch(fetchBrokerLogs({ hostUid, brokerName: 'query_editor' }));
+      await store.dispatch(fetchLogContent({ hostUid, path: PATH }));
+    }
+
+    const { detailedStatus, logsByBroker, viewingLogs } = store.getState().broker;
+    expect(detailedStatus[hostKey('hostA', 'query_editor')].data.asinfo[0].as_id).toBe('hostA');
+    expect(detailedStatus[hostKey('hostB', 'query_editor')].data.asinfo[0].as_id).toBe('hostB');
+    expect(logsByBroker[hostKey('hostA', 'query_editor')]).toEqual([{ path: 'hostA.err' }]);
+    expect(logsByBroker[hostKey('hostB', 'query_editor')]).toEqual([{ path: 'hostB.err' }]);
+    expect(viewingLogs[hostKey('hostA', PATH)].data.total).toBe('1');
+    expect(viewingLogs[hostKey('hostB', PATH)].data.total).toBe('2');
+  });
+
+  it("closing one host's tab or the host itself leaves the other host's entries", async () => {
+    const store = makeStore();
+    brokerApi.getBrokerStatus.mockResolvedValue({ asinfo: [] });
+    brokerApi.viewLog.mockResolvedValue({ total: '1' });
+    for (const hostUid of ['hostA', 'hostB']) {
+      await store.dispatch(fetchDetailedBrokerStatus({ hostUid, brokerName: 'query_editor' }));
+      await store.dispatch(fetchLogContent({ hostUid, path: PATH }));
+    }
+
+    store.dispatch(closeTab('broker_status:hostA:query_editor'));
+    store.dispatch(closeTab(`log:hostA:${PATH}`));
+    let { detailedStatus, viewingLogs } = store.getState().broker;
+    expect(Object.keys(detailedStatus)).toEqual([hostKey('hostB', 'query_editor')]);
+    expect(Object.keys(viewingLogs)).toEqual([hostKey('hostB', PATH)]);
+
+    store.dispatch(closeHostTabs('hostB'));
+    ({ detailedStatus, viewingLogs } = store.getState().broker);
+    expect(detailedStatus).toEqual({});
+    expect(viewingLogs).toEqual({});
   });
 });

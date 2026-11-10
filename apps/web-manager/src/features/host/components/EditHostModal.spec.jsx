@@ -12,16 +12,17 @@ const { thunk, action } = vi.hoisted(() => ({
 vi.mock('../hostSlice', () => ({
   editHost: thunk(),
   moveHost: thunk(),
+  fetchHosts: thunk(),
   loginToHostWithSideEffects: thunk(),
   fetchHostEnv: thunk(),
-  closeEditHostModal: action('host/closeEditHostModal'),
+  closeEditHostModal: vi.fn(action('host/closeEditHostModal')),
   clearHostError: action('host/clearHostError'),
   setSelectedHost: action('host/setSelectedHost'),
 }));
 vi.mock('../../database/databaseSlice', () => ({ fetchDatabaseStartInfo: thunk() }));
 vi.mock('../../broker/brokerSlice', () => ({ fetchBrokerList: thunk() }));
 vi.mock('../../layout/layoutSlice', () => ({ setActiveMainTab: action('layout/setActiveMainTab') }));
-import { editHost } from '../hostSlice';
+import { closeEditHostModal, editHost, fetchHosts, loginToHostWithSideEffects } from '../hostSlice';
 import EditHostModal from './EditHostModal';
 
 let container;
@@ -71,4 +72,25 @@ it('saves an empty password when asked to change it and the field is left empty'
   await act(async () => q('edit-host-change-password-toggle').click());
   await act(async () => q('edit-host-save-btn').click());
   expect(editHost.mock.calls[0][0].payload.password).toBe('');
+});
+
+it('logs in with the changed settings before saving anything', async () => {
+  await render();
+  await act(async () => q('edit-host-connect-save-btn').click());
+  expect(editHost).not.toHaveBeenCalled();
+  expect(loginToHostWithSideEffects).toHaveBeenCalledWith({
+    hostUid: 'h1',
+    changes: { id: 'admin', address: '10.0.0.1', port: 8001, alias: 'Prod' },
+  });
+  expect(fetchHosts).toHaveBeenCalledTimes(1);
+  expect(closeEditHostModal).toHaveBeenCalled();
+});
+
+it('saves nothing and stays open when that login fails', async () => {
+  loginToHostWithSideEffects.mockImplementationOnce(() => () => ({ unwrap: () => Promise.reject(new Error('Incorrect password')) }));
+  await render();
+  await act(async () => q('edit-host-connect-save-btn').click());
+  expect(editHost).not.toHaveBeenCalled();
+  expect(fetchHosts).not.toHaveBeenCalled();
+  expect(closeEditHostModal).not.toHaveBeenCalled();
 });

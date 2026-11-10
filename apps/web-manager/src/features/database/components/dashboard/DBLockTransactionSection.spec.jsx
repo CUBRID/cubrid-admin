@@ -104,3 +104,13 @@ describe('DBLockTransactionSection transaction-ended signal', () => {
     expect(fetchDashboardLocks).not.toHaveBeenCalled();
   });
 });
+
+describe('DBLockTransactionSection lock total', () => {
+  it('shows the locks the rows add up to, not the number of rows', async () => {
+    const row = (obj, mode, count) => ({ index: '2', user: 'dba', host: 'h', pid: '1', program: 'csql', obj, mode, count: String(count) });
+    const locks = [row('Instance of class', 'X_LOCK', 20), row('Class', 'IS_LOCK', 1), row('Class', 'IX_LOCK', 1), row('Root class', 'IX_LOCK', 1), row('Class', 'IS_LOCK', 1)];
+    await render({ locks, locksStatus: 'loaded' });
+
+    expect(container.querySelector('[data-testid="db-dashboard-lock-total"]').textContent).toBe('24');
+  });
+});

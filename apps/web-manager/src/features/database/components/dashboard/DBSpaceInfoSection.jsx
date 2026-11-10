@@ -18,7 +18,7 @@ export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, polling
     if (hostUid && dbname) dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
   };
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'files' }, refresh);
 
   useEffect(() => {
     let interval;
