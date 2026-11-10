@@ -38,7 +38,7 @@ export function unloadObjectTypeWarnings(classes: string[]): Warning[] {
     })),
     {
       code: 'UNLOAD_RESULT_NOT_RECORDED',
-      message: 'CMS stopped after this warning, so the table counts and the Load Database list entry were not written.',
+      message: 'Because of this warning, the table counts and the Load Database list entry were not written.',
     },
   ];
 }

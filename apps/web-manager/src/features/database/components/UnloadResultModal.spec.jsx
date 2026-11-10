@@ -41,7 +41,7 @@ const render = async (payload) => {
 
 describe('unload result', () => {
   it('shows the warnings and no empty table when CMS stopped before counting', async () => {
-    await render({ result: [], warnings: [WARNING, 'CMS stopped after this warning, so the table counts and the Load Database list entry were not written.'] });
+    await render({ result: [], warnings: [WARNING, 'Because of this warning, the table counts and the Load Database list entry were not written.'] });
     expect(container.textContent).toContain(WARNING);
     expect(container.textContent).toContain('table counts');
     expect(container.querySelector('table')).toBeNull();
