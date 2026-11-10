@@ -36,9 +36,9 @@ afterEach(async () => {
   container.remove();
 });
 
-const render = (hostId) => act(async () => {
+const render = (hostId, host = {}) => act(async () => {
   const state = {
-    host: { selectedHostUid: 'h1', authorizedHosts: ['h1'], hosts: [{ uid: 'h1', id: hostId }] },
+    host: { selectedHostUid: 'h1', authorizedHosts: ['h1'], hosts: [{ uid: 'h1', id: hostId }], ...host },
     user: { preferences: { uiLocale: 'ko' } },
   };
   root.render(<Provider store={configureStore({ reducer: () => state })}><MemoryRouter><HeaderMenu /></MemoryRouter></Provider>);
@@ -55,4 +55,21 @@ it('keeps CMS Account Management on for the CMS admin account', async () => {
   await render('admin');
   expect(cmsAccounts().disabled).toBe(false);
   expect(cmsAccounts().title).toBe('');
+});
+
+const engineVersion = () => [...container.querySelectorAll('button')].find((b) => b.textContent === KO.serverVersion);
+
+it('says Host Engine Version is off for the highlighted host, not the selected one', async () => {
+  // h1 selected and connected; h2 highlighted, not connected.
+  await render('admin', { highlightedHostUid: 'h2', reconnectQueue: [] });
+  expect(engineVersion().disabled).toBe(true);
+  expect(engineVersion().title).toBe(KO.hostConnectRequiredHint);
+
+  // h2 connected but waiting to reconnect.
+  await render('admin', { highlightedHostUid: 'h2', authorizedHosts: ['h1', 'h2'], reconnectQueue: ['h2'] });
+  expect(engineVersion().disabled).toBe(true);
+  expect(engineVersion().title).toBe(KO.hostConnectRequiredHint);
+
+  await render('admin', { highlightedHostUid: 'h2', authorizedHosts: ['h1', 'h2'], reconnectQueue: [] });
+  expect(engineVersion().disabled).toBe(false);
 });
