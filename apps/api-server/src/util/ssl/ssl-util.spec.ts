@@ -72,4 +72,54 @@ describe('ssl file modes', () => {
     expect(winWarn).not.toHaveBeenCalled();
     if (process.platform !== 'win32') expect(modeOf(winPaths.keyPath)).toBe(0o644);
   });
+
+  unixOnly('leaves a linked key, certificate or folder as it is', () => {
+    const shared = path.join(base, 'letsencrypt');
+    fs.mkdirSync(shared);
+    fs.writeFileSync(path.join(shared, 'privkey.pem'), 'KEY', { mode: 0o640 });
+    fs.chmodSync(path.join(shared, 'privkey.pem'), 0o640);
+    fs.writeFileSync(path.join(shared, 'cert.pem'), 'CERT', { mode: 0o600 });
+    fs.chmodSync(path.join(shared, 'cert.pem'), 0o600);
+    fs.chmodSync(shared, 0o755);
+    const dir = path.join(base, 'ssl');
+    fs.symlinkSync(shared, dir);
+    const paths = { sslDir: dir, keyPath: path.join(base, 'key-link.pem'), certPath: path.join(base, 'cert-link.pem') };
+    fs.symlinkSync(path.join(shared, 'privkey.pem'), paths.keyPath);
+    fs.symlinkSync(path.join(shared, 'cert.pem'), paths.certPath);
+    const warn = jest.fn();
+    restrictSslFiles(paths, { ownDir: true, warn });
+    expect(modeOf(path.join(shared, 'privkey.pem'))).toBe(0o640);
+    expect(modeOf(path.join(shared, 'cert.pem'))).toBe(0o600);
+    expect(modeOf(shared)).toBe(0o755);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  unixOnly('makes missing parent folders with the usual mode and only ssl/ owner-only', () => {
+    process.env.CWM_SSL_DIR = path.join(base, 'a', 'b', 'ssl');
+    getOrCreateSSLCert();
+    const usual = 0o777 & ~process.umask();
+    expect(modeOf(path.join(base, 'a'))).toBe(usual);
+    expect(modeOf(path.join(base, 'a', 'b'))).toBe(usual);
+    expect(modeOf(path.join(base, 'a', 'b', 'ssl'))).toBe(0o700);
+  });
+
+  unixOnly('says to check the ssl/ owner and permissions when the key cannot be read, and still fails', () => {
+    const dir = path.join(base, 'ssl');
+    fs.mkdirSync(dir);
+    const locked = path.join(base, 'locked-key.pem');
+    fs.writeFileSync(locked, 'KEY');
+    fs.chmodSync(locked, 0o000);
+    fs.symlinkSync(locked, path.join(dir, 'key.pem')); // left as it is, so the read is refused
+    fs.writeFileSync(path.join(dir, 'cert.pem'), 'CERT');
+    process.env.CWM_SSL_DIR = dir;
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() => getOrCreateSSLCert()).toThrow(/EACCES/);
+      expect(error.mock.calls[0][0]).toContain(path.join(dir, 'key.pem'));
+      expect(error.mock.calls[0][0]).toContain('check the owner and permissions');
+    } finally {
+      fs.chmodSync(locked, 0o600);
+    }
+  });
 });
+
