@@ -1596,6 +1596,7 @@ export const CM_KO = {
   connectionFailed: '연결 실패',
   hostLoginFailedMsg: '호스트에 로그인하지 못했습니다.',
   hostNotLoggedIn: '로그인 안 함',
+  hostNotRespondingLabel: '응답 없음',
   hostLoginFailedWith: (msg) => (msg ? `로그인 실패: ${msg}` : '로그인 실패'),
   hostLoginNoResponseMsg: 'CMS가 응답하지 않습니다. 호스트에서 CMS가 실행 중인지, 주소와 포트가 올바른지 확인하세요.',
   cmsAdminRequiredErrorMsg: 'CMS 사용자 관리는 CMS admin 계정으로 연결한 호스트에서만 할 수 있습니다.',

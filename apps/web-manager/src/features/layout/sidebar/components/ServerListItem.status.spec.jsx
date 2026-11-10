@@ -39,6 +39,7 @@ const cases = [
   ['logging in', hostState({ isLoggingIntoHost: true }), 'A host login is in progress.', 'animate-pulse'],
   ['login failed', hostState({ hostAuthErrors: { h1: 'Incorrect password' } }), 'Login failed: Incorrect password', 'bg-rose-500'],
   ['disconnected, still authorized', hostState({ authorizedHosts: ['h1'], reconnectQueue: ['h1'] }), 'Disconnected', 'bg-rose-500'],
+  ['CMS not responding', hostState({ authorizedHosts: ['h1'], hostNotResponding: { h1: true } }), 'Not responding', 'bg-rose-500'],
 ];
 
 describe('sidebar host dot', () => {

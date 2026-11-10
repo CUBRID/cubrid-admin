@@ -2,7 +2,7 @@ import React from 'react';
 import { shallowEqual, useSelector } from 'react-redux';
 import { useCM } from '../../../constants/useCM';
 import {
-  HOST_CONNECTED, HOST_DISCONNECTED, HOST_LOGGING_IN, HOST_LOGIN_FAILED,
+  HOST_CONNECTED, HOST_DISCONNECTED, HOST_LOGGING_IN, HOST_LOGIN_FAILED, HOST_NOT_RESPONDING,
   hostConnectionStatus, hostConnectionStatusText,
 } from '../hostConnectionStatus';
 
@@ -13,6 +13,7 @@ const DOT_COLOR = {
   [HOST_LOGGING_IN]: 'bg-amber-500 animate-pulse',
   [HOST_LOGIN_FAILED]: 'bg-rose-500',
   [HOST_DISCONNECTED]: 'bg-rose-500',
+  [HOST_NOT_RESPONDING]: 'bg-rose-500',
 };
 
 /** A host's status and its text (for title / aria-label), from the host slice. */
@@ -24,6 +25,7 @@ export function useHostConnectionStatus(hostUid) {
       authorizedHosts: h.authorizedHosts,
       reconnectQueue: h.reconnectQueue,
       hostAuthErrors: h.hostAuthErrors,
+      hostNotResponding: h.hostNotResponding,
       isLoggingIntoHost: h.isLoggingIntoHost,
       selectedHostUid: h.selectedHostUid,
     };
@@ -34,7 +36,7 @@ export function useHostConnectionStatus(hostUid) {
 
 /**
  * Green connected, yellow not logged in (blinking while logging in), red
- * login failed or connection lost. `ping` adds the sidebar's ripple to green.
+ * login failed, connection lost or CMS not responding. `ping` adds the sidebar's ripple to green.
  */
 export function HostStatusDot({ status, text, ping = false, className = '' }) {
   const color = DOT_COLOR[status] ?? 'bg-amber-500';

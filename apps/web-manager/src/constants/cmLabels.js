@@ -1546,6 +1546,7 @@ export const CM = {
   connectionFailed: 'Connection failed',
   hostLoginFailedMsg: 'Could not log in to the host.',
   hostNotLoggedIn: 'Not logged in',
+  hostNotRespondingLabel: 'Not responding',
   hostLoginFailedWith: (msg) => (msg ? `Login failed: ${msg}` : 'Login failed'),
   hostLoginNoResponseMsg: 'No response from the CMS. Check that the CMS is running on the host and that the address and port are correct.',
   cmsAdminRequiredErrorMsg: 'Only a host connected as the CMS admin account can manage CMS users.',

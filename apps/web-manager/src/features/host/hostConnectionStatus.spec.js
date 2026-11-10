@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  HOST_CONNECTED, HOST_DISCONNECTED, HOST_LOGGING_IN, HOST_LOGIN_FAILED, HOST_NOT_LOGGED_IN,
+  HOST_CONNECTED, HOST_DISCONNECTED, HOST_LOGGING_IN, HOST_LOGIN_FAILED, HOST_NOT_LOGGED_IN, HOST_NOT_RESPONDING,
   hostConnectionStatus, hostConnectionStatusText,
 } from './hostConnectionStatus';
 import { getCM } from '../../constants/useCM';
@@ -14,6 +14,12 @@ describe('hostConnectionStatus', () => {
 
   it('is disconnected while waiting to reconnect, though still in authorizedHosts', () => {
     expect(hostConnectionStatus('h1', { ...base, authorizedHosts: ['h1'], reconnectQueue: ['h1'] })).toBe(HOST_DISCONNECTED);
+  });
+
+  it('is not responding for a connected host whose CMS did not answer, but disconnected once in the reconnect window', () => {
+    expect(hostConnectionStatus('h1', { ...base, authorizedHosts: ['h1'], hostNotResponding: { h1: true } })).toBe(HOST_NOT_RESPONDING);
+    expect(hostConnectionStatus('h1', { ...base, authorizedHosts: ['h1'], hostNotResponding: { h1: true }, reconnectQueue: ['h1'] })).toBe(HOST_DISCONNECTED);
+    expect(hostConnectionStatus('h1', { ...base, hostNotResponding: { h1: true } })).toBe(HOST_NOT_LOGGED_IN);
   });
 
   it('is logging in only for the selected host while a login runs', () => {
@@ -47,5 +53,7 @@ describe('hostConnectionStatusText', () => {
     expect(hostConnectionStatusText(HOST_NOT_LOGGED_IN, 'h1', state, KO)).toBe('로그인 안 함');
     expect(hostConnectionStatusText(HOST_LOGIN_FAILED, 'h1', state, KO)).toBe('로그인 실패: Incorrect password');
     expect(hostConnectionStatusText(HOST_DISCONNECTED, 'h1', state, KO)).toBe('연결 끊김');
+    expect(hostConnectionStatusText(HOST_NOT_RESPONDING, 'h1', state, EN)).toBe('Not responding');
+    expect(hostConnectionStatusText(HOST_NOT_RESPONDING, 'h1', state, KO)).toBe('응답 없음');
   });
 });
