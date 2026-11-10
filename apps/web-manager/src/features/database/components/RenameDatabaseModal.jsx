@@ -70,7 +70,6 @@ export default function RenameDatabaseModal() {
     // databaseCoreSlice's parseDbResponse). That change used to re-trigger
     // this effect mid-flow, call resetAction(), and bounce the modal off its
     // success screen back onto a blank form.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRenameDatabaseModalOpen]);
 
   if (!isRenameDatabaseModalOpen) return null;
@@ -217,7 +216,7 @@ export default function RenameDatabaseModal() {
         {/* New Database Name Row */}
         <div className="grid grid-cols-[170px_1fr] items-center gap-4">
           <label className="font-medium text-slate-700 dark:text-slate-200">
-            {CM.newDatabaseName || 'New database name:'}
+            {CM.newDatabaseName}
           </label>
           <Input
             data-testid="rename-database-new-name-input"

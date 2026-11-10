@@ -75,7 +75,7 @@
             "cd dist/apps/api-server && npm install --production",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-win-x64",
             "node scripts/copy-web-to-api.mjs",
-            "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-web-manager.exe"
+            "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-admin.exe"
           ],
           "parallel": false
         },
@@ -84,7 +84,7 @@
             "cd dist/apps/api-server && npm install --production",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-x64",
             "node scripts/copy-web-to-api.mjs",
-            "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-web-manager-linux"
+            "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-admin-linux"
           ],
           "parallel": false
         },
@@ -93,7 +93,7 @@
             "cd dist/apps/api-server && npm install --production",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-macos-x64",
             "node scripts/copy-web-to-api.mjs",
-            "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-web-manager-macos"
+            "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-admin-macos"
           ],
           "parallel": false
         },
@@ -102,11 +102,11 @@
             "cd dist/apps/api-server && npm install --production",
             "node scripts/copy-web-to-api.mjs",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-win-x64",
-            "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-web-manager.exe",
+            "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-admin.exe",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-x64",
-            "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-web-manager-linux",
+            "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-admin-linux",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-macos-x64",
-            "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-web-manager-macos"
+            "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-admin-macos"
           ],
           "parallel": false
         }

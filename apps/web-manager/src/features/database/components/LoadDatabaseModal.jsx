@@ -8,6 +8,7 @@ import { databaseJobApi } from '../databaseJobApi';
 import { useCmsJob } from '../../../infrastructure/hooks/useCmsJob';
 import { getCmsJobLoadingSubtitle } from '../../../infrastructure/cmsJob/cmsJobUi';
 import { useCM } from '../../../constants/useCM';
+import LoadResultView from './LoadResultView';
 
 import LoadConfigSection from './load/LoadConfigSection';
 import LoadSourceSection from './load/LoadSourceSection';
@@ -52,6 +53,8 @@ export default function LoadDatabaseModal() {
   } = useActionState();
   const { runJob, background, wasBackgrounded } = useCmsJob();
   const [jobStatus, setJobStatus] = useState(null);
+  // loaddb's output (counts and failed lines), shown after the job ends.
+  const [resultLog, setResultLog] = useState(null);
 
   const [unloadList, setUnloadList] = useState([]);
   const [selectedUnload, setSelectedUnload] = useState('');
@@ -274,13 +277,20 @@ export default function LoadDatabaseModal() {
         checkoption: formData.checkBoxes.checkoption ? 'both' : 'load',
       };
 
-      await runJob(
+      setResultLog(null);
+      const job = await runJob(
         () => databaseJobApi.submitLoad(selectedHostUid, selectedDatabase, payload),
         { onProgress: (j) => setJobStatus(j.jobStatus ?? j.status) }
       );
-      if (!wasBackgrounded()) endSuccess();
+      if (!wasBackgrounded()) {
+        setResultLog(job?.result?.log ?? null);
+        endSuccess();
+      }
     } catch (err) {
-      if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.failure));
+      if (!wasBackgrounded()) {
+        setResultLog(err?.job?.result?.log ?? null);
+        endError(typeof err === 'string' ? err : (err.message || CM.failure));
+      }
     }
   };
 
@@ -292,28 +302,28 @@ export default function LoadDatabaseModal() {
   const getValidationError = () => {
     if (radio === 0) {
       if (!selectedUnload) {
-        return CM.errLoadFileFromList || 'Please select the unloaded file from the list.';
+        return CM.errLoadFileFromList;
       }
       const hasChecked = dataSource.some((row) => row.checked);
       if (!hasChecked) {
-        return CM.errNoSelectedPath || 'Please check the unloaded files of the selected database from the following list.';
+        return CM.errNoSelectedPath;
       }
     } else if (radio === 1) {
       const { schema, object, index, trigger } = formData.checkBoxes;
       if (!schema && !object && !index && !trigger) {
-        return CM.errLoadFileFromSys || 'Please select the unloaded file from the file system';
+        return CM.errLoadFileFromSys;
       }
       if (schema && !formData.unloadFiles.schema?.trim()) {
-        return CM.errLoadSchema || 'Loaded schema file is not valid.';
+        return CM.errLoadSchema;
       }
       if (object && !formData.unloadFiles.object?.trim()) {
-        return CM.errLoadOjbects || 'Loaded objects file is not valid.';
+        return CM.errLoadObjects;
       }
       if (index && !formData.unloadFiles.index?.trim()) {
-        return CM.errLoadIndex || 'Loaded index file is not valid.';
+        return CM.errLoadIndex;
       }
       if (trigger && !formData.unloadFiles.trigger?.trim()) {
-        return CM.errLoadTrigger || 'Loaded trigger file is not valid.';
+        return CM.errLoadTrigger;
       }
     }
 
@@ -333,13 +343,13 @@ export default function LoadDatabaseModal() {
 
     if (formData.checkBoxes.errorcontrolfile) {
       if (!formData.values.errorcontrolfile?.trim()) {
-        return CM.errControlFile || 'The error control file is not valid.';
+        return CM.errControlFile;
       }
     }
 
     if (formData.checkBoxes.ignoreclassfile) {
       if (!formData.values.ignoreclassfile?.trim()) {
-        return CM.errClassFile || 'The ignored table file is not valid.';
+        return CM.errClassFile;
       }
     }
 
@@ -374,7 +384,9 @@ export default function LoadDatabaseModal() {
           message={CM.jobCompletedSuccess(CM.loadDatabase)}
           onConfirm={handleClose}
           confirmText={CM.ok}
-        />
+        >
+          <LoadResultView log={resultLog} />
+        </ModalStatusSuccess>
       </Modal>
     );
   }
@@ -389,7 +401,9 @@ export default function LoadDatabaseModal() {
           onRetry={handleLoadDatabase}
           onCancel={resetAction}
           cancelText={CM.close}
-        />
+        >
+          <LoadResultView log={resultLog} />
+        </ModalStatusError>
       </Modal>
     );
   }
@@ -452,7 +466,7 @@ export default function LoadDatabaseModal() {
         {isActive && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-amber-700 dark:text-amber-400 text-xs">
             <Icon name="warning" size="sm" />
-            <span>Database loading can only be performed when the database is stopped.</span>
+            <span>{CM.loadRequiresStoppedMsg}</span>
           </div>
         )}
         <LoadConfigSection formData={formData} handleInputChange={handleInputChange} />

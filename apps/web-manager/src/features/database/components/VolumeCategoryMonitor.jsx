@@ -272,8 +272,9 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
         dbname={dbname}
       />
 
+      {/* Left and top, as the other tabs; not a centred column. */}
       <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-7xl mx-auto space-y-5">
+        <div className="space-y-5">
           <CategoryStats volumes={volumes} summary={summary} pageSize={pageSize} />
           <UtilizationBar summary={summary} usageSeverity={usageSeverity} pageSize={pageSize} />
           <VolumeTableContainer volumes={volumes} pageSize={pageSize} status={spaceInfoStatus} title={meta.label} />

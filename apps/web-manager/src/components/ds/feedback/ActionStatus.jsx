@@ -50,7 +50,8 @@ export const ModalStatusSuccess = ({
   children,
 }) => {
   const CM = useCM();
-  const displayTitle = title || CM.operationComplete;
+  // title={false}: the dialog's own title already says it.
+  const displayTitle = title === false ? null : title || CM.operationComplete;
   const displayMessage = message || CM.operationCompletedSuccess;
   const displayConfirmText = confirmText || CM.ok;
   return (
@@ -63,7 +64,9 @@ export const ModalStatusSuccess = ({
       </div>
 
       <div className="w-full min-w-0 space-y-2 px-8">
-        <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white break-words">{displayTitle}</Typography>
+        {displayTitle && (
+          <Typography variant="h4" className="text-17 font-bold text-slate-900 dark:text-white break-words">{displayTitle}</Typography>
+        )}
         <Typography variant="p" className="text-14 text-slate-500 dark:text-slate-400 leading-relaxed max-w-[360px] mx-auto break-words">
           {displayMessage}
         </Typography>
@@ -141,7 +144,7 @@ export const ModalStatusError = ({
           {showDetail && (
             <div className="mt-2 bg-rose-500/5 border border-rose-500/15 rounded-xl px-5 py-4 animate-in fade-in slide-in-from-top-1 duration-200">
               <Typography variant="caption" className="text-12 font-semibold uppercase tracking-wide text-rose-400 mb-1 block">
-                {CM.message || 'Message'}
+                {CM.message}
               </Typography>
               <Typography variant="caption" className="text-rose-600/90 dark:text-rose-400/90 font-mono leading-relaxed block break-words text-13">
                 {rawDetail}

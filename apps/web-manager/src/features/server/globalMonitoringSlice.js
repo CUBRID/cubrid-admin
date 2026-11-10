@@ -4,6 +4,8 @@ import { databaseApi } from '../database/databaseApi';
 import { brokerApi } from '../broker/brokerApi';
 import monitoringApi from './monitoringApi';
 import { computeBrokerRates, cpuUsagePercent, extractBrokerList, volumeGroup } from './hostMetrics';
+import { getCM, getStoredLocale } from '../../constants/useCM';
+import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 const usedPct = (totalPages, freePages) => (totalPages > 0 ? Math.round(((totalPages - freePages) * 100) / totalPages) : -1);
 
@@ -27,7 +29,7 @@ export const fetchHostSummary = createAsyncThunk(
         hostApi.getHostEnv(hostUid).catch(() => null),
       ]);
 
-      if (!hostStat) return rejectWithValue('Host unreachable');
+      if (!hostStat) return rejectWithValue(getCM(getStoredLocale()).hostUnreachableMsg);
 
       // 2. Fetch Volume data (needed for Permanent/Temp space) only for
       // databases that are running and logged in: volume-info is a per-db
@@ -124,7 +126,7 @@ export const fetchHostSummary = createAsyncThunk(
           errorQ: totalErrorQ,
           dbOn: runningNames.size,
           dbOff: [...knownNames].filter((dbname) => !runningNames.has(dbname)).length,
-          version: envInfo?.os_info || envInfo?.os || 'Unknown',
+          version: envInfo?.os_info || envInfo?.os || getCM(getStoredLocale()).unknownFallback,
           brokerPorts: brokerPorts.join(', '),
           ...(withVolumes
             ? {
@@ -139,7 +141,7 @@ export const fetchHostSummary = createAsyncThunk(
         }
       };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to fetch monitoring data');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );

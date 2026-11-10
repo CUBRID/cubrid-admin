@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { useShownBrokers } from '../../broker/brokerRestartState';
+import { brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from '../../broker/brokerState';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Card } from '../../../components/ds/layout/Card';
@@ -53,11 +54,16 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     hostUid,
     tabId: `brokers_status:${hostUid}`,
     pollingIntervalSeconds: preferences.brokerStatusInterval,
-    onFetch: () => async (dispatch) => {
+    onFetch: (silent) => async (dispatch) => {
       if (isSection) return;
-      setLoading(true);
+      // Only a read the user asked for (and the first load) shows on the
+      // refresh button; a background poll every few seconds used to dim it
+      // and spin it each time.
+      if (!silent) setLoading(true);
       try {
-        const result = await dispatch(fetchBrokerList(hostUid)).unwrap();
+        // A background poll reads as one, so it leaves the sidebar's list and
+        // spinner alone and takes a read already in flight.
+        const result = await dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)).unwrap();
         setBrokers(result);
         setLoadFailed(false);
       } catch (err) {
@@ -80,11 +86,11 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     {
       header: CM.status,
       accessor: 'state',
-      render: (val) => (
-        <StatusBadge 
-          label={val} 
-          variant={val === 'ON' ? 'emerald' : 'rose'} 
-          pulse={val === 'ON'} 
+      render: (_, row) => (
+        <StatusBadge
+          label={brokerStateOf(row)}
+          variant={brokerStateVariant(row)}
+          pulse={isBrokerOn(row)}
         />
       )
     },
@@ -106,9 +112,11 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     { header: CM.errQuery, accessor: 'error_query', render: (val) => <span className={`font-mono text-14 font-bold ${parseInt(val) > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{val}</span> },
   ], [CM]);
 
-  // A broker being restarted shows ON until the restart ends.
+  // A broker being restarted shows ON until the restart ends; one listed
+  // without a state (broker service off) counts as OFF; SUSPENDED counts as
+  // running.
   const shownBrokers = useShownBrokers(hostUid, brokers);
-  const activeCount = shownBrokers.filter(b => b.state === 'ON').length;
+  const activeCount = shownBrokers.filter(isBrokerRunning).length;
 
   const activeBadge = (
     <StatusBadge label={CM.activeCount(activeCount)} variant="emerald" pulse={true} className="rounded-full" />

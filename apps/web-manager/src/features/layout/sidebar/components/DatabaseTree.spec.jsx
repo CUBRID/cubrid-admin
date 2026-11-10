@@ -166,3 +166,50 @@ it("renders a database's folders only while it is logged in", async () => {
   expect(folders).toHaveLength(2);
   expect(container.querySelectorAll('[data-testid="tree-node-Users"]')).toHaveLength(1);
 });
+
+// Right-clicking moves the selection the way a file explorer does (#29).
+const rightClickDb = (dbname) => act(async () => {
+  const summary = container.querySelector(`[data-testid="tree-node-${dbname}"] summary`);
+  summary.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+});
+
+it('selects just the right-clicked database when it is outside the selection', async () => {
+  await render();
+  await clickDb('a');
+  await clickDb('b', { ctrlKey: true });
+  await rightClickDb('d');
+
+  expect(selection.size).toBe(0);
+  expect(store.getState().database.selectedDatabase).toBe('d');
+});
+
+it('moves the highlight to a right-clicked database with nothing multi-selected', async () => {
+  await render();
+  await clickDb('a');
+  await rightClickDb('c');
+
+  expect(store.getState().database.selectedDatabase).toBe('c');
+});
+
+it('leaves the highlight where it was on a right-click inside a multi-selection', async () => {
+  await render();
+  await clickDb('a');
+  await clickDb('b', { ctrlKey: true });
+  await rightClickDb('b');
+
+  expect([...selection].sort()).toEqual(['a', 'b']);
+  expect(store.getState().database.selectedDatabase).toBe('a');
+});
+
+it('starts Ctrl/Cmd and Shift clicks from a database selected by right-click', async () => {
+  await render();
+  await clickDb('a');
+  await rightClickDb('b');
+  await clickDb('c', { ctrlKey: true });
+  expect([...selection].sort()).toEqual(['b', 'c']);
+
+  await clickDb('a');
+  await rightClickDb('b');
+  await clickDb('d', { shiftKey: true });
+  expect([...selection].sort()).toEqual(['b', 'c', 'd']);
+});

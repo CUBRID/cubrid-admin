@@ -35,9 +35,9 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = () => {
+const render = (cmsUserToEdit = { user: { id: 'user1', casauth: 'none' } }) => {
   const state = {
-    host: { isEditCmsUserModalOpen: true, selectedHostUid: 'h1', cmsUserToEdit: { user: { id: 'user1', casauth: 'none' } } },
+    host: { isEditCmsUserModalOpen: true, selectedHostUid: 'h1', cmsUserToEdit },
     user: { preferences: { uiLocale: 'en' } },
   };
   const store = configureStore({ reducer: () => state });
@@ -70,3 +70,32 @@ it('changes the password once asked, which CMS needs to be non-empty', async () 
   await act(async () => q('edit-cms-user-save-btn').click());
   expect(setHostPassword).toHaveBeenCalledWith({ hostUid: 'h1', payload: { targetid: 'user1', newpassword: 'newpass' } });
 });
+
+it('saves to the host the user list was opened for, not the selected one', async () => {
+  await render({ hostUid: 'h2', user: { id: 'user1', casauth: 'none' } });
+  await act(async () => q('edit-cms-user-save-btn').click());
+  expect(updateCmsUser.mock.calls[0][0]).toMatchObject({ hostUid: 'h2' });
+});
+
+it('names the password fields as new ones when editing', async () => {
+  await render();
+  expect(q('edit-cms-user-password-input').placeholder).toBe('New Password');
+  expect(document.body.textContent).toContain('Confirm New Password');
+});
+
+it('shows the password rule below both password fields, so the two inputs stay level', async () => {
+  await render();
+  expect(q('edit-cms-user-password-hint')).toBeNull();
+  await act(async () => q('edit-cms-user-change-password-toggle').click());
+
+  const hint = q('edit-cms-user-password-hint');
+  const password = q('edit-cms-user-password-input');
+  const confirm = q('edit-cms-user-confirm-password-input');
+  // Nothing between a field's label and its input on one side only.
+  expect(password.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(confirm.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(hint.className).toContain('col-span-2');
+  expect(password.closest('.grid').contains(hint)).toBe(true);
+  expect(password.getAttribute('aria-describedby')).toContain('edit-cms-user-password-hint');
+});
+

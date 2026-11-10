@@ -36,6 +36,7 @@ import { ModalStatusLoading,
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { failureText } from '../../../infrastructure/errors/serverErrorText';
 import {
   MAX_GENERAL_VOLUME_SIZE_MB,
   MIN_GENERAL_VOLUME_SIZE_MB,
@@ -383,16 +384,16 @@ export default function CreateDatabaseModal() {
       // apply — surface which ones so it isn't silently lost.
       const result = finishedJob?.result;
       const failedSteps = [
-        result?.startDatabase?.success === false && { label: CM.startDatabase, message: result.startDatabase.error?.message },
-        result?.updateUser?.success === false && { label: CM.wizardSetDbaPass, message: result.updateUser.error?.message },
-        result?.setAutoAddVol?.success === false && { label: CM.wizardAutoVol, message: result.setAutoAddVol.error?.message },
-        result?.setAutoStart?.success === false && { label: CM.autoStart, message: result.setAutoStart.error?.message },
+        result?.startDatabase?.success === false && { label: CM.startDatabase, message: failureText(result.startDatabase.error, CM) },
+        result?.updateUser?.success === false && { label: CM.wizardSetDbaPass, message: failureText(result.updateUser.error, CM) },
+        result?.setAutoAddVol?.success === false && { label: CM.wizardAutoVol, message: failureText(result.setAutoAddVol.error, CM) },
+        result?.setAutoStart?.success === false && { label: CM.autoStart, message: failureText(result.setAutoStart.error, CM) },
         // On an HA-configured host, a failure here means the new database
         // never got its ha_mode=off marker — it silently stays subject to
         // the host's HA replication, and can't be deleted through this API
         // until that marker is added (deleteDatabase's HA gate checks for
         // it). Surfacing nothing here would make that look like full success.
-        result?.haModeConfig?.success === false && { label: CM.wizardHaModeConfig, message: result.haModeConfig.error?.message },
+        result?.haModeConfig?.success === false && { label: CM.wizardHaModeConfig, message: failureText(result.haModeConfig.error, CM) },
       ].filter(Boolean);
       setCreationWarning(
         failedSteps.length > 0
@@ -618,7 +619,7 @@ export default function CreateDatabaseModal() {
                   label={CM.databaseName}
                   value={formData.dbName}
                   onChange={(e) => handleInputChange('dbName', e.target.value)}
-                  placeholder="e.g. production_db"
+                  placeholder={CM.examplePlaceholder('production_db')}
                   icon="database"
                   error={inputIssueText(createIssues.dbName, CM)}
                 />
@@ -645,7 +646,7 @@ export default function CreateDatabaseModal() {
                     label={CM.userDefined}
                     value={formData.userDefinedLocale}
                     onChange={(e) => handleInputChange('userDefinedLocale', e.target.value)}
-                    placeholder="e.g. de_DE.utf8"
+                    placeholder={CM.examplePlaceholder('de_DE.utf8')}
                   />
                 </div>
               )}
@@ -864,7 +865,7 @@ export default function CreateDatabaseModal() {
                     <Input
                       value={formData.autoAddVol.warn}
                       onChange={(e) => handleAutoAddVolChange('warn', e.target.value)}
-                      placeholder="e.g. 0.15"
+                      placeholder={CM.examplePlaceholder('0.15')}
                       error={inputIssueText(createIssues.warn, CM)}
                       data-testid="create-database-autoadd-warn-input"
                     />
@@ -882,7 +883,7 @@ export default function CreateDatabaseModal() {
                         min={extSizeMin}
                         error={inputIssueText(createIssues.extSize, CM)}
                         data-testid="create-database-autoadd-ext-input"
-                        placeholder="e.g. 512"
+                        placeholder={CM.examplePlaceholder('512')}
                         className="flex-1"
                       />
                       <div className="w-[80px] shrink-0">

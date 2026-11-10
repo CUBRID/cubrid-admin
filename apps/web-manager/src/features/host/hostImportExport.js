@@ -5,6 +5,10 @@
  */
 
 import { UNGROUPED_GROUP_ID } from './hostGroupUtils';
+import { getCM, getStoredLocale } from '../../constants/useCM';
+
+// Import errors reach the screen as is, in the UI language.
+const labels = () => getCM(getStoredLocale());
 
 export const MIN_IMPORT_PORT = 1;
 export const MAX_IMPORT_PORT = 65535;
@@ -65,7 +69,7 @@ export function buildGroupedExportPayload(hostGroups, selectedUids) {
     groups.push({
       // The no-group bucket is written without a name, so a user group may
       // itself be called "Ungrouped".
-      ...(groupId === UNGROUPED_GROUP_ID ? {} : { name: group.name || 'Imported' }),
+      ...(groupId === UNGROUPED_GROUP_ID ? {} : { name: group.name || labels().importedPlaceholder }),
       hosts: hostsInGroup.map((host) => ({
         alias: host.alias || '',
         address: host.address || '',
@@ -322,21 +326,25 @@ export function parseImportPort(value, defaultPort = DEFAULT_IMPORT_PORT) {
   }
 
   if (!/^\d+$/.test(raw)) {
-    return { valid: false, error: 'Port must be an integer' };
+    return { valid: false, error: labels().importPortNotIntegerMsg };
   }
 
   const port = Number(raw);
   if (!Number.isInteger(port) || port < MIN_IMPORT_PORT || port > MAX_IMPORT_PORT) {
-    return { valid: false, error: `Port must be ${MIN_IMPORT_PORT}-${MAX_IMPORT_PORT}` };
+    return { valid: false, error: labels().importPortRangeMsg(MIN_IMPORT_PORT, MAX_IMPORT_PORT) };
   }
 
   return { valid: true, port };
 }
 
+// The server's rule (findDuplicateHost): the same address, port and CMS user,
+// compared as they are sent. The same address and port with another CMS user
+// is another connection.
 function sameConnection(a, b) {
   return (
-    String(a.address).trim() === String(b.address).trim() &&
-    String(a.port) === String(b.port)
+    String(a.address ?? '') === String(b.address ?? '') &&
+    Number(a.port) === Number(b.port) &&
+    String(a.id ?? '') === String(b.id ?? '')
   );
 }
 
@@ -346,10 +354,16 @@ function sameAlias(a, b) {
   return left !== '' && right !== '' && left === right;
 }
 
+const problem = (code, message) => ({ code, message });
+
 /**
- * @returns {string|null} validation error message
+ * What is wrong with the row on its own or against the hosts already there.
+ * Rows of the file that clash with each other are not wrong: one of them can
+ * be imported (importFileConflicts).
+ * @returns {{ code: string, message: string }|null} what is wrong with the
+ *   row (code) and how to say it in the UI language (message)
  */
-export function validateImportHostEntry(entry, { existingHosts = [], batchPeers = [] } = {}) {
+export function validateImportHostEntry(entry, { existingHosts = [] } = {}) {
   const alias = String(entry.alias ?? '').trim();
   const address = String(entry.address ?? '').trim();
   const id = String(entry.id ?? '').trim();
@@ -357,33 +371,85 @@ export function validateImportHostEntry(entry, { existingHosts = [], batchPeers 
     ? { valid: true, port: entry.portNumber }
     : parseImportPort(entry.port);
 
-  if (!alias) return 'Name (alias) is required';
-  if (!address) return 'Address is required';
-  if (!id) return 'Username is required';
-  if (!portResult.valid) return portResult.error;
+  if (!alias) return problem('ALIAS_REQUIRED', labels().importAliasRequiredMsg);
+  if (!address) return problem('ADDRESS_REQUIRED', labels().addressRequired);
+  if (!id) return problem('USERNAME_REQUIRED', labels().usernameRequired);
+  if (!portResult.valid) return problem('PORT_INVALID', portResult.error);
 
-  const normalized = { alias, address, id, port: portResult.port };
+  const connection = { address: entry.address, port: portResult.port, id: entry.id };
 
   for (const existing of existingHosts) {
-    if (sameConnection(normalized, existing)) {
-      return 'Already registered (address + port)';
+    if (sameConnection(connection, existing)) {
+      return problem('ALREADY_REGISTERED', labels().importAlreadyRegisteredMsg);
     }
-    if (sameAlias(normalized, existing)) {
-      return 'Alias already in use';
-    }
-  }
-
-  for (const peer of batchPeers) {
-    if (peer.rowId != null && peer.rowId === entry.rowId) continue;
-    if (sameConnection(normalized, peer)) {
-      return 'Duplicate address + port in import file';
-    }
-    if (sameAlias(normalized, peer)) {
-      return 'Duplicate alias in import file';
+    if (sameAlias({ alias }, existing)) {
+      return problem('ALIAS_IN_USE', labels().importAliasInUseMsg);
     }
   }
 
   return null;
+}
+
+/**
+ * The other rows of the file this row cannot be imported with: the same
+ * connection, or the same alias. Only rows that can be imported count.
+ * @returns {{ rowId: string, code: string }[]}
+ */
+function importFileConflicts(row, rows) {
+  const conflicts = [];
+  for (const other of rows) {
+    if (other.rowId === row.rowId || !other.isSelectable) continue;
+    if (sameConnection(
+      { address: row.address, port: row.portNumber, id: row.id },
+      { address: other.address, port: other.portNumber, id: other.id },
+    )) {
+      conflicts.push({ rowId: other.rowId, code: 'DUPLICATE_CONNECTION_IN_FILE' });
+    } else if (sameAlias(row, other)) {
+      conflicts.push({ rowId: other.rowId, code: 'DUPLICATE_ALIAS_IN_FILE' });
+    }
+  }
+  return conflicts;
+}
+
+const conflictMessage = (code) => (code === 'DUPLICATE_CONNECTION_IN_FILE'
+  ? labels().importDuplicateConnectionMsg
+  : labels().importDuplicateAliasMsg);
+
+/**
+ * Why the row cannot be picked while these rows are: another row of the file
+ * with the same connection or alias is picked. Unpicking that row frees it.
+ * @returns {string|null} the reason, in the UI language
+ */
+export function importRowBlockedReason(row, selectedRowIds) {
+  const picked = new Set(selectedRowIds);
+  if (picked.has(row.rowId)) return null;
+  const clash = (row.fileConflicts ?? []).find((conflict) => picked.has(conflict.rowId));
+  return clash ? conflictMessage(clash.code) : null;
+}
+
+/**
+ * Whether another row can still be added to the picked ones (Select all is
+ * then not fully on). Picking B, which clashes with both A and C, leaves none.
+ */
+export function canPickMoreImportRows(rows, selectedRowIds) {
+  return pickImportRows(rows, [...selectedRowIds, ...rows.map((row) => row.rowId)]).length > selectedRowIds.length;
+}
+
+/**
+ * The rows to pick from `rowIds`, in their order, that can be imported
+ * together: a row clashing with one picked before it is left out (Select all,
+ * the selection a file opens with).
+ * @returns {string[]} row ids
+ */
+export function pickImportRows(rows, rowIds) {
+  const byId = new Map(rows.map((row) => [row.rowId, row]));
+  const picked = [];
+  for (const rowId of rowIds) {
+    const row = byId.get(rowId);
+    if (!row?.isSelectable || picked.includes(rowId) || importRowBlockedReason(row, picked)) continue;
+    picked.push(rowId);
+  }
+  return picked;
 }
 
 export function buildImportPreviewList(parsed, existingHosts) {
@@ -415,43 +481,36 @@ export function buildImportPreviewList(parsed, existingHosts) {
     };
   });
 
-  return baseRows.map((row) => {
-    const batchPeers = baseRows
-      .filter((other) => other.rowId !== row.rowId)
-      .map((other) => {
-        const peerPort = parseImportPort(other.port);
-        return {
-          rowId: other.rowId,
-          alias: String(other.alias ?? '').trim(),
-          address: String(other.address ?? '').trim(),
-          port: peerPort.valid ? peerPort.port : other.port,
-        };
-      });
-
-    const validationError = validateImportHostEntry(row, { existingHosts, batchPeers });
-
+  const checkedRows = baseRows.map((row) => {
+    const invalid = validateImportHostEntry(row, { existingHosts });
     return {
       ...row,
-      validationError,
-      isDuplicate: validationError === 'Already registered (address + port)',
-      isSelectable: !validationError,
+      validationError: invalid?.message ?? null,
+      isDuplicate: invalid?.code === 'ALREADY_REGISTERED',
+      isSelectable: !invalid,
     };
   });
+
+  return checkedRows.map((row) => (row.isSelectable
+    ? { ...row, fileConflicts: importFileConflicts(row, checkedRows) }
+    : row));
 }
 
 /**
  * @returns {{ ok: true } | { ok: false, messages: string[] }}
  */
 export function validateSelectedImportRows(rows) {
-  const invalid = rows.filter((row) => row.validationError && !row.isDuplicate);
-  if (invalid.length === 0) {
-    return { ok: true };
-  }
-
-  const messages = invalid.map((row) =>
-    `${row.alias || row.address || row.rowId}: ${row.validationError}`
-  );
-  return { ok: false, messages };
+  const name = (row) => row.alias || row.address || row.rowId;
+  const messages = rows
+    .filter((row) => row.validationError && !row.isDuplicate)
+    .map((row) => `${name(row)}: ${row.validationError}`);
+  // Two rows of the file with the same connection or alias, both picked.
+  const pickedIds = rows.map((row) => row.rowId);
+  rows.forEach((row, index) => {
+    const reason = importRowBlockedReason(row, pickedIds.slice(0, index));
+    if (reason) messages.push(`${name(row)}: ${reason}`);
+  });
+  return messages.length === 0 ? { ok: true } : { ok: false, messages };
 }
 
 /**
@@ -483,22 +542,22 @@ function parseXmlDocument(xmlString, contextLabel) {
 
   const errorNode = doc.querySelector('parsererror');
   if (errorNode) {
-    throw new Error(`Invalid XML in ${contextLabel}. Please select a valid CUBRID Manager file.`);
+    throw new Error(labels().importInvalidXmlMsg(contextLabel));
   }
 
   return doc;
 }
 
 function parseHostsFromXmlString(xmlString) {
-  const doc = parseXmlDocument(xmlString, 'host list');
+  const doc = parseXmlDocument(xmlString, labels().importHostListLabel);
 
   if (doc.documentElement.nodeName !== 'hosts') {
-    throw new Error('Incorrect file format. Expected <hosts> root element.');
+    throw new Error(labels().importWrongRootMsg);
   }
 
   const hostNodes = doc.getElementsByTagName('host');
   if (hostNodes.length === 0) {
-    throw new Error('No host connection information found in the selected file.');
+    throw new Error(labels().importNoHostInfoMsg);
   }
 
   const parsedHosts = [];
@@ -518,14 +577,14 @@ function parseHostsFromXmlString(xmlString) {
   }
 
   if (parsedHosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
 
   return parsedHosts;
 }
 
 function parseHostGroupsFromXmlString(xmlString) {
-  const doc = parseXmlDocument(xmlString, 'host groups');
+  const doc = parseXmlDocument(xmlString, labels().importHostGroupsLabel);
 
   const groupNodes = doc.getElementsByTagName('group');
   const groups = [];
@@ -606,14 +665,14 @@ function tryParseNativeJson(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(data.groups);
   if (parsed.hosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
   return parsed;
 }
 
 /** @returns {{ hosts, groups }|null} parsed native XML payload, or null if not our native format */
 function tryParseNativeXml(input) {
-  const doc = parseXmlDocument(input, 'host list');
+  const doc = parseXmlDocument(input, labels().importHostListLabel);
   if (doc.documentElement.nodeName !== 'cwm-hosts') {
     return null;
   }
@@ -639,7 +698,7 @@ function tryParseNativeXml(input) {
 
   const parsed = groupedPayloadToHostsAndGroups(groupList);
   if (parsed.hosts.length === 0) {
-    throw new Error('The selected file contains no valid host connections.');
+    throw new Error(labels().importNoValidHostsInFileMsg);
   }
   return parsed;
 }

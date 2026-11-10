@@ -10,6 +10,7 @@ import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { EmptyState } from '../../../components/ds/layout/EmptyState';
 import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
+import { menuOffReason } from '../../layout/menuOffReason';
 
 function CMSLogViewer({ hostUid, type }) {
   const CM = useCM();
@@ -184,8 +185,8 @@ function CMSLogViewer({ hostUid, type }) {
       />
 
       {toolbarMenu && (
-        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} width="w-48" onClose={() => setToolbarMenu(null)}>
-          <MenuItem icon="content_copy" label={CM.copyVisibleEntries} disabled={paginatedLogs.length === 0} onClick={() => { handleCopy(); setToolbarMenu(null); }} />
+        <ContextMenuWrapper x={toolbarMenu.x} y={toolbarMenu.y} minWidth="min-w-48" onClose={() => setToolbarMenu(null)}>
+          <MenuItem icon="content_copy" label={CM.copyVisibleEntries} disabled={paginatedLogs.length === 0} title={menuOffReason(CM, { noTarget: paginatedLogs.length === 0 && CM.nothingToCopyHint })} onClick={() => { handleCopy(); setToolbarMenu(null); }} />
           <MenuDivider />
           <MenuItem icon={showAll ? 'view_list' : 'view_stream'} label={showAll ? CM.paginated : CM.viewAll} onClick={() => { setShowAll(!showAll); setToolbarMenu(null); }} />
         </ContextMenuWrapper>
@@ -215,7 +216,7 @@ function CMSLogViewer({ hostUid, type }) {
                 </div>
                 <div className="w-24 shrink-0 flex items-center gap-2">
                   <Icon name="person" size="sm" weight={300} className="text-slate-400 dark:text-slate-600" />
-                  <span title={log['@user'] || 'System'} className="text-slate-700 dark:text-slate-300 font-medium truncate">{log['@user'] || 'System'}</span>
+                  <span title={log['@user'] || CM.systemFallback} className="text-slate-700 dark:text-slate-300 font-medium truncate">{log['@user'] || CM.systemFallback}</span>
                 </div>
                 <div className="w-40 shrink-0">
                   <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-sm border border-indigo-500/20 text-12 font-bold tracking-tighter">

@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useState, useMemo, memo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { databaseApi } from '../databaseApi';
+import { volumeDirectory } from '../volumePath';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { formatSize } from '../../../infrastructure/utils/format';
@@ -365,12 +366,15 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo, pagesize, logp
           { 
             header: CM.path, 
             accessor: 'location',
-            render: (val) => (
-              <div className="flex items-center gap-1 group min-w-0">
-                <Icon name="folder" size="xs" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-amber-500/50 transition-colors" />
-                <span className="text-12 text-slate-400 font-mono truncate" title={val}>{val?.toString().trim()}</span>
-              </div>
-            )
+            render: (_, row) => {
+              const folder = volumeDirectory(row);
+              return (
+                <div className="flex items-center gap-1 group min-w-0">
+                  <Icon name="folder" size="xs" weight={300} className="text-slate-300 dark:text-slate-600 shrink-0 group-hover:text-amber-500/50 transition-colors" />
+                  <span className="text-12 text-slate-400 font-mono truncate" title={folder}>{folder.trim()}</span>
+                </div>
+              );
+            }
           }
         ]}
         data={spaceinfo || []}

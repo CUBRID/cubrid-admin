@@ -1,4 +1,5 @@
 import { flattenHostsFromGroups, findGroupIdForHost } from './hostGroupUtils';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 // CUBRID's HA_SERVER_STATE (boot.h) as reported per-db in the heartbeat's
 // dbmode.server_mode — the individual db server's own replication state,
@@ -245,7 +246,7 @@ export function findHaPeersNeedingMerge(hostGroups, haNodes, anchorHostUid) {
   if (!targetGroupId || !haNodes?.length) return null;
 
   const hosts = flattenHostsFromGroups(hostGroups);
-  const targetGroupName = hostGroups[targetGroupId]?.name || 'Group';
+  const targetGroupName = hostGroups[targetGroupId]?.name || getCM(getStoredLocale()).groupLabel;
   const peers = [];
   const seenUids = new Set();
 
@@ -262,7 +263,7 @@ export function findHaPeersNeedingMerge(hostGroups, haNodes, anchorHostUid) {
         address: matched.address,
         port: matched.port,
         fromGroupId,
-        fromGroupName: hostGroups[fromGroupId]?.name || 'Group',
+        fromGroupName: hostGroups[fromGroupId]?.name || getCM(getStoredLocale()).groupLabel,
         haRole: (node.state || '').trim().toLowerCase(),
       });
     }

@@ -127,7 +127,7 @@ export default function SuggestedHaNodesModal() {
         <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl flex gap-3">
           <Icon name="info" className="text-amber-500 shrink-0" size="sm" />
           <p className="text-13 text-slate-600 dark:text-slate-400 leading-relaxed">
-            This server is part of an HA cluster. Select a peer node to configure and add it to your server list.
+            {CM.suggestedHaNodesHint}
           </p>
         </div>
 

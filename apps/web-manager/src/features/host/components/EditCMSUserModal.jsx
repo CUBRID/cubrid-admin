@@ -13,7 +13,8 @@ import {
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
-import { Toggle } from '../../../components/ds/forms/Toggle';
+import { Typography } from '../../../components/ds/foundation/Typography';
+import PasswordChangeLink from './PasswordChangeLink';
 import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
@@ -120,13 +121,13 @@ export default function EditCMSUserModal() {
       if (isEditMode) {
         if (changePassword) {
           await dispatch(setHostPassword({
-            hostUid: selectedHostUid,
+            hostUid,
             payload: { targetid: formData.targetid, newpassword: formData.password }
           })).unwrap();
         }
         if (!isAdmin) {
           await dispatch(updateCmsUser({
-            hostUid: selectedHostUid,
+            hostUid,
             payload: {
               targetid: formData.targetid,
               casauth: formData.casauth,
@@ -142,7 +143,7 @@ export default function EditCMSUserModal() {
         endSuccess(CM.userUpdatedSuccessMsg(formData.targetid));
       } else {
         await dispatch(addCmsUser({
-          hostUid: selectedHostUid,
+          hostUid,
           payload: {
             targetid: formData.targetid,
             password: formData.password,
@@ -153,7 +154,7 @@ export default function EditCMSUserModal() {
         })).unwrap();
         endSuccess(CM.userCreatedSuccessMsg(formData.targetid));
       }
-      dispatch(fetchCmsUsers(selectedHostUid));
+      dispatch(fetchCmsUsers(hostUid));
     } catch (err) {
       endError(err?.message || CM.synchronizationFailed);
     }
@@ -191,7 +192,7 @@ export default function EditCMSUserModal() {
       onClose={handleClose}
       onSubmit={handleSave}
       submitDisabled={!canSave}
-      title={isEditMode ? CM.editUser : CM.addUser}
+      title={isEditMode ? CM.editUser : CM.addManagementUserBtn}
       subtitle={isEditMode ? CM.editingUser(username) : CM.createManagementAccount}
       icon={isEditMode ? 'manage_accounts' : 'person_add'}
       maxWidth="540px"
@@ -200,7 +201,7 @@ export default function EditCMSUserModal() {
         <div className="flex justify-end gap-2 w-full">
           <Button data-testid="edit-cms-user-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
           <Button data-testid="edit-cms-user-save-btn" onClick={handleSave} disabled={!canSave}>
-            {isEditMode ? CM.saveChanges : CM.addUser}
+            {isEditMode ? CM.saveChanges : CM.addManagementUserBtn}
           </Button>
         </div>
       }
@@ -227,31 +228,30 @@ export default function EditCMSUserModal() {
               icon="badge"
               required
             />
-            {isEditMode && (
-              <Toggle
-                testId="edit-cms-user-change-password-toggle"
-                label={CM.changePassword}
-                checked={changePassword}
-                onChange={setChangePassword}
-              />
-            )}
             <div className="grid grid-cols-2 gap-4">
               <Input
                 data-testid="edit-cms-user-password-input"
-                label={CM.password}
+                label={isEditMode ? CM.newPassword : CM.password}
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
-                placeholder={isEditMode ? CM.passwordConfirm : CM.password}
+                placeholder={isEditMode ? CM.newPassword : CM.password}
                 icon="lock"
                 required={settingPassword}
                 disabled={!settingPassword}
-                description={settingPassword ? CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES) : null}
+                describedBy={settingPassword ? 'edit-cms-user-password-hint' : undefined}
+                labelAction={isEditMode ? (
+                  <PasswordChangeLink
+                    testId="edit-cms-user-change-password-toggle"
+                    active={changePassword}
+                    onChange={setChangePassword}
+                  />
+                ) : null}
                 error={passwordTooLong ? CM.cmsPasswordTooLongMsg(CMS_PASSWORD_MAX_BYTES) : (passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null)}
               />
               <Input
                 data-testid="edit-cms-user-confirm-password-input"
-                label={CM.passwordConfirm}
+                label={isEditMode ? CM.confirmNewPassword : CM.passwordConfirm}
                 type="password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData(p => ({ ...p, confirmPassword: e.target.value }))}
@@ -261,6 +261,12 @@ export default function EditCMSUserModal() {
                 disabled={!settingPassword}
                 error={passwordMismatch && formData.confirmPassword ? CM.passwordsDoNotMatch : null}
               />
+              {/* Below both fields, so the two inputs stay level. */}
+              {settingPassword && (
+                <Typography id="edit-cms-user-password-hint" data-testid="edit-cms-user-password-hint" variant="p" className="col-span-2 -mt-2 ml-0.5 text-12 font-medium leading-tight text-slate-400 dark:text-slate-500">
+                  {CM.cmsPasswordRuleHint(CMS_PASSWORD_MAX_BYTES)}
+                </Typography>
+              )}
             </div>
           </div>
         </section>

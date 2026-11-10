@@ -71,7 +71,7 @@ export default function LockInformationModal() {
     if (!selectedHostUid || !selectedDatabase) return;
     const requestId = ++requestIdRef.current;
     if (!isActive) {
-      setError('Database is stopped. Locking information is only available when the database is running.');
+      setError(CM.lockInfoDbStoppedMsg);
       setLoading(false);
       return;
     }

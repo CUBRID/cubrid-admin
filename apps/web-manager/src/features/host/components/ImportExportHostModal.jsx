@@ -15,6 +15,9 @@ import { exportHostsToXml,
   exportHostGroupsToJson,
   parseHostsImportFile,
   buildImportPreviewList,
+  canPickMoreImportRows,
+  importRowBlockedReason,
+  pickImportRows,
   validateSelectedImportRows,
   partitionImportRows,
 } from '../hostImportExport';
@@ -45,7 +48,7 @@ export default function ImportExportHostModal() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [fileName, setFileName] = useState('export_hosts');
   const [exportFormat, setExportFormat] = useState('nativeXml');
-  const [importGroupName, setImportGroupName] = useState('Imported');
+  const [importGroupName, setImportGroupName] = useState(CM.importedPlaceholder);
 
   useEffect(() => {
     if (isImportExportModalOpen) {
@@ -63,25 +66,30 @@ export default function ImportExportHostModal() {
         setPendingPasswordHosts([]);
         setPasswordDrafts({});
         setShowPasswordPrompt(false);
-        setImportGroupName('Imported');
+        setImportGroupName(CM.importedPlaceholder);
       }
     }
   }, [isImportExportModalOpen, importExportMode, hosts]);
 
   if (!isImportExportModalOpen) return null;
 
+  // A row clashing with a picked row of the file (same connection or alias)
+  // waits until that row is unpicked.
   const handleToggleHost = (uid) => {
-    setSelectedHosts(prev =>
-      prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
-    );
+    setSelectedHosts((prev) => {
+      if (prev.includes(uid)) return prev.filter((id) => id !== uid);
+      const row = importList.find((h) => h.rowId === uid);
+      return row && importRowBlockedReason(row, prev) ? prev : [...prev, uid];
+    });
   };
 
+  // Every row that can go in, keeping the rows already picked: of rows that
+  // clash only one is picked.
   const handleToggleAll = () => {
-    const selectable = importList.filter(h => h.isSelectable);
-    if (selectedHosts.length === selectable.length) {
+    if (isAllSelected) {
       setSelectedHosts([]);
     } else {
-      setSelectedHosts(selectable.map(h => h.rowId));
+      setSelectedHosts(pickImportRows(importList, [...selectedHosts, ...importList.map((h) => h.rowId)]));
     }
   };
 
@@ -89,7 +97,7 @@ export default function ImportExportHostModal() {
     const base = String(filename || '')
       .replace(/\.(xml|prefs|properties|txt)$/i, '')
       .trim();
-    return base || 'Imported';
+    return base || CM.importedPlaceholder;
   };
 
   const handleFileChange = async (e) => {
@@ -106,7 +114,7 @@ export default function ImportExportHostModal() {
         const listWithStatus = buildImportPreviewList(parsed, hosts);
 
         setImportList(listWithStatus);
-        setSelectedHosts(listWithStatus.filter(h => h.isSelectable).map(h => h.rowId));
+        setSelectedHosts(pickImportRows(listWithStatus, listWithStatus.map((h) => h.rowId)));
       } catch (err) {
         dispatch(showStatusModal({
           type: 'error',
@@ -223,7 +231,7 @@ export default function ImportExportHostModal() {
           }
 
           if (unassignedHosts.length > 0) {
-            const fallbackName = importGroupName.trim() || 'Imported';
+            const fallbackName = importGroupName.trim() || CM.importedPlaceholder;
             const groupId = await createImportGroup(fallbackName);
             createdGroupIds.push(groupId);
             importedGroupNames.push(fallbackName);
@@ -433,8 +441,12 @@ export default function ImportExportHostModal() {
   const icon = importExportMode === 'export' ? 'file_upload' : 'file_download';
 
   const selectable = importList.filter(h => h.isSelectable);
-  const isAllSelected = selectable.length > 0 && selectedHosts.length === selectable.length;
-  const isSomeSelected = selectedHosts.length > 0 && selectedHosts.length < selectable.length;
+  // All selected: no other row can be added (of clashing rows only one goes
+  // in, whichever was picked).
+  const isAllSelected = selectedHosts.length > 0 && !canPickMoreImportRows(importList, selectedHosts);
+  const isSomeSelected = selectedHosts.length > 0 && !isAllSelected;
+  const blockedReason = (host) => importRowBlockedReason(host, selectedHosts);
+  const canPick = (host) => host.isSelectable && !blockedReason(host);
   const hasValidationErrors = importList.some((h) => h.validationError && !h.isDuplicate);
   const fileHasPrefsGroups = importList.some((row) => row.hasPrefsGroups);
 
@@ -474,33 +486,6 @@ export default function ImportExportHostModal() {
               >
                 {CM.changeFileBtn}
               </Button>
-            )}
-            {importExportMode === 'export' && !isPasswordStep && (
-              <div className="flex items-center gap-2">
-                <Typography variant="caption" className="font-bold text-slate-400 uppercase tracking-tight">{CM.exportFormatLabel}</Typography>
-                <div className="w-44">
-                  <Select
-                    size="sm"
-                    value={exportFormat}
-                    onChange={(e) => setExportFormat(e.target.value)}
-                    options={[
-                      { value: 'nativeXml', label: CM.formatNativeXml },
-                      { value: 'nativeJson', label: CM.formatNativeJson },
-                      { value: 'caXml', label: CM.formatCaXml },
-                    ]}
-                  />
-                </div>
-                <Typography variant="caption" className="font-bold text-slate-400 uppercase tracking-tight">{CM.filenameLabel}</Typography>
-                <div className="w-48">
-                  <Input
-                    size="sm"
-                    value={fileName}
-                    onChange={(e) => setFileName(e.target.value)}
-                    placeholder={CM.exportFilenamePlaceholder}
-                    suffix={exportFormat === 'nativeJson' ? '.JSON' : '.XML'}
-                  />
-                </div>
-              </div>
             )}
           </div>
           <div className="flex gap-3">
@@ -636,6 +621,38 @@ export default function ImportExportHostModal() {
         ) : (
           <>
             <div className="px-4 py-2 bg-slate-50/50 dark:bg-bk-main/20 flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800">
+              {/* Format and file name get a row of their own: in the footer next to
+                  the buttons they were squeezed until their labels broke apart. */}
+              {importExportMode === 'export' && (
+                <div data-testid="export-settings" className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
+                  <Select
+                    label={CM.exportFormatLabel}
+                    size="sm"
+                    value={exportFormat}
+                    onChange={(e) => setExportFormat(e.target.value)}
+                    options={[
+                      { value: 'nativeXml', label: CM.formatNativeXml },
+                      { value: 'nativeJson', label: CM.formatNativeJson },
+                      { value: 'caXml', label: CM.formatCaXml },
+                    ]}
+                  />
+                  <div className="flex items-end gap-2 min-w-0">
+                    <Input
+                      data-testid="export-filename-input"
+                      label={CM.filenameLabel}
+                      size="sm"
+                      className="flex-1 min-w-0"
+                      value={fileName}
+                      onChange={(e) => setFileName(e.target.value)}
+                      placeholder={CM.exportFilenamePlaceholder}
+                    />
+                    {/* Outside the field, so it never covers the end of the name. */}
+                    <span className="h-8 flex items-center font-mono text-13 font-semibold text-slate-500 dark:text-slate-400">
+                      {exportFormat === 'nativeJson' ? '.json' : '.xml'}
+                    </span>
+                  </div>
+                </div>
+              )}
               {importExportMode === 'import' && (
                 fileHasPrefsGroups ? (
                   <Typography variant="caption" className="text-slate-500 text-12">
@@ -715,8 +732,8 @@ export default function ImportExportHostModal() {
                           >
                             <Checkbox
                               checked={isSelected}
-                              onChange={() => host.isSelectable && handleToggleHost(rowId)}
-                              disabled={!host.isSelectable}
+                              onChange={() => (isSelected || canPick(host)) && handleToggleHost(rowId)}
+                              disabled={!isSelected && !canPick(host)}
                             />
                           </div>
                         );
@@ -738,9 +755,9 @@ export default function ImportExportHostModal() {
                               <Badge variant="secondary" size="xs">{CM.invalidLabel}</Badge>
                             )}
                           </div>
-                          {host.validationError && (
+                          {(host.validationError || blockedReason(host)) && (
                             <Typography variant="caption" className="text-12 text-amber-600 dark:text-amber-400">
-                              {host.validationError}
+                              {host.validationError || blockedReason(host)}
                             </Typography>
                           )}
                         </div>
@@ -761,13 +778,13 @@ export default function ImportExportHostModal() {
                   data={importList}
                   showEmptyStateAsRow
                   onRowClick={(host) => {
-                    if (host.isSelectable) handleToggleHost(host.rowId);
+                    if (selectedHosts.includes(host.rowId) || canPick(host)) handleToggleHost(host.rowId);
                   }}
                   rowClassName={(host) => {
                     const isSelected = selectedHosts.includes(host.rowId);
                     return `
                       ${isSelected ? 'bg-bk-yellow/3' : ''}
-                      ${host.isSelectable ? 'cursor-pointer' : 'opacity-60 grayscale-[0.35]'}
+                      ${isSelected || canPick(host) ? 'cursor-pointer' : 'opacity-60 grayscale-[0.35]'}
                     `;
                   }}
                />

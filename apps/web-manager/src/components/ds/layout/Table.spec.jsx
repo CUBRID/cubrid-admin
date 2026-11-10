@@ -193,3 +193,38 @@ describe('Table paginate', () => {
     expect(shown()[0]).toBe('row-9');
   });
 });
+
+describe('Table sort arrows', () => {
+  const twoCols = [{ header: 'Name', accessor: 'name' }, { header: 'Size', accessor: 'size' }];
+  const data = [{ name: 'b', size: 2 }, { name: 'a', size: 1 }];
+  const header = (text) => [...container.querySelectorAll('th')].find((th) => th.textContent.startsWith(text));
+  // An icon in the header's flex row takes room; one laid over the cell does not.
+  const inlineIcon = (th) => th.querySelector(':scope > div > span:not(.truncate)');
+  const overlayIcon = (th) => th.querySelector(':scope > div > span.absolute');
+
+  it('gives only the sorted column an arrow that takes room; the others get an overlaid hover hint', async () => {
+    await render({ columns: twoCols, data, sortable: true });
+    for (const th of container.querySelectorAll('th')) {
+      expect(overlayIcon(th)).not.toBeNull();
+      expect(inlineIcon(th)).toBe(overlayIcon(th));
+    }
+    await act(async () => header('Name').click());
+    expect(header('Name').querySelector(':scope > div > span.absolute')).toBeNull();
+    expect(header('Name').querySelector(':scope > div > span.shrink-0')).not.toBeNull();
+    expect(overlayIcon(header('Size'))).not.toBeNull();
+    expect([...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent)).toEqual(['a1', 'b2']);
+  });
+
+  it('stops ordering rows by a column that was hidden after sorting on it', async () => {
+    await render({ columns: twoCols, data, sortable: true });
+    await act(async () => header('Name').click());
+    expect([...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent)).toEqual(['a1', 'b2']);
+    await render({ columns: [twoCols[1]], data, sortable: true });
+    expect([...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent)).toEqual(['2', '1']);
+  });
+
+  it('shows no arrow or hint on a table that does not sort', async () => {
+    await render({ columns: twoCols, data });
+    expect(container.querySelector('th span.absolute, th span.shrink-0')).toBeNull();
+  });
+});

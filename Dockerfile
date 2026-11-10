@@ -18,10 +18,10 @@ FROM --platform=linux/amd64 debian:bookworm-slim
 RUN useradd -m -u 1000 cubrid
 WORKDIR /app
 
-COPY dist/executables/cubrid-web-manager-linux ./cubrid-web-manager-linux
+COPY dist/executables/cubrid-admin-linux ./cubrid-admin-linux
 COPY dist/executables/conf ./conf
-RUN chmod +x ./cubrid-web-manager-linux && chown -R cubrid:cubrid /app
+RUN chmod +x ./cubrid-admin-linux && chown -R cubrid:cubrid /app
 
 USER cubrid
 EXPOSE 8080
-ENTRYPOINT ["./cubrid-web-manager-linux"]
+ENTRYPOINT ["./cubrid-admin-linux"]

@@ -1,4 +1,5 @@
 import apiClient from '../../api/apiClient';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 const TRUSTED_DOWNLOAD_HOSTS = ['github.com', 'objects.githubusercontent.com'];
 
@@ -25,7 +26,7 @@ export async function fetchUpdateStatus() {
     : await apiClient.get('/version/check');
 
   if (!status || typeof status.result?.status !== 'string') {
-    throw new Error('Malformed update status');
+    throw new Error(getCM(getStoredLocale()).updateStatusMalformedMsg);
   }
   return {
     currentVersion: status.currentVersion,

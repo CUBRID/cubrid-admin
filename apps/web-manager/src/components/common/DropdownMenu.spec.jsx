@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DropdownMenu, SubMenu, MenuItem } from './DropdownMenu';
 
 let container;
@@ -176,4 +176,44 @@ it('renders no wrapper or title when none is given', async () => {
   const item = container.querySelector('[role="menuitem"]');
   expect(item.closest('[title]')).toBeNull();
   expect(item.parentElement).toBe(container);
+});
+
+describe('a label cut off with "…"', () => {
+  // jsdom lays nothing out: make every element as wide as its text needs,
+  // and the label's box narrower or not.
+  const widths = (clientWidth) => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300);
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(clientWidth);
+  };
+  afterEach(() => vi.restoreAllMocks());
+  const label = () => container.querySelector('[role="menuitem"] span.truncate');
+
+  it('shows the whole label on hover', async () => {
+    widths(120);
+    await renderItem({ label: 'a-very-long-database-name-that-does-not-fit' });
+    expect(label().getAttribute('title')).toBe('a-very-long-database-name-that-does-not-fit');
+  });
+
+  it('adds nothing to a label that fits', async () => {
+    widths(300);
+    await renderItem({});
+    expect(label().hasAttribute('title')).toBe(false);
+  });
+
+  it('leaves the item\'s own title (why it is off) in charge', async () => {
+    widths(120);
+    await renderItem({ disabled: true, title: 'Log in to the database first.' });
+    expect(label().hasAttribute('title')).toBe(false);
+  });
+});
+
+it('lets a menu and its submenu grow with their items up to the window', async () => {
+  await renderMenus();
+  await openSubMenu();
+  const top = container.querySelector('[role="menu"]');
+  const sub = subMenuPortal();
+  expect(top.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-52', 'w-max']));
+  expect(top.style.maxWidth).toBe('calc(100vw - 16px)');
+  expect(sub.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-56', 'w-max']));
+  expect(sub.style.maxWidth).toBe('calc(100vw - 40px)');
 });

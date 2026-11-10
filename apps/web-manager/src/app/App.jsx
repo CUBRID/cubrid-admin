@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { toggleTheme, toggleSidebar, setIsResizing, setActiveMainTab, closeTab, closeOtherTabs, closeAllTabs, triggerRefreshActiveTab } from '../features/layout/layoutSlice';
@@ -94,6 +94,7 @@ import { useCM } from '../constants/useCM';
 import { useConfirm } from '../infrastructure/hooks/useConfirm';
 import { chooseTab } from './tabSelection';
 import { isRefreshViewKey } from './refreshViewKey';
+import { useRefreshFlash } from '../infrastructure/hooks/useRefreshFlash';
 
 function DashboardLayout() {
   const CM = useCM();
@@ -104,7 +105,7 @@ function DashboardLayout() {
   const { operationLoading: dbOpLoading } = useSelector((state) => state.databaseOperation, shallowEqual);
   const dbActionLoading = dbCoreLoading || dbOpLoading || dbUILoading;
   const { theme, isSidebarCollapsed, isResizing, activeMainTab, openTabs, dirtyTabs, refreshCounter } = useSelector((state) => state.layout, shallowEqual);
-  const [isFlashing, setIsFlashing] = useState(false);
+  const isFlashing = useRefreshFlash(refreshCounter);
   const { isAddHostModalOpen, hosts, isServiceOperating, serviceOperationType, serviceProgressMessage } = useSelector((state) => state.host, shallowEqual);
   useLoggedOutDbCleanup();
   // isAddDatabaseModalOpen removed
@@ -114,14 +115,6 @@ function DashboardLayout() {
     lastActionTarget: brokerActionName, 
     lastActionType: brokerActionType 
   } = useSelector((state) => state.broker, shallowEqual);
-
-  useEffect(() => {
-    if (refreshCounter > 0) {
-      setIsFlashing(true);
-      const timer = setTimeout(() => setIsFlashing(false), 400);
-      return () => clearTimeout(timer);
-    }
-  }, [refreshCounter]);
 
   const tabLabels = openTabs.reduce((acc, tabId) => {
     if (tabId.startsWith('host:')) {
@@ -265,11 +258,16 @@ function DashboardLayout() {
               scroll container that picks up the difference, so header, tab
               bar, and dashboard body scroll together as one unit instead of
               wrapping/squishing internally. */}
-          <main className="w-full h-full bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
+          {/* @container: the header sizes itself to what is visible (100cqw), not to the page. */}
+          <main className="@container w-full h-full bg-background-light dark:bg-bk-main overflow-x-auto overflow-y-hidden custom-scrollbar">
           <div className="h-full min-w-fit flex flex-col">
 
             <Header theme={theme} toggleTheme={() => dispatch(toggleTheme())} />
-          <div className="shrink-0 bg-slate-50 dark:bg-bk-main">
+          {/* w-0 min-w-full: the tab bar takes the width the header set and
+              adds nothing to the wrapper's min-w-fit above. With its own
+              width counted, every open tab widened main instead of the tab
+              list scrolling (and showing its previous/next buttons). */}
+          <div className="shrink-0 w-0 min-w-full bg-slate-50 dark:bg-bk-main">
 
             <Breadcrumb
               activeTab={activeMainTab}

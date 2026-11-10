@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
 import { dbKey } from './dbKey';
+import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 export const fetchDatabaseParamDump = createAsyncThunk(
   'database/fetchParamDump',
@@ -9,7 +10,7 @@ export const fetchDatabaseParamDump = createAsyncThunk(
       const response = await databaseApi.getParamDump(hostUid, dbname, both);
       return { dbname, data: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch param dump for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -21,7 +22,7 @@ export const fetchDatabasePlanDump = createAsyncThunk(
       const response = await databaseApi.getPlanDump(hostUid, dbname, plandrop);
       return { dbname, data: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch plan dump for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -33,7 +34,7 @@ export const fetchDatabaseClasses = createAsyncThunk(
       const response = await databaseApi.getClassInfo(hostUid, dbname, dbstatus || 'on');
       return { dbname, classes: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch classes for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -45,7 +46,7 @@ export const fetchAutoVolumeConfig = createAsyncThunk(
       const response = await databaseApi.getAutoVolumeConfig(hostUid, dbname);
       return { dbname, config: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch auto volume config for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -57,7 +58,7 @@ export const updateAutoVolumeConfig = createAsyncThunk(
       const response = await databaseApi.setAutoVolumeConfig(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to update auto volume config for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -69,7 +70,7 @@ export const fetchAutoVolumeLog = createAsyncThunk(
       const response = await databaseApi.getAutoVolumeLog(hostUid);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch auto volume log');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );

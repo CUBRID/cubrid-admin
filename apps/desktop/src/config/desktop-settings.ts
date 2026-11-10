@@ -89,7 +89,8 @@ export function saveDesktopSettings(settings: DesktopSettings): void {
 export function setWorkspaceRoot(workspaceRoot: string): DesktopSettings {
   const resolved = path.resolve(workspaceRoot);
   if (isPathInsideAppBundle(resolved)) {
-    throw new Error('Workspace cannot be inside the application bundle.');
+    // A code the settings page words in the UI language.
+    throw new Error('WORKSPACE_IN_APP_BUNDLE');
   }
 
   const current = loadDesktopSettings();

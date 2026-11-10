@@ -313,7 +313,7 @@ export default function OptimizeDatabaseModal() {
           return;
         }
         setResultJob(getCmsJobErrorResult(err, lastJob, previewJob));
-        endError(typeof err === 'string' ? err : (err.message || 'Optimization was interrupted. Check the database connection and try again.'));
+        endError(typeof err === 'string' ? err : (err.message || CM.optimizeInterruptedMsg));
       }
     }
   };
@@ -391,7 +391,7 @@ export default function OptimizeDatabaseModal() {
         {isActive && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-amber-700 dark:text-amber-400 text-xs">
             <Icon name="warning" size="sm" />
-            <span>Database optimization can only be performed when the database is stopped.</span>
+            <span>{CM.optimizeRequiresStoppedMsg}</span>
           </div>
         )}
         <CaDialogGroup>

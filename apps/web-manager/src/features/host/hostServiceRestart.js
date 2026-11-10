@@ -22,8 +22,8 @@ export const restartHostService = (hostUid) => async (dispatch) => {
   try {
     const { stopFailed = [], startFailed = [], skipped = [], leftStopped = [] } = await databaseApi.restartWholeService(hostUid);
     const problems = [
-      stopFailed.length > 0 ? formatServiceFailures('stop service', stopFailed) : '',
-      startFailed.length > 0 ? formatServiceFailures('start service', startFailed) : '',
+      stopFailed.length > 0 ? formatServiceFailures('stop', stopFailed) : '',
+      startFailed.length > 0 ? formatServiceFailures('start', startFailed) : '',
     ].filter(Boolean);
     return { problems, skipped, leftStopped, haNodeFailed: startFailed.some((f) => f.name === HA_NODE_STEP) };
   } catch (err) {

@@ -168,6 +168,32 @@ it('shows an unavailable state when the volume fetch failed with nothing loaded 
   expect(volumeCard().textContent).toContain(CM.dataUnavailableTitle);
 });
 
+// Running databases the user isn't logged in to are left out of the table;
+// a line under it says how many when some are shown.
+const hiddenNote = () => container.querySelector('[data-testid="server-dashboard-storage-volumes-hidden"]');
+
+it('says how many running databases are left out when only some are logged in', async () => {
+  mockFetchReturning(Promise.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+  await render(makeStore(), ['demodb', 'otherdb', 'thirddb']);
+
+  expect(hiddenNote().textContent).toBe(CM.storageVolumesHiddenMsg(2));
+});
+
+it('adds no line when every running database is logged in', async () => {
+  mockFetchReturning(Promise.resolve([{ dbname: 'demodb', spaceinfo: [], freespace: '0' }]));
+  await render(makeStore(), ['demodb']);
+
+  expect(hiddenNote()).toBeNull();
+});
+
+it('leaves it to the empty message when none are logged in', async () => {
+  baseState = { ...baseState, database: { loggedInDatabases: [] } };
+  await render(makeStore(), ['demodb', 'otherdb']);
+
+  expect(hiddenNote()).toBeNull();
+  expect(volumeCard().textContent).toContain(CM.storageVolumesRequireOnlineDbMsg);
+});
+
 // The host dashboard's refresh button (and F5, and the first load) bumps
 // refreshKey; its background ticks do not, and re-render with the same key.
 describe('refreshKey', () => {

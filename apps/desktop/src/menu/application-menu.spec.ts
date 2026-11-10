@@ -15,9 +15,10 @@ jest.mock('../window/window-registry', () => ({
   getMainWindow: () => ({ isDestroyed: () => false, webContents: { send, getZoomLevel, setZoomLevel } }),
 }));
 
-import { Menu } from 'electron';
+import { Menu, shell } from 'electron';
 import {
   buildApplicationMenuTemplate,
+  getMenuLanguage,
   installApplicationMenu,
   MENU_ACTION_IDS,
   normalizeMenuActionState,
@@ -60,7 +61,7 @@ it('mirrors the header menu in English and Korean', () => {
     'Help',
     'Report Bug',
     'CUBRID Online Forum',
-    'CUBRID tools developments',
+    'CUBRID Admin on GitHub',
     'Check for Updates',
     'Host Engine Version',
     'About CUBRID Admin',
@@ -93,7 +94,7 @@ it('ends File with Switch Workspace and Quit on every platform, macOS keeping Qu
   }
 
   const mac = buildApplicationMenuTemplate('en', true, allEnabled);
-  expect(mac[0].label).toBe('Next CUBRID Admin');
+  expect(mac[0].label).toBe('CUBRID Admin');
   expect(submenu(mac[0]).map((item) => item.role)).toContain('quit');
   expect(labels(mac)).not.toContain('Window');
 });
@@ -203,4 +204,18 @@ it('normalizes reported state and rebuilds only on change', () => {
   setApplicationMenuState({ 'add-host': true });
   setApplicationMenuState({ 'add-host': true });
   expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(3);
+});
+
+it('keeps the reported language for the app\'s own dialogs', () => {
+  installApplicationMenu('ko');
+  expect(getMenuLanguage()).toBe('ko');
+  installApplicationMenu('en');
+  expect(getMenuLanguage()).toBe('en');
+});
+
+it('opens the CUBRID Admin repository from Help', () => {
+  const help = top(buildApplicationMenuTemplate('en', false, allEnabled), 'Help');
+  const item = help.find((entry) => entry.label === 'CUBRID Admin on GitHub') as Item;
+  (item.click as () => void)();
+  expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/CUBRID/cubrid-admin');
 });

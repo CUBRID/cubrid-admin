@@ -109,3 +109,20 @@ it('re-clamps when the window shrinks while the menu is open', async () => {
   const { top } = menuBox();
   expect(top + menuSize.height).toBeLessThanOrEqual(500 - PADDING);
 });
+
+it('grows with its items from its minimum width up to the window, not a fixed width', async () => {
+  await renderAt(100, 100);
+  const { menu } = menuBox();
+  expect(menu.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-60', 'w-max']));
+  expect(menu.className).not.toMatch(/(^|\s)w-60(\s|$)/);
+  expect(menu.style.maxWidth).toBe(`calc(100vw - ${PADDING * 2}px)`);
+});
+
+it('places a menu grown wide by a long name by its real width', async () => {
+  menuSize = { width: 600, height: 300 };
+  await renderAt(700, 100);
+  const box = menuBox();
+  // 700 + 600 runs past the right edge, so it opens to the left of the pointer.
+  expect(box.left).toBe(700 - 600);
+  expectInsideViewport(box);
+});

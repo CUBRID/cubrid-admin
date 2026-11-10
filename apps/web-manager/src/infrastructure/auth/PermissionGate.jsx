@@ -1,12 +1,15 @@
 import React from 'react';
 
 import { EmptyState } from '../../components/ds/layout/EmptyState';
+import { useCM } from '../../constants/useCM';
 
 export const PermissionGate = ({
   requires = [],
-  fallback = <EmptyState title="Access Denied" description="You do not have permission to view this content." icon="lock" />,
+  fallback,
   children,
 }) => {
+  const CM = useCM();
+  const denied = fallback ?? <EmptyState title={CM.accessDeniedTitle} description={CM.accessDeniedMsg} icon="lock" />;
   // Assuming a generic pattern where the userSlice has currentUser or session data
 
   // Fallback simplified role matching since specific role slice wasn't provided directly in snippet
@@ -21,7 +24,7 @@ export const PermissionGate = ({
   const hasRole = true; 
 
   if (!hasRole) {
-    return fallback;
+    return denied;
   }
 
   return <>{children}</>;
