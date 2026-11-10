@@ -17,6 +17,12 @@ const desktopBridge: DesktopBridge = {
   setWorkspaceRoot: (workspaceRoot, options) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot, options),
   finishWorkspaceSetup: (workspaceRoot) =>
     ipcRenderer.invoke('desktop:finish-workspace-setup', workspaceRoot),
+  exportWorkspace: (password) => ipcRenderer.invoke('desktop:export-workspace', password),
+  pickWorkspaceArchive: () => ipcRenderer.invoke('desktop:pick-workspace-archive'),
+  openWorkspaceArchive: (filePath, password) => ipcRenderer.invoke('desktop:open-workspace-archive', filePath, password),
+  pickImportFolder: () => ipcRenderer.invoke('desktop:pick-import-folder'),
+  importWorkspaceArchive: (filePath, password, folder) =>
+    ipcRenderer.invoke('desktop:import-workspace-archive', filePath, password, folder),
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),
   setMenuLanguage: (language) => ipcRenderer.invoke('desktop:set-menu-language', language),
   setMenuState: (state) => ipcRenderer.invoke('desktop:set-menu-state', state),

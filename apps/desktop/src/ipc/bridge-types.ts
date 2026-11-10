@@ -28,6 +28,14 @@ export type DesktopBridge = {
    */
   setWorkspaceRoot: (workspaceRoot: string, options?: { ignoreUnknownJobs?: boolean }) => Promise<{ ok: true; unchanged?: true }>;
   finishWorkspaceSetup: (workspaceRoot: string) => Promise<{ ok: boolean }>;
+  /** The workspace in use, to a file the user names (null when the dialog is cancelled), locked with `password`. */
+  exportWorkspace: (password: string) => Promise<{ filePath: string } | null>;
+  pickWorkspaceArchive: () => Promise<string | null>;
+  /** Throws WORKSPACE_ARCHIVE_WRONG_PASSWORD, _DAMAGED, _NOT_OURS or _VERSION unless `password` opens the file. */
+  openWorkspaceArchive: (filePath: string, password: string) => Promise<{ ok: true }>;
+  pickImportFolder: () => Promise<string | null>;
+  /** Makes the empty or new `folder` a workspace from the export; the switch to it is setWorkspaceRoot's. */
+  importWorkspaceArchive: (filePath: string, password: string, folder: string) => Promise<{ workspaceRoot: string }>;
   revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
   setMenuLanguage: (language: 'en' | 'ko') => Promise<{ ok: true }>;
   setMenuState: (state: Record<string, boolean>) => Promise<{ ok: true }>;

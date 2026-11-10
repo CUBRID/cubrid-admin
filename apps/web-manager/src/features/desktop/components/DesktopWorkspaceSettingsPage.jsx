@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { isDesktopApp } from '../isDesktopApp';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
@@ -8,6 +8,8 @@ import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
+import WorkspaceExportDialog from './WorkspaceExportDialog';
+import WorkspacePasswordDialog from './WorkspacePasswordDialog';
 
 // For comparing workspace folders as typed: no surrounding spaces or
 // trailing separator ("/ws/" is "/ws").
@@ -46,7 +48,13 @@ export default function DesktopWorkspaceSettingsPage() {
   const [message, setMessage] = useState('');
   // The server could not say whether a job runs: switch only if the user says so.
   const [askIgnoreUnknownJobs, setAskIgnoreUnknownJobs] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  // The export file being imported, while its password is asked.
+  const [importFile, setImportFile] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
 
   const loadInfo = useCallback(async () => {
     if (!bridge) {
@@ -87,13 +95,13 @@ export default function DesktopWorkspaceSettingsPage() {
     }
   };
 
-  const handleContinue = async () => {
+  const handleContinue = async (root = workspaceRoot) => {
     if (!bridge) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await bridge.finishWorkspaceSetup(workspaceRoot);
+      await bridge.finishWorkspaceSetup(root);
       setMessage(CM.applyingWorkspaceMsg);
     } catch (err) {
       setError(desktopErrorText(err, CM, CM.workspaceSaveFailedMsg));
@@ -106,15 +114,15 @@ export default function DesktopWorkspaceSettingsPage() {
     setMessage(CM.applyingWorkspaceMsg);
   };
 
-  const handleSave = async ({ ignoreUnknownJobs = false } = {}) => {
+  const handleSave = async ({ ignoreUnknownJobs = false, root = workspaceRoot } = {}) => {
     if (!bridge) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
       const result = ignoreUnknownJobs
-        ? await bridge.setWorkspaceRoot(workspaceRoot, { ignoreUnknownJobs: true })
-        : await bridge.setWorkspaceRoot(workspaceRoot);
+        ? await bridge.setWorkspaceRoot(root, { ignoreUnknownJobs: true })
+        : await bridge.setWorkspaceRoot(root);
       // The folder in use, written another way: nothing restarts, back to the dashboard.
       if (result?.unchanged) {
         navigate('/home');
@@ -130,6 +138,65 @@ export default function DesktopWorkspaceSettingsPage() {
       setError(desktopErrorText(err, CM, CM.workspaceSaveFailedMsg));
     }
   };
+
+  // Import: the export file, its password (asked again while wrong), an
+  // empty folder to make the workspace in; then the same switch as Save (or
+  // Continue on first run), with its checks.
+  const startImport = async () => {
+    if (!bridge) return;
+    setError('');
+    setMessage('');
+    const file = await bridge.pickWorkspaceArchive();
+    if (!file) return;
+    setImportError('');
+    setImportFile(file);
+  };
+
+  const importWith = async (password) => {
+    setImportBusy(true);
+    setImportError('');
+    try {
+      await bridge.openWorkspaceArchive(importFile, password);
+    } catch (err) {
+      setImportBusy(false);
+      const text = desktopErrorText(err, CM, CM.workspaceSaveFailedMsg);
+      if (String(err?.message ?? '').includes('WORKSPACE_ARCHIVE_WRONG_PASSWORD')) {
+        setImportError(text);
+        return;
+      }
+      setImportFile(null);
+      setError(text);
+      return;
+    }
+    const folder = await bridge.pickImportFolder();
+    if (!folder) {
+      setImportBusy(false);
+      setImportFile(null);
+      return;
+    }
+    try {
+      const { workspaceRoot: root } = await bridge.importWorkspaceArchive(importFile, password, folder);
+      setImportBusy(false);
+      setImportFile(null);
+      setWorkspaceRoot(root);
+      if (setupMode) await handleContinue(root);
+      else await handleSave({ root });
+    } catch (err) {
+      setImportBusy(false);
+      setImportFile(null);
+      setError(desktopErrorText(err, CM, CM.workspaceSaveFailedMsg));
+    }
+  };
+
+  // File > Import Workspace opens this page with ?do=import: start once.
+  const startedFromMenu = useRef(false);
+  useEffect(() => {
+    if (loading || startedFromMenu.current) return;
+    if (new URLSearchParams(location.search).get('do') !== 'import') return;
+    startedFromMenu.current = true;
+    navigate(location.pathname, { replace: true });
+    void startImport();
+  }, [loading, location.search]);
 
   // Saving the folder the app already runs on would restart it for nothing.
   const unchanged = Boolean(info)
@@ -230,6 +297,26 @@ export default function DesktopWorkspaceSettingsPage() {
             >
               {CM.selectFolderEllipsis}
             </button>
+            <button
+              type="button"
+              data-testid="workspace-import-btn"
+              disabled={saving}
+              onClick={() => void startImport()}
+              className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40 disabled:opacity-50"
+            >
+              {CM.importWorkspace}
+            </button>
+            {!setupMode && (
+              <button
+                type="button"
+                data-testid="workspace-export-btn"
+                disabled={saving}
+                onClick={() => { setError(''); setMessage(''); setExportOpen(true); }}
+                className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40 disabled:opacity-50"
+              >
+                {CM.exportWorkspace}
+              </button>
+            )}
             {setupMode ? (
               <button
                 type="button"
@@ -266,6 +353,21 @@ export default function DesktopWorkspaceSettingsPage() {
           void handleSave({ ignoreUnknownJobs: true });
         }}
         testId="workspace-jobs-unknown"
+      />
+      <WorkspaceExportDialog
+        isOpen={exportOpen}
+        onClose={() => setExportOpen(false)}
+        onExported={(filePath) => setMessage(CM.workspaceExportedMsg(filePath))}
+      />
+      <WorkspacePasswordDialog
+        isOpen={importFile !== null}
+        title={CM.importWorkspaceTitle}
+        submitLabel={CM.workspaceImportBtn}
+        busy={importBusy}
+        error={importError}
+        onSubmit={(password) => void importWith(password)}
+        onCancel={() => { if (!importBusy) setImportFile(null); }}
+        testId="workspace-import"
       />
     </SettingsShell>
   );
