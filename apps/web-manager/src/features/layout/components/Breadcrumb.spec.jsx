@@ -124,6 +124,23 @@ it('protects unsaved tabs from browser refresh or window close', async () => {
   expect(event.defaultPrevented).toBe(true);
 });
 
+it('tells the desktop app while a tab has unsaved changes, so quitting asks about them once', async () => {
+  const setUnsavedChanges = vi.fn().mockResolvedValue({ ok: true });
+  window.desktopBridge = { setUnsavedChanges };
+  try {
+    await renderBreadcrumb(callbacks(), ['dirty']);
+    expect(setUnsavedChanges.mock.calls).toEqual([[true]]);
+    await renderBreadcrumb(callbacks(), []);
+    expect(setUnsavedChanges.mock.calls).toEqual([[true], [false]]);
+    await renderBreadcrumb(callbacks(), ['dirty']);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    expect(setUnsavedChanges.mock.calls).toEqual([[true], [false], [true], [false]]);
+  } finally {
+    delete window.desktopBridge;
+  }
+});
+
 it('shows page navigation and an all-tabs menu when tabs overflow', async () => {
   const handlers = callbacks();
   await renderBreadcrumb(handlers, ['dirty'], {

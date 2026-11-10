@@ -1,4 +1,4 @@
-import { openTab, showStatusModal } from './layoutSlice';
+import { askWorkspaceSwitch, openTab, showStatusModal } from './layoutSlice';
 import {
   openAddHostModal,
   openEditHostModal,
@@ -18,6 +18,7 @@ export const MENU_ACTIONS = Object.freeze({
   editHost: 'edit-host',
   exportHosts: 'export-hosts',
   importHosts: 'import-hosts',
+  switchWorkspace: 'switch-workspace',
   serviceDashboard: 'service-dashboard',
   cmsAccountManagement: 'cms-account-management',
   editCubridConfig: 'edit-cubrid-config',
@@ -78,6 +79,8 @@ export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, auth
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
     [MENU_ACTIONS.exportHosts]: true,
     [MENU_ACTIONS.importHosts]: true,
+    // Desktop app only; the header shows it only there.
+    [MENU_ACTIONS.switchWorkspace]: true,
     [MENU_ACTIONS.serviceDashboard]: true,
     [MENU_ACTIONS.cmsAccountManagement]:
       Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid),
@@ -101,11 +104,17 @@ function openHostTab(dispatch, CM, selectedHostUid, tabId) {
   }
 }
 
+/** The desktop app's workspace page (App.jsx route). */
+export const DESKTOP_WORKSPACE_PATH = '/desktop/workspace';
+
 /**
  * Runs one menu action. Callers check the enabled flag first.
+ * `navigate` is react-router's, for actions that leave the dashboard.
+ * `dirtyTabs` (tabs with unsaved changes) and `anyModalOpen` guard the
+ * workspace switch, which leaves the dashboard and drops both.
  * @returns {boolean} false when the id is unknown
  */
-export function runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid }) {
+export function runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs = [], anyModalOpen = false }) {
   switch (id) {
     case MENU_ACTIONS.addHost:
       dispatch(openAddHostModal());
@@ -118,6 +127,16 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHo
       return true;
     case MENU_ACTIONS.importHosts:
       dispatch(openImportExportModal('import'));
+      return true;
+    case MENU_ACTIONS.switchWorkspace:
+      // Leaving the dashboard would close an open modal with what it holds.
+      if (anyModalOpen) return true;
+      // ... and drop unsaved conf edits: ask first (WorkspaceSwitchConfirm).
+      if (dirtyTabs.length > 0) {
+        dispatch(askWorkspaceSwitch());
+        return true;
+      }
+      navigate(DESKTOP_WORKSPACE_PATH);
       return true;
     case MENU_ACTIONS.serviceDashboard:
       dispatch(openTab('service_dashboard'));
