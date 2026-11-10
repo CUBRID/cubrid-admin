@@ -25,3 +25,16 @@ describe('hostNotResponding', () => {
     expect(hostReducer(set, revokeHostLogin('h1')).hostNotResponding).toEqual({});
   });
 });
+
+describe('loggingInHosts', () => {
+  const pending = (arg) => ({ type: 'host/loginToHost/pending', meta: { arg } });
+  it('lists each host while its own login runs, whatever is selected', () => {
+    let state = { ...start(), selectedHostUid: 'h1' };
+    state = hostReducer(state, pending('h2'));
+    state = hostReducer(state, pending({ hostUid: 'h3', changes: { password: 'x' } }));
+    expect(state.loggingInHosts).toEqual(['h2', 'h3']);
+    state = hostReducer(state, { type: 'host/loginToHost/fulfilled', payload: { hostUid: 'h2' }, meta: { arg: 'h2' } });
+    state = hostReducer(state, { type: 'host/loginToHost/rejected', payload: 'Incorrect password', meta: { arg: { hostUid: 'h3' } } });
+    expect(state.loggingInHosts).toEqual([]);
+  });
+});

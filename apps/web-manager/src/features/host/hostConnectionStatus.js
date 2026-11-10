@@ -13,12 +13,13 @@ export const HOST_NOT_RESPONDING = 'notResponding';
  * keeps its UI state for a seamless reconnect), so the queue is read first.
  */
 export function hostConnectionStatus(hostUid, host = {}) {
-  const { authorizedHosts = [], reconnectQueue = [], hostAuthErrors = {}, hostNotResponding = {}, isLoggingIntoHost = false, selectedHostUid = null } = host;
+  const { authorizedHosts = [], reconnectQueue = [], hostAuthErrors = {}, hostNotResponding = {}, loggingInHosts = [] } = host;
   if (!hostUid) return HOST_NOT_LOGGED_IN;
   if (reconnectQueue.includes(hostUid)) return HOST_DISCONNECTED;
   if (authorizedHosts.includes(hostUid)) return hostNotResponding[hostUid] ? HOST_NOT_RESPONDING : HOST_CONNECTED;
-  // A login is started on the selected host (double-click selects it first).
-  if (isLoggingIntoHost && selectedHostUid === hostUid) return HOST_LOGGING_IN;
+  // Its own login, not whichever host is selected: a login selects the host
+  // only once it succeeds, and a batch login runs several.
+  if (loggingInHosts.includes(hostUid)) return HOST_LOGGING_IN;
   if (hostAuthErrors[hostUid]) return HOST_LOGIN_FAILED;
   return HOST_NOT_LOGGED_IN;
 }

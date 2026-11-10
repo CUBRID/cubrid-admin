@@ -26,8 +26,7 @@ export function useHostConnectionStatus(hostUid) {
       reconnectQueue: h.reconnectQueue,
       hostAuthErrors: h.hostAuthErrors,
       hostNotResponding: h.hostNotResponding,
-      isLoggingIntoHost: h.isLoggingIntoHost,
-      selectedHostUid: h.selectedHostUid,
+      loggingInHosts: h.loggingInHosts,
     };
   }, shallowEqual);
   const status = hostConnectionStatus(hostUid, host);

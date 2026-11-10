@@ -24,7 +24,7 @@ afterEach(async () => {
 const host = { uid: 'h1', id: 'admin', alias: 'node-a', address: '10.0.0.5', port: '8001' };
 const hostState = (over = {}) => ({
   hosts: [host], hostEnvs: {}, authorizedHosts: [], reconnectQueue: [], hostAuthErrors: {},
-  isLoggingIntoHost: false, selectedHostUid: 'h1', ...over,
+  loggingInHosts: [], selectedHostUid: 'h1', ...over,
 });
 const render = (ui, host, uiLocale = 'en') => act(async () => {
   const store = configureStore({ reducer: { user: () => ({ preferences: { uiLocale } }), host: () => host } });
@@ -36,7 +36,7 @@ const color = () => dot().lastElementChild.className;
 const cases = [
   ['connected', hostState({ authorizedHosts: ['h1'] }), 'Connected', 'bg-emerald-500'],
   ['not logged in', hostState(), 'Not logged in', 'bg-amber-500'],
-  ['logging in', hostState({ isLoggingIntoHost: true }), 'A host login is in progress.', 'animate-pulse'],
+  ['logging in', hostState({ loggingInHosts: ['h1'] }), 'A host login is in progress.', 'animate-pulse'],
   ['login failed', hostState({ hostAuthErrors: { h1: 'Incorrect password' } }), 'Login failed: Incorrect password', 'bg-rose-500'],
   ['disconnected, still authorized', hostState({ authorizedHosts: ['h1'], reconnectQueue: ['h1'] }), 'Disconnected', 'bg-rose-500'],
   ['CMS not responding', hostState({ authorizedHosts: ['h1'], hostNotResponding: { h1: true } }), 'Not responding', 'bg-rose-500'],
@@ -56,6 +56,13 @@ describe('sidebar host dot', () => {
     expect(color()).toContain('bg-emerald-500');
     // The orange role badge still says the role is unknown.
     expect(container.textContent).toContain(getCM('en').haUnknown);
+  });
+
+  it('blinks the host being logged in, not the selected one that is not connected', async () => {
+    const state = hostState({ selectedHostUid: 'h1', hostAuthErrors: { h1: 'Incorrect password' }, loggingInHosts: ['h2'], isLoggingIntoHost: true });
+    await render(<ServerListItem host={host} isAuthorized={false} onContextMenu={() => undefined} />, state);
+    expect(dot().dataset.status).toBe('loginFailed');
+    expect(color()).not.toContain('animate-pulse');
   });
 
   it('says the status in Korean', async () => {

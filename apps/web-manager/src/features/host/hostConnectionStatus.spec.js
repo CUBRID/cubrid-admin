@@ -5,7 +5,7 @@ import {
 } from './hostConnectionStatus';
 import { getCM } from '../../constants/useCM';
 
-const base = { authorizedHosts: [], reconnectQueue: [], hostAuthErrors: {}, isLoggingIntoHost: false, selectedHostUid: null };
+const base = { authorizedHosts: [], reconnectQueue: [], hostAuthErrors: {}, loggingInHosts: [] };
 
 describe('hostConnectionStatus', () => {
   it('is connected for a logged-in host', () => {
@@ -22,10 +22,11 @@ describe('hostConnectionStatus', () => {
     expect(hostConnectionStatus('h1', { ...base, hostNotResponding: { h1: true } })).toBe(HOST_NOT_LOGGED_IN);
   });
 
-  it('is logging in only for the selected host while a login runs', () => {
-    const state = { ...base, isLoggingIntoHost: true, selectedHostUid: 'h1' };
-    expect(hostConnectionStatus('h1', state)).toBe(HOST_LOGGING_IN);
-    expect(hostConnectionStatus('h2', state)).toBe(HOST_NOT_LOGGED_IN);
+  it('is logging in for the host whose own login runs, not the selected one', () => {
+    const state = { ...base, loggingInHosts: ['h2'], hostAuthErrors: { h1: 'Incorrect password' } };
+    expect(hostConnectionStatus('h2', state)).toBe(HOST_LOGGING_IN);
+    // h1 (say, selected) keeps its own status.
+    expect(hostConnectionStatus('h1', state)).toBe(HOST_LOGIN_FAILED);
   });
 
   it('is login failed when the last login left an error', () => {

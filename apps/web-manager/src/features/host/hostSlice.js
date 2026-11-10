@@ -30,6 +30,7 @@ function purgeHostClientState(state, hostUid) {
   delete state.hostEnvs[hostUid];
   delete state.hostAuthErrors[hostUid];
   if (state.hostNotResponding?.[hostUid]) delete state.hostNotResponding[hostUid];
+  state.loggingInHosts = (state.loggingInHosts ?? []).filter((uid) => uid !== hostUid);
 }
 
 // A failed login records its message twice: per host (sidebar overlay,
@@ -535,6 +536,9 @@ const initialState = {
   // that did not yet open the reconnect window, see apiClient); cleared by the
   // next request for the host that reaches CMS. Shown as "Not responding".
   hostNotResponding: {}, // { [hostUid]: true }
+  // Hosts whose own login (loginToHost: double-click, Reconnect, batch,
+  // silent re-login) is running, for the status dot.
+  loggingInHosts: [],
 };
 
 const hostSlice = createSlice({
@@ -851,8 +855,13 @@ const hostSlice = createSlice({
         }
         // Clean up previous error for this host if any
         clearHostLoginError(state, loginHostUid(action.meta.arg));
+        const loggingIn = loginHostUid(action.meta.arg);
+        if (loggingIn && !(state.loggingInHosts ?? []).includes(loggingIn)) {
+          state.loggingInHosts = [...(state.loggingInHosts ?? []), loggingIn];
+        }
       })
       .addCase(loginToHost.fulfilled, (state, action) => {
+        state.loggingInHosts = (state.loggingInHosts ?? []).filter((uid) => uid !== loginHostUid(action.meta.arg));
         if (!state.isBatchHostLogin) {
           state.isLoggingIntoHost = false;
           state.loading = false;
@@ -883,6 +892,7 @@ const hostSlice = createSlice({
         }
       })
       .addCase(loginToHost.rejected, (state, action) => {
+        state.loggingInHosts = (state.loggingInHosts ?? []).filter((uid) => uid !== loginHostUid(action.meta.arg));
         if (!state.isBatchHostLogin) {
           state.isLoggingIntoHost = false;
           state.loading = false;
