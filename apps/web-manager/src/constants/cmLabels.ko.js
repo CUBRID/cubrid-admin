@@ -2000,6 +2000,8 @@ export const CM_KO = {
     DB_LIST_NOT_REFRESHED: (d) => (d.jobType === 'rename'
       ? '데이터베이스 이름을 바꿨지만 데이터베이스 목록을 새로 읽지 못했습니다. 목록을 직접 새로 고치고, 이름 변경을 다시 하지 마세요.'
       : '데이터베이스를 복사했지만 데이터베이스 목록을 새로 읽지 못했습니다. 목록을 직접 새로 고치고, 복사를 다시 하지 마세요.'),
+    UNLOAD_OBJECT_TYPE_THREAD_COUNT_IGNORED: (d) => `[${d.class}] 테이블에 객체 타입 컬럼이 있어 --thread-count 옵션이 무시되었습니다.`,
+    UNLOAD_RESULT_NOT_RECORDED: () => '이 경고 때문에 테이블별 건수와 로드 목록 항목이 기록되지 않았습니다.',
   },
   administratorLabel: '관리자',
 

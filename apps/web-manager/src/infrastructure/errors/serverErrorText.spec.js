@@ -195,6 +195,16 @@ describe('warningText', () => {
     expect(warningText(english, undefined, KO)).toBe(english);
     expect(warningText(english, { code: 'RENAME_SECTION_KEPT', oldName: 'old', newName: 'new' }, EN)).toBe(english);
   });
+
+  it('says the unload OBJECT-type warnings in Korean', () => {
+    const objectType = "warning: [dba.tb] has object type. So for class [dba.tb], '--thread-count' option is ignored.";
+    const notRecorded = 'CMS stopped after this warning, so the table counts and the Load Database list entry were not written.';
+    expect(warningText(objectType, { code: 'UNLOAD_OBJECT_TYPE_THREAD_COUNT_IGNORED', class: 'dba.tb' }, KO))
+      .toBe('[dba.tb] 테이블에 객체 타입 컬럼이 있어 --thread-count 옵션이 무시되었습니다.');
+    expect(warningText(notRecorded, { code: 'UNLOAD_RESULT_NOT_RECORDED' }, KO))
+      .toBe('이 경고 때문에 테이블별 건수와 로드 목록 항목이 기록되지 않았습니다.');
+    expect(warningText(objectType, { code: 'UNLOAD_OBJECT_TYPE_THREAD_COUNT_IGNORED', class: 'dba.tb' }, EN)).toBe(objectType);
+  });
 });
 
 describe('CMS text in Korean', () => {
