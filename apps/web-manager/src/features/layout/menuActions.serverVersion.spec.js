@@ -8,7 +8,7 @@ vi.mock('../host/hostSlice', () => ({
   openImportExportModal: () => ({}),
   openCmsUserManagementModal: () => ({}),
 }));
-import { MENU_ACTIONS, engineVersionHostUid, getMenuActionEnabled, runMenuAction } from './menuActions';
+import { MENU_ACTIONS, engineVersionHostUid, getMenuActionEnabled, menuActionHost, runMenuAction } from './menuActions';
 
 it('enables Host Engine Version only for a connected selected host', () => {
   const version = (selectedHostUid, authorizedHosts) =>
@@ -40,4 +40,26 @@ it('opens Host Engine Version for the highlighted host', () => {
   const dispatch = vi.fn();
   runMenuAction(MENU_ACTIONS.serverVersion, { dispatch, CM: {}, selectedHostUid: 'a', highlightedHostUid: 'c' });
   expect(dispatch).toHaveBeenCalledWith({ type: 'open-version', payload: 'c' });
+});
+
+describe('menuActionHost', () => {
+  const ctx = { selectedHostUid: 'a', highlightedHostUid: 'b', authorizedHosts: ['a', 'b'], reconnectQueue: [] };
+
+  it('Host Engine Version looks at the highlighted host, other items at the selected one', () => {
+    expect(menuActionHost(MENU_ACTIONS.serverVersion, ctx)).toEqual({ hostUid: 'b', connected: true });
+    expect(menuActionHost(MENU_ACTIONS.cmsAccountManagement, ctx)).toEqual({ hostUid: 'a', connected: true });
+  });
+
+  it('counts the highlighted host as not connected while it is not authorized or waits to reconnect', () => {
+    expect(menuActionHost(MENU_ACTIONS.serverVersion, { ...ctx, authorizedHosts: ['a'] }).connected).toBe(false);
+    expect(menuActionHost(MENU_ACTIONS.serverVersion, { ...ctx, reconnectQueue: ['b'] }).connected).toBe(false);
+    expect(menuActionHost(MENU_ACTIONS.serverVersion, { ...ctx, highlightedHostUid: null, selectedHostUid: null }))
+      .toEqual({ hostUid: null, connected: false });
+  });
+
+  it('is what turns Host Engine Version on and off', () => {
+    for (const c of [ctx, { ...ctx, authorizedHosts: ['a'] }, { ...ctx, reconnectQueue: ['b'] }]) {
+      expect(getMenuActionEnabled(c)[MENU_ACTIONS.serverVersion]).toBe(menuActionHost(MENU_ACTIONS.serverVersion, c).connected);
+    }
+  });
 });
