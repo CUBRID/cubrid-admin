@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 /**
  * State constants for action lifecycle
@@ -29,7 +30,7 @@ export const useActionState = (initialState = ACTION_STATE.IDLE) => {
 
   const endError = useCallback((err) => {
     // Normalize error message
-    const msg = typeof err === 'string' ? err : (err?.message || err?.error || 'Operation failed');
+    const msg = typeof err === 'string' ? err : (err?.message || err?.error || getCM(getStoredLocale()).operationFailed);
     setError(msg);
     setState(ACTION_STATE.ERROR);
   }, []);

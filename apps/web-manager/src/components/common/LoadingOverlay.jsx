@@ -1,4 +1,5 @@
 import React from 'react';
+import { getCM, getStoredLocale } from '../../constants/useCM';
 
 /**
  * LoadingOverlay - Premium centralized loading design.
@@ -7,7 +8,7 @@ import React from 'react';
  */
 const LoadingOverlay = ({
   isVisible,
-  title = 'Processing...',
+  title = getCM(getStoredLocale()).processingEllipsis,
   subtitle = '',
   className = ''
 }) => {
@@ -105,7 +106,7 @@ const LoadingOverlay = ({
         <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 shadow-sm transition-all duration-300">
           <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDuration: '1s' }} />
           <span className="text-11 font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-            Request in Progress
+            {getCM(getStoredLocale()).requestInProgressLabel}
           </span>
         </div>
 

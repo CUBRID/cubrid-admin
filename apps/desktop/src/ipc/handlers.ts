@@ -13,7 +13,7 @@ import {
   setWorkspaceRoot,
 } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
-import { installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
+import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
 import { getDefaultWorkspaceRoot, isSameWorkspaceFolder, resolveWorkspacePaths } from '../workspace/workspace-paths';
@@ -28,6 +28,17 @@ import {
   getUpdateStatus,
   openUpdateDownload,
 } from '../update/check-for-update';
+
+const WORKSPACE_DIALOG_LABELS = {
+  en: {
+    title: 'Select workspace folder',
+    message: 'Choose one folder. The app will create data/ and ssl/ inside it automatically.',
+  },
+  ko: {
+    title: '워크스페이스 폴더 선택',
+    message: '폴더 하나를 고르세요. 앱이 그 안에 data/와 ssl/을 자동으로 만듭니다.',
+  },
+};
 
 // Why the server could not start on the configured workspace at launch
 // (a WorkspaceError message); the workspace page shows it until another
@@ -140,12 +151,12 @@ export function registerDesktopIpcHandlers(): void {
   });
 
   ipcMain.handle('desktop:pick-workspace-directory', async () => {
+    const L = WORKSPACE_DIALOG_LABELS[getMenuLanguage()];
     const result = await dialog.showOpenDialog({
       defaultPath: dialogDefaultDirectory(app.getPath('documents')),
       properties: ['openDirectory', 'createDirectory'],
-      title: 'Select workspace folder',
-      message:
-        'Choose one folder. The app will create data/ and ssl/ inside it automatically.',
+      title: L.title,
+      message: L.message,
     });
 
     if (result.canceled || result.filePaths.length === 0) {

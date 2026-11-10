@@ -3,6 +3,7 @@ import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 import React, { useState } from 'react';
 import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
+import { volumeDirectory } from '../volumePath';
 import DBPerformanceSection from './dashboard/DBPerformanceSection';
 import DBVolumesSection from './dashboard/DBVolumesSection';
 import DBSpaceInfoSection from './dashboard/DBSpaceInfoSection';
@@ -102,7 +103,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     pageSize: volumePageSize(v, pageSizes),
     freePct: v.totalpage && parseInt(v.totalpage) > 0 && v.freepage && v.freepage.trim() !== '' ? (parseInt(v.freepage) / parseInt(v.totalpage)) * 100 : 0,
     date: v.date || '-', 
-    path: v.location
+    path: volumeDirectory(v)
   }));
 
   const mappedSpaceInfo = (data.spaceInfo || []).map(f => ({

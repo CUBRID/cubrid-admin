@@ -37,14 +37,14 @@ describe('maintenance result rows', () => {
     expect(rows[CM.maintenanceFindings]).toBe(CM.maintenanceNotReported);
   });
 
-  it('falls back to English for new maintenance keys while preserving existing Korean labels', () => {
+  it('shows the maintenance details in Korean with the Korean labels', () => {
     const CM = getCM('ko');
     const rows = Object.fromEntries(getMaintenanceRows({ ...completed, type: 'check', maintenanceSummary: { scope: 'entire-database', repairRequested: true } }, CM));
     expect(CM.databaseName).toBe('데이터베이스 이름');
-    expect(CM.maintenanceRepairMode).toBe('Repair mode');
-    expect(rows[CM.maintenanceRepairMode]).toBe('Check with repair enabled');
-    expect(rows[CM.result]).toBe('Command completed successfully');
-    expect(rows[CM.maintenanceDuration]).toBe('6.0 seconds');
+    expect(CM.maintenanceRepairMode).toBe('복구 모드');
+    expect(rows[CM.maintenanceRepairMode]).toBe('복구를 켜고 검사');
+    expect(rows[CM.result]).toBe('명령이 성공했습니다');
+    expect(rows[CM.maintenanceDuration]).toBe('6.0초');
   });
 
   it('retains the summary when a later snapshot omits it', () => {

@@ -1,6 +1,7 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeUnloadResultModal } from '../databaseSlice';
 import { useCM } from '../../../constants/useCM';
+import { isPartialUnloadRow, unloadRowCount } from '../unloadResultRows';
 
 import { Button } from '../../../components/ds/foundation/Button';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -15,14 +16,16 @@ export default function UnloadResultModal() {
   if (!isUnloadResultModalOpen) return null;
 
   const resultData = unloadResultData?.[0] || {};
-  const rows = Object.entries(resultData).map(([tableName, stats]) => ({
-    tableName,
-    stats,
-  }));
+  const entries = Object.entries(resultData);
+  const partial = entries.some(([name, stats]) => isPartialUnloadRow(name, stats));
+  // A table's line starts with its row count; any other line is not a table.
+  const rows = entries
+    .filter(([, stats]) => /^\s*\d/.test(String(stats ?? '')))
+    .map(([tableName, stats]) => ({ tableName, rowCount: unloadRowCount(stats) }));
   const close = () => dispatch(closeUnloadResultModal());
   const columns = [
-    { accessor: 'tableName', header: CM.classLabel },
-    { accessor: 'stats', header: CM.resultLabel, align: 'right', cellClassName: 'font-mono text-amber-600 dark:text-amber-400' },
+    { accessor: 'tableName', header: CM.unloadTableNameLabel },
+    { accessor: 'rowCount', header: CM.unloadRowCountLabel, align: 'right', cellClassName: 'font-mono text-amber-600 dark:text-amber-400' },
   ];
 
   return (
@@ -36,6 +39,9 @@ export default function UnloadResultModal() {
       footer={<Button variant="primary" onClick={close}>{CM.close}</Button>}
     >
       <div className="space-y-3">
+        {partial && (
+          <p data-testid="unload-result-partial" className="text-13 text-amber-600 dark:text-amber-400">{CM.unloadPartialMsg}</p>
+        )}
         <JobWarnings warnings={unloadResultWarnings} />
         {/* No rows with warnings: CMS stopped before counting (OBJECT-type warning). */}
         {(rows.length > 0 || !unloadResultWarnings?.length) && (

@@ -191,3 +191,154 @@ describe('BrokerStatus job queue', () => {
     expect(elapsedCells).toEqual([['5s', CM.jobReceivedAt('23:59:58')], ['—', '']]);
   });
 });
+
+describe('BrokerStatus basic information values', () => {
+  const cell = (label) => [...container.querySelectorAll('span')].find((span) => span.textContent === label)?.parentElement;
+  const isLit = (label) => !!cell(label)?.querySelector('.bg-emerald-50');
+
+  it('shows SQL_LOG as off when the engine reports NONE', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker({ sqll: 'NONE' })] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+
+    expect(cell('SQL_LOG').textContent).toContain('NONE');
+    expect(isLit('SQL_LOG')).toBe(false);
+    expect(isLit('AUTO_ADD_APPL_SERVER')).toBe(true);
+  });
+
+  it('shows the settings as unknown when the broker service is off and the list has no state', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: BROKER_NAME }] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+
+    for (const label of ['AUTO_ADD_APPL_SERVER', 'SQL_LOG', 'LONG_TRANSACTION_TIME', 'LONG_QUERY_TIME']) {
+      expect(cell(label).textContent).toBe(`${label}-`);
+    }
+  });
+
+  it('shows the settings of a stopped broker as unknown, not as defaults', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: BROKER_NAME, state: 'OFF' }] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+
+    for (const label of ['AUTO_ADD_APPL_SERVER', 'SQL_LOG', 'LONG_TRANSACTION_TIME', 'LONG_QUERY_TIME']) {
+      expect(cell(label).textContent).toBe(`${label}-`);
+    }
+  });
+});
+
+describe('BrokerStatus application server table', () => {
+  // Header text without the sort icon's ligature name.
+  const headers = () => [...container.querySelectorAll('th')].map((th) => th.textContent.replace(/(unfold_more|arrow_upward|arrow_downward|expand_more|expand_less)$/, '').trim());
+  const asRow = (overrides = {}) => ({
+    as_id: '1', as_pid: '4321', as_c: '10', as_psize: '20480', as_status: 'IDLE', as_cpu: '0.5', as_ctime: '0:01',
+    as_lat: '2026/11/05 10:00:00', as_lct: '2026/11/05 09:59:00', as_cur: '',
+    as_num_query: '100', as_num_tran: '50', as_long_query: '4', as_long_tran: '0', as_error_query: '0',
+    as_dbname: 'demodb', as_dbhost: 'localhost', as_client_ip: '10.0.0.5',
+    ...overrides,
+  });
+
+  it('shows CA\'s columns, with LQS from the rise in long queries per second', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow()] });
+    await render();
+    await flush();
+
+    // CA's columns, in CA's order (PORT only when CMS sends it, see below);
+    // as in CA, DB host, the two times, client IP and SQL start hidden.
+    expect(headers()).toEqual([CM.idLabel, CM.pid, CM.qps, CM.lqs, CM.memory, CM.status, CM.database]);
+    // CMS sends as_port on Windows only; without it there is no PORT column.
+    expect(headers()).not.toContain(CM.port);
+    expect(container.textContent).toContain('20.0 MiB');
+
+    now += 2000;
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow({ as_num_query: '120', as_num_tran: '54', as_long_query: '10' })] });
+    await act(async () => refreshButton().click());
+    await flush();
+
+    const row = [...container.querySelectorAll('tbody tr')][0];
+    const cells = [...row.querySelectorAll('td')].map((td) => td.textContent.trim());
+    const col = (label) => cells[headers().indexOf(label)];
+    expect(col(CM.qps)).toBe('10.0');
+    expect(col(CM.lqs)).toBe('3.0');
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => localStorage.removeItem('brokerStatusAsHiddenColumns'));
+
+  const picker = () => container.querySelector('[data-testid="as-column-picker"]');
+  const choice = (key) => document.querySelector(`[data-testid="as-column-picker-${key}"]`);
+
+  it('turns columns on and off from the column list, keeps the choice, and never hides ID or PID', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow()] });
+    await render();
+    await flush();
+
+    await act(async () => picker().click());
+    expect(choice('as_id').disabled).toBe(true);
+    expect(choice('as_id').checked).toBe(true);
+    expect(choice('as_pid').disabled).toBe(true);
+    expect(choice('as_cur').checked).toBe(false);
+
+    await act(async () => choice('as_cur').click());
+    await act(async () => choice('qps').click());
+    expect(headers()).toEqual([CM.idLabel, CM.pid, CM.lqs, CM.memory, CM.status, CM.database, CM.asCurrentSqlCol]);
+    // The list sits in the card's header; a click in it does not fold the card.
+    expect(container.querySelector('tbody')).not.toBeNull();
+    expect(JSON.parse(localStorage.getItem('brokerStatusAsHiddenColumns')))
+      .toEqual(['as_dbhost', 'as_lat', 'as_lct', 'as_client_ip', 'qps']);
+
+    // Escape closes the list.
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(choice('as_cur')).toBeNull();
+  });
+
+  it('starts with the columns chosen before in this browser', async () => {
+    localStorage.setItem('brokerStatusAsHiddenColumns', JSON.stringify(['as_lct']));
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow()] });
+    await render();
+    await flush();
+
+    expect(headers()).toEqual([
+      CM.idLabel, CM.pid, CM.qps, CM.lqs, CM.memory, CM.status, CM.database, CM.asDbHostCol,
+      CM.lastAccess, CM.clientIp, CM.asCurrentSqlCol,
+    ]);
+  });
+
+  it('shows a time on the broker\'s current date as the time of day, the full value on hover', async () => {
+    localStorage.setItem('brokerStatusAsHiddenColumns', '[]');
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({
+      ...statusResponse(),
+      time: '2026/11/05 07:40:00',
+      asinfo: [asRow({ as_lat: '2026/11/05 07:35:40', as_lct: '2026/11/04 23:00:00', as_dbhost: 'a-very-long-database-host-name' })],
+    });
+    await render();
+    await flush();
+
+    const row = container.querySelector('tbody tr');
+    const cellOf = (label) => row.querySelectorAll('td')[headers().indexOf(label)];
+    const access = cellOf(CM.lastAccess).querySelector('span');
+    expect(access.textContent).toBe('07:35:40');
+    expect(access.title).toBe('2026/11/05 07:35:40');
+    expect(cellOf(CM.asLastConnectCol).textContent).toBe('2026/11/04 23:00:00');
+    // Long text is cut on screen; the whole value is the tooltip.
+    expect(cellOf(CM.asDbHostCol).querySelector('span').title).toBe('a-very-long-database-host-name');
+  });
+
+  it('shows the PORT column when CMS sends each server\'s port (Windows)', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker()] });
+    brokerApi.getBrokerStatus.mockResolvedValue({ ...statusResponse(), asinfo: [asRow({ as_port: '30001' })] });
+    await render();
+    await flush();
+
+    expect(headers()).toContain(CM.port);
+  });
+});

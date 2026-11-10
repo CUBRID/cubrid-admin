@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { nextSeq } from '../infrastructure/utils/singleFlight';
 import { isDesktopApp } from '../features/desktop/isDesktopApp';
+import { getCM, getStoredLocale } from '../constants/useCM';
+import { serverErrorText } from '../infrastructure/errors/serverErrorText';
 
 export const hostActions = {
   revokeHostLogin: (hostUid) => ({ type: 'host/revokeHostLogin', payload: hostUid }),
@@ -361,7 +363,7 @@ async function requestSessionRefresh(tokenInUse) {
 
     const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) {
-      throw new Error('No refresh token');
+      throw new Error(getCM(getStoredLocale()).sessionRefreshFailedMsg);
     }
 
     const response = await axios.post(
@@ -376,7 +378,7 @@ async function requestSessionRefresh(tokenInUse) {
 
     const tokens = unwrapAuthTokens(response.data);
     if (!tokens?.token) {
-      throw new Error('Refresh response missing access token');
+      throw new Error(getCM(getStoredLocale()).sessionRefreshFailedMsg);
     }
 
     localStorage.setItem('token', tokens.token);
@@ -544,22 +546,22 @@ apiClient.interceptors.response.use(
     const requestUrl = originalRequest?.url ?? '';
 
     // Normalize the error message before any early returns so every rejection
-    // path exposes a meaningful message via err.response.data.message.
-    // Priority: our StandardResponse.note → nested data.message → data.detail
-    // → data.title → existing message (e.g. NestJS default "Internal Server Error")
+    // path exposes a meaningful message via err.response.data.message, in the
+    // UI language (serverErrorText).
     if (apiData && typeof apiData === 'object' && !Array.isArray(apiData)) {
-      const normalizedMessage = apiData.note
-        || apiData.data?.message
-        || apiData.data?.detail
-        || apiData.data?.title
-        || apiData.message
-        || 'An unexpected error occurred';
+      const normalizedMessage = serverErrorText(apiData, getCM(getStoredLocale()));
 
       apiData.message = normalizedMessage;
       // Also overwrite error.message so every catch(err) block that reads
       // err.message directly gets the meaningful server message instead of
       // Axios's generic "Request failed with status code NNN".
       error.message = normalizedMessage;
+    } else if (error.request && !error.response && error.code !== 'ERR_CANCELED') {
+      // No reply at all; Axios says "Network Error" or "timeout of …".
+      const CM = getCM(getStoredLocale());
+      error.message = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+        ? CM.serverTimeoutMsg
+        : CM.networkErrorMsg;
     }
 
     if (statusCode === 401 && !originalRequest._retry) {

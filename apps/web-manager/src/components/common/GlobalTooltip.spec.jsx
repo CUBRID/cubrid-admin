@@ -47,6 +47,28 @@ describe('GlobalTooltip', () => {
     expect(tooltip()?.textContent).toBe('Full host name: production-db-01');
   });
 
+  it('shows above every menu, submenus included', async () => {
+    await over(host.querySelector('#a'));
+    await wait(TOOLTIP_DELAY_MS);
+    // DropdownMenu's submenu flyout sits at z-index 100000.
+    const z = Number(/z-\[(\d+)\]/.exec(tooltip().className)?.[1]);
+    expect(z).toBeGreaterThan(100000);
+  });
+
+  it('opens in the top layer, over any z-index, where popovers are supported', async () => {
+    // jsdom has no popover support; stand in for the browser's.
+    const shown = [];
+    HTMLElement.prototype.showPopover = function showPopover() { shown.push(this); };
+    try {
+      await over(host.querySelector('#a'));
+      await wait(TOOLTIP_DELAY_MS);
+      expect(tooltip().getAttribute('popover')).toBe('manual');
+      expect(shown).toEqual([tooltip()]);
+    } finally {
+      delete HTMLElement.prototype.showPopover;
+    }
+  });
+
   it('puts the title back and hides when the pointer leaves', async () => {
     const a = host.querySelector('#a');
     await over(a);

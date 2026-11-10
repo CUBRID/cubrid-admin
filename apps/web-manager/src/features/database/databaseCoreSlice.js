@@ -3,6 +3,7 @@ import { databaseApi } from './databaseApi';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { dbKey } from './dbKey';
 import { nextSeq } from '../../infrastructure/utils/singleFlight';
+import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 export const fetchDatabaseStartInfo = createAsyncThunk(
   'database/fetchDatabaseStartInfo',
@@ -13,7 +14,7 @@ export const fetchDatabaseStartInfo = createAsyncThunk(
     const result = await databaseApi.readStartInfo(hostUid, { fresh: !arg?.isBackground });
     if (!result.ok) {
       const err = result.error;
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch database information', { seq: result.seq });
+      return rejectWithValue(requestErrorText(err), { seq: result.seq });
     }
     return fulfillWithValue(result.value, { seq: result.seq });
   }
@@ -29,7 +30,7 @@ export const startDatabase = createAsyncThunk(
       if (isAmbiguousFailure(err)) {
         dispatch(fetchDatabaseStartInfo(hostUid));
       }
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to start database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -58,7 +59,7 @@ export const stopDatabase = createAsyncThunk(
       if (isAmbiguousFailure(err)) {
         dispatch(fetchDatabaseStartInfo(hostUid));
       }
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to stop database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -77,7 +78,7 @@ export const startAllDatabases = createAsyncThunk(
       const response = await databaseApi.startAllDatabases(hostUid, dbnames);
       return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to start databases');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -89,7 +90,7 @@ export const stopAllDatabases = createAsyncThunk(
       const response = await databaseApi.stopAllDatabases(hostUid, dbnames);
       return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || 'Failed to stop databases');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -101,7 +102,7 @@ export const runSelectedDatabasesAction = createAsyncThunk(
       const response = await databaseApi.runSelectedDatabasesAction(hostUid, action, dbnames);
       return fulfillWithValue(response, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to ${action} databases`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -115,7 +116,7 @@ export const loginDatabase = createAsyncThunk(
         : await databaseApi.loginDatabaseWithProfile(hostUid, dbname);
       return fulfillWithValue({ dbname, ...response }, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to login to database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -127,7 +128,7 @@ export const logoutDatabase = createAsyncThunk(
       await databaseApi.logoutDatabase(hostUid, dbname);
       return fulfillWithValue({ dbname }, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to log out of database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -139,7 +140,7 @@ export const registerDatabase = createAsyncThunk(
       const response = await databaseApi.registerDatabase(hostUid, dbname, payload);
       return fulfillWithValue({ dbname, response }, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to register database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -151,7 +152,7 @@ export const deleteDatabaseProfile = createAsyncThunk(
       const response = await databaseApi.deleteDatabaseProfile(hostUid, dbname);
       return fulfillWithValue({ dbname, response }, { seq: nextSeq() });
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || err.response?.data?.error || `Failed to delete saved credentials for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );

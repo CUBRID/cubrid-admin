@@ -59,6 +59,8 @@ export const Table = ({
     if (!sortConfig) return data;
     // Find the column to check for sortAccessor (raw sort key override)
     const col = columns.find((c) => c.accessor === sortConfig.key);
+    // A column that was hidden after sorting on it no longer orders the rows.
+    if (!col) return data;
     const sortKey = col?.sortAccessor ?? sortConfig.key;
     return [...data].sort((a, b) => {
       let valA = a[sortKey];
@@ -255,14 +257,22 @@ export const Table = ({
 
                     <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}>
                       <span className="truncate">{col.header}</span>
-                      {isInteractive && (
-                        <span className={`ml-0.5 transition-all duration-150 ${isSorted ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`}>
+                      {/* Only the sorted column's arrow takes room; on the
+                          others the hover hint is laid over the cell's right
+                          edge, so an unsorted column is no wider than its title. */}
+                      {isInteractive && isSorted && (
+                        <span className="ml-0.5 shrink-0">
                           <Icon
-                            name={isSorted ? (activeSortDir === 'asc' ? 'north' : 'south') : 'unfold_more'}
+                            name={activeSortDir === 'asc' ? 'north' : 'south'}
                             size="12px"
-                            weight={isSorted ? 700 : 300}
-                            className={isSorted ? 'text-amber-500' : 'text-slate-400'}
+                            weight={700}
+                            className="text-amber-500"
                           />
+                        </span>
+                      )}
+                      {isInteractive && !isSorted && (
+                        <span aria-hidden="true" className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity duration-150">
+                          <Icon name="unfold_more" size="12px" weight={300} className="text-slate-400" />
                         </span>
                       )}
                     </div>

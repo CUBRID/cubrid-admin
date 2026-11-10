@@ -6,7 +6,7 @@ import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../constants/useCM';
-import { confSaveProblems, isConfChangedSinceLoaded } from '../confSaveProblems';
+import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 import ConfigEditorToolbar from './broker/ConfigEditorToolbar';
@@ -82,12 +82,21 @@ export default function BrokerConfigEditor({ hostUid }) {
   // No client-side check here: the server parses and validates broker.conf
   // and rejects it with per-line reasons.
   const handleSave = async () => {
+    // CMS's broker_setparam (ts2_set_broker_conf) only rewrites broker.conf
+    // on disk and never notifies the running broker, so nothing saved here is
+    // live until the broker restarts: say so before saving.
+    if (!(await confirm({
+      title: CM.saveConfigConfirmTitle,
+      description: CM.brokerConfigSaveConfirmDesc,
+      confirmLabel: CM.saveChanges,
+      variant: 'warning',
+    }))) return;
     setSaving(true);
     try {
       const confdata = rawContent.split('\n');
 
       const result = await brokerApi.updateBrokerConfig(hostUid, confdata, originalRawContentRef.current.split('\n'));
-      const warnings = result?.warnings ?? [];
+      const warnings = confSaveWarnings(result);
 
       originalRawContentRef.current = rawContent;
       setHasChanges(false);
@@ -96,10 +105,8 @@ export default function BrokerConfigEditor({ hostUid }) {
         type: 'success',
         title: CM.configSaved,
         message: CM.brokerConfigSaveSuccess,
-        // CMS's broker_setparam (ts2_set_broker_conf) only rewrites
-        // broker.conf on disk and never notifies the running broker, so
-        // nothing saved here is live until the broker restarts.
-        guidance: [CM.brokerConfigRestartRequiredNotice, ...warnings],
+        // The restart was already said before saving; only CMS warnings here.
+        ...(warnings.length > 0 ? { guidance: warnings } : {}),
       }));
     } catch (err) {
       if (isConfChangedSinceLoaded(err)) {

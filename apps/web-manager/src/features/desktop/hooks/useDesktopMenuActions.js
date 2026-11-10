@@ -33,12 +33,13 @@ export function useDesktopMenuActions() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const isAuthenticated = useSelector((state) => state.auth?.isAuthenticated, shallowEqual);
-  const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue } = useSelector(
+  const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts } = useSelector(
     (state) => ({
       selectedHostUid: state.host?.selectedHostUid ?? null,
       highlightedHostUid: state.host?.highlightedHostUid ?? null,
       authorizedHosts: state.host?.authorizedHosts ?? NO_HOSTS,
       reconnectQueue: state.host?.reconnectQueue ?? NO_HOSTS,
+      hosts: state.host?.hosts ?? NO_HOSTS,
     }),
     shallowEqual
   );
@@ -52,7 +53,7 @@ export function useDesktopMenuActions() {
 
   const enabled = isDashboardShown
     ? {
-      ...getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue }),
+      ...getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts }),
       // Not over an open modal (it would close with what it holds).
       [MENU_ACTIONS.switchWorkspace]: !anyModalOpen,
     }

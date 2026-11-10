@@ -3,22 +3,24 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { brokerStateOf } from '../../broker/brokerState';
+import { databaseApi } from '../databaseApi';
+import { dbKey } from '../dbKey';
+import { dbCharsetFromParamDump } from '../dbCharset';
 import { fetchHostEnv } from '../../host/hostSlice';
 import { openTab } from '../../layout/layoutSlice';
 import { useCM } from '../../../constants/useCM';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
-import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import { Button } from '../../../components/ds/foundation/Button';
 import { TabGroup } from '../../../components/ds/layout/TabGroup';
 import { Table } from '../../../components/ds/layout/Table';
-import { Input } from '../../../components/ds/forms/Input';
-import { Select } from '../../../components/ds/forms/Select';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
-import { parseConfText, parseEngineSizeToBytes, validateEffectiveParams } from '@api-interfaces';
+import { checkEffectiveParams, parseConfText, parseEngineSizeToBytes } from '@api-interfaces';
+import { paramIssuesText } from '../../../infrastructure/errors/paramIssueText';
 import { ParamScopeBadge } from './ParamScopeBadge';
 
 // The param list itself — which keys exist, their category/type/guard/
@@ -105,7 +107,7 @@ function isEffectivelyDefault(guard, value, defaultValue) {
 // explicit conf line can coincidentally match the default; an implicit field
 // is always shown as the default, but not every default-valued field is
 // implicit).
-function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge, deprecatedBadge, deprecatedHint }) {
+function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, defaultValueBadge, isImplicit, implicitHint, implicitBadge, deprecatedBadge, deprecatedHint, fromCommonBadge }) {
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       {isModified && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
@@ -130,6 +132,16 @@ function ParamNameCell({ label, isModified, isDefaultValue, defaultValueHint, de
           Default badge above. */}
       {deprecatedBadge && (
         <DeprecatedBadge label={deprecatedBadge} hint={deprecatedHint} />
+      )}
+      {/* A database view's value that comes from [common], its own section
+          not setting the key. */}
+      {fromCommonBadge && (
+        <span
+          data-testid="param-from-common-badge"
+          className="shrink-0 text-10 font-mono font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500"
+        >
+          {fromCommonBadge}
+        </span>
       )}
       {isImplicit && (
         <span
@@ -236,8 +248,8 @@ export default function DatabasePropertyModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isDatabasePropertyModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
-  const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { selectedDatabase, loggedInDatabases, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedHostUid, authorizedHosts, hosts } = useSelector((state) => state.host, shallowEqual);
   const isAuthorized = selectedHostUid && authorizedHosts.includes(selectedHostUid);
   // Resolved per this host's actual engine version by the server (see
   // CmsConfigService.getEnv) — populated into `hostEnvs` by whatever
@@ -254,33 +266,72 @@ export default function DatabasePropertyModal() {
   // Read-only display state — loaded once per (host, database) and never
   // mutated by the user; actual edits happen only in the raw text editor
   // (see the "Edit in Text Editor" banner below).
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [params, setParams] = useState({});
+  // What this view's own section sets: [@db] for a database, [common]
+  // otherwise. Validated on its own, since the section rules (a [common]-only
+  // key set under [@db], say) are about what is written where.
+  const [sectionParams, setSectionParams] = useState({});
+  // Keys a database view shows from [common] because its [@db] doesn't set them.
+  const [commonKeys, setCommonKeys] = useState(() => new Set());
   const [bufferMode, setBufferMode] = useState(DEFAULT_BUFFER_MODE);
   const [brokers, setBrokers] = useState([]);
-  const [connectionInfo, setConnectionInfo] = useState({ brokerIp: 'localhost', brokerPort: '', charset: 'UTF-8' });
-  // Connection Information is the only editable part of this modal, so it is
-  // also the only thing the "discard changes?" confirmation guards. The
-  // Server Parameter tables are read-only and have nothing to discard.
-  const [connectionDirty, setConnectionDirty] = useState(false);
-  const updateConnectionInfo = patch => {
-    setConnectionInfo(prev => ({ ...prev, ...patch }));
-    setConnectionDirty(true);
-  };
+  // Connection Information is shown, not edited: nothing in this web manager
+  // reads it (it came from CA, whose query editor connected through a
+  // broker). The brokers run on the host itself, so its address and their
+  // ports are what there is to show.
+  const brokerHostAddress = hosts?.find((h) => h.uid === selectedHostUid)?.address;
+  // The database's character set, read once per opened database (see
+  // dbCharset.js): { value } or { reason } (why it can't be shown).
+  const [charset, setCharset] = useState(null);
+  const charsetKeyRef = useRef(null);
+  // Which (host, database) `params` holds; the charset waits for it.
+  const [paramsKey, setParamsKey] = useState(null);
+  const isDbLoggedIn = Boolean(selectedDatabase) && (loggedInDatabases ?? []).includes(dbKey(selectedHostUid, selectedDatabase));
+  const isDbRunning = Boolean(selectedDatabase) && (activeDatabasesByHost?.[selectedHostUid] ?? []).includes(selectedDatabase);
   // Tracks which (host, database) the Server Parameter config has already
   // been fetched for, so switching tabs and back doesn't needlessly re-fetch.
   const fetchedConfigKeyRef = useRef(null);
+  // Numbers each config read; only the latest one ends the spinner.
+  const fetchSeqRef = useRef(0);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
-      setShowDiscardConfirm(false);
-      setConnectionDirty(false);
       setParams({});
+      setSectionParams({});
+      setCommonKeys(new Set());
       setBufferMode(DEFAULT_BUFFER_MODE);
       setActiveSidebar('Server Parameter');
       fetchedConfigKeyRef.current = null;
+      setParamsKey(null);
+      setCharset(null);
+      charsetKeyRef.current = null;
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase]);
+
+  // Only for a database logged in to (never a query for one that isn't) and
+  // running (paramdump in SA mode leaves the client values empty). When
+  // cubrid.conf sets intl_collation, the dump shows that setting, not the
+  // database's charset, so there is nothing to read.
+  useEffect(() => {
+    const key = `${selectedHostUid}:${selectedDatabase || ''}`;
+    if (!isDatabasePropertyModalOpen || !selectedDatabase) return;
+    if (!isDbLoggedIn) { setCharset({ reason: CM.dbLoginRequiredHint }); return; }
+    if (!isDbRunning) { setCharset({ reason: CM.dbStartRequiredHint }); return; }
+    if (paramsKey !== key) return;
+    if (params.intl_collation?.trim()) { setCharset({ reason: CM.charsetCollationSetHint }); return; }
+    if (charsetKeyRef.current === key) return;
+    charsetKeyRef.current = key;
+    setCharset(null);
+    databaseApi.getParamDump(selectedHostUid, selectedDatabase, 'y')
+      .then((dump) => {
+        if (charsetKeyRef.current !== key) return;
+        const value = dbCharsetFromParamDump(dump);
+        setCharset(value ? { value } : { reason: CM.charsetUnreadHint });
+      })
+      .catch(() => {
+        if (charsetKeyRef.current === key) setCharset({ reason: CM.charsetUnreadHint });
+      });
+  }, [isDatabasePropertyModalOpen, selectedHostUid, selectedDatabase, isDbLoggedIn, isDbRunning, paramsKey, params, CM]);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && !hostEnv) {
@@ -295,9 +346,8 @@ export default function DatabasePropertyModal() {
           const response = await brokerApi.getBrokerList(selectedHostUid);
           const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
           if (brokerList && Array.isArray(brokerList)) {
-            const list = brokerList.map(b => ({ label: `${b.name} [${b.port}/${b.status || b.state}]`, port: b.port }));
+            const list = brokerList.map(b => ({ label: `${b.name} [${b.port}/${brokerStateOf(b)}]`, port: b.port }));
             setBrokers(list);
-            setConnectionInfo(prev => (!prev.brokerPort && list.length > 0) ? { ...prev, brokerPort: list[0].label } : prev);
           }
         } catch (err) { console.error('Failed to fetch brokers:', err); }
       };
@@ -314,33 +364,50 @@ export default function DatabasePropertyModal() {
       fetchedConfigKeyRef.current !== configKey
     ) {
       fetchedConfigKeyRef.current = configKey;
+      const fetchSeq = ++fetchSeqRef.current;
       const fetchParams = async () => {
         setFetching(true);
         try {
           const response = await hostApi.getHostConfig(selectedHostUid, 'cubridconf');
           const lines = response?.conflist?.[0]?.confdata || [];
-          const newParams = {};
-          // Deliberately NOT merged: engine inheritance between [common]
-          // and [@dbname] is real (unlike broker.conf's [broker]), but
-          // showing a [common] value as if it were explicitly present in
-          // this db's own section is still a UI fiction here - it made a
-          // hidden commonOnly field (e.g. cubrid_port_id, filtered out of
-          // the individual-properties view entirely) carry a non-blank
-          // value anyway, which validateEffectiveParams then correctly
-          // flagged as "set in the wrong section" even though nothing was
-          // ever actually written there. [common] and [@dbname] are
-          // edited as fully separate targets, same as
-          // BrokerPropertyModal's identical [broker]/[%name] split.
           // The engine matches [@dbname] case-sensitively against the
           // database name (prm_section_cmp with ignore_case=false), so
           // [@DemoDB] and [@demodb] are different sections to it.
           const target = selectedDatabase ? `@${selectedDatabase}` : 'common';
           // Same engine-faithful parser the raw editor validates with, so
           // this view and the editor never disagree about what a line says.
-          const section = parseConfText(lines).sections.find(s => s.name === target);
-          for (const { key, value } of section?.entries ?? []) {
-            newParams[key.toLowerCase()] = value;
-          }
+          const sections = parseConfText(lines).sections;
+          const read = (name) => {
+            const values = {};
+            for (const { key, value } of sections.find(sec => sec.name === name)?.entries ?? []) {
+              values[key.toLowerCase()] = value;
+            }
+            return values;
+          };
+          const own = read(target);
+          // A database runs with [common] and its own [@db] over it, key by
+          // key, so a database view shows both: the values in effect.
+          const inherited = selectedDatabase ? read('common') : {};
+          // Some pairs of keys are one setting to the engine, the later line
+          // read winning (system_parameter.c): a buffer's pages and size,
+          // and a deprecated key and its replacement. [@db] is read after
+          // [common], so a pair [@db] sets at all hides [common]'s.
+          const pairs = [
+            ...bufferGroups.map(({ pagesKey, sizeKey }) => [pagesKey, sizeKey]),
+            ...databaseParamSchema.filter(e => e.deprecated?.replacedBy).map(e => [e.key, e.deprecated.replacedBy]),
+          ];
+          pairs.forEach(([first, second]) => {
+            if (first in own || second in own) {
+              delete inherited[first];
+              delete inherited[second];
+            }
+          });
+          const newParams = { ...inherited, ...own };
+          // A response for an earlier (host, database), the modal having been
+          // reopened for another since, must not replace the newer one's.
+          if (fetchedConfigKeyRef.current !== configKey) return;
+          setSectionParams(own);
+          setCommonKeys(new Set(Object.keys(inherited).filter(key => !(key in own))));
 
           // Mirrors CA's PageSizeChoiceComposite#initBtnState: prefer the
           // pages key if it has a value, else fall back to size.
@@ -350,6 +417,7 @@ export default function DatabasePropertyModal() {
           });
           setBufferMode({ ...DEFAULT_BUFFER_MODE, ...nextMode });
           setParams({ ...newParams });
+          setParamsKey(configKey);
         } catch (err) {
           console.error('Failed to fetch config:', err);
           // Allow a retry on the next tab switch instead of permanently
@@ -364,31 +432,27 @@ export default function DatabasePropertyModal() {
             fetchedConfigKeyRef.current = null;
           }
         }
-        finally { setFetching(false); }
+        finally {
+          // An earlier read's late end must not end the current one's spinner.
+          if (fetchSeqRef.current === fetchSeq) setFetching(false);
+        }
       };
       fetchParams();
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase, selectedHostUid, activeSidebar, isAuthorized, databaseParamSchema, bufferGroups]);
 
-  // Connection Information is the only thing this modal can still write —
-  // it's local-only (how this web manager instance reaches the broker),
-  // never a cubrid.conf value, so it was never part of the read-only pivot.
-  // Server Parameter values are edited exclusively through the raw text
-  // editor now (see handleOpenTextEditor below).
-  const handleApply = () => {
-    closeModal();
-  };
-
+  // Server Parameter values are edited only through the raw text editor
+  // (see handleOpenTextEditor below); nothing in this modal is editable.
   const handleOpenTextEditor = () => {
     dispatch(openTab(`edit_config:${selectedHostUid}:cubridconf`));
     dispatch(closeDatabasePropertyModal());
   };
 
   const closeModal = () => {
-    setShowDiscardConfirm(false);
-    setConnectionDirty(false);
     dispatch(closeDatabasePropertyModal());
     setParams({});
+    setSectionParams({});
+    setCommonKeys(new Set());
     setBufferMode(DEFAULT_BUFFER_MODE);
   };
 
@@ -400,32 +464,26 @@ export default function DatabasePropertyModal() {
   );
 
   // One shared rule engine (required/guard/section-placement/cross-field) —
-  // see validateEffectiveParams's own doc comment. Nothing here is editable
+  // see checkEffectiveParams's own doc comment. Nothing here is editable
   // any more, so this only ever flags a value that's ALREADY stored in
   // cubrid.conf and fails its own guard — a passive diagnostic pointing at
   // the text editor, not something Apply can block.
   const reconciledParams = useMemo(
-    () => getEffectiveParams(params, bufferMode, bufferGroups),
-    [params, bufferMode, bufferGroups]
+    () => getEffectiveParams(sectionParams, bufferMode, bufferGroups),
+    [sectionParams, bufferMode, bufferGroups]
   );
   const guardErrors = useMemo(
-    () => validateEffectiveParams(databaseParamSchema, reconciledParams, {
+    () => paramIssuesText(checkEffectiveParams(databaseParamSchema, reconciledParams, {
       isCommonSection: !selectedDatabase,
       commonSectionLabel: 'common',
       emptyValueIsError: true,
       sysprmKeywords: true,
-    }),
-    [databaseParamSchema, reconciledParams, selectedDatabase]
+    }), CM),
+    [databaseParamSchema, reconciledParams, selectedDatabase, CM]
   );
   const guardErrorCount = Object.keys(guardErrors).length;
 
-  const handleClose = () => {
-    if (connectionDirty) {
-      setShowDiscardConfirm(true);
-      return;
-    }
-    closeModal();
-  };
+  const handleClose = closeModal;
 
   // CUBRID forces auto_restart_server off in-process whenever HA is enabled
   // (system_parameter.c's prm_tune_parameters — an abnormally-terminated
@@ -455,8 +513,9 @@ export default function DatabasePropertyModal() {
       // Never in the conf file — the value shown is purely e.default, not
       // anything anyone actually set.
       isImplicit: params[e.key] === undefined || params[e.key] === '',
+      isFromCommon: commonKeys.has(e.key),
     }))
-  , [databaseParamSchema, params, guardErrors, selectedDatabase]);
+  , [databaseParamSchema, params, guardErrors, selectedDatabase, commonKeys]);
 
   const advancedRows = useMemo(() => databaseParamSchema
     // See generalRows' comment — commonOnly keys (ha_mode/ha_node_list/
@@ -484,9 +543,10 @@ export default function DatabasePropertyModal() {
         inactiveHint: isInactive ? CM.paramInactiveWhileHint(dep.dependsOnKey) : null,
         isDefaultValue: isEffectivelyDefault(e.guard, params[e.key], e.default),
         isImplicit: params[e.key] === undefined || params[e.key] === '',
+        isFromCommon: commonKeys.has(e.key),
       };
     })
-  , [databaseParamSchema, params, guardErrors, schemaDefaults, CM, selectedDatabase]);
+  , [databaseParamSchema, params, guardErrors, schemaDefaults, CM, selectedDatabase, commonKeys]);
 
   // Connection Information configures how this web manager instance itself
   // reaches the broker for a specific database — meaningless while editing
@@ -506,7 +566,7 @@ export default function DatabasePropertyModal() {
   // Advanced table (and CA itself): the value cell shows the current value,
   // falling back to the default as a placeholder.
   const generalColumns = [
-    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} /> },
+    { header: CM.parameter, accessor: 'key', width: '45%', render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} fromCommonBadge={row.isFromCommon ? CM.fromCommonSectionBadge : null} /> },
     {
       header: CM.value, accessor: 'value', width: '55%', cellClassName: 'w-[55%]', sortable: false,
       render: (_, row) => {
@@ -533,7 +593,7 @@ export default function DatabasePropertyModal() {
       header: CM.parameter, accessor: 'key', width: '30%',
       className: '!sticky left-0 z-20 bg-slate-100 dark:bg-slate-900',
       cellClassName: 'sticky left-0 z-[1] bg-white dark:bg-slate-900',
-      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} />,
+      render: (_, row) => <ParamNameCell label={row.key} isModified={row.isModified} isDefaultValue={row.isDefaultValue} defaultValueBadge={CM.usingDefaultBadge} defaultValueHint={CM.usingDefaultHint(row.default)} isImplicit={row.isImplicit} implicitBadge={CM.implicitValueBadge} implicitHint={CM.implicitValueHint(row.default)} deprecatedBadge={row.deprecated ? CM.deprecatedParamBadge : null} deprecatedHint={row.deprecated ? CM.deprecatedParamHint(row.deprecated.replacedBy) : null} fromCommonBadge={row.isFromCommon ? CM.fromCommonSectionBadge : null} />,
     },
     {
       header: CM.parameterTypeLabel, accessor: 'scope', width: '16%',
@@ -565,43 +625,26 @@ export default function DatabasePropertyModal() {
       testId="database-property"
       footer={
         <div className="flex justify-end items-center w-full gap-2.5">
-          <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-          {activeSidebar === 'Server Parameter' ? (
-            <Button
-              data-testid="database-property-open-editor-btn"
-              variant="primary"
-              onClick={handleOpenTextEditor}
-              icon="edit"
-              className="min-w-[140px]"
-            >
-              {CM.openInTextEditorBtn}
-            </Button>
-          ) : (
-            <Button
-              data-testid="database-property-apply-btn"
-              variant="primary"
-              onClick={handleApply}
-              icon="save"
-              className="min-w-[140px]"
-            >
-              {CM.applyChanges}
-            </Button>
-          )}
+          <Button data-testid="database-property-cancel-btn" variant="ghost" onClick={handleClose}>{CM.close}</Button>
+          <Button
+            data-testid="database-property-open-editor-btn"
+            variant="primary"
+            onClick={handleOpenTextEditor}
+            icon="edit"
+            className="min-w-[140px]"
+          >
+            {CM.openInTextEditorBtn}
+          </Button>
         </div>
       }
     >
       <div className="flex h-[min(720px,calc(90vh-146px))] min-h-[360px] -m-5 overflow-hidden">
 
         {/* ─── Sidebar ─── */}
-        {/* Deliberately dark in both themes (nav items below use light-on-dark
-            text/hover colors with no `dark:` variants of their own). Must be
-            opaque in light mode — a translucent bg-slate-900/60 blends toward
-            a medium gray against this panel's white background, landing
-            close enough to the inactive label's text-slate-500 to be
-            unreadable until hover. dark:bg-black/40 stays translucent since
-            it only ever blends with the panel's own dark background. */}
-        <div className="w-[180px] bg-slate-900 dark:bg-black/40 border-r border-white/6 flex flex-col shrink-0">
-          <div className="px-4 py-4 border-b border-white/5">
+        {/* Light in light mode like the rest of the dialog; dark:bg-black/40
+            only ever blends with the panel's own dark background. */}
+        <div className="w-[180px] bg-slate-50 dark:bg-black/40 border-r border-slate-200 dark:border-white/6 flex flex-col shrink-0">
+          <div className="px-4 py-4 border-b border-slate-200 dark:border-white/5">
             <p className="text-11 font-black uppercase tracking-[0.2em] text-slate-500">{CM.navigation}</p>
           </div>
           <div className="py-2 flex-1">
@@ -611,8 +654,8 @@ export default function DatabasePropertyModal() {
                 onClick={() => setActiveSidebar(id)}
                 className={`relative w-full flex items-center gap-3 px-4 py-3.5 text-left group ${
                   activeSidebar === id
-                    ? 'bg-amber-500/10 text-amber-500'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/4'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-white/4'
                 }`}
               >
                 {activeSidebar === id && (
@@ -622,7 +665,7 @@ export default function DatabasePropertyModal() {
                   name={icon}
                   size="16px"
                   weight={activeSidebar === id ? 500 : 300}
-                  className={activeSidebar === id ? 'text-amber-500' : 'text-slate-600 group-hover:text-slate-400'}
+                  className={activeSidebar === id ? 'text-amber-500' : 'text-slate-400 group-hover:text-slate-600 dark:text-slate-600 dark:group-hover:text-slate-400'}
                 />
                 <span className="text-12 font-black uppercase tracking-widest">{label}</span>
               </button>
@@ -630,9 +673,9 @@ export default function DatabasePropertyModal() {
           </div>
           {/* Bottom context info */}
           {selectedDatabase && (
-            <div className="px-4 py-3 border-t border-white/5">
-              <p className="text-10 uppercase tracking-widest text-slate-600 font-bold mb-1">{CM.context}</p>
-              <p title={selectedDatabase} className="text-12 font-mono font-black text-amber-500/80 truncate">{selectedDatabase}</p>
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-white/5">
+              <p className="text-10 uppercase tracking-widest text-slate-400 dark:text-slate-600 font-bold mb-1">{CM.context}</p>
+              <p title={selectedDatabase} className="text-12 font-mono font-black text-amber-600 dark:text-amber-500/80 truncate">{selectedDatabase}</p>
             </div>
           )}
         </div>
@@ -685,14 +728,7 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.brokerIp}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.publicAddress}</p>
                     </div>
-                    <div className="flex-1">
-                      <Input
-                        value={connectionInfo.brokerIp}
-                        onChange={e => updateConnectionInfo({ brokerIp: e.target.value })}
-                        size="sm"
-                        icon="dns"
-                      />
-                    </div>
+                    <p data-testid="database-property-broker-ip" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200">{brokerHostAddress || '—'}</p>
                   </div>
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
@@ -700,14 +736,9 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.servicePort}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.activeBroker}</p>
                     </div>
-                    <div className="flex-1">
-                      <Select
-                        value={connectionInfo.brokerPort}
-                        options={brokers.map(b => ({ value: b.label, label: b.label }))}
-                        onChange={e => updateConnectionInfo({ brokerPort: e.target.value })}
-                        size="sm"
-                      />
-                    </div>
+                    <ul data-testid="database-property-broker-ports" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200 space-y-0.5">
+                      {brokers.length > 0 ? brokers.map(b => <li key={b.label}>{b.label}</li>) : <li>—</li>}
+                    </ul>
                   </div>
                   <div className="h-px bg-slate-100 dark:bg-white/5" />
                   <div className="flex items-center gap-4">
@@ -715,14 +746,7 @@ export default function DatabasePropertyModal() {
                       <p className="text-11 uppercase tracking-widest text-slate-400 font-black mb-0.5">{CM.textEncoding}</p>
                       <p className="text-10 font-mono text-slate-400 dark:text-slate-600">{CM.charset}</p>
                     </div>
-                    <div className="flex-1">
-                      <Select
-                        value={connectionInfo.charset}
-                        options={['UTF-8', 'EUC-KR', 'ISO-8859-1', 'UHC'].map(o => ({ value: o, label: o }))}
-                        onChange={e => updateConnectionInfo({ charset: e.target.value })}
-                        size="sm"
-                      />
-                    </div>
+                    <p data-testid="database-property-charset" className="flex-1 font-mono text-14 text-slate-700 dark:text-slate-200" title={charset?.reason}>{charset?.value ?? '—'}</p>
                   </div>
                 </div>
 
@@ -788,17 +812,6 @@ export default function DatabasePropertyModal() {
         </div>
       </div>
     </Modal>
-    <ConfirmDialog
-      isOpen={isDatabasePropertyModalOpen && showDiscardConfirm}
-      title={CM.discardChangesTitle}
-      description={CM.discardChangesDesc}
-      confirmLabel={CM.discardChangesBtn}
-      cancelLabel={CM.keepEditingBtn}
-      variant="warning"
-      onConfirm={closeModal}
-      onCancel={() => setShowDiscardConfirm(false)}
-      testId="database-property-discard"
-    />
     </>
   );
 }

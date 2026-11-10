@@ -164,7 +164,7 @@ export const Select = ({
               {opt.value === value && (
                 <div className="absolute left-0 top-2 bottom-2 w-[3px] bg-amber-500 rounded-r-full" />
               )}
-              <span className="truncate">{opt.label}</span>
+              <span className="truncate" title={typeof opt.label === 'string' ? opt.label : undefined}>{opt.label}</span>
             </div>
           ))
         )}
@@ -204,7 +204,7 @@ export const Select = ({
               <Icon name={icon} size={isSm ? '14px' : '18px'} weight={300} />
             </div>
           )}
-          <span className={`block truncate ${!selectedOption ? 'text-slate-400' : 'text-slate-900 dark:text-slate-200'}`}>
+          <span title={typeof selectedOption?.label === 'string' ? selectedOption.label : undefined} className={`block truncate ${!selectedOption ? 'text-slate-400' : 'text-slate-900 dark:text-slate-200'}`}>
             {selectedOption ? selectedOption.label : resolvedPlaceholder}
           </span>
           <div

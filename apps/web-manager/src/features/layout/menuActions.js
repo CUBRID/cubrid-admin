@@ -6,6 +6,7 @@ import {
   openImportExportModal,
   openCmsUserManagementModal,
 } from '../host/hostSlice';
+import { isCmsAdminHost } from '../host/cmsAdmin';
 import { openUpdateCheck, setAboutCubrid } from './appBarSlice';
 
 /**
@@ -72,7 +73,7 @@ export function menuActionHost(id, { selectedHostUid, highlightedHostUid, author
 }
 
 /** @returns {Record<string, boolean>} enabled flag per action id */
-export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [] }) {
+export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [], hosts = [] }) {
   const hostState = { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue };
   return {
     [MENU_ACTIONS.addHost]: true,
@@ -82,8 +83,9 @@ export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, auth
     // Desktop app only; the header shows it only there.
     [MENU_ACTIONS.switchWorkspace]: true,
     [MENU_ACTIONS.serviceDashboard]: true,
+    // Only for the CMS admin account, as in CA (isCmsAdminHost).
     [MENU_ACTIONS.cmsAccountManagement]:
-      Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid),
+      Boolean(selectedHostUid) && authorizedHosts.includes(selectedHostUid) && isCmsAdminHost(hosts, selectedHostUid),
     // The config editors stay enabled and explain a missing host on click.
     [MENU_ACTIONS.editCubridConfig]: true,
     [MENU_ACTIONS.editBrokerConfig]: true,

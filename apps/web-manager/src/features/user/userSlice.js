@@ -4,6 +4,7 @@ import { getStoredLocale, setStoredLocale } from '../../constants/useCM';
 import { userApi } from './userApi';
 import { dbKey } from '../database/dbKey';
 import { isDbLoginGone, dbOfLoginGone } from '../database/dbLoginGone';
+import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 export const DEFAULT_PREFERENCES = {
   dashboardInterval: 3,
@@ -46,7 +47,7 @@ export const fetchPreferences = createAsyncThunk(
       const response = await userApi.getPreferences();
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch preferences');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -58,7 +59,7 @@ export const updatePreferences = createAsyncThunk(
       await userApi.updatePreferences(preferences);
       return preferences;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update preferences');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -78,7 +79,7 @@ export const fetchDatabaseUsers = createAsyncThunk(
     } catch (err) {
       return rejectWithValue({ 
         dbname, 
-        error: err.response?.data?.message || `Failed to fetch users for ${dbname}` 
+        error: requestErrorText(err) 
       });
     }
   }
@@ -91,7 +92,7 @@ export const createDatabaseUser = createAsyncThunk(
       const response = await userApi.createDatabaseUser(hostUid, dbname, payload);
       return { dbname, user: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to create user');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -103,7 +104,7 @@ export const updateDatabaseUser = createAsyncThunk(
       const response = await userApi.updateDatabaseUser(hostUid, dbname, userName, payload);
       return { dbname, userName, user: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update user');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -115,7 +116,7 @@ export const dropDatabaseUser = createAsyncThunk(
       await userApi.dropDatabaseUser(hostUid, dbname, userName);
       return { dbname, userName };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to drop user');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );

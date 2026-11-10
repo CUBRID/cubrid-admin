@@ -1,10 +1,11 @@
-import React, { forwardRef, useId } from 'react';
+import React, { forwardRef, useId, useLayoutEffect, useRef, useState } from 'react';
 import { FormField } from './FormField';
 import { Icon } from '../foundation/Icon';
 
 export const Input = forwardRef(({
   label,
   labelExtra,
+  labelAction,
   description,
   error,
   required,
@@ -19,6 +20,9 @@ export const Input = forwardRef(({
   inputClassName = '',
   id,
   onStepChange,
+  // Ids of text elsewhere that also describes the input (a hint shown
+  // below a row of fields rather than above this one).
+  describedBy,
   ...props
 }, ref) => {
   const generatedId = useId();
@@ -27,6 +31,26 @@ export const Input = forwardRef(({
   const errorId = error ? `${inputId}-error` : undefined;
   const isNumber = type === 'number';
   const isSm = size === 'sm';
+  const hasStepper = isNumber && !disabled;
+
+  // The suffix and the number stepper sit side by side at the right; the
+  // text stops before them by their measured width, so a long suffix
+  // ("CORES") neither meets the stepper nor runs over the digits.
+  const rightRef = useRef(null);
+  const [rightWidth, setRightWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = rightRef.current;
+    if (!el) {
+      setRightWidth(0);
+      return undefined;
+    }
+    const update = () => setRightWidth(el.offsetWidth);
+    update();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [suffix, hasStepper]);
 
   const handleAdjust = (delta) => {
     if (disabled || !onChange) return;
@@ -39,6 +63,7 @@ export const Input = forwardRef(({
     <FormField 
       label={label} 
       labelExtra={labelExtra} 
+      labelAction={labelAction}
       description={description} 
       error={error} 
       required={required} 
@@ -68,7 +93,7 @@ export const Input = forwardRef(({
             if (onChange) onChange(e);
           }}
           aria-invalid={error ? 'true' : undefined}
-          aria-describedby={[descriptionId, errorId].filter(Boolean).join(' ') || undefined}
+          aria-describedby={[descriptionId, describedBy, errorId].filter(Boolean).join(' ') || undefined}
           className={`w-full ${isSm ? 'h-8 text-14' : 'h-10 text-15'} font-medium bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl focus:outline-hidden transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${
             icon ? 'pl-12' : 'pl-3'
           } ${
@@ -81,6 +106,7 @@ export const Input = forwardRef(({
             disabled ? 'opacity-60 cursor-not-allowed' : ''
           } ${inputClassName}`}
           style={{
+            ...(rightWidth > 0 ? { paddingRight: rightWidth + 20 } : {}),
             colorScheme: 'light dark',
             WebkitAppearance: 'none',
             MozAppearance: 'textfield'
@@ -88,34 +114,38 @@ export const Input = forwardRef(({
           {...props}
         />
 
-        {suffix && (
-          <div className={`absolute inset-y-0 select-none flex items-center justify-center animate-in fade-in duration-300 ${isNumber ? 'right-9' : 'right-3.5'}`}>
-            {typeof suffix === 'string' ? (
-              <span className="text-12 font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5">
-                {suffix}
-              </span>
-            ) : suffix}
-          </div>
-        )}
+        {(suffix || hasStepper) && (
+          <div ref={rightRef} className="absolute inset-y-0 right-3 flex items-center gap-1.5">
+            {suffix && (
+              <div className="select-none flex items-center justify-center animate-in fade-in duration-300">
+                {typeof suffix === 'string' ? (
+                  <span className="text-12 font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-slate-200/50 dark:border-white/5">
+                    {suffix}
+                  </span>
+                ) : suffix}
+              </div>
+            )}
 
-        {isNumber && !disabled && (
-          <div className="absolute right-3 px-1 border-l border-slate-200/50 dark:border-white/5 flex flex-col items-center justify-center gap-0.5 h-6 my-auto pointer-events-none">
-            <button
-               type="button"
-               tabIndex="-1"
-               onClick={() => (onStepChange ? onStepChange(1) : handleAdjust(1))}
-               className="w-4 h-2.5 flex items-center justify-center text-slate-400 hover:text-bk-yellow transition-all active:scale-95 pointer-events-auto"
-            >
-              <Icon name="keyboard_arrow_up" size="15px" weight={700} />
-            </button>
-            <button
-               type="button"
-               tabIndex="-1"
-               onClick={() => (onStepChange ? onStepChange(-1) : handleAdjust(-1))}
-               className="w-4 h-2.5 flex items-center justify-center text-slate-400 hover:text-bk-yellow transition-all active:scale-95 pointer-events-auto"
-            >
-              <Icon name="keyboard_arrow_down" size="15px" weight={700} />
-            </button>
+            {hasStepper && (
+              <div className="pl-1 border-l border-slate-200/50 dark:border-white/5 flex flex-col items-center justify-center gap-0.5 h-6">
+                <button
+                   type="button"
+                   tabIndex="-1"
+                   onClick={() => (onStepChange ? onStepChange(1) : handleAdjust(1))}
+                   className="w-4 h-2.5 flex items-center justify-center text-slate-400 hover:text-bk-yellow transition-all active:scale-95"
+                >
+                  <Icon name="keyboard_arrow_up" size="15px" weight={700} />
+                </button>
+                <button
+                   type="button"
+                   tabIndex="-1"
+                   onClick={() => (onStepChange ? onStepChange(-1) : handleAdjust(-1))}
+                   className="w-4 h-2.5 flex items-center justify-center text-slate-400 hover:text-bk-yellow transition-all active:scale-95"
+                >
+                  <Icon name="keyboard_arrow_down" size="15px" weight={700} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -108,4 +108,10 @@ describe('SystemStatusSection', () => {
       expect(container.textContent).not.toContain(CM.live);
     });
   });
+
+  it('leaves a read error to the top of the dashboard instead of showing it here', async () => {
+    await render({ currentStatus: {}, averages: {}, disk: null, error: 'connect ECONNREFUSED' });
+    expect(container.textContent).not.toContain(CM.systemStatusError);
+    expect(container.textContent).not.toContain('connect ECONNREFUSED');
+  });
 });

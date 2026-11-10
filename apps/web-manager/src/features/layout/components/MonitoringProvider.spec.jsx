@@ -148,7 +148,7 @@ it('waits for the interval after a failed poll instead of retrying at once', asy
 it('keeps dispatching each tick while a read is still waiting on the host', async () => {
   // A read still in flight is shared by the next tick's thunk (see
   // createSharedReads), so dispatching again sends nothing new.
-  releaseStartInfo = () => {};
+  releaseStartInfo = () => undefined;
   await act(async () => {
     await vi.advanceTimersByTimeAsync(30000);
   });

@@ -1,0 +1,75 @@
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Provider } from 'react-redux';
+// HeaderMenu uses react-router (Switch Workspace navigates), so it renders inside a router.
+import { MemoryRouter } from 'react-router-dom';
+import { configureStore } from '@reduxjs/toolkit';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+// The menus as plain lists: every item rendered, with its state and tooltip.
+vi.mock('../../../components/common/DropdownMenu', () => ({
+  DropdownMenu: ({ children }) => <div>{children}</div>,
+  SubMenu: ({ children }) => <div>{children}</div>,
+  MenuDivider: () => null,
+  MenuItem: ({ label, disabled, title }) => <button type="button" disabled={disabled} title={title}>{label}</button>,
+}));
+vi.mock('../menuActions', async (importOriginal) => ({ ...(await importOriginal()), runMenuAction: vi.fn() }));
+vi.mock('../../host/hostSlice', () => ({}));
+vi.mock('../layoutSlice', () => ({}));
+vi.mock('../appBarSlice', () => ({}));
+
+import HeaderMenu from './HeaderMenu';
+import { getCM } from '../../../constants/useCM';
+
+const KO = getCM('ko');
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+let container;
+let root;
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+});
+
+const render = (hostId, host = {}) => act(async () => {
+  const state = {
+    host: { selectedHostUid: 'h1', authorizedHosts: ['h1'], hosts: [{ uid: 'h1', id: hostId }], ...host },
+    user: { preferences: { uiLocale: 'ko' } },
+  };
+  root.render(<Provider store={configureStore({ reducer: () => state })}><MemoryRouter><HeaderMenu /></MemoryRouter></Provider>);
+});
+const cmsAccounts = () => [...container.querySelectorAll('button')].find((b) => b.textContent === KO.cmsAccountManagement);
+
+it('turns CMS Account Management off with the reason on a host connected with another account', async () => {
+  await render('operator');
+  expect(cmsAccounts().disabled).toBe(true);
+  expect(cmsAccounts().title).toBe(KO.cmsAdminRequiredHint);
+});
+
+it('keeps CMS Account Management on for the CMS admin account', async () => {
+  await render('admin');
+  expect(cmsAccounts().disabled).toBe(false);
+  expect(cmsAccounts().title).toBe('');
+});
+
+const engineVersion = () => [...container.querySelectorAll('button')].find((b) => b.textContent === KO.serverVersion);
+
+it('says Host Engine Version is off for the highlighted host, not the selected one', async () => {
+  // h1 selected and connected; h2 highlighted, not connected.
+  await render('admin', { highlightedHostUid: 'h2', reconnectQueue: [] });
+  expect(engineVersion().disabled).toBe(true);
+  expect(engineVersion().title).toBe(KO.hostConnectRequiredHint);
+
+  // h2 connected but waiting to reconnect.
+  await render('admin', { highlightedHostUid: 'h2', authorizedHosts: ['h1', 'h2'], reconnectQueue: ['h2'] });
+  expect(engineVersion().disabled).toBe(true);
+  expect(engineVersion().title).toBe(KO.hostConnectRequiredHint);
+
+  await render('admin', { highlightedHostUid: 'h2', authorizedHosts: ['h1', 'h2'], reconnectQueue: [] });
+  expect(engineVersion().disabled).toBe(false);
+});

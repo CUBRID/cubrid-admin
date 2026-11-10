@@ -276,19 +276,19 @@ export default function RestoreDatabaseModal() {
       const day = parseInt(parts[2], 10);
       // restoredb --up-to-date takes years from 1900 (util_sa.c).
       if (isNaN(year) || year < RESTORE_YEAR_MIN || year > new Date().getFullYear()) {
-        return CM.errYear || 'The year value of date is not valid.';
+        return CM.errYear;
       }
       if (isNaN(month) || month < 1 || month > 12) {
-        return CM.errMonth || 'The month value of date is not valid.';
+        return CM.errMonth;
       }
       if (isNaN(day) || day < 1 || day > 31) {
-        return CM.errDay || 'The day value of date is not valid.';
+        return CM.errDay;
       }
 
       // Calendar check for leap years and month lengths
       const testDate = new Date(year, month - 1, day);
       if (testDate.getFullYear() !== year || (testDate.getMonth() + 1) !== month || testDate.getDate() !== day) {
-        return CM.errDay || 'The day value of date is not valid.';
+        return CM.errDay;
       }
 
       // Check if restore date is before the backup date
@@ -328,7 +328,7 @@ export default function RestoreDatabaseModal() {
       }
       const combinedDateTime = formData.restoreDateOnly + 'T' + formData.restoreTimeOnly;
       if (backupDate && new Date(combinedDateTime) < backupDate) {
-        return CM.restoreDateBeforeBackup || 'Recovery date must be on or after the backup date.';
+        return CM.restoreDateBeforeBackup;
       }
     }
 
@@ -339,16 +339,16 @@ export default function RestoreDatabaseModal() {
                    levelVal === '1' ? formData.manualLevel1Path :
                    formData.manualLevel2Path;
       if (!path) {
-        if (levelVal === '0') return CM.errLevel0File || 'The level 0 file is not valid.';
-        if (levelVal === '1') return CM.errLevel1File || 'The level 1 file is not valid.';
-        return CM.errLevel2File || 'The level 2 file is not valid.';
+        if (levelVal === '0') return CM.errLevel0File;
+        if (levelVal === '1') return CM.errLevel1File;
+        return CM.errLevel2File;
       }
     }
 
     // 3. Recovery Path Validation (only if changeRestorePath is checked)
     if (formData.changeRestorePath) {
       if (!formData.recoveryPath) {
-        return CM.errRecoveryPath || 'The user-defined recovery path is not valid.';
+        return CM.errRecoveryPath;
       }
     }
 
@@ -385,9 +385,9 @@ export default function RestoreDatabaseModal() {
       }
 
       if (!pathnameVal) {
-        if (levelVal === '0') endError(CM.errLevel0File || 'The level 0 file is not valid.');
-        else if (levelVal === '1') endError(CM.errLevel1File || 'The level 1 file is not valid.');
-        else endError(CM.errLevel2File || 'The level 2 file is not valid.');
+        if (levelVal === '0') endError(CM.errLevel0File);
+        else if (levelVal === '1') endError(CM.errLevel1File);
+        else endError(CM.errLevel2File);
         return;
       }
 
@@ -443,7 +443,7 @@ export default function RestoreDatabaseModal() {
     }
 
     if (formData.changeRestorePath && !formData.recoveryPath) {
-      endError(CM.errRecoveryPath || 'The user-defined recovery path is not valid.');
+      endError(CM.errRecoveryPath);
       return;
     }
     const recoverypathParam = formData.changeRestorePath ? formData.recoveryPath : 'none';
@@ -558,9 +558,9 @@ export default function RestoreDatabaseModal() {
         )}
 
         {/* ── Database Name Group ── */}
-        <CaDialogGroup title={CM.grpDbName || 'Database Name'}>
+        <CaDialogGroup title={CM.grpDbName}>
           <CaDialogFieldGrid labelWidth="130px" className="pt-2">
-            <CaDialogField label={CM.lblDbNameRestore || 'Database name:'}>
+            <CaDialogField label={CM.lblDbNameRestore}>
               <Input
                 value={selectedDatabase}
                 disabled
@@ -573,7 +573,7 @@ export default function RestoreDatabaseModal() {
         </CaDialogGroup>
 
         {/* ── Date and Time Option Group ── */}
-        <CaDialogGroup title={CM.grpRestoredData || 'Restored Data'}>
+        <CaDialogGroup title={CM.grpRestoredData}>
           <CaDialogFieldGrid labelWidth="130px" className="gap-y-4 pt-2">
             <CaDialogField fullWidth>
               <Checkbox
@@ -606,13 +606,13 @@ export default function RestoreDatabaseModal() {
                     <div className="space-y-3 animate-in slide-in-from-top-1 duration-200">
                       <div className="flex gap-4 max-w-md">
                         <DatePicker
-                          label={CM.lblDate || 'Date:'}
+                          label={CM.lblDate}
                           value={formData.restoreDateOnly}
                           onChange={(e) => handleInputChange('restoreDateOnly', e.target.value)}
                           className="flex-1"
                         />
                         <TimePicker
-                          label={CM.lblTime || 'Time:'}
+                          label={CM.lblTime}
                           value={formData.restoreTimeOnly}
                           onChange={(e) => handleInputChange('restoreTimeOnly', e.target.value)}
                           className="flex-1"
@@ -657,7 +657,7 @@ export default function RestoreDatabaseModal() {
                       onChange={(e) => handleInputChange('manualLevel0Path', e.target.value)}
                       disabled={!formData.selectBackupFilePath || formData.manualBackupLevel !== '0'}
                       icon="folder_open"
-                      placeholder="e.g. /path/to/demodb_backup_lv0"
+                      placeholder={CM.examplePlaceholder('/path/to/demodb_backup_lv0')}
                     />
                   </div>
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
@@ -669,7 +669,7 @@ export default function RestoreDatabaseModal() {
                       onChange={(e) => handleInputChange('manualLevel1Path', e.target.value)}
                       disabled={!formData.selectBackupFilePath || formData.manualBackupLevel !== '1'}
                       icon="folder_open"
-                      placeholder="e.g. /path/to/demodb_backup_lv1"
+                      placeholder={CM.examplePlaceholder('/path/to/demodb_backup_lv1')}
                     />
                   </div>
                   <div className="grid grid-cols-[110px_1fr] items-center gap-3">
@@ -681,7 +681,7 @@ export default function RestoreDatabaseModal() {
                       onChange={(e) => handleInputChange('manualLevel2Path', e.target.value)}
                       disabled={!formData.selectBackupFilePath || formData.manualBackupLevel !== '2'}
                       icon="folder_open"
-                      placeholder="e.g. /path/to/demodb_backup_lv2"
+                      placeholder={CM.examplePlaceholder('/path/to/demodb_backup_lv2')}
                     />
                   </div>
                   {scatteredLevelsWarning && (
@@ -702,7 +702,7 @@ export default function RestoreDatabaseModal() {
         if (!defaultDir) return null;
 
         return (
-          <CaDialogGroup title={CM.grpDbPath || 'Recovery Path'}>
+          <CaDialogGroup title={CM.grpDbPath}>
             <CaDialogFieldGrid labelWidth="130px" className="pt-2">
               <CaDialogField fullWidth>
                 <div className="flex items-center gap-4 w-full">
@@ -730,7 +730,7 @@ export default function RestoreDatabaseModal() {
       })()}
 
       {/* ── Partial Recovery Group ── */}
-      <CaDialogGroup title={CM.grpPartialRecovery || 'Partial Recovery'}>
+      <CaDialogGroup title={CM.grpPartialRecovery}>
         <CaDialogFieldGrid labelWidth="130px" className="pt-2">
           <CaDialogField fullWidth>
             <Checkbox

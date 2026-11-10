@@ -4,6 +4,7 @@ import { fetchDatabaseStartInfo } from './databaseCoreSlice';
 import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { dbKey } from './dbKey';
 import { isDbLoginGone, dbOfLoginGone } from './dbLoginGone';
+import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 
 // Lifecycle Operations
 export const createDatabase = createAsyncThunk(
@@ -14,7 +15,7 @@ export const createDatabase = createAsyncThunk(
       return response;
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
-      return rejectWithValue(err.response?.data?.message || 'Failed to create database');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -27,7 +28,7 @@ export const copyDatabase = createAsyncThunk(
       return response;
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
-      return rejectWithValue(err.response?.data?.message || 'Failed to copy database');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -40,7 +41,7 @@ export const renameDatabase = createAsyncThunk(
       return { dbname, newName: payload.newName, response };
     } catch (err) {
       if (isAmbiguousFailure(err)) dispatch(fetchDatabaseStartInfo(hostUid));
-      return rejectWithValue(err.response?.data?.message || `Failed to rename database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -52,7 +53,7 @@ export const fetchCreateDatabaseInfo = createAsyncThunk(
       const response = await databaseApi.getCreateDatabaseInfo(hostUid);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch database creation info');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -65,7 +66,7 @@ export const addVolume = createAsyncThunk(
       const response = await databaseApi.addVolume(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to add volume to ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -81,7 +82,7 @@ export const fetchBackupSchedule = createAsyncThunk(
       const response = await databaseApi.getBackupSchedule(hostUid, dbname);
       return { dbname, schedules: response.backups || [] };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch backup schedules for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -93,7 +94,7 @@ export const addBackupSchedule = createAsyncThunk(
       const response = await databaseApi.addBackupSchedule(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to add backup schedule for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -105,7 +106,7 @@ export const editBackupSchedule = createAsyncThunk(
       const response = await databaseApi.editBackupSchedule(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to update backup schedule for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -117,7 +118,7 @@ export const deleteBackupSchedule = createAsyncThunk(
       const response = await databaseApi.deleteBackupSchedule(hostUid, dbname, payload);
       return { dbname, backupid: payload?.backupid, response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to delete backup schedule ${payload?.backupid}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -129,7 +130,7 @@ export const fetchBackupList = createAsyncThunk(
       const response = await databaseApi.getBackupList(hostUid, dbname);
       return { dbname, backups: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch backup list for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -141,7 +142,7 @@ export const fetchBackupDbInfo = createAsyncThunk(
       const response = await databaseApi.getBackupDbInfo(hostUid, dbname);
       return { dbname, info: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch backup info for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -153,7 +154,7 @@ export const fetchAutoBackupLog = createAsyncThunk(
       const response = await databaseApi.getAutoBackupLog(hostUid);
       return response.error || [];
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch auto backup log');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -166,7 +167,7 @@ export const checkDatabase = createAsyncThunk(
       const response = await databaseApi.checkDatabase(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to check database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -178,7 +179,7 @@ export const compactDatabase = createAsyncThunk(
       const response = await databaseApi.compactDatabase(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to compact database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -190,7 +191,7 @@ export const optimizeDatabase = createAsyncThunk(
       const response = await databaseApi.optimizeDatabase(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to optimize database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -203,7 +204,7 @@ export const loadDatabase = createAsyncThunk(
       const response = await databaseApi.loadDatabase(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to load database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -215,7 +216,7 @@ export const unloadDatabase = createAsyncThunk(
       const response = await databaseApi.unloadDatabase(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to unload database ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -230,7 +231,7 @@ export const fetchQueryPlan = createAsyncThunk(
       const dbEntry = response.planlist?.find(p => p.dbname === dbname);
       return { dbname, plan: dbEntry?.queryplan || [] };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch query plans for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -242,7 +243,7 @@ export const setAutoExecQuery = createAsyncThunk(
       const response = await databaseApi.setAutoExecQuery(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to set auto exec query for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -254,7 +255,7 @@ export const appendAutoExecQueryPlan = createAsyncThunk(
       const response = await databaseApi.appendAutoExecQueryPlan(hostUid, dbname, plan);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to add query plan for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -266,7 +267,7 @@ export const updateAutoExecQueryPlan = createAsyncThunk(
       const response = await databaseApi.updateAutoExecQueryPlan(hostUid, dbname, plan);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to update query plan for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -278,7 +279,7 @@ export const removeAutoExecQueryPlan = createAsyncThunk(
       const response = await databaseApi.removeAutoExecQueryPlan(hostUid, dbname, queryId);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to remove query plan for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -298,7 +299,7 @@ export const fetchQueryPlanLog = createAsyncThunk(
       }
       return Array.isArray(response) ? response : [];
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch query plan log');
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -311,7 +312,7 @@ export const fetchLockInfo = createAsyncThunk(
       const response = await databaseApi.getLockInfo(hostUid, dbname);
       return { dbname, info: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch lock info for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -323,7 +324,7 @@ export const fetchTransactionInfo = createAsyncThunk(
       const response = await databaseApi.getTransactionInfo(hostUid, dbname, payload);
       return { dbname, info: response };
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to fetch transaction info for ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );
@@ -335,7 +336,7 @@ export const killTransaction = createAsyncThunk(
       const response = await databaseApi.killTransaction(hostUid, dbname, payload);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || `Failed to kill transaction in ${dbname}`);
+      return rejectWithValue(requestErrorText(err));
     }
   }
 );

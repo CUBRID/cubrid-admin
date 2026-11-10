@@ -77,6 +77,11 @@ it('does not render a description field in create mode', async () => {
   expectNoDescriptionField();
 });
 
+it('asks for nothing it does not have fields for in create mode', async () => {
+  await render(undefined);
+  expect(document.body.textContent).not.toMatch(/credentials|role membership/i);
+});
+
 it('does not render a description field in edit mode, even when the user has a comment', async () => {
   await render('alice');
   expect(el('create-user-username-input').value).toBe('alice');
@@ -171,3 +176,15 @@ it('does not remove a password when only the confirmation is left filled in', as
   expect(userApi.updateDatabaseUser).not.toHaveBeenCalled();
   expect(container.textContent).toContain('Passwords do not match');
 });
+
+it.each([[undefined, 'create'], ['alice', 'edit']])('shows the password hint below both password fields (%s, %s mode)', async (user) => {
+  await render(user);
+  const hint = el('create-user-password-hint');
+  const password = el('create-user-password-input');
+  const confirm = el('create-user-confirm-password-input');
+  expect(password.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(confirm.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(hint.className).toContain('col-span-2');
+  expect(password.getAttribute('aria-describedby')).toContain('create-user-password-hint');
+});
+

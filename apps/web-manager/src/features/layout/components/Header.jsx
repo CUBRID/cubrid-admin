@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { logoutUser, fetchUser } from '../../auth/authSlice';
 import { fetchPreferences } from '../../user/userSlice';
@@ -15,6 +15,15 @@ export default function Header({ theme, toggleTheme }) {
   const CM = useCM();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const desktopApp = isDesktopApp();
+  // How much the header is folded to fit its width: 0 everything, 1 the
+  // logout button without its text, 2 also the user name hidden, 3 also the
+  // three menus folded into one. The right-hand buttons always show.
+  const [fold, setFold] = useState(0);
+  // Bumped on every new width, so the row is measured again even when fold
+  // is already 0 (setting the same fold would not render).
+  const [measureTick, setMeasureTick] = useState(0);
+  const headerRef = useRef(null);
+  const rowRef = useRef(null);
   const dispatch = useDispatch();
   const { user, isAuthenticated, loading: authLoading, error: authError } = useSelector((state) => state.auth, shallowEqual);
 
@@ -24,6 +33,36 @@ export default function Header({ theme, toggleTheme }) {
       dispatch(fetchPreferences());
     }
   }, [dispatch, isAuthenticated, user]);
+
+  // Other words (language, user name), other widths: measure from the start.
+  useLayoutEffect(() => { setFold(0); setMeasureTick((n) => n + 1); }, [CM, user]);
+
+  // Before paint: one more step while the row is wider than the header.
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (row && fold < 3 && row.scrollWidth > row.clientWidth + 1) setFold(fold + 1);
+  }, [fold, measureTick]);
+
+  // A new width (window, sidebar): start again from everything shown.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header || typeof ResizeObserver === 'undefined') return undefined;
+    let lastWidth = header.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (header.clientWidth !== lastWidth) {
+        lastWidth = header.clientWidth;
+        setFold(0);
+        setMeasureTick((n) => n + 1);
+      }
+    });
+    observer.observe(header);
+    // Text widths change once the web fonts arrive.
+    let live = true;
+    document.fonts?.ready?.then(() => {
+      if (live) { setFold(0); setMeasureTick((n) => n + 1); }
+    });
+    return () => { live = false; observer.disconnect(); };
+  }, []);
 
   const handleLogout = async () => {
     await dispatch(logoutUser());
@@ -36,24 +75,15 @@ export default function Header({ theme, toggleTheme }) {
 
   return (
     <>
-      <header className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center px-6 z-40 shrink-0 min-w-fit select-none relative">
-        {/* No justify-between: with both sides pinned to opposite edges,
-            squeezing the row below their combined natural width makes the
-            left side run straight into the right side's space instead of
-            yielding it — flexbox only avoids that via shrinking, which none
-            of these items do. ml-auto gets the same flush-right look while
-            there's room, but once there isn't, it just settles to 0 instead
-            of going negative, so the row grows past the header's own width
-            instead of the two sides overlapping — the resulting horizontal
-            overflow is handled one level up by <main>'s own scroll
-            container (App.jsx), so the header, tab bar, and dashboard body
-            all scroll together as one unit instead of each getting its own
-            independent scrollbar. */}
-        <div className="w-full flex items-center">
+      <header ref={headerRef} data-fold={fold} className="bg-white dark:bg-background-dark border-b border-slate-100 dark:border-white/6 h-14 flex items-center px-6 z-40 shrink-0 w-[100cqw] select-none sticky left-0">
+        {/* The header is as wide as what <main> shows (100cqw), stays in
+            view when the page scrolls sideways (sticky), and folds (see
+            `fold`) instead of running past the window. */}
+        <div ref={rowRef} className="w-full flex items-center">
           {/* ── Left: logo + menus ── */}
           <div className="flex items-center gap-1 shrink-0">
             {/* Dropdown menus */}
-            <HeaderMenu />
+            <HeaderMenu folded={fold >= 3} />
           </div>
 
           {/* ── Right: theme toggle + user + logout ── */}
@@ -80,6 +110,7 @@ export default function Header({ theme, toggleTheme }) {
                 <button
                   className={`${btnBase} px-2 gap-2 bg-slate-100 dark:bg-white/4 border-slate-200 dark:border-white/[0.07] hover:bg-slate-200 dark:hover:bg-white/8 group shrink-0 justify-between`}
                   onClick={() => setIsProfileOpen(true)}
+                  title={fold >= 2 ? (user?.id || CM.admin) : undefined}
                 >
                   {authLoading ? (
                     <div className="flex items-center gap-2 w-full justify-center">
@@ -96,9 +127,11 @@ export default function Header({ theme, toggleTheme }) {
                           className={authError ? 'text-white' : 'text-bk-side'}
                         />
                       </div>
-                      <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight text-left px-1 whitespace-nowrap">
-                        {user?.id || CM.admin}
-                      </span>
+                      {fold < 2 && (
+                        <span className="text-14 font-bold text-slate-700 dark:text-slate-200 tracking-tight text-left px-1 whitespace-nowrap">
+                          {user?.id || CM.admin}
+                        </span>
+                      )}
                       <Icon name="expand_more" size="15px" className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
                     </>
                   )}
@@ -109,9 +142,10 @@ export default function Header({ theme, toggleTheme }) {
                   className="h-8 flex items-center justify-center rounded-sm border transition-all active:scale-[0.98] gap-2 px-4 shrink-0 bg-rose-500/5 border-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
                   onClick={handleLogout}
                   title={CM.logout}
+                  aria-label={CM.logout}
                 >
                   <Icon name="logout" size="19px" weight={400} />
-                  <span className="text-15 font-bold tracking-tight whitespace-nowrap">{CM.logout}</span>
+                  {fold < 1 && <span className="text-15 font-bold tracking-tight whitespace-nowrap">{CM.logout}</span>}
                 </button>
               </>
             )}

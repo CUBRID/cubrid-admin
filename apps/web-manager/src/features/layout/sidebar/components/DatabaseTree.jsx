@@ -236,7 +236,7 @@ export default function DatabaseTree({
           <Icon name="database" size="sm" className="text-slate-400 dark:text-slate-500" weight={300} />
         </div>
         <Typography variant="caption" className="text-slate-500 font-black uppercase tracking-widest text-12">
-          No databases found
+          {CM.noDatabasesFound}
         </Typography>
       </div>
     );
@@ -306,7 +306,18 @@ export default function DatabaseTree({
               dispatch(setSelectedDatabaseSubItem(null));
             }}
             onDoubleClick={() => handleDbActivate(db, isLoggedIn)}
-            onContextMenu={(e) => onContextMenu(e, db.dbname, isActive, isLoggedIn)}
+            onContextMenu={(e) => {
+              // As in a file explorer: right-clicking a database outside the
+              // selection selects just that one; inside a multi-selection
+              // the selection stays, for the menu to act on all of it.
+              if (!(selectedDbNames?.size > 1 && selectedDbNames.has(db.dbname))) {
+                if (selectedDbNames?.size > 0) onSelectedDbNamesChange?.(new Set());
+                handleMultiSelect.setAnchor(db.dbname);
+                dispatch(setSelectedDatabase(db.dbname));
+                dispatch(setSelectedDatabaseSubItem(null));
+              }
+              onContextMenu(e, db.dbname, isActive, isLoggedIn);
+            }}
           >
             {/* Level 2 items — only for a logged-in database: every folder
                 below lists or opens per-db data the server refuses without a
@@ -587,7 +598,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
         }
       }}
     >
-      {renderCategory('Permanent_PermanentData', 'Permanent Data', 'data_usage', v => v.type === 'PERMANENT' && (v.purpose === 'PERMANENT' || !v.purpose))}
+      {renderCategory('Permanent_PermanentData', CM.permanentData, 'data_usage', v => v.type === 'PERMANENT' && (v.purpose === 'PERMANENT' || !v.purpose))}
       {renderCategory('Permanent_TemporaryData', CM.permanentTemp, 'layers', v => v.type === 'PERMANENT' && v.purpose === 'TEMPORARY')}
       {renderCategory('Temporary_TemporaryData', CM.temporary, 'auto_delete', v => v.type === 'TEMPORARY')}
       
@@ -600,7 +611,7 @@ const SpaceFolder = React.memo(({ db, isActive, isLoggedIn, selectedDatabase, se
         hasChildren={true}
       >
         {renderCategory('Active', CM.active, 'radio_button_checked', v => v.type === 'Active_log')}
-        {renderCategory('Archive', 'Archive', 'inventory_2', v => v.type === 'Archive_log')}
+        {renderCategory('Archive', CM.archive, 'inventory_2', v => v.type === 'Archive_log')}
       </TreeNode>
     </TreeNode>
   );

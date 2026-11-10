@@ -2,10 +2,10 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CopyDatabaseModal from './CopyDatabaseModal';
 import uiReducer from '../databaseUISlice';
-import databaseCoreReducer from '../databaseCoreSlice';
+import databaseCoreReducer, { fetchDatabaseStartInfo } from '../databaseCoreSlice';
 import { CmsJobProvider } from '../../../infrastructure/context/CmsJobContext';
 
 const mocks = vi.hoisted(() => ({ submitCopy: vi.fn(), run: vi.fn(), getStartInfo: vi.fn(), getVolumeInfo: vi.fn() }));
@@ -209,6 +209,47 @@ it.each([false, true])('blocks the source name before submission (individual cop
   await typeNewName('clone');
   expect(input.getAttribute('aria-invalid')).toBeNull();
   expect(execute().disabled).toBe(false);
+});
+
+describe('a copy that deletes its source', () => {
+  // The source leaves the list (the copy moved it) while the job runs and
+  // after it succeeds, which used to reset the modal to an empty form.
+  const sourceGone = { ok: true, seq: 50, value: { dblist: { dbs: [{ dbname: 'clone', dbdir: '/db/clone' }] }, activelist: { active: [] } } };
+  const deleteSource = () => [...container.querySelectorAll('label')]
+    .find((label) => label.textContent.includes('Delete a source database')).querySelector('input');
+  const nameInput = () => container.querySelector('[data-testid="copy-database-dest-name-input"]');
+
+  it('keeps the progress view while the source leaves the list', async () => {
+    let finish;
+    mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    await render();
+    // After the read made as the dialog opens, which checks the new name.
+    mocks.getStartInfo.mockResolvedValue(sourceGone.value);
+    await typeNewName('clone');
+    await click(deleteSource());
+    await click(execute());
+    expect(mocks.submitCopy.mock.calls[0][1]).toMatchObject({ move: 'y' });
+
+    await act(async () => store.dispatch(fetchDatabaseStartInfo('host-1')));
+    expect(store.getState().database.databasesByHost['host-1'].map((db) => db.dbname)).toEqual(['clone']);
+    expect(nameInput()).toBeNull();
+
+    await act(async () => finish(job));
+    expect(container.textContent).toContain('Copy completed: clone');
+  });
+
+  it('keeps the success view, with the new name, after the source leaves the list', async () => {
+    await render();
+    // After the read made as the dialog opens, which checks the new name.
+    mocks.getStartInfo.mockResolvedValue(sourceGone.value);
+    await typeNewName('clone');
+    await click(deleteSource());
+    await click(execute());
+
+    expect(store.getState().database.databasesByHost['host-1'].map((db) => db.dbname)).toEqual(['clone']);
+    expect(nameInput()).toBeNull();
+    expect(container.textContent).toContain('Copy completed: clone');
+  });
 });
 
 it('refuses a new name that createdb would reject (18 characters and more, a digit first)', async () => {

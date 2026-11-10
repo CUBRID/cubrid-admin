@@ -1,4 +1,6 @@
 import apiClient from '../../api/apiClient';
+import { getCM, getStoredLocale } from '../../constants/useCM';
+import { failureText, warningText } from '../../infrastructure/errors/serverErrorText';
 
 const ACCEPTED = (status) => status === 202 || (status >= 200 && status < 300);
 
@@ -27,7 +29,7 @@ export function resolveCmsJobStatus(job) {
 
 export function formatCmsJobError(job) {
   if (job?.error?.message) return job.error.message;
-  return 'Job failed';
+  return getCM(getStoredLocale()).jobFailedMsg;
 }
 
 /** Align with api-server CMS long job timeout (default 12h). */
@@ -44,16 +46,34 @@ const submitJob = (url, payload) =>
     timeout: JOB_SUBMIT_TIMEOUT_MS,
   });
 
+// A job's error and warnings in the UI language, as apiClient does for an
+// error response, so everything that shows a job reads them as they are.
+function localizeJob(job) {
+  if (!job || typeof job !== 'object') return job;
+  const CM = getCM(getStoredLocale());
+  const localized = { ...job };
+  if (job.error && typeof job.error === 'object') {
+    localized.error = { ...job.error, message: failureText(job.error, CM) };
+  }
+  if (Array.isArray(job.warnings) && Array.isArray(job.warningDetails)) {
+    localized.warnings = job.warnings.map((warning, i) => warningText(warning, job.warningDetails[i], CM));
+  }
+  return localized;
+}
+
 export const databaseJobApi = {
   getJob: async (jobId) => {
-    const job = await apiClient.get(`/jobs/${jobId}`, { timeout: JOB_POLL_TIMEOUT_MS });
+    const job = localizeJob(await apiClient.get(`/jobs/${jobId}`, { timeout: JOB_POLL_TIMEOUT_MS }));
     const resolved = resolveCmsJobStatus(job);
     return resolved ? { ...job, jobStatus: resolved } : job;
   },
 
   listActive: () => apiClient.get('/jobs/active', { timeout: JOB_POLL_TIMEOUT_MS }),
 
-  listRecent: () => apiClient.get('/jobs/recent', { timeout: JOB_POLL_TIMEOUT_MS }),
+  listRecent: async () => {
+    const jobs = await apiClient.get('/jobs/recent', { timeout: JOB_POLL_TIMEOUT_MS });
+    return Array.isArray(jobs) ? jobs.map(localizeJob) : jobs;
+  },
 
   submitUnload: (hostUid, dbname, payload) =>
     submitJob(`/${hostUid}/database/unload/${encodeURIComponent(dbname)}`, payload),

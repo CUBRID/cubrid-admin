@@ -8,7 +8,7 @@ import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { PageToolbar } from '../../../components/ds/layout/PageToolbar';
 import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
-import { confSaveProblems, isConfChangedSinceLoaded } from '../confSaveProblems';
+import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 // ── Highlighted Source View ────────────────────────────────────────────────
@@ -71,7 +71,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
         () => hostApi.getHostConfig(hostUid, confname));
       if (version !== loadVersion.current) return;
       const lines = response?.conflist?.[0]?.confdata;
-      if (!Array.isArray(lines)) throw new Error('Configuration response has no confdata');
+      if (!Array.isArray(lines)) throw new Error(CM.configResponseEmptyMsg);
       const joined = lines.join('\n');
       originalContentRef.current = joined;
       setContent(joined);
@@ -120,11 +120,21 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   // No client-side check here: the server parses and validates the text
   // (cubrid.conf and cm.conf alike) and rejects it with per-line reasons.
   const handleSave = async () => {
+    // Both files are read only when their process starts: cubrid.conf by the
+    // database server and by each client (boot_sr.c / boot_cl.c, brokers in
+    // broker.c), cm.conf by cub_manager (cub_cm_init_env); nothing re-reads
+    // them while running.
+    if (!(await confirm({
+      title: CM.saveConfigConfirmTitle,
+      description: confname === 'cmconf' ? CM.cmConfSaveConfirmDesc : CM.cubridConfSaveConfirmDesc,
+      confirmLabel: CM.saveChanges,
+      variant: 'warning',
+    }))) return;
     setSaving(true);
     try {
       const payload = { confname, confdata: content.split('\n'), loaded: originalContentRef.current.split('\n') };
       const result = await hostApi.setHostConfig(hostUid, payload);
-      const warnings = result?.warnings ?? [];
+      const warnings = confSaveWarnings(result);
       originalContentRef.current = content;
       setHasChanges(false);
       dispatch(setTabDirty({ tabId, isDirty: false }));

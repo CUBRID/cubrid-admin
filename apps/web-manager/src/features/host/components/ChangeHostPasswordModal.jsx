@@ -85,7 +85,7 @@ export default function ChangeHostPasswordModal() {
       await dispatch(editHost({ hostUid: changePasswordHostUid, payload: localPayload })).unwrap();
 
       // 3. Finally revalidate host login so the session picks up the new credentials
-      await dispatch(loginToHostWithSideEffects(changePasswordHostUid)).unwrap().catch(() => {});
+      await dispatch(loginToHostWithSideEffects(changePasswordHostUid)).unwrap().catch(() => undefined);
 
       setIsSuccess(true);
     } catch (err) {
@@ -174,8 +174,8 @@ export default function ChangeHostPasswordModal() {
               </div>
               <div className="flex-1 min-w-0">
                 <Typography variant="caption" className="font-bold text-amber-600/70 dark:text-amber-400/60 uppercase tracking-widest block mb-0.5">{CM.targetHost}</Typography>
-                <Typography title={currentHost?.alias || currentHost?.id || 'N/A'} variant="span" className="text-sm font-black text-slate-900 dark:text-white truncate block tracking-tight font-mono">
-                  {currentHost?.alias || currentHost?.id || 'N/A'}
+                <Typography title={currentHost?.alias || currentHost?.id || CM.notApplicableFallback} variant="span" className="text-sm font-black text-slate-900 dark:text-white truncate block tracking-tight font-mono">
+                  {currentHost?.alias || currentHost?.id || CM.notApplicableFallback}
                 </Typography>
               </div>
             </div>

@@ -18,7 +18,9 @@ vi.mock('../database/databaseApi', () => ({
 vi.mock('../broker/brokerApi', () => ({ brokerApi: { getBrokerList: vi.fn().mockResolvedValue([]) } }));
 vi.mock('./hostApi', () => ({ hostApi: { getHaInfo: vi.fn().mockResolvedValue({}) } }));
 import { databaseApi } from '../database/databaseApi';
-import hostReducer from './hostSlice';
+import hostReducer, { formatServiceFailures } from './hostSlice';
+import { CM } from '../../constants/cmLabels';
+import { CM_KO } from '../../constants/cmLabels.ko';
 import databaseReducer from '../database/databaseCoreSlice';
 import brokerReducer from '../broker/brokerSlice';
 import { restartHostService } from './hostServiceRestart';
@@ -94,4 +96,10 @@ it('says when the node-wide ha_start failed, so HA on the node may be off', asyn
   const result = await store.dispatch(restartHostService('h1'));
 
   expect(result.haNodeFailed).toBe(true);
+});
+
+it('says which service steps failed and why in Korean', () => {
+  const brokers = { name: 'brokers', type: '/errors/cms/request_failed', code: 'REQUEST_FAILED', cmsNote: 'x', cmsTask: 'stopbroker', error: 'x' };
+  expect(formatServiceFailures('stop', [brokers], { ...CM, ...CM_KO })).toBe('서비스를 중지하지 못한 항목: 브로커 (CMS 작업이 실패했습니다. (x))');
+  expect(formatServiceFailures('stop', [brokers], CM)).toBe('Failed to stop service for: brokers (x)');
 });

@@ -32,6 +32,8 @@ let store;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
+  // The save itself is confirmed first (restart notice); yes unless a test says otherwise.
+  confirmMock.mockResolvedValue(true);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -86,13 +88,14 @@ it('shows the server\'s warnings after a successful save', async () => {
   expect(store.getState().lastStatus).toMatchObject({ type: 'success', guidance: [expect.stringContaining('server_long_query_time')] });
 });
 
-it('broker.conf: success shows the restart notice followed by any server warnings', async () => {
+it('broker.conf: success shows only the server warnings (the restart was said before saving)', async () => {
   brokerApi.getBrokerConfig.mockResolvedValue(config('[broker]\nMASTER_SHM_ID=30001'));
   brokerApi.updateBrokerConfig.mockResolvedValue({ success: true, warnings: ['Line 1: some warning'] });
   await act(async () => root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>));
   await edit(q('broker-config-textarea'), '[broker]\nMASTER_SHM_ID=30002');
   await act(async () => q('broker-config-save-btn').click());
-  expect(store.getState().lastStatus.guidance).toEqual([CM.brokerConfigRestartRequiredNotice, 'Line 1: some warning']);
+  expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ description: CM.brokerConfigSaveConfirmDesc }));
+  expect(store.getState().lastStatus.guidance).toEqual(['Line 1: some warning']);
 });
 
 it('broker.conf: a server rejection shows its reasons and no restart notice', async () => {
@@ -122,7 +125,7 @@ it('offers to reload when the file changed on the host since it was opened, and 
 
 it('keeps the edits when the reload is declined', async () => {
   hostApi.setHostConfig.mockRejectedValue(changedOnHost);
-  confirmMock.mockResolvedValue(false);
+  confirmMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
   await saveCmConf('[cm]\ncm_port=8002');
 
   expect(hostApi.getHostConfig).toHaveBeenCalledTimes(1);
@@ -141,4 +144,31 @@ it('broker.conf: sends the loaded file and offers a reload when it changed on th
   expect(brokerApi.updateBrokerConfig).toHaveBeenCalledWith('host', ['[broker]', 'MASTER_SHM_ID=30002'], ['[broker]', 'MASTER_SHM_ID=30001']);
   expect(brokerApi.getBrokerConfig).toHaveBeenCalledTimes(2);
   expect(store.getState().lastStatus).toBeNull();
+});
+
+it.each([
+  ['cubridconf', '[common]\ncubrid_port_id=1523', '[common]\ncubrid_port_id=1524', 'cubridConfSaveConfirmDesc'],
+  ['cmconf', '[cm]\ncm_port=8001', '[cm]\ncm_port=8002', 'cmConfSaveConfirmDesc'],
+])('%s: asks before saving with what must be restarted, and saves nothing if declined', async (confname, loaded, next, desc) => {
+  hostApi.getHostConfig.mockResolvedValue(config(loaded));
+  confirmMock.mockResolvedValue(false);
+  await act(async () => root.render(<Provider store={store}><CubridConfigEditor hostUid="host" confname={confname} /></Provider>));
+  await edit(q('cubrid-config-textarea'), next);
+  await act(async () => q('cubrid-config-save-btn').click());
+
+  expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ description: CM[desc] }));
+  expect(hostApi.setHostConfig).not.toHaveBeenCalled();
+  expect(q('cubrid-config-textarea').value).toBe(next);
+  expect(store.getState().lastStatus).toBeNull();
+});
+
+it('broker.conf: saves nothing and keeps the edits when the save is declined', async () => {
+  brokerApi.getBrokerConfig.mockResolvedValue(config('[broker]\nMASTER_SHM_ID=30001'));
+  confirmMock.mockResolvedValue(false);
+  await act(async () => root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>));
+  await edit(q('broker-config-textarea'), '[broker]\nMASTER_SHM_ID=30002');
+  await act(async () => q('broker-config-save-btn').click());
+
+  expect(brokerApi.updateBrokerConfig).not.toHaveBeenCalled();
+  expect(q('broker-config-textarea').value).toBe('[broker]\nMASTER_SHM_ID=30002');
 });

@@ -2,14 +2,17 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../host/hostApi', () => ({ hostApi: { getHostConfig: vi.fn() } }));
 vi.mock('../../broker/brokerApi', () => ({ brokerApi: { getBrokerList: vi.fn() } }));
+vi.mock('../databaseApi', () => ({ databaseApi: { getParamDump: vi.fn() } }));
 vi.mock('../databaseSlice', () => ({ closeDatabasePropertyModal: vi.fn(() => ({ type: 'close' })) }));
 vi.mock('../../layout/layoutSlice', () => ({ openTab: vi.fn(tabId => ({ type: 'openTab', payload: tabId })) }));
 import { hostApi } from '../../host/hostApi';
 import { brokerApi } from '../../broker/brokerApi';
+import { databaseApi } from '../databaseApi';
+import { CM } from '../../../constants/cmLabels';
 import { closeDatabasePropertyModal } from '../databaseSlice';
 import { openTab } from '../../layout/layoutSlice';
 import { ToastProvider } from '../../../infrastructure/context/ToastContext';
@@ -38,7 +41,7 @@ beforeEach(async () => {
   hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata: [
     '[@demodb]', 'max_clients=123', 'data_buffer_size=512M',
   ] }] });
-  brokerApi.getBrokerList.mockResolvedValue({ result: [] });
+  brokerApi.getBrokerList.mockResolvedValue({ result: [{ name: 'query_editor', port: 30000, state: 'ON' }, { name: 'broker1', port: 33000, state: 'OFF' }] });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -48,6 +51,7 @@ beforeEach(async () => {
     host: {
       selectedHostUid: 'host',
       authorizedHosts: ['host'],
+      hosts: [{ uid: 'host', address: '192.168.3.80' }],
       hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } },
     },
     user: { preferences: { uiLocale: 'en' } },
@@ -78,6 +82,14 @@ it('shows the loaded values as read-only text — no inputs or selects in the Se
   expect(container.querySelector('[role="combobox"]')).toBeNull();
 });
 
+it('draws the navigation sidebar light in light mode and dark only in dark mode', async () => {
+  const sidebar = [...document.querySelectorAll('div')].find((el) => el.className.includes?.('w-[180px]'));
+  const classes = sidebar.className.split(/\s+/);
+  expect(classes).toContain('bg-slate-50');
+  expect(classes).toContain('dark:bg-black/40');
+  expect(classes).not.toContain('bg-slate-900');
+});
+
 it('shows a notice directing edits to the text editor instead of an Apply button', async () => {
   expect(control('open-editor-inline-btn')).not.toBeNull();
   expect(control('apply-btn')).toBeNull();
@@ -102,14 +114,19 @@ it('opening the text editor triggers no additional config fetch/write — it onl
   expect(hostApi.getHostConfig).toHaveBeenCalledTimes(1);
 });
 
-it('Connection Information stays local-only — Apply just closes the modal, no editor redirect, no API write', async () => {
+it('shows Connection Information as read-only values: the host address, each broker\'s port, the character set', async () => {
   const connectionTab = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection'));
   await click(connectionTab);
-  expect(control('apply-btn')).not.toBeNull();
-  expect(control('open-editor-btn')).toBeNull();
-  await click(control('apply-btn'));
-  expect(closeDatabasePropertyModal).toHaveBeenCalledTimes(1);
-  expect(openTab).not.toHaveBeenCalled();
+  expect(control('broker-ip').textContent).toBe('192.168.3.80');
+  expect([...control('broker-ports').querySelectorAll('li')].map((li) => li.textContent)).toEqual(['query_editor [30000/ON]', 'broker1 [33000/OFF]']);
+  // Not logged in to demodb here: nothing is asked for, and the reason is the tooltip.
+  expect(control('charset').textContent).toBe('—');
+  expect(control('charset').title).toBe(CM.dbLoginRequiredHint);
+  expect(databaseApi.getParamDump).not.toHaveBeenCalled();
+  expect(container.querySelector('input, select, [role="combobox"]')).toBeNull();
+  expect(control('apply-btn')).toBeNull();
+  expect(control('open-editor-btn')).not.toBeNull();
+  expect(control('cancel-btn').textContent).toBe('Close');
 });
 
 it('matches [@dbname] case-sensitively, like the engine — [@demodb] is not DemoDB\'s section', async () => {
@@ -141,44 +158,17 @@ it.each(['modal-close', 'cancel-btn'])('closes unchanged properties through %s w
 });
 
 const openConnectionTab = () => click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection')));
-const editBrokerIp = async value => {
-  const field = container.querySelector('input');
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  await act(async () => {
-    setter.call(field, value);
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-};
 
-it.each(['modal-close', 'cancel-btn'])('protects Connection Information edits through %s and only closes after discard', async trigger => {
+it.each(['modal-close', 'cancel-btn'])('closes from Connection Information through %s at once, with nothing to discard', async trigger => {
   await openConnectionTab();
-  await editBrokerIp('10.0.0.5');
   await click(control(trigger));
-  expect(discardControl('modal').textContent).toContain('Discard changes?');
-  expect(dispatch).not.toHaveBeenCalledWith({ type: 'close' });
-  await click(discardControl('cancel-btn'));
   expect(discardControl('modal')).toBeNull();
-  expect(container.querySelector('input').value).toBe('10.0.0.5');
-  await click(control(trigger));
-  await click(discardControl('confirm-btn'));
   expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
 });
 
-it('Escape prompts for Connection Information edits and dismissing the prompt preserves them', async () => {
+it('closes from Connection Information on Escape at once', async () => {
   await openConnectionTab();
-  await editBrokerIp('10.0.0.5');
   await escape();
-  expect(discardControl('modal')).not.toBeNull();
-  await escape();
-  expect(discardControl('modal')).toBeNull();
-  expect(dispatch).not.toHaveBeenCalledWith({ type: 'close' });
-  expect(container.querySelector('input').value).toBe('10.0.0.5');
-});
-
-it('Apply on Connection Information closes without prompting', async () => {
-  await openConnectionTab();
-  await editBrokerIp('10.0.0.5');
-  await click(control('apply-btn'));
   expect(discardControl('modal')).toBeNull();
   expect(dispatch).toHaveBeenCalledWith({ type: 'close' });
 });
@@ -230,4 +220,161 @@ it('compares time values in ms, so 360000 (ms) counts as the 6min default', asyn
   const row = Array.from(container.querySelectorAll('tr')).find(r => r.textContent.includes('checkpoint_interval'));
   expect(row.textContent).toContain('360000');
   expect(row.textContent).toContain('Default');
+});
+
+// A database runs with [common] and its own [@db] over it, so its view shows
+// both (test DB #20/#27: some values in the view were not the ones in effect).
+const renderConf = async (confdata, schema = DATABASE_PARAM_SCHEMA, selectedDatabase = 'demodb') => {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata }] });
+  const state = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: schema } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  await act(async () => root.render(
+    <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+};
+const rowOf = (key) => [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes(key));
+
+it('shows a [common] value the database does not set, marked as from [common]', async () => {
+  await renderConf(['[common]', 'max_clients=200', 'checkpoint_interval=10min', '[@demodb]', 'max_clients=123']);
+  expect(rowOf('checkpoint_interval').textContent).toContain('10min');
+  expect(rowOf('checkpoint_interval').querySelector('[data-testid="param-from-common-badge"]').textContent).toBe('[common]');
+});
+
+it('shows the database\'s own value over [common], unmarked', async () => {
+  await renderConf(['[common]', 'max_clients=200', '[@demodb]', 'max_clients=123']);
+  expect(rowOf('max_clients').textContent).toContain('123');
+  expect(rowOf('max_clients').textContent).not.toContain('200');
+  expect(rowOf('max_clients').querySelector('[data-testid="param-from-common-badge"]')).toBeNull();
+});
+
+it('does not flag a [common]-only key as set in the wrong section when it comes from [common]', async () => {
+  const schema = [...DATABASE_PARAM_SCHEMA, { key: 'cubrid_port_id', category: 'general', commonOnly: true, guard: { kind: 'int', min: 1 }, default: '1523' }];
+  await renderConf(['[common]', 'cubrid_port_id=1523', '[@demodb]', 'max_clients=123'], schema);
+  expect(container.textContent).not.toMatch(/\d+ invalid/);
+});
+
+it('leaves the [common] view as it was: no badge', async () => {
+  await renderConf(['[common]', 'max_clients=200', 'checkpoint_interval=10min'], DATABASE_PARAM_SCHEMA, null);
+  expect(rowOf('checkpoint_interval').textContent).toContain('10min');
+  expect(container.querySelector('[data-testid="param-from-common-badge"]')).toBeNull();
+});
+
+it('takes a buffer pair from [@db] whole when it sets either key, as the engine reads it', async () => {
+  await renderConf(['[common]', 'data_buffer_pages=40000', '[@demodb]', 'data_buffer_size=1G']);
+  expect(container.textContent).toContain('1G');
+  expect(container.textContent).not.toContain('40000');
+  expect(container.textContent).not.toContain('data_buffer_pages');
+});
+
+it('still checks the [@db] side of a buffer pair when [common] sets the other key', async () => {
+  await renderConf(['[common]', 'data_buffer_pages=40000', '[@demodb]', 'data_buffer_size=abc']);
+  expect(container.textContent).toMatch(/1 invalid/);
+});
+
+it('keeps the newer database\'s values when an earlier database\'s config answers late', async () => {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  let answerFirst;
+  hostApi.getHostConfig
+    .mockReturnValueOnce(new Promise((resolve) => { answerFirst = resolve; }))
+    .mockResolvedValueOnce({ conflist: [{ confdata: ['[@otherdb]', 'max_clients=456'] }] });
+  const base = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase: 'demodb' },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  const store = configureStore({ reducer: (state = base, action) => (action.type === 'test/select' ? { ...state, database: { selectedDatabase: action.payload } } : state) });
+  await act(async () => root.render(
+    <Provider store={store}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+  await act(async () => store.dispatch({ type: 'test/select', payload: 'otherdb' }));
+  expect(rowOf('max_clients').textContent).toContain('456');
+
+  await act(async () => answerFirst({ conflist: [{ confdata: ['[@demodb]', 'max_clients=123'] }] }));
+  expect(rowOf('max_clients').textContent).toContain('456');
+  expect(rowOf('max_clients').textContent).not.toContain('123');
+});
+
+it('takes a deprecated key and its replacement from [@db] whole when it sets either', async () => {
+  const schema = [...DATABASE_PARAM_SCHEMA, { key: 'lock_timeout', category: 'general', guard: { kind: 'time' }, default: '-1' }];
+  await renderConf(['[common]', 'lock_timeout_in_secs=10', '[@demodb]', 'lock_timeout=5s'], schema);
+  expect(rowOf('lock_timeout').textContent).toContain('5s');
+  expect(container.textContent).not.toContain('lock_timeout_in_secs');
+});
+
+it('stops showing the loading view when the config read fails', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  hostApi.getHostConfig.mockRejectedValue(new Error('connect ECONNREFUSED'));
+  const state = {
+    databaseUI: { isDatabasePropertyModalOpen: true },
+    database: { selectedDatabase: 'demodb' },
+    host: { selectedHostUid: 'host', authorizedHosts: ['host'], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+    user: { preferences: { uiLocale: 'en' } },
+  };
+  await act(async () => root.render(
+    <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+  ));
+  expect(container.querySelector('.animate-spin')).toBeNull();
+});
+
+describe('character set in Connection Information', () => {
+  const dump = (collation) => ({ client: [{ intl_collation: `"${collation}"` }], server: [{ intl_collation: '""' }] });
+  const renderDb = async ({ confdata = ['[@demodb]', 'max_clients=123'], loggedIn = true, running = true } = {}) => {
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    hostApi.getHostConfig.mockResolvedValue({ conflist: [{ confdata }] });
+    brokerApi.getBrokerList.mockResolvedValue({ result: [] });
+    const state = {
+      databaseUI: { isDatabasePropertyModalOpen: true },
+      database: {
+        selectedDatabase: 'demodb',
+        loggedInDatabases: loggedIn ? ['host:demodb'] : [],
+        activeDatabasesByHost: { host: running ? ['demodb'] : [] },
+      },
+      host: { selectedHostUid: 'host', authorizedHosts: ['host'], hosts: [], hostEnvs: { host: { paramSchemas: { database: DATABASE_PARAM_SCHEMA } } } },
+      user: { preferences: { uiLocale: 'en' } },
+    };
+    await act(async () => root.render(
+      <Provider store={configureStore({ reducer: () => state })}><ToastProvider><DatabasePropertyModal /></ToastProvider></Provider>
+    ));
+    await act(async () => { await Promise.resolve(); });
+    await click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('Connection')));
+  };
+
+  it('reads it once from the client side of paramdump for a running database logged in to', async () => {
+    databaseApi.getParamDump.mockResolvedValue(dump('iso88591_bin'));
+    await renderDb();
+    expect(databaseApi.getParamDump).toHaveBeenCalledTimes(1);
+    expect(databaseApi.getParamDump).toHaveBeenCalledWith('host', 'demodb', 'y');
+    expect(control('charset').textContent).toBe('ISO-8859-1');
+    // Switching tabs does not ask again.
+    await click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes(CM.serverNavLabel)));
+    await click(Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes(CM.connectionNavLabel)));
+    expect(databaseApi.getParamDump).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing it cannot know: cubrid.conf sets intl_collation, or the database is stopped', async () => {
+    await renderDb({ confdata: ['[common]', 'intl_collation=utf8_bin', '[@demodb]', 'max_clients=123'] });
+    expect(control('charset').textContent).toBe('—');
+    expect(control('charset').title).toBe(CM.charsetCollationSetHint);
+    await renderDb({ running: false });
+    expect(control('charset').title).toBe(CM.dbStartRequiredHint);
+    expect(databaseApi.getParamDump).not.toHaveBeenCalled();
+  });
+
+  it('says so when the dump does not tell it', async () => {
+    databaseApi.getParamDump.mockRejectedValue(new Error('boom'));
+    await renderDb();
+    expect(control('charset').textContent).toBe('—');
+    expect(control('charset').title).toBe(CM.charsetUnreadHint);
+  });
 });

@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { fetchDatabaseSpaceInfo } from '../databaseSlice';
+import { volumeDirectory } from '../volumePath';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -118,9 +119,10 @@ export default function VolumeInfoMonitor({ tabId }) {
   const barColor = usedPct > 85 ? 'bg-rose-500' : usedPct > 60 ? 'bg-amber-500' : 'bg-emerald-500';
 
   const volumeName = volume.spacename?.split(/[/\\]/).pop() || volume.spacename;
+  const volumeFolder = volumeDirectory(volume);
   const infoRows = [
     { label: CM.volNameRow, value: volumeName, icon: 'storage' },
-    { label: CM.locationRow,    value: volume.location, icon: 'folder' },
+    { label: CM.locationRow,    value: volumeFolder, icon: 'folder' },
     { label: CM.purposeRow,     value: volume.purpose || '-', icon: 'flag' },
     { label: CM.pageSizeRow,   value: `${formatNumber(pageSize)} B`, icon: 'data_array' },
     { label: CM.totalSizeRow,  value: formatMegabytes(totalM), icon: 'straighten' },
@@ -149,8 +151,8 @@ export default function VolumeInfoMonitor({ tabId }) {
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500/60" />
-              <Typography title={volume.location} variant="label" className="text-12 text-slate-400 font-mono leading-none truncate max-w-sm">
-                {volume.location}
+              <Typography title={volumeFolder} variant="label" className="text-12 text-slate-400 font-mono leading-none truncate max-w-sm">
+                {volumeFolder}
               </Typography>
             </div>
           </div>
