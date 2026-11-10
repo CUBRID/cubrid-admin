@@ -14,6 +14,8 @@ const initialState = {
   activeMainTab: null,
   openTabs: [],
   dirtyTabs: [], // Tracks tab IDs with unsaved changes
+  // Desktop File > Switch Workspace asked while a tab has unsaved changes.
+  workspaceSwitchConfirmOpen: false,
   statusModal: {
     isOpen: false,
     type: 'success', // success, error, info
@@ -141,6 +143,16 @@ const layoutSlice = createSlice({
     closeStatusModal: (state) => {
       state.statusModal.isOpen = false;
     },
+    askWorkspaceSwitch: (state) => {
+      state.workspaceSwitchConfirmOpen = true;
+    },
+    closeWorkspaceSwitchConfirm: (state) => {
+      state.workspaceSwitchConfirmOpen = false;
+    },
+    // The unsaved edits were given up (the editors are gone with the dashboard).
+    clearDirtyTabs: (state) => {
+      state.dirtyTabs = [];
+    },
     triggerRefreshActiveTab: (state, action) => {
       state.refreshCounter += 1;
       state.refreshTabId = action.payload || state.activeMainTab;
@@ -180,6 +192,9 @@ export const {
   closeHostTabs,
   showStatusModal,
   closeStatusModal,
+  askWorkspaceSwitch,
+  closeWorkspaceSwitchConfirm,
+  clearDirtyTabs,
   triggerRefreshActiveTab,
   dismissDefaultCmsPassword,
 } = layoutSlice.actions;

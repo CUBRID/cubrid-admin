@@ -109,3 +109,17 @@ export function volumeGroup(space) {
   if (type === 'TEMPORARY') return 'tempTemp';
   return null;
 }
+
+/**
+ * CPU in use (%) between two CMS gethoststat samples: user and kernel time
+ * over all time. The counters are /proc/stat ticks since boot (cpu_user is
+ * user+nice, cpu_kernel system). Null without a previous sample or when no
+ * time passed.
+ */
+export function cpuUsagePercent(prevStat, currStat) {
+  if (!prevStat || !currStat) return null;
+  const delta = (key) => (toNumber(currStat[key]) ?? 0) - (toNumber(prevStat[key]) ?? 0);
+  const busy = delta('cpu_user') + delta('cpu_kernel');
+  const total = busy + delta('cpu_idle') + delta('cpu_iowait');
+  return total > 0 ? (busy / total) * 100 : null;
+}

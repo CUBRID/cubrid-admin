@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The real databaseSlice pulls in apiClient and every database thunk; these
 // tests only render the sections' empty states.
 vi.mock('../../databaseSlice', () => ({
-  fetchDashboardVolumes: vi.fn(() => ({ type: 'test/noop' })),
   fetchDatabaseSpaceInfo: vi.fn(() => ({ type: 'test/noop' })),
   fetchDashboardCAS: vi.fn(() => ({ type: 'test/noop' })),
   fetchBackupSchedule: vi.fn(() => ({ type: 'test/noop' })),
@@ -92,16 +91,16 @@ describe('DBVolumesSection rows', () => {
     expect(container.textContent).not.toContain(CM.dataUnavailableTitle);
   });
 
-  it('shows used / total pages, and "-" for a log volume with no free page count, as the CSV export does', async () => {
+  it('shows used / total as sizes (pages × page size), and "-" for a log volume with no free page count, as the CSV export does', async () => {
     const volumes = [
-      { name: '/data/demodb', type: 'PERMANENT', purpose: 'PERMANENT', free: '3,904 pages', total: '8,192 pages', date: '-', path: '/data' },
-      { name: '/data/demodb_lgat', type: 'ACTIVE_LOG', purpose: '-', free: '-', total: '32,768 pages', date: '-', path: '/data' },
+      { name: '/data/demodb', type: 'PERMANENT', purpose: 'PERMANENT', free: '3904', total: '8192', pageSize: '16384', date: '-', path: '/data' },
+      { name: '/data/demodb_lgat', type: 'ACTIVE_LOG', purpose: '-', free: ' ', total: '32768', pageSize: '16384', date: '-', path: '/data' },
     ];
     await render(<DBVolumesSection volumes={volumes} volumesStatus="ok" pollingProps={pollingProps} />);
     const rows = [...container.querySelectorAll('tr')].map((tr) => tr.textContent);
-    expect(rows.find((t) => t.includes('demodb_lgat') === false && t.includes('demodb'))).toContain('4,288 / 8,192');
+    expect(rows.find((t) => t.includes('demodb_lgat') === false && t.includes('demodb'))).toContain('67 MiB / 128 MiB');
     const logRow = rows.find((t) => t.includes('demodb_lgat'));
-    expect(logRow).not.toContain('32,768 / 32,768');
+    expect(logRow).not.toContain('512 MiB / 512 MiB');
     expect(logRow).toContain('-');
   });
 });
@@ -132,5 +131,20 @@ describe('DBJobAutomationSection empty state', () => {
     expect(container.textContent).toContain(CM.dataUnavailableTitle);
     expect(container.textContent).not.toContain(CM.noBackupPlansTitle);
     expect(container.textContent).toContain(CM.noQueryPlansTitle);
+  });
+});
+
+describe('DBBrokersCASSection', () => {
+  const cas = (id, status, qps) => ({ broker: 'query_editor', id: String(id), pid: String(100 + id), qps, lqs: '0', status, lastConn: '-', _idNum: id, _pidNum: 100 + id, _qpsNum: qps ?? 0, _lqsNum: 0 });
+
+  it('counts IDLE CASes as ready and BUSY, CLIENT WAIT and CLOSE WAIT ones as busy', async () => {
+    const brokersCAS = [cas(1, 'IDLE', 1.25), cas(2, 'BUSY', 11.8), cas(3, 'CLIENT WAIT', null), cas(4, 'RESTART', 0)];
+    await render(<DBBrokersCASSection brokersCAS={brokersCAS} casStatus="loaded" pollingProps={pollingProps} />);
+
+    expect(container.textContent).toContain(CM.readyCount(1));
+    expect(container.textContent).toContain(CM.busyCount(2));
+    // Each CAS's rate with one decimal.
+    expect(container.textContent).toContain('11.8');
+    expect(container.textContent).toContain('1.3');
   });
 });

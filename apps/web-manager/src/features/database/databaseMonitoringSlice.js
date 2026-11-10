@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { databaseApi } from './databaseApi';
-import { brokerApi } from '../broker/brokerApi';
-import { fetchBrokerStatusMap } from '../broker/fetchBrokerStatusMap';
+import { readSharedBrokerStatus } from '../broker/brokerSlice';
 import { createRateTracker } from '../broker/rateTracker';
 import { dbKey as dashboardKey } from './dbKey';
 import { isDbLoginGone, dbOfLoginGone } from './dbLoginGone';
@@ -44,30 +43,14 @@ export const fetchDatabaseVolumes = createAsyncThunk(
   }
 );
 
+// One volume-info read feeds every view of a database's space: the volume
+// tabs (spaceInfo) and the dashboard's volume and file-space sections.
 export const fetchDatabaseSpaceInfo = createAsyncThunk(
   'database/fetchDatabaseSpaceInfo',
   async ({ hostUid, dbname }, { rejectWithValue }) => {
     try {
       const response = await databaseApi.getVolumeInfo(hostUid, dbname);
       return { hostUid, dbname, data: response };
-    } catch (err) {
-      return rejectWithValue(requestErrorText(err));
-    }
-  }
-);
-
-export const fetchDashboardVolumes = createAsyncThunk(
-  'database/fetchDashboardVolumes',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
-    try {
-      const response = await databaseApi.getVolumeInfo(hostUid, dbname);
-      return {
-        hostUid,
-        dbname,
-        volumes: response.spaceinfo || [],
-        pagesize: response.pagesize,
-        logpagesize: response.logpagesize
-      };
     } catch (err) {
       return rejectWithValue(requestErrorText(err));
     }
@@ -105,15 +88,15 @@ export const fetchDashboardPerformance = createAsyncThunk(
 
 export const fetchDashboardCAS = createAsyncThunk(
   'database/fetchDashboardCAS',
-  async ({ hostUid, dbname }, { rejectWithValue }) => {
+  async ({ hostUid, dbname, isBackground }, { rejectWithValue }) => {
     try {
-      const brokerList = await brokerApi.getBrokerList(hostUid);
-      const actualBrokerList = brokerList?.[0]?.broker || [];
+      // The sidebar's broker poll reads the same list and status at the same
+      // moment, so a poll joins that read; a user refresh reads anew.
+      const { brokers: actualBrokerList, statusByName } = await readSharedBrokerStatus(hostUid, { fresh: !isBackground });
       const brokersCAS = [];
 
-      // One bulk status request; brokerDetails stays index-aligned with
-      // actualBrokerList (null = no status for that broker).
-      const statusByName = await fetchBrokerStatusMap(hostUid, actualBrokerList.map(b => b?.name));
+      // brokerDetails stays index-aligned with actualBrokerList (null = no
+      // status for that broker).
       const brokerDetails = actualBrokerList.map(b => statusByName.get(b?.name) ?? null);
 
       brokerDetails.forEach((status, idx) => {
@@ -132,7 +115,7 @@ export const fetchDashboardCAS = createAsyncThunk(
               broker: brokerName,
               id: cas.as_id,
               pid: cas.as_pid,
-              qps: qps === null ? null : qps.toFixed(1),
+              qps,
               lqs: cas.as_long_query,
               status: cas.as_status,
               lastConn: cas.as_lct,
@@ -156,21 +139,24 @@ export const fetchDashboardCAS = createAsyncThunk(
 
 export const fetchDashboardData = createAsyncThunk(
   'database/fetchDashboardData',
-  async ({ hostUid, dbname }, { rejectWithValue, dispatch }) => {
+  // `collapsed`: the sections the user collapsed (useRefreshWhenShown); their
+  // data is not read, and a section reads its own when expanded again.
+  async ({ hostUid, dbname, isBackground, collapsed = {} }, { rejectWithValue, dispatch }) => {
     if (!hostUid || !dbname) return rejectWithValue('Missing hostUid or dbname');
 
+    const skipped = Promise.resolve({ skipped: true });
     const settled = await Promise.allSettled([
-      dispatch(fetchDashboardVolumes({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardLocks({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardPerformance({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDashboardCAS({ hostUid, dbname })).unwrap(),
-      dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
+      // The volume and file sections show the same read.
+      collapsed.volumes && collapsed.files ? skipped : dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname })).unwrap(),
+      collapsed.locks ? skipped : dispatch(fetchDashboardLocks({ hostUid, dbname })).unwrap(),
+      collapsed.performance ? skipped : dispatch(fetchDashboardPerformance({ hostUid, dbname })).unwrap(),
+      collapsed.cas ? skipped : dispatch(fetchDashboardCAS({ hostUid, dbname, isBackground })).unwrap(),
     ]);
 
-    const [volR, lockR, , , spaceR] = settled;
+    const [spaceR, lockR] = settled;
 
-    if (volR.status === 'rejected' && spaceR.status === 'rejected') {
-      return rejectWithValue(volR.reason || getCM(getStoredLocale()).dashboardFetchFailedMsg(dbname));
+    if (spaceR.status === 'rejected') {
+      return rejectWithValue(spaceR.reason || getCM(getStoredLocale()).dashboardFetchFailedMsg(dbname));
     }
 
     if (lockR.status === 'rejected') {
@@ -184,19 +170,24 @@ export const fetchDashboardData = createAsyncThunk(
 );
 
 const initialState = {
+  // Bumped per host when a database's volumes changed (a volume was added),
+  // so the host dashboard's volume table re-reads (DatabaseVolumes).
+  volumesChangedSeq: {},
   dashboardData: {},
   dashboardLoading: {},
   dashboardError: {},
   spaceInfo: {},
   spaceInfoLoading: {},
-  volumes: [],
-  volumesLoading: false,
 };
 
 const databaseMonitoringSlice = createSlice({
   name: 'databaseMonitoring',
   initialState,
   reducers: {
+    volumesChanged: (state, action) => {
+      const hostUid = action.payload;
+      state.volumesChangedSeq[hostUid] = (state.volumesChangedSeq[hostUid] || 0) + 1;
+    },
     clearMonitoringError: (state, action) => {
       const key = action.payload;
       if (key) delete state.dashboardError[key];
@@ -222,16 +213,6 @@ const databaseMonitoringSlice = createSlice({
     };
 
     builder
-      .addCase(fetchDatabaseVolumes.pending, (state) => {
-        state.volumesLoading = true;
-      })
-      .addCase(fetchDatabaseVolumes.fulfilled, (state, action) => {
-        state.volumesLoading = false;
-        state.volumes = action.payload;
-      })
-      .addCase(fetchDatabaseVolumes.rejected, (state) => {
-        state.volumesLoading = false;
-      })
       .addCase(fetchDatabaseSpaceInfo.fulfilled, (state, action) => {
         const { hostUid, dbname, data } = action.payload;
         const key = dashboardKey(hostUid, dbname);
@@ -243,28 +224,25 @@ const databaseMonitoringSlice = createSlice({
           pagesize: data.pagesize,
           logpagesize: data.logpagesize,
         };
-        // Also merge into the per-DB dashboard cache — DBSpaceInfoSection's
-        // own "became active" refresh dispatches this thunk, and the
-        // dashboard reads from `dashboardData`, not `spaceInfo`.
+        // Also merge into the per-DB dashboard cache: both of its volume
+        // sections (DBVolumesSection, DBSpaceInfoSection) read from
+        // `dashboardData`, not `spaceInfo`, and their own refreshes dispatch
+        // this thunk.
         const existing = state.dashboardData[key] || emptyDashboardEntry();
         state.dashboardData[key] = {
           ...existing,
+          volumes: data.spaceinfo || [],
+          pagesize: data.pagesize,
+          logpagesize: data.logpagesize,
+          volumesStatus: 'loaded',
           spaceInfo: data.fileinfo || [],
           volumeSummary: data.dbinfo || [],
           spaceInfoStatus: 'loaded',
         };
       })
       .addCase(fetchDatabaseSpaceInfo.rejected, (state, action) => {
-        setSectionStatus(state, action.meta.arg, 'spaceInfoStatus', 'error');
-      })
-      .addCase(fetchDashboardVolumes.fulfilled, (state, action) => {
-        const { hostUid, dbname, volumes, pagesize, logpagesize } = action.payload;
-        const key = dashboardKey(hostUid, dbname);
-        const existing = state.dashboardData[key] || emptyDashboardEntry();
-        state.dashboardData[key] = { ...existing, volumes, pagesize, logpagesize, volumesStatus: 'loaded' };
-      })
-      .addCase(fetchDashboardVolumes.rejected, (state, action) => {
         setSectionStatus(state, action.meta.arg, 'volumesStatus', 'error');
+        setSectionStatus(state, action.meta.arg, 'spaceInfoStatus', 'error');
       })
       .addCase(fetchDashboardPerformance.fulfilled, (state, action) => {
         const { hostUid, dbname, performance, perfSample } = action.payload;
@@ -340,5 +318,5 @@ const databaseMonitoringSlice = createSlice({
   }
 });
 
-export const { clearMonitoringError } = databaseMonitoringSlice.actions;
+export const { clearMonitoringError, volumesChanged } = databaseMonitoringSlice.actions;
 export default databaseMonitoringSlice.reducer;

@@ -6,11 +6,12 @@ import { isPartialUnloadRow, unloadRowCount } from '../unloadResultRows';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Table } from '../../../components/ds/layout/Table';
+import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 
 export default function UnloadResultModal() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { isUnloadResultModalOpen, unloadResultData } = useSelector((state) => state.databaseUI, shallowEqual);
+  const { isUnloadResultModalOpen, unloadResultData, unloadResultWarnings } = useSelector((state) => state.databaseUI, shallowEqual);
 
   if (!isUnloadResultModalOpen) return null;
 
@@ -37,11 +38,17 @@ export default function UnloadResultModal() {
       maxWidth="500px"
       footer={<Button variant="primary" onClick={close}>{CM.close}</Button>}
     >
-      {partial && (
-        <p data-testid="unload-result-partial" className="mb-3 text-13 text-amber-600 dark:text-amber-400">{CM.unloadPartialMsg}</p>
-      )}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-        <Table columns={columns} data={rows} emptyMessage={CM.noResultsLabel} showEmptyStateAsRow bordered selectable />
+      <div className="space-y-3">
+        {partial && (
+          <p data-testid="unload-result-partial" className="text-13 text-amber-600 dark:text-amber-400">{CM.unloadPartialMsg}</p>
+        )}
+        <JobWarnings warnings={unloadResultWarnings} />
+        {/* No rows with warnings: CMS stopped before counting (OBJECT-type warning). */}
+        {(rows.length > 0 || !unloadResultWarnings?.length) && (
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+            <Table columns={columns} data={rows} emptyMessage={CM.noResultsLabel} showEmptyStateAsRow bordered selectable />
+          </div>
+        )}
       </div>
     </Modal>
   );

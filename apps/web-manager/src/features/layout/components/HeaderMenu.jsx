@@ -1,28 +1,40 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
-import { MENU_ACTIONS, getMenuActionEnabled, runMenuAction } from '../menuActions';
+import { MENU_ACTIONS, getMenuActionEnabled, menuActionHost, runMenuAction } from '../menuActions';
 import { menuOffReason } from '../menuOffReason';
 import { isCmsAdminHost } from '../../host/cmsAdmin';
 import { useCM } from '../../../constants/useCM';
+import { isDesktopApp } from '../../desktop/isDesktopApp';
+import { isAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
+
+const NO_TABS = [];
 
 export default function HeaderMenu({ folded = false }) {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { selectedHostUid, authorizedHosts, hosts } = useSelector((state) => state.host, shallowEqual);
+  const navigate = useNavigate();
+  const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts } = useSelector((state) => state.host, shallowEqual);
+  const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
 
-  const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts, hosts });
+  const enabled = getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts });
   // Only Edit Host, CMS Account Management and Host Engine Version are ever
   // off, for want of a selected (and, for CMS accounts, connected with the
   // CMS admin account) host.
-  const action = (id) => ({
-    disabled: !enabled[id],
-    title: enabled[id] ? undefined : menuOffReason(CM, {
-      hostSelected: Boolean(selectedHostUid),
-      hostConnected: (authorizedHosts ?? []).includes(selectedHostUid),
-      cmsAdmin: id !== MENU_ACTIONS.cmsAccountManagement || isCmsAdminHost(hosts, selectedHostUid),
-    }),
-    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid }),
-  });
+  const action = (id) => {
+    // The host the item acts on (Host Engine Version: the highlighted one),
+    // the same one that turned it off.
+    const target = menuActionHost(id, { selectedHostUid, highlightedHostUid, authorizedHosts: authorizedHosts ?? [], reconnectQueue: reconnectQueue ?? [] });
+    return {
+      disabled: !enabled[id],
+      title: enabled[id] ? undefined : menuOffReason(CM, {
+        hostSelected: Boolean(target.hostUid),
+        hostConnected: target.connected,
+        cmsAdmin: id !== MENU_ACTIONS.cmsAccountManagement || isCmsAdminHost(hosts, selectedHostUid),
+      }),
+      onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, anyModalOpen: isAnyModalOpen() }),
+    };
+  };
 
   const MenuLabel = ({ children }) => (
     <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 tracking-wide group-hover:text-amber-500 transition-colors">
@@ -54,6 +66,22 @@ export default function HeaderMenu({ folded = false }) {
         label={CM.importHost}
         {...action(MENU_ACTIONS.importHosts)}
       />
+      {isDesktopApp() && (
+        <>
+          <MenuDivider />
+          <MenuItem
+            icon="folder_open"
+            label={CM.switchWorkspace}
+            {...action(MENU_ACTIONS.switchWorkspace)}
+          />
+          <MenuDivider />
+          <MenuItem
+            icon="logout"
+            label={CM.quit}
+            onClick={() => void window.desktopBridge?.quitApp?.()}
+          />
+        </>
+      )}
     </>
   );
   const configItems = (

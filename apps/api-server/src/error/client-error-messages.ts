@@ -205,6 +205,10 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'This host is already registered.';
       case HostErrorCode.DUPLICATED_ALIAS:
         return 'This name is already used by another host. Choose a different name.';
+      case HostErrorCode.HOST_CONNECTED:
+        return "Can't test the connection while a host with this address, port and CMS user is connected (the test could end that connection).";
+      case HostErrorCode.CMS_ADMIN_REQUIRED:
+        return 'Only a host connected as the CMS admin account can manage CMS users.';
       case HostErrorCode.INTERNAL_ERROR:
       case HostErrorCode.UNKNOWN:
         return 'A host operation failed.';
@@ -315,6 +319,10 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
           ? `"${dbname}" is an HA database — Restore Database would desync its replication apply position from the HA peer, so it is not supported here.`
           : 'Restore Database is not supported for HA databases — it would desync replication with the HA peer.';
       }
+      case DatabaseErrorCode.OFFLINE_BACKUP_NOT_SUPPORTED_FOR_HA_DATABASE:
+        return additionalData?.reason === 'DATABASE_STOPPED'
+          ? 'The database is stopped. HA databases can only be backed up online.'
+          : 'HA databases can only be backed up online.';
       case DatabaseErrorCode.INTERNAL_ERROR:
       case DatabaseErrorCode.UNKNOWN:
       default:

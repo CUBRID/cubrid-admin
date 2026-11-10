@@ -30,6 +30,7 @@ import { CaDialogField,
 } from '../../../components/ds/layout/CaDialogLayout';
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
+import { RESTORE_YEAR_MIN } from '@api-interfaces';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -273,7 +274,8 @@ export default function RestoreDatabaseModal() {
       const year = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10);
       const day = parseInt(parts[2], 10);
-      if (isNaN(year) || year < 1 || year > new Date().getFullYear()) {
+      // restoredb --up-to-date takes years from 1900 (util_sa.c).
+      if (isNaN(year) || year < RESTORE_YEAR_MIN || year > new Date().getFullYear()) {
         return CM.errYear;
       }
       if (isNaN(month) || month < 1 || month > 12) {

@@ -18,6 +18,7 @@ vi.mock('./brokerApi', () => ({
 }));
 
 import { brokerApi } from './brokerApi';
+import { hostKey } from '../host/hostKey';
 import brokerReducer from './brokerSlice';
 import layoutReducer, { setActiveMainTab } from '../layout/layoutSlice';
 import {
@@ -136,6 +137,30 @@ describe('broker actions with refresh', () => {
     await store.dispatch(action());
     expect(brokerApi.getBrokerList).not.toHaveBeenCalled();
     expect(refreshState(store).refreshCounter).toBe(1);
+  });
+
+  it('restart keeps a SUSPENDED broker shown as running, like an ON one', async () => {
+    brokerApi.stopAllBrokers.mockResolvedValue({});
+    let finishStart;
+    brokerApi.startAllBrokers.mockReturnValue(new Promise((resolve) => { finishStart = resolve; }));
+    const init = brokerReducer(undefined, { type: '@@init' });
+    const store = configureStore({
+      reducer: { broker: brokerReducer, layout: layoutReducer },
+      preloadedState: {
+        broker: {
+          ...init,
+          navigatorBrokersByHost: {
+            h1: [{ name: 'on1', state: 'ON' }, { name: 'sus1', state: 'suspended ' }, { name: 'off1', state: 'OFF' }],
+          },
+        },
+      },
+    });
+    const restart = store.dispatch(restartAllBrokersAndRefresh('h1'));
+    await vi.waitFor(() => expect(brokerApi.startAllBrokers).toHaveBeenCalled());
+    expect(Object.keys(store.getState().broker.restartingBrokers).sort()).toEqual([hostKey('h1', 'on1'), hostKey('h1', 'sus1')].sort());
+    finishStart({});
+    await restart;
+    expect(store.getState().broker.restartingBrokers).toEqual({});
   });
 
   it('restart still refreshes when start fails after the brokers were stopped', async () => {

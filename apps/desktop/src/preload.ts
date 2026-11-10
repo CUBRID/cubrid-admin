@@ -10,20 +10,29 @@ function resolveApiBaseUrl(): string {
 
 const desktopBridge: DesktopBridge = {
   isWorkspaceSetupRequired: () => ipcRenderer.invoke('desktop:is-workspace-setup-required'),
+  getWorkspaceStartupError: () => ipcRenderer.invoke('desktop:get-workspace-startup-error'),
   getWorkspaceInfo: () => ipcRenderer.invoke('desktop:get-workspace-info'),
   pickWorkspaceDirectory: () => ipcRenderer.invoke('desktop:pick-workspace-directory'),
-  setWorkspaceRoot: (workspaceRoot) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot),
-  resetWorkspaceRoot: () => ipcRenderer.invoke('desktop:reset-workspace-root'),
+  pickOpenFile: (accept) => ipcRenderer.invoke('desktop:pick-open-file', accept),
+  setWorkspaceRoot: (workspaceRoot, options) => ipcRenderer.invoke('desktop:set-workspace-root', workspaceRoot, options),
   finishWorkspaceSetup: (workspaceRoot) =>
     ipcRenderer.invoke('desktop:finish-workspace-setup', workspaceRoot),
   revealSettingsFile: () => ipcRenderer.invoke('desktop:reveal-settings-file'),
   setMenuLanguage: (language) => ipcRenderer.invoke('desktop:set-menu-language', language),
   setMenuState: (state) => ipcRenderer.invoke('desktop:set-menu-state', state),
+  setUnsavedChanges: (unsaved) => ipcRenderer.invoke('desktop:set-unsaved-changes', unsaved),
   onMenuAction: (callback) => {
     const subscription = (_event: IpcRendererEvent, actionId: string) => callback(actionId);
     ipcRenderer.on('desktop:menu-action', subscription);
     return () => {
       ipcRenderer.removeListener('desktop:menu-action', subscription);
+    };
+  },
+  onRefreshView: (callback) => {
+    const subscription = () => callback();
+    ipcRenderer.on('desktop:refresh-view', subscription);
+    return () => {
+      ipcRenderer.removeListener('desktop:refresh-view', subscription);
     };
   },
   onCloseActiveTab: (callback) => {
@@ -34,6 +43,7 @@ const desktopBridge: DesktopBridge = {
     };
   },
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
+  quitApp: () => ipcRenderer.invoke('desktop:quit'),
   getAppVersion: () => ipcRenderer.invoke('desktop:get-app-version'),
   getUpdateStatus: () => ipcRenderer.invoke('desktop:get-update-status'),
   getStartupUpdateNotice: () => ipcRenderer.invoke('desktop:get-startup-update-notice'),

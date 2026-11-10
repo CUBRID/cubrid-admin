@@ -173,6 +173,17 @@ export default function Breadcrumb({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [dirtyTabs]);
 
+  // Desktop: quitting asks about the unsaved changes (one question, not two).
+  const hasDirtyTabs = dirtyTabs.length > 0;
+  useEffect(() => {
+    const setUnsavedChanges = window.desktopBridge?.setUnsavedChanges;
+    if (!setUnsavedChanges || !hasDirtyTabs) return undefined;
+    Promise.resolve(setUnsavedChanges(true)).catch(() => undefined);
+    return () => {
+      Promise.resolve(setUnsavedChanges(false)).catch(() => undefined);
+    };
+  }, [hasDirtyTabs]);
+
   const handleCloseOthers = (tabId) => {
     const targetOthers = openTabs.filter(tid => tid !== tabId);
     const targetDirtyOthers = targetOthers.filter(tid => dirtyTabs.includes(tid));

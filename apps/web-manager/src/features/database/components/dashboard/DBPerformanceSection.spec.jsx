@@ -47,3 +47,29 @@ describe('DBPerformanceSection CPU', () => {
     expect(cpuCell().querySelector('[title]').getAttribute('title')).toBe(CM.casCpuNotCollectedLinux);
   });
 });
+
+describe('DBPerformanceSection memory', () => {
+  const memCell = () => container.querySelectorAll('tbody tr td')[1];
+  const GiB = 1024 ** 3;
+  const MiB = 1024 ** 2;
+
+  it('draws host, CAS and free parts of the host memory, with the amounts on hover', async () => {
+    const memSegments = {
+      host: 6 * GiB, cas: 512 * MiB, free: 9.5 * GiB, total: 16 * GiB,
+      hostPct: 37.5, casPct: 3.125, freePct: 59.375,
+    };
+    await render([row({ memory: '512.0 MiB', memSegments })]);
+    const bar = memCell().querySelector('[data-testid="db-mem-bar"]');
+    expect(bar.textContent).toContain('512.0 MiB');
+    expect(bar.getAttribute('title')).toBe('Host 6.0 GiB · CAS 512.0 MiB · Free 9.5 GiB / Total 16.0 GiB');
+    const parts = [...bar.querySelectorAll('[data-segment]')].map((el) => [el.dataset.segment, el.style.width]);
+    expect(parts).toEqual([['host', '37.5%'], ['cas', '3.125%'], ['free', '59.375%']]);
+    expect(bar.querySelector('[data-segment="host"]').getAttribute('title')).toBe(`${CM.dbMemHostHint}: 6.0 GiB`);
+  });
+
+  it('shows only the CAS amount, without a bar, while the host memory is unknown', async () => {
+    await render([row({ memory: '512.0 MiB', memSegments: null })]);
+    expect(memCell().textContent).toBe('512.0 MiB');
+    expect(memCell().querySelector('[data-testid="db-mem-bar"]')).toBeNull();
+  });
+});

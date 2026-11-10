@@ -7,8 +7,11 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
+import { DEFAULT_SERVICE_VOLUME_INTERVAL, SERVICE_VOLUME_INTERVAL_OPTIONS } from '@api-interfaces';
 
-export default function MonitoringSettingsPopover() {
+// `showServiceVolumeInterval`: the service dashboard's own setting for how
+// often it reads volume usage, next to the dashboard interval.
+export default function MonitoringSettingsPopover({ showServiceVolumeInterval = false }) {
   const CM = useCM();
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef(null);
@@ -43,6 +46,7 @@ export default function MonitoringSettingsPopover() {
       ...preferences,
       dashboardInterval: dashVal,
       brokerStatusInterval: brokerVal,
+      serviceVolumeInterval: preferences.serviceVolumeInterval ?? DEFAULT_SERVICE_VOLUME_INTERVAL,
     });
 
     setCustomDashboardText(dashVal === 0 ? '' : dashVal.toString());
@@ -189,6 +193,34 @@ export default function MonitoringSettingsPopover() {
 
               <p className="text-11 text-slate-400 italic px-1">{CM.syncDbThroughputMsg}</p>
             </div>
+
+            {showServiceVolumeInterval && (
+              <div className="space-y-3" data-testid="service-volume-interval">
+                <div className="flex justify-between items-center">
+                  <Typography variant="caption" className="font-bold text-slate-500 uppercase tracking-tight">{CM.serviceVolumeIntervalLabel}</Typography>
+                  <span className="text-12 text-amber-500 font-black px-1.5 py-0.5 rounded-md bg-amber-500/5 border border-amber-500/10 min-w-[32px] text-center font-mono">
+                    {localPrefs.serviceVolumeInterval > 0 ? `${localPrefs.serviceVolumeInterval}s` : CM.statusOff.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex p-1 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200/50 dark:border-white/5">
+                  {SERVICE_VOLUME_INTERVAL_OPTIONS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      data-testid={`service-volume-interval-${value}`}
+                      onClick={() => setLocalPrefs((prev) => ({ ...prev, serviceVolumeInterval: value }))}
+                      className={`flex-1 py-1.5 text-12 font-black rounded-lg transition-all active:scale-95
+                        ${localPrefs.serviceVolumeInterval === value
+                          ? 'bg-amber-500 text-slate-900 shadow-md transform scale-[1.02]'
+                          : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                    >
+                      {value > 0 ? `${value}s` : CM.statusOff}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-11 text-slate-400 italic px-1">{CM.serviceVolumeIntervalHint}</p>
+              </div>
+            )}
 
             {/* Broker Interval */}
             <div className="space-y-3">

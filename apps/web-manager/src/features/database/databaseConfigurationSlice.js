@@ -85,8 +85,8 @@ const initialState = {
   planDumpLoading: false,
   planDumpError: null,
   
-  databaseClasses: {},
-  databaseClassesLoading: {},
+  databaseClasses: {}, // { [dbKey(hostUid, dbname)]: classes }
+  databaseClassesLoading: {}, // { [dbKey]: boolean }
   
   autoVolumeConfigs: {},
   autoVolumeLogs: [],
@@ -138,17 +138,17 @@ const databaseConfigurationSlice = createSlice({
         state.planDumpError = action.payload;
       })
       .addCase(fetchDatabaseClasses.pending, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.databaseClassesLoading[dbname] = true;
+        const { hostUid, dbname } = action.meta.arg;
+        state.databaseClassesLoading[dbKey(hostUid, dbname)] = true;
       })
       .addCase(fetchDatabaseClasses.fulfilled, (state, action) => {
-        const { dbname, classes } = action.payload;
-        state.databaseClassesLoading[dbname] = false;
-        state.databaseClasses[dbname] = classes;
+        const key = dbKey(action.meta.arg.hostUid, action.payload.dbname);
+        state.databaseClassesLoading[key] = false;
+        state.databaseClasses[key] = action.payload.classes;
       })
       .addCase(fetchDatabaseClasses.rejected, (state, action) => {
-        const { dbname } = action.meta.arg;
-        state.databaseClassesLoading[dbname] = false;
+        const { hostUid, dbname } = action.meta.arg;
+        state.databaseClassesLoading[dbKey(hostUid, dbname)] = false;
       })
       .addCase(fetchAutoVolumeConfig.pending, (state) => {
         state.autoVolumeLoading = true;

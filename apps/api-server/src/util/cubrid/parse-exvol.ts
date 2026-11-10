@@ -217,7 +217,7 @@ export function convertExvolInfoToCmsFormat(volumeInfo: {
  *   }
  * }];
  * const cmsExvol = convertExvolArrayToCmsFormat(exvol);
- * // Returns: [{
+ * // Returns every volume in one object: [{
  * //   "test_data_x001": "data;32768;/path/to/dbname"
  * // }]
  * ```
@@ -239,10 +239,19 @@ export function convertExvolArrayToCmsFormat(
     return [];
   }
 
-  return exvolArray.map((volumeObj) => {
-    const cmsVolumeObj: Record<string, string> = {};
-
+  // One object holding every volume, in a one-element array. CMS turns each
+  // element of a JSON array into its own `exvol` block and createdb reads
+  // only the first block (cm_server_interface.cpp json_to_nv, cm_job_task.cpp
+  // nv_locate "exvol"): one element per volume created only the first
+  // volume, and the job still succeeded.
+  const cmsVolumeObj: Record<string, string> = {};
+  for (const volumeObj of exvolArray) {
     for (const [volumeName, volumeInfo] of Object.entries(volumeObj)) {
+      if (volumeName in cmsVolumeObj) {
+        throw DatabaseError.InvalidVolumeFormat('a different name for each volume', volumeName, {
+          reason: 'DUPLICATE_VOLUME_NAME',
+        });
+      }
       try {
         cmsVolumeObj[volumeName] = convertExvolInfoToCmsFormat(volumeInfo);
       } catch (error) {
@@ -259,7 +268,7 @@ export function convertExvolArrayToCmsFormat(
         );
       }
     }
+  }
 
-    return cmsVolumeObj;
-  });
+  return Object.keys(cmsVolumeObj).length > 0 ? [cmsVolumeObj] : [];
 }

@@ -2,6 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchBrokerList } from '../../broker/brokerSlice';
+import { useShownBrokers } from '../../broker/brokerRestartState';
 import { brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from '../../broker/brokerState';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
@@ -102,16 +103,20 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     { header: CM.qps, accessor: 'qps', render: (val) => <span className="font-mono text-14 text-amber-600 dark:text-amber-400 font-semibold">{val ?? '—'}</span> },
     {
       header: CM.longTran, accessor: 'long_tran',
-      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_tran || '0'} / {(parseFloat(row.long_tran_time || 0) * 1000).toFixed(0)}ms</span>
+      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_tran || '0'} / {parseFloat(row.long_tran_time || 0)}s</span>
     },
     {
       header: CM.longQuery, accessor: 'long_query',
-      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_query || '0'} / {(parseFloat(row.long_query_time || 0) * 1000).toFixed(0)}ms</span>
+      render: (_, row) => <span className="font-mono text-13 text-slate-400">{row.long_query || '0'} / {parseFloat(row.long_query_time || 0)}s</span>
     },
     { header: CM.errQuery, accessor: 'error_query', render: (val) => <span className={`font-mono text-14 font-bold ${parseInt(val) > 0 ? 'text-rose-500' : 'text-slate-400'}`}>{val}</span> },
   ], [CM]);
 
-  const activeCount = brokers.filter(isBrokerRunning).length;
+  // A broker being restarted shows ON until the restart ends; one listed
+  // without a state (broker service off) counts as OFF; SUSPENDED counts as
+  // running.
+  const shownBrokers = useShownBrokers(hostUid, brokers);
+  const activeCount = shownBrokers.filter(isBrokerRunning).length;
 
   const activeBadge = (
     <StatusBadge label={CM.activeCount(activeCount)} variant="emerald" pulse={true} className="rounded-full" />
@@ -132,9 +137,10 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     >
       <Table
         maxRows={15}
+        paginate
         columns={columns}
         emptyState={<FetchEmptyState status={!hasLoadedOnce ? 'loading' : loadFailed ? 'error' : 'loaded'} title={CM.brokerStatus} />}
-        data={brokers}
+        data={shownBrokers}
         loading={(isSection ? sharedLoading : loading) && !hasLoadedOnce && !isManualRefreshing}
         onRowClick={(row) => dispatch(openTab(`broker_status:${hostUid}:${row.name}`))}
       />

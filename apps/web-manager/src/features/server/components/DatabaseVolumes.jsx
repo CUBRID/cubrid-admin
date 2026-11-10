@@ -81,11 +81,18 @@ const BarCell = ({ val }) => {
 // dbListStatus: the host dashboard's database-list fetch state ('loading'
 // until it settles). activeDatabases is [] until then, which must not read as "no
 // running databases".
-export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded' }) {
+// refreshKey: changes on each refresh of the open dashboard (see
+// ServerContent); the table re-reads then, when its database list changes,
+// and when a volume was added on the host (volumesChanged).
+// `isShown`: whether its host tab is the one on screen. A hidden tab reads
+// nothing; what changed meanwhile is read once when it is shown again.
+export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListStatus = 'loaded', refreshKey = 0, isShown = true }) {
   const CM = useCM();
   const dispatch = useDispatch();
   const { authorizedHosts } = useSelector((state) => state.host, shallowEqual);
   const { loggedInDatabases } = useSelector((state) => state.database, shallowEqual);
+  // A volume was added on this host (AddVolumeModal): read again.
+  const volumesChangedSeq = useSelector((state) => state.databaseMonitoring?.volumesChangedSeq?.[hostUid] ?? 0);
   // Fetched into local state (not the shared `state.databaseMonitoring.volumes`
   // slice) so multiple simultaneously-open dashboard tabs don't clobber each other.
   const [volumes, setVolumes] = useState([]);
@@ -106,10 +113,16 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   // A database can stay active (running) after logout — logout only drops
   // the session, not the engine process — so filtering on "active" alone
   // keeps showing (and re-fetching) a logged-out database's storage volumes.
-  const loggedInActiveDatabases = React.useMemo(
-    () => activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db))),
-    [activeDatabases, loggedInDatabases, hostUid]
-  );
+  // The same array while the names are the same: a new array would re-read
+  // the volumes every time either list is rebuilt with the same content.
+  const lastListRef = useRef([]);
+  const loggedInActiveDatabases = React.useMemo(() => {
+    const next = activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
+    const last = lastListRef.current;
+    if (next.length === last.length && next.every((db, i) => db === last[i])) return last;
+    lastListRef.current = next;
+    return next;
+  }, [activeDatabases, loggedInDatabases, hostUid]);
   // Running databases left out of the table for want of a login. Said in a
   // line under the table when some are shown; with none shown the table's
   // own empty message says it.
@@ -159,7 +172,14 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     }
   }, [dbListSettled, hostUid, authorizedHosts, loggedInActiveDatabases, dispatch]);
 
-  useEffect(() => { fetchVolumes(); }, [fetchVolumes]);
+  // Something to read: first render, a refresh, a list change, a volume added.
+  const readPendingRef = useRef(true);
+  useEffect(() => { readPendingRef.current = true; }, [fetchVolumes, refreshKey, volumesChangedSeq]);
+  useEffect(() => {
+    if (!isShown || !readPendingRef.current) return;
+    readPendingRef.current = false;
+    fetchVolumes();
+  }, [isShown, fetchVolumes, refreshKey, volumesChangedSeq]);
 
   const volumeData = React.useMemo(() => volumes?.map((result) => {
     const empty = { display: '-', pct: 0 };
@@ -223,6 +243,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
     >
       <Table
         maxRows={15}
+        paginate
         columns={columns}
         data={volumeData}
         loading={!hasLoadedOnce && dbListStatus !== 'error'}

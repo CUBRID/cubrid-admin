@@ -13,7 +13,8 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Card } from '../../../components/ds/layout/Card';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
-import { isLogVolume, pageCount } from '../volumePages';
+import { isLogVolume, pageCount, pagesToSize, volumePageSize } from '../volumePages';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 // ── Helpers ──
 const TYPE_BADGE = (val = '') => {
@@ -32,7 +33,6 @@ const cleanInt = (v) => {
   return parseInt(cleaned) || 0;
 };
 
-const formatPages = (pages) => cleanInt(pages).toLocaleString();
 
 const getFreeSeverity = (pct) => {
   if (pct < 10) return 'text-rose-500';
@@ -124,8 +124,8 @@ const SummaryCards = memo(({ dbname, data, totals }) => {
         />
       </div>
       <div className="flex justify-between mt-1">
-        <Typography variant="label" className="text-11 text-slate-400 font-mono">PG {data?.pagesize}B</Typography>
-        <Typography variant="label" className="text-11 text-slate-400 font-mono">LOG {data?.logpagesize}B</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-mono">PG {Number(data?.pagesize || 0).toLocaleString()} B</Typography>
+        <Typography variant="label" className="text-11 text-slate-400 font-mono">LOG {Number(data?.logpagesize || 0).toLocaleString()} B</Typography>
       </div>
     </div>
   </div>
@@ -245,8 +245,10 @@ const VolumeCategorization = memo(({ hostUid, dbname, dbinfo, pagesize, logpages
   );
 });
 
-export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
+export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo, pagesize, logpagesize }) => {
   const CM = useCM();
+  // Page counts are shown as sizes: pages × the volume's page size.
+  const sizeOf = (pages, row) => pagesToSize(pages, volumePageSize(row, { pagesize, logpagesize }));
   const dispatch = useDispatch();
 
   return (
@@ -306,7 +308,7 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
               if (usedCount === null) {
                 return (
                   <span className="text-13 font-mono text-slate-500 dark:text-slate-400">
-                    - / {formatPages(row.totalpage)}
+                    - / {sizeOf(row.totalpage, row)}
                   </span>
                 );
               }
@@ -321,10 +323,10 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
                 <div className="flex flex-col gap-0.5 min-w-[130px]">
                   <div className="flex justify-between items-end">
                     <span className="text-13 font-mono text-slate-500 dark:text-slate-400">
-                      <span className="text-slate-700 dark:text-slate-200 font-bold">{formatPages(usedPages)}</span> / {formatPages(totalPages)}
+                      <span className="text-slate-700 dark:text-slate-200 font-bold">{sizeOf(usedPages, row)}</span> / {sizeOf(totalPages, row)}
                     </span>
                     <span className={`text-12 font-mono font-black ${getFreeSeverity(freePct)} ml-2`}>
-                      {isZero ? '0' : Math.round(freePct)}% <span className="opacity-50 text-10 font-sans uppercase">{CM.freeBadge}</span>
+                      {isZero ? '0' : freePct.toFixed(1)}% <span className="opacity-50 text-10 font-sans uppercase">{CM.freeBadge}</span>
                     </span>
                   </div>
                   <div className="w-full h-0.5 bg-slate-100 dark:bg-white/4 rounded-full overflow-hidden">
@@ -347,13 +349,13 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
               const totalPages = cleanInt(row.totalpage);
               const usedPages = cleanInt(row.usedpage);
               const freePages = val != null && val !== '' ? cleanInt(val) : Math.max(0, totalPages - usedPages);
-              return <span className="font-mono text-13 text-slate-400">{formatPages(freePages)}</span>;
+              return <span className="font-mono text-13 text-slate-400">{sizeOf(freePages, row)}</span>;
             }
           },
           {
             header: CM.totalLabel,
             accessor: 'totalpage',
-            render: (val) => <span className="font-mono text-13 font-bold">{formatPages(val)}</span>
+            render: (val, row) => <span className="font-mono text-13 font-bold">{sizeOf(val, row)}</span>
           },
           {
             header: CM.date,
@@ -381,7 +383,8 @@ export const VolumeTopology = memo(({ hostUid, dbname, spaceinfo }) => {
   );
 });
 
-const FileSpaceUsage = memo(({ fileinfo }) => {
+// File sizes come in pages of the data volumes (pagesize).
+const FileSpaceUsage = memo(({ fileinfo, pagesize }) => {
   const CM = useCM();
   return (
   <Card
@@ -398,8 +401,8 @@ const FileSpaceUsage = memo(({ fileinfo }) => {
       columns={[
         { header: CM.dataTypeLabel, accessor: 'data_type' },
         { header: CM.qtyLabel, accessor: 'file_count', className: 'text-center' },
-        { header: CM.usedLabel, accessor: 'used_size', className: 'text-right', render: (val) => <span className="font-mono text-13 font-bold">{formatPages(val)}</span> },
-        { header: CM.totalLabel, accessor: 'total_size', className: 'text-right', render: (val) => <span className="font-mono text-13 text-slate-400">{formatPages(val)}</span> },
+        { header: CM.usedLabel, accessor: 'used_size', className: 'text-right', render: (val) => <span className="font-mono text-13 font-bold">{pagesToSize(val, pagesize)}</span> },
+        { header: CM.totalLabel, accessor: 'total_size', className: 'text-right', render: (val) => <span className="font-mono text-13 text-slate-400">{pagesToSize(val, pagesize)}</span> },
       ]}
       data={fileinfo || []}
     />
@@ -465,8 +468,9 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
-  const { isManualRefreshing: loading, lastRefreshed, handleRefresh: fetchSpaceInfo } = usePollingRefresh({
+  const { isManualRefreshing: loading, lastRefreshed, handleRefresh: fetchSpaceInfo, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId: `db_space:${hostUid}:${dbname}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
     onFetch: () => async () => {
@@ -493,6 +497,8 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
     });
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
   }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
+
+  if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
   // Spinner until the first fetch settles (isManualRefreshing is still false
   // on the first render, before the initial fetch starts).
@@ -536,10 +542,12 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
           hostUid={hostUid} 
           dbname={dbname} 
           spaceinfo={data?.spaceinfo} 
+          pagesize={data?.pagesize}
+          logpagesize={data?.logpagesize}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <FileSpaceUsage fileinfo={data?.fileinfo} />
+          <FileSpaceUsage fileinfo={data?.fileinfo} pagesize={data?.pagesize} />
           <DistributionChart totals={totals} />
         </div>
       </div>

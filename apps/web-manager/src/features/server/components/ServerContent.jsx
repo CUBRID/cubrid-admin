@@ -9,9 +9,7 @@ import { fetchBrokerList } from '../../broker/brokerSlice';
 import DatabaseVolumes from './DatabaseVolumes';
 import Brokers from './Brokers';
 import SystemInfo from './SystemInfo';
-import { fetchDatabaseVolumes } from '../../database/databaseMonitoringSlice';
-import { dbKey } from '../../database/dbKey';
-import { fetchMonitoringData, fetchHaHeartbeatOnly } from '../monitoringSlice';
+import { fetchMonitoringData, fetchHaHeartbeatOnly, fetchHaNodesOnly } from '../monitoringSlice';
 import { isHaClusterMissingMaster, getHaDbServerModes } from '../../host/haPeerUtils';
 
 import SystemStatusSection from './server/SystemStatusSection';
@@ -22,7 +20,7 @@ import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsP
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
-import { autoStartDatabases } from '../autoStartDatabases';
+import { autoStartDatabases } from '@api-interfaces';
 
 // See the HA-abnormal fast-poll effect below.
 const HA_ABNORMAL_POLL_INTERVAL_MS = 1000;
@@ -56,6 +54,11 @@ const Component = function ServerContent({ hostUid }) {
 
   const [autoStartDBs, setAutoStartDBs] = useState([]);
   const [, setAutoStartReady] = useState(false);
+  // Bumped on every refresh of this dashboard while it is open (the button,
+  // F5, the first load and its background ticks): the storage volume table
+  // (DatabaseVolumes) re-reads volume-info for the logged-in running
+  // databases then. Nothing reads it while no dashboard shows it.
+  const [volumesRefreshKey, setVolumesRefreshKey] = useState(0);
   const autoStartReadVersion = useRef(0);
   const autoStartWritePending = useRef(false);
   
@@ -78,7 +81,7 @@ const Component = function ServerContent({ hostUid }) {
     hostUid,
     tabId: `host:${hostUid}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => async (dispatch, getState) => {
+    onFetch: (silent) => async (dispatch) => {
       // 1. First fetch database status to get the current active list
       let dbInfo;
       try {
@@ -94,14 +97,10 @@ const Component = function ServerContent({ hostUid }) {
       const newActiveDatabases = (dbInfo.activelist?.active || []).map((d) => d.dbname);
       setDatabases(newDatabases);
       setActiveDatabases(newActiveDatabases);
-      // A database stays active (running) after logout — logout only drops
-      // the session — so volumes must only be polled for ones still logged
-      // in, or this re-fetches (and DatabaseVolumes keeps showing) storage
-      // info for a database the user already logged out of. Read the login
-      // state now, not from this render: a logout during this refresh must
-      // count.
-      const { loggedInDatabases: loggedInNow } = getState().database;
-      const newLoggedInActiveDatabases = newActiveDatabases.filter((db) => loggedInNow.includes(dbKey(hostUid, db)));
+      // Same render as the list above, so the volume table reads once with
+      // the list it was asked to show, on every refresh of the open
+      // dashboard (background ticks too; a failed read keeps the last rows).
+      setVolumesRefreshKey((key) => key + 1);
 
       // 2. Then fetch other data, using the just-fetched active databases list.
       // fetchBrokerList goes first: the system status (fetchMonitoringData,
@@ -109,7 +108,6 @@ const Component = function ServerContent({ hostUid }) {
       await Promise.all([
         dispatch(fetchBrokerList(silent ? { hostUid, isBackground: true } : hostUid)),
         dispatch(fetchHostEnv(hostUid)),
-        dispatch(fetchDatabaseVolumes({ hostUid, activeDatabases: newLoggedInActiveDatabases })),
         fetchAutoStartInfo(),
         isHA || systemStatusExpanded.current ? dispatch(fetchMonitoringData(hostUid)) : Promise.resolve()
       ]);
@@ -157,6 +155,9 @@ const Component = function ServerContent({ hostUid }) {
   // (not the array) in the deps, so another host joining/leaving the queue
   // doesn't tear down and restart this host's timer.
   const isPendingReconnect = reconnectQueue.includes(hostUid);
+  // While the host waits in the reconnect window nothing is read: the badge
+  // says so instead of "Live".
+  const liveStatus = isPendingReconnect ? 'lost' : preferences?.dashboardInterval > 0 ? 'live' : 'paused';
   useEffect(() => {
     if (!isTabActive || !isHaAbnormal || !authorizedHosts.includes(hostUid) || isPendingReconnect) {
       haAbnormalSinceRef.current = null;
@@ -170,11 +171,21 @@ const Component = function ServerContent({ hostUid }) {
         clearInterval(timer);
         return;
       }
-      dispatch(fetchHaHeartbeatOnly(hostUid));
+      // Node states only; the databases are read once when the nodes change.
+      dispatch(fetchHaNodesOnly(hostUid));
     }, HA_ABNORMAL_POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
   }, [isTabActive, isHaAbnormal, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
+
+  // The nodes changed under the 1s watch (a failover, or back to normal):
+  // read the databases once so their HA badges match the new roles.
+  const haDbInfoStale = Boolean(hostData?.haDbInfoStale);
+  useEffect(() => {
+    if (haDbInfoStale && authorizedHosts.includes(hostUid) && !isPendingReconnect) {
+      dispatch(fetchHaHeartbeatOnly(hostUid));
+    }
+  }, [haDbInfoStale, authorizedHosts, isPendingReconnect, hostUid, dispatch]);
 
   const haDbs = React.useMemo(() => {
     const names = new Set();
@@ -246,10 +257,10 @@ const Component = function ServerContent({ hostUid }) {
               <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
                 {CM.serverDashboard}
               </Typography>
-              <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
-                <div className={`w-1 h-1 rounded-full ${preferences?.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-11 font-bold ${preferences?.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {preferences?.dashboardInterval > 0 ? CM.live : CM.paused}
+              <div data-testid="dashboard-live-badge" className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${liveStatus === 'live' ? 'bg-emerald-500/10 border-emerald-500/30' : liveStatus === 'lost' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
+                <div className={`w-1 h-1 rounded-full ${liveStatus === 'live' ? 'bg-emerald-500 animate-pulse' : liveStatus === 'lost' ? 'bg-rose-500' : 'bg-slate-400'}`} />
+                <span className={`text-11 font-bold ${liveStatus === 'live' ? 'text-emerald-600 dark:text-emerald-400' : liveStatus === 'lost' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {liveStatus === 'live' ? CM.live : liveStatus === 'lost' ? CM.connectionLost : CM.paused}
                 </span>
               </div>
             </div>
@@ -291,7 +302,7 @@ const Component = function ServerContent({ hostUid }) {
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <HostReadErrorBanner hostUid={hostUid} startInfoError={startInfoError} statusReadActive={isHA || isSystemStatusExpanded} />
         <HaClusterStatusSection hostUid={hostUid} />
-        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} />
+        <DatabaseVolumes hostUid={hostUid} activeDatabases={activeDatabases} dbListStatus={dbListStatus} refreshKey={volumesRefreshKey} isShown={activeMainTab === `host:${hostUid}`} />
         <Brokers hostUid={hostUid} isSection={true} />
         <SystemStatusSection hostUid={hostUid} isTabActive={isTabActive} onExpandedChange={handleSystemStatusExpanded} />
         <DatabaseListSection dbListDisplay={dbListDisplay} dbListStatus={dbListStatus} />

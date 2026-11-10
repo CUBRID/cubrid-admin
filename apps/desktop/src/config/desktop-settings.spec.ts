@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  clearConfiguredWorkspaceRoot,
   getDismissedUpdateVersion,
   getLastUpdateCheckAt,
   isCheckForUpdatesOnStartupEnabled,
   loadDesktopSettings,
+  setWorkspaceRoot,
 } from './desktop-settings';
 
 jest.mock('electron', () => ({ app: { isPackaged: false } }));
@@ -39,45 +39,29 @@ describe('desktop settings', () => {
     return JSON.parse(fs.readFileSync(path.join(root, 'desktop-settings.json'), 'utf8'));
   }
 
-  it('keeps update preferences when the workspace is reset to the default', () => {
+  it('keeps update preferences when the workspace is switched', () => {
     writeSettings({
       workspaceRoot: path.join(root, 'custom-workspace'),
       workspaceSetupComplete: true,
       ...updateSettings,
     });
 
-    clearConfiguredWorkspaceRoot();
+    const next = path.join(root, 'other-workspace');
+    setWorkspaceRoot(next);
 
-    expect(readSettingsFile()).toEqual({ workspaceSetupComplete: true, ...updateSettings });
+    expect(readSettingsFile()).toEqual({ workspaceRoot: next, workspaceSetupComplete: true, ...updateSettings });
     expect(isCheckForUpdatesOnStartupEnabled()).toBe(false);
     expect(getLastUpdateCheckAt()).toBe(updateSettings.lastUpdateCheckAt);
     expect(getDismissedUpdateVersion()).toBe(updateSettings.dismissedUpdateVersion);
   });
 
-  it('marks setup complete when resetting a workspace that never finished setup', () => {
-    writeSettings({ workspaceRoot: path.join(root, 'custom-workspace') });
+  it.each([
+    ['outside the app folder', () => path.join(os.tmpdir(), 'elsewhere')],
+    ['named "test"', () => path.join(root, 'test')],
+  ])('keeps a picked workspace %s', (_label, workspaceRoot) => {
+    writeSettings({ workspaceRoot: workspaceRoot(), workspaceSetupComplete: true, ...updateSettings });
 
-    expect(clearConfiguredWorkspaceRoot()).toEqual({ workspaceSetupComplete: true });
-  });
-
-  it('drops only an out-of-root workspace on load and keeps update preferences', () => {
-    writeSettings({
-      workspaceRoot: path.join(os.tmpdir(), 'elsewhere'),
-      workspaceSetupComplete: true,
-      ...updateSettings,
-    });
-
-    expect(loadDesktopSettings()).toEqual({ workspaceSetupComplete: true, ...updateSettings });
-  });
-
-  it('drops only a stray "test" workspace on load and keeps update preferences', () => {
-    writeSettings({
-      workspaceRoot: path.join(root, 'test'),
-      workspaceSetupComplete: true,
-      ...updateSettings,
-    });
-
-    expect(loadDesktopSettings()).toEqual({ workspaceSetupComplete: true, ...updateSettings });
+    expect(loadDesktopSettings()).toEqual({ workspaceRoot: workspaceRoot(), workspaceSetupComplete: true, ...updateSettings });
   });
 
   it('keeps a valid workspace under the portable root', () => {

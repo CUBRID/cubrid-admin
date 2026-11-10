@@ -52,3 +52,14 @@ export function getMaintenanceResult(job: CmsJobRecord, response: unknown, succe
   const output = redactMaintenanceText(job, cms, lines.join('\n'));
   return { success, ...(output ? { output } : {}) };
 }
+
+/**
+ * loaddb's output (CMS `line`: the utility's messages, then its error file),
+ * kept on the job result for success and failure alike so the screen can show
+ * the counts and the failed lines.
+ */
+export function getLoadResult(response: unknown, success: boolean): { success: boolean; log?: string[] } {
+  const cms = response && typeof response === 'object' ? response as Record<string, unknown> : {};
+  const lines = textLines(cms.line);
+  return lines.length ? { success, log: lines } : { success };
+}

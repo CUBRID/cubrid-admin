@@ -11,6 +11,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { Card } from '../../../components/ds/layout/Card';
 import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 // ── Helpers ──
 // Built as a function (not a plain object) because two of the labels are
@@ -25,7 +26,6 @@ const getCategoryMeta = (CM) => ({
 });
 
 
-const formatMB = (pages, pageSize) => ((parseInt(pages) * pageSize) / (1024 * 1024)).toFixed(1);
 
 // ── Sub-components (Memoized) ──
 
@@ -119,7 +119,7 @@ const UtilizationBar = memo(({ summary, usageSeverity, pageSize }) => {
     <div className="bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-sm px-5 py-4">
       <div className="flex items-center justify-between mb-2">
         <Typography variant="label" className="text-12 font-bold text-slate-500 uppercase tracking-widest">{CM.overallUtilization}</Typography>
-        <Typography variant="label" className={`text-12 font-black font-mono ${usageSeverity}`}>{summary.pct.toFixed(2)}%</Typography>
+        <Typography variant="label" className={`text-12 font-black font-mono ${usageSeverity}`}>{summary.pct.toFixed(1)}%</Typography>
       </div>
       <div className="w-full h-2 bg-slate-100 dark:bg-white/5 rounded-none overflow-hidden">
         <div
@@ -175,7 +175,7 @@ const VolumeTableContainer = memo(({ volumes, pageSize, status, title }) => {
                     <div className={`h-full ${barColor} transition-all duration-700ms`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-12 font-bold font-mono text-slate-500">{formatMB(usedPages, pageSize)} MiB {CM.usedLabel}</span>
+                    <span className="text-12 font-bold font-mono text-slate-500">{formatPagesToSize(usedPages, pageSize)} {CM.usedLabel}</span>
                     <span className="text-12 font-bold font-mono text-slate-400">{pct.toFixed(1)}%</span>
                   </div>
                 </div>
@@ -190,16 +190,6 @@ const VolumeTableContainer = memo(({ volumes, pageSize, status, title }) => {
               <span className="text-15 font-bold text-slate-600 dark:text-slate-300 font-mono">{formatPagesToSize(val, pageSize)}</span>
             )
           },
-          {
-            header: CM.pagesLabel,
-            accessor: 'totalpage',
-            className: 'text-right pr-4',
-            render: (val) => (
-              <span className="text-14 text-slate-400 font-mono">
-                {parseInt(val).toLocaleString()}
-              </span>
-            )
-          }
         ]}
         data={volumes}
         emptyState={<FetchEmptyState status={status} title={title} />}
@@ -216,8 +206,9 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
   const { preferences } = useSelector((state) => state.user, shallowEqual);
 
   const tabId = `vol_category:${hostUid}:${dbname}:${category}`;
-  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
+  const { isManualRefreshing: isRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId,
     pollingIntervalSeconds: preferences?.dashboardInterval || 0,
     onFetch: () => (dispatch) => dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }))
@@ -264,6 +255,8 @@ const Component = function VolumeCategoryMonitor({ hostUid, dbname, category }) 
   }, [volumes]);
 
   const usageSeverity = summary.pct > 85 ? 'text-rose-500' : summary.pct > 60 ? 'text-amber-500' : 'text-emerald-500';
+
+  if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden select-none animate-in fade-in duration-300">

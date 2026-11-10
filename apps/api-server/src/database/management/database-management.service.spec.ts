@@ -264,6 +264,26 @@ describe('DatabaseManagementService', () => {
       expect(result).toEqual(mockSuccessResponse.result);
     });
 
+    it('returns no rows instead of failing when CMS failed it only on the OBJECT-type warning', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        status: 'failure', task: 'unloaddb',
+        note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>",
+      });
+
+      await expect(service.unloadDatabase(mockUserId, mockHostUid, mockDbname, baseRequest)).resolves.toEqual([]);
+    });
+
+    it('still fails when the note has other lines besides the OBJECT-type warning, or only others', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        status: 'failure', task: 'unloaddb',
+        note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>ERROR: out of disk<end>",
+      });
+      await expect(service.unloadDatabase(mockUserId, mockHostUid, mockDbname, baseRequest)).rejects.toBeDefined();
+
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'failure', task: 'unloaddb', note: 'ERROR: out of disk' });
+      await expect(service.unloadDatabase(mockUserId, mockHostUid, mockDbname, baseRequest)).rejects.toBeDefined();
+    });
+
     it('should successfully unload database with schema only', async () => {
       const request: UnloadDatabaseRequest = {
         ...baseRequest,
@@ -321,7 +341,6 @@ describe('DatabaseManagementService', () => {
         estimate: '1000',
         prefix: 'backup',
         cach: '100',
-        lofile: '10',
       };
 
       cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
@@ -343,11 +362,27 @@ describe('DatabaseManagementService', () => {
           estimate: '1000',
           prefix: 'backup',
           cach: '100',
-          lofile: '10',
         }),
           expect.objectContaining({ timeoutMs: expect.any(Number) })
       );
     });
+
+    it.each([['no prefix', undefined], ['an empty prefix', '']])(
+      'sends the database name as the prefix for %s, so CMS finds the result log of an HA database',
+      async (_case, prefix) => {
+        // CMS runs an HA database's unloaddb as db@host; without a prefix
+        // the engine names the files db@host_..., while CMS reads <db>_....
+        cmsClient.postAuthenticated.mockResolvedValue(mockSuccessResponse);
+
+        await service.unloadDatabase(mockUserId, mockHostUid, mockDbname, { ...baseRequest, prefix });
+
+        expect(cmsClient.postAuthenticated).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ task: 'unloaddb', prefix: mockDbname }),
+          expect.objectContaining({ timeoutMs: expect.any(Number) })
+        );
+      }
+    );
 
     it('should throw InvalidParameter error when both isSchemaIncluded and isDataIncluded are false', async () => {
       const request: UnloadDatabaseRequest = {

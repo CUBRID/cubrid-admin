@@ -1,4 +1,4 @@
-import { openTab, showStatusModal } from './layoutSlice';
+import { askWorkspaceSwitch, openTab, showStatusModal } from './layoutSlice';
 import {
   openAddHostModal,
   openEditHostModal,
@@ -19,6 +19,7 @@ export const MENU_ACTIONS = Object.freeze({
   editHost: 'edit-host',
   exportHosts: 'export-hosts',
   importHosts: 'import-hosts',
+  switchWorkspace: 'switch-workspace',
   serviceDashboard: 'service-dashboard',
   cmsAccountManagement: 'cms-account-management',
   editCubridConfig: 'edit-cubrid-config',
@@ -48,13 +49,39 @@ export const NO_DASHBOARD_MENU_ACTIONS = Object.freeze({
   [MENU_ACTIONS.about]: true,
 });
 
+/**
+ * The host Host Engine Version reads: the one highlighted in the host list,
+ * which a click on a host that is not connected moves without selecting it.
+ */
+export function engineVersionHostUid({ selectedHostUid, highlightedHostUid }) {
+  return highlightedHostUid ?? selectedHostUid ?? null;
+}
+
+/**
+ * The host a header menu item acts on, and whether it is connected: Host
+ * Engine Version the highlighted host (engineVersionHostUid), connected only
+ * outside the reconnect queue; every other item the selected host. Whether
+ * the item is on and the reason shown when it is off both go by it.
+ */
+export function menuActionHost(id, { selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [] }) {
+  if (id === MENU_ACTIONS.serverVersion) {
+    const hostUid = engineVersionHostUid({ selectedHostUid, highlightedHostUid });
+    return { hostUid, connected: Boolean(hostUid) && authorizedHosts.includes(hostUid) && !reconnectQueue.includes(hostUid) };
+  }
+  const hostUid = selectedHostUid ?? null;
+  return { hostUid, connected: Boolean(hostUid) && authorizedHosts.includes(hostUid) };
+}
+
 /** @returns {Record<string, boolean>} enabled flag per action id */
-export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [], hosts = [] }) {
+export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [], hosts = [] }) {
+  const hostState = { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue };
   return {
     [MENU_ACTIONS.addHost]: true,
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
     [MENU_ACTIONS.exportHosts]: true,
     [MENU_ACTIONS.importHosts]: true,
+    // Desktop app only; the header shows it only there.
+    [MENU_ACTIONS.switchWorkspace]: true,
     [MENU_ACTIONS.serviceDashboard]: true,
     // Only for the CMS admin account, as in CA (isCmsAdminHost).
     [MENU_ACTIONS.cmsAccountManagement]:
@@ -64,7 +91,9 @@ export function getMenuActionEnabled({ selectedHostUid, authorizedHosts = [], ho
     [MENU_ACTIONS.editBrokerConfig]: true,
     [MENU_ACTIONS.editCmConfig]: true,
     [MENU_ACTIONS.checkForUpdates]: true,
-    [MENU_ACTIONS.serverVersion]: Boolean(selectedHostUid),
+    // Read from the host's CMS, so only for a connected host, and not while
+    // it waits to reconnect.
+    [MENU_ACTIONS.serverVersion]: menuActionHost(MENU_ACTIONS.serverVersion, hostState).connected,
     [MENU_ACTIONS.about]: true,
   };
 }
@@ -77,11 +106,17 @@ function openHostTab(dispatch, CM, selectedHostUid, tabId) {
   }
 }
 
+/** The desktop app's workspace page (App.jsx route). */
+export const DESKTOP_WORKSPACE_PATH = '/desktop/workspace';
+
 /**
  * Runs one menu action. Callers check the enabled flag first.
+ * `navigate` is react-router's, for actions that leave the dashboard.
+ * `dirtyTabs` (tabs with unsaved changes) and `anyModalOpen` guard the
+ * workspace switch, which leaves the dashboard and drops both.
  * @returns {boolean} false when the id is unknown
  */
-export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
+export function runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs = [], anyModalOpen = false }) {
   switch (id) {
     case MENU_ACTIONS.addHost:
       dispatch(openAddHostModal());
@@ -94,6 +129,16 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
       return true;
     case MENU_ACTIONS.importHosts:
       dispatch(openImportExportModal('import'));
+      return true;
+    case MENU_ACTIONS.switchWorkspace:
+      // Leaving the dashboard would close an open modal with what it holds.
+      if (anyModalOpen) return true;
+      // ... and drop unsaved conf edits: ask first (WorkspaceSwitchConfirm).
+      if (dirtyTabs.length > 0) {
+        dispatch(askWorkspaceSwitch());
+        return true;
+      }
+      navigate(DESKTOP_WORKSPACE_PATH);
       return true;
     case MENU_ACTIONS.serviceDashboard:
       dispatch(openTab('service_dashboard'));
@@ -114,7 +159,7 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid }) {
       dispatch(openUpdateCheck({ source: 'manual' }));
       return true;
     case MENU_ACTIONS.serverVersion:
-      dispatch(openServerVersionModal(selectedHostUid));
+      dispatch(openServerVersionModal(engineVersionHostUid({ selectedHostUid, highlightedHostUid })));
       return true;
     case MENU_ACTIONS.about:
       dispatch(setAboutCubrid(true));

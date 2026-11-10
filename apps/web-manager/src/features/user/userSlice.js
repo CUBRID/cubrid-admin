@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { DEFAULT_SERVICE_VOLUME_INTERVAL } from '@api-interfaces';
 import { getStoredLocale, setStoredLocale } from '../../constants/useCM';
 import { userApi } from './userApi';
 import { dbKey } from '../database/dbKey';
@@ -8,6 +9,7 @@ import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 export const DEFAULT_PREFERENCES = {
   dashboardInterval: 3,
   brokerStatusInterval: 3,
+  serviceVolumeInterval: DEFAULT_SERVICE_VOLUME_INTERVAL,
   uiLocale: 'en',
 };
 
@@ -25,6 +27,10 @@ function mergePreferencesState(current, patch) {
   if (patch.brokerStatusInterval == null) {
     merged.brokerStatusInterval =
       current.brokerStatusInterval ?? DEFAULT_PREFERENCES.brokerStatusInterval;
+  }
+  if (patch.serviceVolumeInterval == null) {
+    merged.serviceVolumeInterval =
+      current.serviceVolumeInterval ?? DEFAULT_PREFERENCES.serviceVolumeInterval;
   }
   if (patch.uiLocale === 'ko' || patch.uiLocale === 'en') {
     merged.uiLocale = patch.uiLocale;
@@ -206,6 +212,9 @@ const userSlice = createSlice({
           state.preferences,
           action.payload ?? {}
         );
+        // Server error messages are worded by the stored locale (apiClient
+        // has no store): keep it the same as the screens' language.
+        setStoredLocale(state.preferences.uiLocale);
       })
       .addCase(fetchPreferences.rejected, (state, action) => {
         state.preferencesLoading = false;
@@ -220,6 +229,9 @@ const userSlice = createSlice({
           state.preferences,
           action.payload ?? {}
         );
+        // Server error messages are worded by the stored locale (apiClient
+        // has no store): keep it the same as the screens' language.
+        setStoredLocale(state.preferences.uiLocale);
       })
       .addCase(updatePreferences.rejected, (state, action) => {
         state.preferencesLoading = false;

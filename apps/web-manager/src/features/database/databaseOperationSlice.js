@@ -358,8 +358,8 @@ const initialState = {
   queryPlansLoading: {},
   queryPlansError: {},
   queryPlanLogs: [],
-  lockInfo: {},
-  transactionInfo: {},
+  lockInfo: {}, // { [dbKey(hostUid, dbname)]: info }
+  transactionInfo: {}, // { [dbKey(hostUid, dbname)]: info }
   operationLoading: false,
   actionLoading: false,
   error: null,
@@ -460,11 +460,11 @@ const databaseOperationSlice = createSlice({
       })
       .addCase(fetchLockInfo.fulfilled, (state, action) => {
         const { dbname, info } = action.payload;
-        state.lockInfo[dbname] = info;
+        state.lockInfo[dbKey(action.meta.arg.hostUid, dbname)] = info;
       })
       .addCase(fetchTransactionInfo.fulfilled, (state, action) => {
         const { dbname, info } = action.payload;
-        state.transactionInfo[dbname] = info;
+        state.transactionInfo[dbKey(action.meta.arg.hostUid, dbname)] = info;
       })
       
       // Backup Schedule cases

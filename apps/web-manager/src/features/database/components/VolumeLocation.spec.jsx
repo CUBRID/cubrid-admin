@@ -36,6 +36,8 @@ const makeStore = () => configureStore({
   reducer: {
     user: (s = { preferences: { uiLocale: 'en', dashboardInterval: 0 } }) => s,
     host: (s = { authorizedHosts: [], reconnectQueue: [] }) => s,
+    // The volume screen shows nothing without the database's login.
+    database: (s = { loggedInDatabases: ['h1:demodb'] }) => s,
     layout: (s = { refreshCounter: 0, activeMainTab: null }) => s,
     databaseMonitoring: (s = {
       spaceInfo: { 'h1:demodb': { pagesize: '16384', logpagesize: '16384', volumes: [dataVolume, logVolume] } },

@@ -35,7 +35,7 @@ export const formatSize = (bytes, decimals = 2) => {
  */
 export const formatPagesToSize = (pages, pageSize) => {
   if (!pages || !pageSize) return '0 B';
-  return formatSize(pages * pageSize);
+  return formatSize(pages * pageSize, 1);
 };
 
 /**

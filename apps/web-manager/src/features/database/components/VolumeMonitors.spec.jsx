@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Data comes straight from the store in these tests; polling is not under test.
 vi.mock('../../../infrastructure/hooks/usePollingRefresh', () => ({
-  usePollingRefresh: () => ({ isManualRefreshing: false, lastRefreshed: new Date(0), handleRefresh: vi.fn() }),
+  usePollingRefresh: () => ({ isManualRefreshing: false, lastRefreshed: new Date(0), handleRefresh: vi.fn(), isDbLoggedIn: true }),
 }));
 vi.mock('../databaseSlice', () => ({ fetchDatabaseSpaceInfo: vi.fn(() => ({ type: 'test/noop' })) }));
 vi.mock('../../user/components/MonitoringSettingsPopover', () => ({ default: () => null }));

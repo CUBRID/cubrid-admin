@@ -11,7 +11,7 @@ vi.hoisted(() => {
 vi.mock('../../../api/apiClient', () => ({ default: { defaults: { headers: { common: {} } } } }));
 import UnloadResultModal from './UnloadResultModal';
 import { isPartialUnloadRow, unloadRowCount } from '../unloadResultRows';
-import uiReducer from '../databaseUISlice';
+import uiReducer, { openUnloadResultModal } from '../databaseUISlice';
 
 let container;
 let root;
@@ -92,4 +92,26 @@ it('recognises only the partial-unload line as one', () => {
   expect(isPartialUnloadRow('12', '객체가 (전체/객체)')).toBe(true);
   expect(isPartialUnloadRow('Only', '12 (100%/40%)')).toBe(false);
   expect(isPartialUnloadRow('athlete', '6677 (100%/38%)')).toBe(false);
+});
+
+// An unload CMS failed only on the OBJECT-type warning ends with warnings and
+// no rows (openUnloadResultModal takes the job's result and warnings).
+const renderJob = (payload) => {
+  const store = configureStore({ reducer: { user: () => ({ preferences: { uiLocale: 'en' } }), databaseUI: uiReducer } });
+  store.dispatch(openUnloadResultModal(payload));
+  return act(async () => root.render(<Provider store={store}><UnloadResultModal /></Provider>));
+};
+const OBJECT_WARNING = "warning: [dba.tb] has object type. So for class [dba.tb], '--thread-count' option is ignored.";
+
+it('shows the warnings and no empty table when the counts were not written', async () => {
+  await renderJob({ result: [], warnings: [OBJECT_WARNING, 'Because of this warning, the table counts and the Load Database list entry were not written.'] });
+  expect(document.body.textContent).toContain(OBJECT_WARNING);
+  expect(document.body.textContent).toContain('table counts');
+  expect(document.querySelector('table')).toBeNull();
+});
+
+it('shows the counted tables, and no warning, for a job without warnings', async () => {
+  await renderJob({ result: [{ 'dba.tc': '2 (100%/100%)' }] });
+  expect(tableRows()).toEqual(['dba.tc']);
+  expect(document.querySelectorAll('[role="alert"]')).toHaveLength(0);
 });

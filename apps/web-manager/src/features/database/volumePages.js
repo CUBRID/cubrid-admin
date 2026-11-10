@@ -1,3 +1,5 @@
+import { formatSize } from '../../infrastructure/utils/format';
+
 // CMS gives no free page count for log volumes: freepage comes as a blank
 // string and usedpage is left out. Such a count is null here, so the screens
 // show "-" instead of reading it as 0, which made a log volume look fully used.
@@ -16,4 +18,20 @@ export function pageCount(value) {
 export function isLogVolume(row) {
   const type = (row?.type || '').toString().toUpperCase();
   return type.includes('LOG') || type.includes('ACTIVE') || type.includes('ARCHIVE');
+}
+
+/** The page size of a volume's pages: logpagesize for a log volume, pagesize otherwise. */
+export function volumePageSize(row, { pagesize, logpagesize }) {
+  return isLogVolume(row) ? logpagesize : pagesize;
+}
+
+/**
+ * `pages` pages of `pageSize` bytes as a size in KiB/MiB/GiB ("1.5 MiB"), or
+ * "-" when the count or the page size is unknown.
+ */
+export function pagesToSize(pages, pageSize) {
+  const count = pageCount(pages);
+  const size = Number(pageSize);
+  if (count === null || !Number.isFinite(size) || size <= 0) return '-';
+  return formatSize(count * size, 1);
 }

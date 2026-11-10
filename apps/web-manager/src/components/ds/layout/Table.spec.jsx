@@ -112,6 +112,88 @@ describe('Table maxRows', () => {
   });
 });
 
+describe('Table paginate', () => {
+  const shown = () => [...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent);
+  const position = () => container.querySelector('[data-testid="table-pager-position"]')?.textContent;
+  const click = (testId) => act(async () => {
+    container.querySelector(`[data-testid="${testId}"]`).click();
+  });
+
+  it('shows every row and no pager when they fit in maxRows', async () => {
+    await render({ data: rows(15), maxRows: 15, paginate: true });
+    expect(shown()).toHaveLength(15);
+    expect(container.querySelector('[data-testid="table-pager"]')).toBeNull();
+  });
+
+  it('splits longer tables into pages of maxRows - 1 rows instead of scrolling', async () => {
+    await render({ data: rows(40), maxRows: 15, paginate: true });
+    expect(shown()).toEqual(rows(14).map((r) => r.name));
+    expect(position()).toBe('1 / 3');
+    expect(scrollArea()).toBeNull();
+    expect(grip()).not.toBeNull();
+    expect(container.querySelector('[data-testid="table-pager-prev"]').disabled).toBe(true);
+
+    await click('table-pager-next');
+    await click('table-pager-next');
+    expect(position()).toBe('3 / 3');
+    expect(shown()).toEqual(rows(40).slice(28).map((r) => r.name));
+    expect(container.querySelector('[data-testid="table-pager-next"]').disabled).toBe(true);
+  });
+
+  it('keeps the page and the sort across a refresh, and moves to the last page when it is gone', async () => {
+    const numbered = (n) => Array.from({ length: n }, (_, i) => ({ name: `row-${String(i).padStart(2, '0')}` }));
+    await render({ data: numbered(40), maxRows: 15, paginate: true, sortable: true });
+    await click('table-pager-next'); // the first click on a header would go back to page 1
+    await act(async () => container.querySelector('th').click()); // asc
+    await act(async () => container.querySelector('th').click()); // desc
+    await click('table-pager-next');
+    expect(position()).toBe('2 / 3');
+    expect(shown()[0]).toBe('row-25');
+
+    await render({ data: numbered(40), maxRows: 15, paginate: true, sortable: true });
+    expect(position()).toBe('2 / 3');
+    expect(shown()[0]).toBe('row-25');
+
+    await render({ data: numbered(20), maxRows: 15, paginate: true, sortable: true });
+    expect(position()).toBe('2 / 2');
+    expect(shown()).toEqual(['row-05', 'row-04', 'row-03', 'row-02', 'row-01', 'row-00']);
+  });
+
+  it('lets the grip set the rows a page shows, keeping the first row shown, and resets it', async () => {
+    const key = (k) => act(async () => grip().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })));
+    await render({ data: rows(40), maxRows: 15, paginate: true });
+    await click('table-pager-next');
+    expect(shown()[0]).toBe('row-14');
+
+    await key('ArrowDown');
+    expect(shown()).toHaveLength(15);
+    expect(position()).toBe('1 / 3');
+    expect(shown()).toContain('row-14');
+
+    // A drag of 10 rows (ROW_PX each) down from 15 rows a page.
+    await act(async () => {
+      grip().dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientY: 100, bubbles: true }));
+      grip().dispatchEvent(new MouseEvent('pointermove', { clientY: 100 + ROW_PX * 10, bubbles: true }));
+      grip().dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+    });
+    expect(shown()).toHaveLength(25);
+    expect(position()).toBe('1 / 2');
+
+    await act(async () => grip().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(shown()).toHaveLength(14);
+    expect(grip()).not.toBeNull();
+  });
+
+  it('sorts every row, not just the page, and goes back to page 1', async () => {
+    await render({ data: rows(40), maxRows: 15, paginate: true, sortable: true });
+    await click('table-pager-next');
+    await act(async () => container.querySelector('th').click());
+    await act(async () => container.querySelector('th').click());
+    expect(position()).toBe('1 / 3');
+    expect(shown()[0]).toBe('row-9');
+  });
+});
+
 describe('Table sort arrows', () => {
   const twoCols = [{ header: 'Name', accessor: 'name' }, { header: 'Size', accessor: 'size' }];
   const data = [{ name: 'b', size: 2 }, { name: 'a', size: 1 }];

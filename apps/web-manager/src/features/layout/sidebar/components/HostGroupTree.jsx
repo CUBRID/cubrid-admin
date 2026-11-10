@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useDispatch } from 'react-redux';
-import { setSelectedGroup, moveHost } from '../../../host/hostSlice';
+import React, { useState, useCallback, useRef } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { setSelectedGroup, setHighlightedHost, moveHost } from '../../../host/hostSlice';
 import { orderedGroupEntries, sortHostUidsByHaRole, UNGROUPED_GROUP_ID, HOST_DRAG_MIME } from '../../../host/hostGroupUtils';
 import ServerListItem from './ServerListItem';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
@@ -21,7 +21,10 @@ export default function HostGroupTree({
   const CM = useCM();
   const dispatch = useDispatch();
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
-  const [focusedHostUid, setFocusedHostUid] = useState(selectedHostUid);
+  // The highlighted row, kept in the store: Host Engine Version in the menus
+  // reads it. Selecting a host (a login, a dashboard) highlights it too.
+  const highlightedHostUid = useSelector((state) => state.host.highlightedHostUid);
+  const focusedHostUid = highlightedHostUid ?? selectedHostUid;
   const [draggedHost, setDraggedHost] = useState(null);
   const [dropTargetGroupId, setDropTargetGroupId] = useState(null);
   const draggedHostRef = useRef(null);
@@ -33,11 +36,9 @@ export default function HostGroupTree({
   // click: only it joins a multi-selection that starts empty.
   const plainClickedHostUidRef = useRef(null);
 
-  // External activation (or host deletion) should bring list focus back in
-  // sync. Merely focusing another row does not change selectedHostUid.
-  useEffect(() => {
-    setFocusedHostUid(selectedHostUid);
-  }, [selectedHostUid]);
+  const highlightHost = useCallback((uid) => {
+    dispatch(setHighlightedHost(uid));
+  }, [dispatch]);
 
   const clearDragState = useCallback(() => {
     draggedHostRef.current = null;
@@ -260,7 +261,7 @@ export default function HostGroupTree({
                       isAuthorized={authorizedHosts.includes(uid)}
                       haInfo={haInfo[uid]}
                       onContextMenu={onContextMenu}
-                      onSelect={setFocusedHostUid}
+                      onSelect={highlightHost}
                       onActivate={onHostActivate}
                       compact
                       draggable
@@ -297,7 +298,7 @@ export default function HostGroupTree({
               isAuthorized={authorizedHosts.includes(uid)}
               haInfo={haInfo[uid]}
               onContextMenu={onContextMenu}
-              onSelect={setFocusedHostUid}
+              onSelect={highlightHost}
               onActivate={onHostActivate}
               draggable
               isDragging={draggedHost?.hostUid === uid}

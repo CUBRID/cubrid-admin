@@ -114,4 +114,40 @@ describe('ConfigService', () => {
       expect(svc.getCmsRejectUnauthorized()).toBe(true);
     });
   });
+
+  describe('desktop mode', () => {
+    const keys = ['CWM_DESKTOP', 'LISTEN_UNIX_SOCKET', 'ALLOWED_ORIGINS', 'PORT', 'LISTEN_HOST', 'AUTH_REGISTRATION_ENABLED'];
+    let saved: Record<string, string | undefined>;
+    beforeEach(() => {
+      saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    });
+    afterEach(() => {
+      for (const key of keys) {
+        if (saved[key] === undefined) delete process.env[key];
+        else process.env[key] = saved[key];
+      }
+    });
+
+    it('is on only with CWM_DESKTOP=1, and then closes registration', () => {
+      process.env.CWM_DESKTOP = '1';
+      process.env.LISTEN_UNIX_SOCKET = '/tmp/x.sock';
+      process.env.ALLOWED_ORIGINS = 'app://cwm';
+      process.env.AUTH_REGISTRATION_ENABLED = 'true';
+      const desktop = new ConfigService();
+      expect(desktop.isDesktopMode()).toBe(true);
+      expect(desktop.isAuthRegistrationEnabled()).toBe(false);
+
+      delete process.env.CWM_DESKTOP;
+      expect(new ConfigService().isDesktopMode()).toBe(false);
+    });
+
+    it('refuses to start in desktop mode without a socket, even with a TCP port and host', () => {
+      process.env.CWM_DESKTOP = '1';
+      process.env.ALLOWED_ORIGINS = 'app://cwm';
+      process.env.PORT = '9443';
+      process.env.LISTEN_HOST = '0.0.0.0';
+      delete process.env.LISTEN_UNIX_SOCKET;
+      expect(() => new ConfigService()).toThrow('LISTEN_UNIX_SOCKET is required when CWM_DESKTOP=1.');
+    });
+  });
 });

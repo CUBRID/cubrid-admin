@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchLogContent } from '../brokerSlice';
+import { hostKey } from '../../host/hostKey';
 import { extractSQL } from '../logParsingUtils';
 import { analyzeTopSQL } from '../topSQLAnalysis';
 import { brokerApi } from '../brokerApi';
@@ -122,7 +123,7 @@ function LogViewer({ hostUid, path }) {
   const [topAnalysis, setTopAnalysis] = useState(null);
   const pageSize = 100;
 
-  const logState   = useSelector(s => s.broker.viewingLogs[path]);
+  const logState   = useSelector(s => s.broker.viewingLogs[hostKey(hostUid, path)]);
   const pageLoading = logState?.loading;
   const fileName   = path.split('/').pop();
   const lowerFileName = fileName.toLowerCase();

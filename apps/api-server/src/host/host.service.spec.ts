@@ -4,6 +4,7 @@ import { UserRepositoryService } from '@repository';
 import { HostError, HostErrorCode } from '@error/index';
 import { HostInfo, User } from '@type/index';
 import { getHost, MAX_HOST_ALIAS_LENGTH, UNGROUPED_GROUP_ID } from './host-group.util';
+import * as tokenActivity from '@cms-https-client/cms-token-activity';
 
 describe('HostService', () => {
   let service: HostService;
@@ -124,6 +125,18 @@ describe('HostService', () => {
 
       expect(saved().cmsTokenIssuedAt).toBeUndefined();
       expect(saved().cmsTokenActiveTimeSec).toBeUndefined();
+    });
+
+    it('forgets the old session when a login with the same settings brings a new token', async () => {
+      const forget = jest.spyOn(tokenActivity, 'forgetCmsToken');
+      try {
+        await service.updateHost('u1', 'host-a', { alias: 'renamed', token: 'tok2' });
+
+        expect(forget).toHaveBeenCalledWith('tok');
+        expect(saved().token).toBe('tok2');
+      } finally {
+        forget.mockRestore();
+      }
     });
   });
 });

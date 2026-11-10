@@ -145,6 +145,24 @@ export class DatabaseUserService extends BaseService {
     }
   }
 
+  /**
+   * Drops every database login of the host without logging back in, and
+   * stops re-logins still running: the host now points at another CMS server
+   * or account, where these logins do not exist and the saved DB passwords
+   * must not be sent.
+   */
+  forgetDbLoginsOfHost(userId: string, hostUid: string): void {
+    const prefix = `${userId}:${hostUid}:`;
+    const keys = new Set([...this.dbLoginCache.keys(), ...this.pendingRelogins.keys()].filter((key) => key.startsWith(prefix)));
+    for (const key of keys) {
+      const dbname = key.slice(prefix.length);
+      // A re-login still running fails its generation check and sets nothing.
+      this.logoutGenerations.set(key, this.logoutGeneration(userId, hostUid, dbname) + 1);
+      this.dbLoginCache.delete(key);
+      this.pendingRelogins.delete(key);
+    }
+  }
+
   /** Whether a re-login of this database after a host login is still running. */
   isDbLoginRestoring(userId: string, hostUid: string, dbname: string): boolean {
     return this.pendingRelogins.has(`${userId}:${hostUid}:${dbname}`);

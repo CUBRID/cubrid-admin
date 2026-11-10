@@ -6,7 +6,8 @@ import {
   updateCmsUser,
   setHostPassword,
   fetchCmsUsers,
-  closeEditCmsUserModal
+  closeEditCmsUserModal,
+  askHostPassword
 } from '../hostSlice';
 
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -50,6 +51,9 @@ export default function EditCMSUserModal() {
   const editUser = cmsUserToEdit?.user;
   const username = isEditMode ? (editUser?.id || editUser?.name || editUser['@id'] || editUser.targetid || '') : '';
   const isAdmin = isEditMode && username === 'admin';
+  // The CMS account this app logs in to the host with.
+  const hostLoginId = useSelector((state) => state.host.hosts?.find((h) => h.uid === hostUid)?.id);
+  const [askPasswordOnClose, setAskPasswordOnClose] = useState(false);
 
   const {
     error: actionError,
@@ -133,6 +137,9 @@ export default function EditCMSUserModal() {
             }
           })).unwrap();
         }
+        // Its saved password no longer works: ask for the new one once this
+        // window closes, rather than keep or quietly replace it.
+        setAskPasswordOnClose(changePassword && formData.targetid === hostLoginId);
         endSuccess(CM.userUpdatedSuccessMsg(formData.targetid));
       } else {
         await dispatch(addCmsUser({
@@ -153,7 +160,11 @@ export default function EditCMSUserModal() {
     }
   };
 
-  const handleClose = () => dispatch(closeEditCmsUserModal());
+  const handleClose = () => {
+    dispatch(closeEditCmsUserModal());
+    if (askPasswordOnClose) dispatch(askHostPassword(hostUid));
+    setAskPasswordOnClose(false);
+  };
 
   if (!isOpen) return null;
 

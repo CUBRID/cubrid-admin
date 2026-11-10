@@ -139,8 +139,11 @@ export function CmsJobProvider({ children }) {
         initialJob,
       } = options;
 
+      // The job as last seen, for the failure path below.
+      let lastSeen = { jobId };
       const onUpdate = (serverJob) => {
         const normalized = normalizeTrackedJob(serverJob);
+        lastSeen = { ...lastSeen, ...normalized, jobId };
         upsertJob(jobId, normalized);
         if (onProgress) {
           try {
@@ -158,6 +161,7 @@ export function CmsJobProvider({ children }) {
           const snapshot = await databaseJobApi.getJob(jobId);
           onUpdate(snapshot);
         } catch {
+          lastSeen = { ...lastSeen, jobStatus: 'queued' };
           upsertJob(jobId, { jobStatus: 'queued' });
         }
       }
@@ -175,15 +179,16 @@ export function CmsJobProvider({ children }) {
         if (err?.cancelled) {
           throw err;
         }
-        setJobs((prev) => {
-          const cur = prev.find((j) => j.jobId === jobId);
-          const interrupted = normalizeTrackedJob(
-            getCmsJobErrorResult(err, { ...cur, jobId }),
-            cur || {}
-          );
-          notifyTerminal(interrupted, { notify, successMessage, errorMessage }, session);
-          return prev.map((j) => (j.jobId === jobId ? { ...j, ...interrupted } : j));
-        });
+        // Notified here, not from inside the state updater: an updater runs
+        // only when React next renders, after the dialog that ran the job has
+        // already dismissed this job's result (useCmsJob), so the global
+        // result dialog came up over that dialog's own failure view.
+        const interrupted = normalizeTrackedJob(getCmsJobErrorResult(err, lastSeen), lastSeen);
+        notifyTerminal(interrupted, { notify, successMessage, errorMessage }, session);
+        setJobs((prev) => prev.map((j) => {
+          if (j.jobId !== jobId) return j;
+          return { ...j, ...normalizeTrackedJob(getCmsJobErrorResult(err, j), j) };
+        }));
         throw err;
       } finally {
         trackingRef.current.delete(jobId);

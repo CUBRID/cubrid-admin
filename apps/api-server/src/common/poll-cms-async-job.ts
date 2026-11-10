@@ -2,6 +2,7 @@ import { HostService } from '@host';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import { CmsError } from '@error/cms/cms-error';
 import { isInvalidTokenError } from './decorators/handle-cms-token-errors.decorator';
+import { clearHostConfCache } from '../util/concurrency/host-conf-cache';
 import {
   CMS_ASYNC_JOB_FIRST_POLL_INTERVAL_MS,
   CMS_ASYNC_JOB_POLL_INTERVAL_MS,
@@ -28,6 +29,31 @@ function sleep(ms: number): Promise<void> {
  * may still be fine.
  */
 export async function pollCmsAsyncJob(
+  deps: { hostService: HostService; cmsClient: CmsHttpsClientService },
+  userId: string,
+  hostUid: string,
+  task: string,
+  initialResponse: any,
+  options?: { onUuid?: (uuid: string) => void | Promise<void>; deadlineMs?: number }
+): Promise<{ response: any; polls: number }> {
+  try {
+    return await pollUntilDone(deps, userId, hostUid, task, initialResponse, options);
+  } finally {
+    // The task may have changed databases.txt (also when it failed partway),
+    // which start-info keeps per host for a minute (HA replica databases):
+    // read it again on the next start-info.
+    if (DB_LIST_TASKS.has(task)) clearHostConfCache(hostUid);
+  }
+}
+
+/**
+ * Tasks that add, remove or rename a database, as CMS names them and as a
+ * CMS job record names them (its type, used when following a job after a
+ * restart).
+ */
+const DB_LIST_TASKS = new Set(['createdb', 'deletedb', 'renamedb', 'copydb', 'create', 'delete', 'rename', 'copy']);
+
+async function pollUntilDone(
   deps: { hostService: HostService; cmsClient: CmsHttpsClientService },
   userId: string,
   hostUid: string,

@@ -1,5 +1,6 @@
 import { HostService } from '@host';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { clearHostConfCache } from '@util';
 import { ValidationError } from '@error/validation/validation-error';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
 import {
@@ -482,6 +483,8 @@ export class CmsConfigService extends BaseService implements OnModuleInit, OnMod
       cmsRequest
     );
 
+    // What start-info kept from this host's conf files is stale now.
+    clearHostConfCache(hostUid);
     return { success: true };
   }
 

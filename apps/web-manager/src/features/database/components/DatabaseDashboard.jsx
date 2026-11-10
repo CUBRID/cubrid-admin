@@ -14,21 +14,33 @@ import CASLogModal from './CASLogModal';
 import { isDatabaseInHa } from '../../host/haPeerUtils';
 import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
+import { totalCasQps } from '../casMetrics';
+import { pagesToSize, volumePageSize } from '../volumePages';
+import { dbMemorySegments, formatBytes1, recentHostMemory, hostMemoryMaxAgeMs } from '../dbMemorySegments';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { useCM } from '../../../constants/useCM';
+import DbLoginRequiredState from './DbLoginRequiredState';
 
 const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const CM = useCM();
   const { selectedHostUid, hosts, haInfo } = useSelector((state) => state.host, shallowEqual);
   
   const hostUid = propHostUid || selectedHostUid;
+  // While the host waits in the reconnect window nothing is read: the badge
+  // says so instead of "Live".
+  const isPendingReconnect = useSelector((state) => (state.host.reconnectQueue ?? []).includes(hostUid));
   const hostHaInfo = haInfo[hostUid] || {};
   const isHA = hostHaInfo.isHA;
 
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
+  // The host's memory as the host or service dashboard last read it
+  // (gethoststat). The DB dashboard does not read it itself, so the bar uses
+  // only a recent read (dbMemorySegments.js, recentHostMemory) and is hidden
+  // otherwise.
+  const hostSummary = useSelector((state) => state.globalMonitoring?.summaries?.[hostUid]);
   // CMS getenv osinfo ("LINUX", "NT", ...). On Linux the broker never fills
   // per-CAS CPU (get_psinfo in broker_process_info.c is Solaris/HP-UX only),
   // so CMS as_cpu is always 0.00 there; unknown OS keeps the CAS sum.
@@ -42,17 +54,22 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
   const { dashboardData, dashboardLoading } = useSelector((state) => state.databaseMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  const liveStatus = isPendingReconnect ? 'lost' : preferences.dashboardInterval > 0 ? 'live' : 'paused';
   const { activeMainTab } = useSelector((state) => state.layout, shallowEqual);
 
   const [logModal, setLogModal] = useState({ isOpen: false, brokerName: '', casId: '', type: 'sql' });
   
 
 
-  const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
+  // Which sections are collapsed (useRefreshWhenShown); the refresh skips them.
+  const collapsedSections = React.useRef({});
+
+  const { isManualRefreshing, lastRefreshed, handleRefresh, isDbLoggedIn } = usePollingRefresh({
     hostUid,
+    dbname,
     tabId: propHostUid ? `db:${hostUid}:${dbname}` : `db:${dbname}`,
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent }))
+    onFetch: (silent) => (dispatch) => dispatch(fetchDashboardData({ hostUid, dbname, isBackground: silent, collapsed: { ...collapsedSections.current } }))
   });
 
   const activeHost = hosts.find(h => h.uid === selectedHostUid);
@@ -73,14 +90,17 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
 
   // Pass polling props to sections
-  const pollingProps = { hostUid, dbname, isTabActive, refreshInterval: preferences.dashboardInterval };
+  const pollingProps = { hostUid, dbname, isTabActive, refreshInterval: preferences.dashboardInterval, collapsedSections };
 
+  // Page counts are shown as sizes: pages × the database's page size.
+  const pageSizes = { pagesize: data.pagesize, logpagesize: data.logpagesize };
   const mappedVolumes = (data.volumes || []).map(v => ({
     name: v.spacename, 
     type: v.type, 
     purpose: v.purpose || '-',
-    free: v.freepage && v.freepage.trim() !== '' ? CM.pagesCountLabel(v.freepage) : '-',
-    total: v.totalpage && v.totalpage.trim() !== '' ? CM.pagesCountLabel(v.totalpage) : '-',
+    free: v.freepage,
+    total: v.totalpage,
+    pageSize: volumePageSize(v, pageSizes),
     freePct: v.totalpage && parseInt(v.totalpage) > 0 && v.freepage && v.freepage.trim() !== '' ? (parseInt(v.freepage) / parseInt(v.totalpage)) * 100 : 0,
     date: v.date || '-', 
     path: volumeDirectory(v)
@@ -89,10 +109,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const mappedSpaceInfo = (data.spaceInfo || []).map(f => ({
     type: f.data_type, 
     fileCount: f.file_count, 
-    usedPages: f.used_size ? CM.pagesCountLabel(f.used_size) : '-',
-    fileTablePages: f.file_table_size ? CM.pagesCountLabel(f.file_table_size) : '-',
-    reservedPages: f.reserved_size ? CM.pagesCountLabel(f.reserved_size) : '-',
-    totalPages: f.total_size ? CM.pagesCountLabel(f.total_size) : '-'
+    usedPages: pagesToSize(f.used_size, data.pagesize),
+    fileTablePages: pagesToSize(f.file_table_size, data.pagesize),
+    reservedPages: pagesToSize(f.reserved_size, data.pagesize),
+    totalPages: pagesToSize(f.total_size, data.pagesize)
   }));
 
   const perf = data.performance || {};
@@ -101,12 +121,16 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const casStats = brokersCAS.reduce((acc, cas) => {
     acc.cpu += parseFloat(cas.cpu || 0);
     acc.memKB += parseFloat(cas.psize || 0);
-    acc.activeCount += (cas.status?.toLowerCase() === 'busy' ? 1 : 0);
     return acc;
-  }, { cpu: 0, memKB: 0, activeCount: 0 });
+  }, { cpu: 0, memKB: 0 });
 
-  const totalQps = brokersCAS.reduce((a, c) => a + parseInt(c.qps || 0), 0);
-  const totalMemMB = (casStats.memKB / 1024).toFixed(1);
+  const totalQps = totalCasQps(brokersCAS);
+  const rawHitRatio = parseFloat(perf.data_page_buffer_hit_ratio);
+  const hitRatio = Number.isFinite(rawHitRatio) ? rawHitRatio : null;
+  // psize is in KiB.
+  const casMemBytes = casStats.memKB * 1024;
+  const hostMem = recentHostMemory([hostData.currentStatus, hostSummary], Date.now(), hostMemoryMaxAgeMs(preferences.dashboardInterval));
+  const memSegments = dbMemorySegments(casMemBytes, hostMem?.memTotal, hostMem?.memUsed);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.
   const rates = perf.calculatedRates || {};
@@ -116,24 +140,29 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
     cpu: casCpuNotCollected ? '-' : casStats.cpu.toFixed(1) + '%',
     cpuPct: casCpuNotCollected ? 0 : Math.min(casStats.cpu, 100),
     cpuNote: casCpuNotCollected ? CM.casCpuNotCollectedLinux : undefined,
-    memory: totalMemMB + 'MiB', 
-    memPct: Math.min((casStats.memKB / 1024) / 4, 100),
+    memory: formatBytes1(casMemBytes),
+    memSegments,
     tps: formatRate(rates.tps),
-    qps: totalQps.toLocaleString(), 
-    hitRatio: (perf.data_page_buffer_hit_ratio || '0.00') + '%',
-    hitPct: parseFloat(perf.data_page_buffer_hit_ratio || '0'),
+    qps: formatRate(totalQps), 
+    // CMS reads the engine's ratio as a whole number (cm_mem_cpu_stat.cpp).
+    hitRatio: hitRatio === null ? '-' : `${Math.round(hitRatio)}%`,
+    hitPct: hitRatio,
     fetch: formatRate(rates.fetchPerSec),
     dirty: formatRate(rates.dirtyPerSec),
     ioReads: formatRate(rates.ioReadPerSec),
     ioWrites: formatRate(rates.ioWritePerSec)
   }];
   
-  const mappedBrokers = brokersCAS.map(c => ({ broker: c.broker, id: c.id, pid: c.pid, qps: c.qps, lqs: c.lqs, status: c.status, lastConn: c.lastConn, dbname: c.dbname }));
   const handleExport = () => {
     const headers = [CM.sectionLabel, CM.keyLabel, CM.value];
     const rows = [
       [CM.summaryLabel, CM.database, dbname],
       [CM.summaryLabel, CM.host, `${activeHost?.address}:${activeHost?.port}`],
+      // Memory in the bar's order: host (without this db's CAS), CAS, free, total.
+      [CM.performance, `${CM.memory} (${CM.dbMemHostLabel})`, memSegments ? formatBytes1(memSegments.host) : '-'],
+      [CM.performance, `${CM.memory} (${CM.dbMemCasLabel})`, formatBytes1(casMemBytes)],
+      [CM.performance, `${CM.memory} (${CM.dbMemFreeLabel})`, memSegments ? formatBytes1(memSegments.free) : '-'],
+      [CM.performance, `${CM.memory} (${CM.dbMemTotalLabel})`, memSegments ? formatBytes1(memSegments.total) : '-'],
       [CM.performance, CM.tps, dbStats[0].tps],
       [CM.performance, CM.qps, dbStats[0].qps],
       [CM.performance, CM.hitRatioLabel, dbStats[0].hitRatio],
@@ -145,9 +174,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
       ...(data.volumes || []).map(v => {
         const total = parseInt(v.totalpage, 10);
         const free = parseInt(v.freepage, 10);
+        const pageSize = volumePageSize(v, pageSizes);
         const value = Number.isNaN(total) || Number.isNaN(free)
           ? '-'
-          : CM.pagesCountLabel(`${Math.max(0, total - free)} / ${total}`);
+          : `${pagesToSize(Math.max(0, total - free), pageSize)} / ${pagesToSize(total, pageSize)}`;
         return [CM.volumeLabel, v.spacename, value];
       })
     ];
@@ -175,10 +205,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
           <div>
             <div className="flex items-center gap-2">
               <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{CM.databaseDashboard}</Typography>
-              <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
-                <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
+              <div data-testid="dashboard-live-badge" className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${liveStatus === 'live' ? 'bg-emerald-500/10 border-emerald-500/30' : liveStatus === 'lost' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
+                <div className={`w-1 h-1 rounded-full ${liveStatus === 'live' ? 'bg-emerald-500 animate-pulse' : liveStatus === 'lost' ? 'bg-rose-500' : 'bg-slate-400'}`} />
+                <span className={`text-11 font-bold ${liveStatus === 'live' ? 'text-emerald-600 dark:text-emerald-400' : liveStatus === 'lost' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {liveStatus === 'live' ? CM.live : liveStatus === 'lost' ? CM.connectionLost : CM.paused}
                 </span>
               </div>
             </div>
@@ -229,7 +259,10 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
 
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 relative">
-        {isLoading && (!data.volumes || data.volumes.length === 0) ? (
+        {/* Without this database's login nothing is read: no section is mounted to poll. */}
+        {!isDbLoggedIn ? (
+          <DbLoginRequiredState />
+        ) : isLoading && (!data.volumes || data.volumes.length === 0) ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -242,7 +275,7 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
             <DBVolumesSection volumes={mappedVolumes} volumesStatus={data.volumesStatus} pollingProps={pollingProps} />
             <DBSpaceInfoSection spaceInfo={mappedSpaceInfo} spaceInfoStatus={data.spaceInfoStatus} pollingProps={pollingProps} />
             <DBBrokersCASSection
-              brokersCAS={mappedBrokers}
+              brokersCAS={brokersCAS}
               casStatus={data.casStatus}
               pollingProps={pollingProps}
               onViewSQLLog={(row) => setLogModal({ isOpen: true, brokerName: row.broker, casId: row.id, type: 'sql' })}

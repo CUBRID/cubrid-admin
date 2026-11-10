@@ -23,6 +23,7 @@ export class ConfigService {
   public authRegistrationEnabled!: boolean;
   public listenHost?: string;
   private readonly listenUnixSocket?: string;
+  private readonly desktopMode: boolean;
   private readonly cmsCaCert?: string;
   private logToFile!: boolean;
   private logDir!: string;
@@ -58,7 +59,9 @@ export class ConfigService {
     this.cmsCaCert = this.resolveCmsCaCert(args);
     this.cmsRejectUnauthorized = this.resolveCmsRejectUnauthorized(args);
     this.cmsForwardEnabled = this.resolveCmsForwardEnabled(args);
-    this.authRegistrationEnabled = this.resolveAuthRegistrationEnabled(args);
+    this.desktopMode = (process.env.CWM_DESKTOP ?? '').trim() === '1';
+    // The desktop app has one built-in user and no accounts to sign up for.
+    this.authRegistrationEnabled = this.desktopMode ? false : this.resolveAuthRegistrationEnabled(args);
 
     this.resolveLogSettings(args);
 
@@ -84,8 +87,7 @@ export class ConfigService {
 
     const allowedFromEnvOrArg =
       args.ALLOWED_ORIGINS ?? process.env.ALLOWED_ORIGINS;
-    const desktopMode = (process.env.CWM_DESKTOP ?? '').trim() === '1';
-    this.setAllowedOrigins(allowedFromEnvOrArg, desktopMode);
+    this.setAllowedOrigins(allowedFromEnvOrArg, this.desktopMode);
 
     const listenHost =
       args.LISTEN_HOST ?? process.env.LISTEN_HOST ?? process.env.HOST;
@@ -97,6 +99,10 @@ export class ConfigService {
       args.LISTEN_UNIX_SOCKET ?? process.env.LISTEN_UNIX_SOCKET;
     if (listenUnixSocket?.trim()) {
       this.listenUnixSocket = listenUnixSocket.trim();
+    }
+    // Desktop mode has no app login, so it must never listen on TCP.
+    if (this.desktopMode && !this.listenUnixSocket) {
+      throw new Error('LISTEN_UNIX_SOCKET is required when CWM_DESKTOP=1.');
     }
   }
 
@@ -126,6 +132,15 @@ export class ConfigService {
 
   getListenUnixSocket(): string | undefined {
     return this.listenUnixSocket;
+  }
+
+  /**
+   * Run by the desktop app (CWM_DESKTOP=1, set only by its main process):
+   * no app login (DesktopUserGuard instead of JwtAuthGuard) and listening on
+   * the app's socket only (LISTEN_UNIX_SOCKET, required then).
+   */
+  isDesktopMode(): boolean {
+    return this.desktopMode;
   }
 
   getCmsRejectUnauthorized(): boolean {

@@ -8,7 +8,7 @@ import uiReducer from '../databaseUISlice';
 import databaseCoreReducer, { fetchDatabaseStartInfo } from '../databaseCoreSlice';
 import { CmsJobProvider } from '../../../infrastructure/context/CmsJobContext';
 
-const mocks = vi.hoisted(() => ({ submitCopy: vi.fn(), run: vi.fn(), getStartInfo: vi.fn(), readStartInfo: vi.fn(), getVolumeInfo: vi.fn() }));
+const mocks = vi.hoisted(() => ({ submitCopy: vi.fn(), run: vi.fn(), getStartInfo: vi.fn(), getVolumeInfo: vi.fn() }));
 vi.mock('../../../api/apiClient', () => ({ default: { defaults: { headers: { common: {} } } } }));
 vi.mock('../databaseJobApi', async importOriginal => ({
   ...await importOriginal(),
@@ -18,7 +18,17 @@ vi.mock('../../../infrastructure/services/cmsJobRunner', () => ({
   runCmsJobInBackground: mocks.run, isCmsJobPolling: () => false,
   cancelAllCmsJobPolls: vi.fn(), cancelCmsJobPoll: vi.fn(),
 }));
-vi.mock('../databaseApi', () => ({ databaseApi: { getStartInfo: mocks.getStartInfo, readStartInfo: mocks.readStartInfo, getVolumeInfo: mocks.getVolumeInfo } }));
+vi.mock('../databaseApi', async () => {
+  const { createSharedReads } = await import('../../../infrastructure/utils/singleFlight');
+  const reads = createSharedReads();
+  return {
+    databaseApi: {
+      getStartInfo: mocks.getStartInfo,
+      getVolumeInfo: mocks.getVolumeInfo,
+      readStartInfo: (hostUid, options) => reads(hostUid, () => mocks.getStartInfo(hostUid), options),
+    },
+  };
+});
 // The tray's shared result popup isn't under test here.
 vi.mock('../../../infrastructure/cmsJob/JobResultModal', () => ({ JobResultModal: () => null }));
 
@@ -35,11 +45,13 @@ beforeEach(() => {
   root = createRoot(container);
   const fixed = {
     auth: { isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } },
-    host: { selectedHostUid: 'host-1' },
   };
   store = configureStore({
     reducer: {
       ...Object.fromEntries(Object.entries(fixed).map(([key, value]) => [key, () => value])),
+      // 'test/select-host' switches the host, as a click on another host does.
+      host: (state = { selectedHostUid: 'host-1' }, action) =>
+        action.type === 'test/select-host' ? { ...state, selectedHostUid: action.payload } : state,
       database: databaseCoreReducer,
       databaseUI: uiReducer,
     },
@@ -48,7 +60,7 @@ beforeEach(() => {
         ...databaseCoreReducer(undefined, { type: 'init' }),
         activeHostUid: 'host-1',
         selectedDatabase: 'demodb',
-        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }] },
+        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }, { dbname: 'otherdb', dbdir: '/db/otherdb' }, { dbname: 'repdb', cmsListed: false }] },
         loggedInDatabases: ['host-1:demodb', 'host-1:newdb', 'host-1:otherdb'],
       },
       databaseUI: { ...uiReducer(undefined, { type: 'init' }), isCopyDatabaseModalOpen: true },
@@ -163,6 +175,24 @@ it('still supports normal copy without volume metadata', async () => {
   expect(mocks.submitCopy.mock.calls[0][1]).not.toHaveProperty('volume');
 });
 
+it('reads the database list of the host it copied on, also when the job was backgrounded and another host is selected since', async () => {
+  mocks.getVolumeInfo.mockResolvedValue({ spaceinfo: [] });
+  let finish;
+  mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  await render();
+  await typeNewName('clone');
+  await click(execute());
+  const backgroundBtn = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Confirm'));
+  await click(backgroundBtn);
+  expect(store.getState().databaseUI.isCopyDatabaseModalOpen).toBe(false);
+  await act(async () => store.dispatch({ type: 'test/select-host', payload: 'host-2' }));
+  mocks.getStartInfo.mockClear();
+
+  await act(async () => finish(job));
+
+  expect(mocks.getStartInfo.mock.calls).toEqual([['host-1']]);
+});
+
 it.each([false, true])('blocks the source name before submission (individual copy: %s)', async individualCopy => {
   await render();
   await typeNewName('clone');
@@ -192,8 +222,9 @@ describe('a copy that deletes its source', () => {
   it('keeps the progress view while the source leaves the list', async () => {
     let finish;
     mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-    mocks.readStartInfo.mockResolvedValue(sourceGone);
     await render();
+    // After the read made as the dialog opens, which checks the new name.
+    mocks.getStartInfo.mockResolvedValue(sourceGone.value);
     await typeNewName('clone');
     await click(deleteSource());
     await click(execute());
@@ -208,8 +239,9 @@ describe('a copy that deletes its source', () => {
   });
 
   it('keeps the success view, with the new name, after the source leaves the list', async () => {
-    mocks.readStartInfo.mockResolvedValue(sourceGone);
     await render();
+    // After the read made as the dialog opens, which checks the new name.
+    mocks.getStartInfo.mockResolvedValue(sourceGone.value);
     await typeNewName('clone');
     await click(deleteSource());
     await click(execute());
@@ -218,4 +250,39 @@ describe('a copy that deletes its source', () => {
     expect(nameInput()).toBeNull();
     expect(container.textContent).toContain('Copy completed: clone');
   });
+});
+
+it('refuses a new name that createdb would reject (18 characters and more, a digit first)', async () => {
+  await render();
+  await typeNewName('a'.repeat(18));
+  expect(execute().disabled).toBe(true);
+  expect(container.textContent).toContain('At most 17 characters');
+  await typeNewName('2copy');
+  expect(execute().disabled).toBe(true);
+  expect(container.textContent).toContain('Must start with a letter');
+  await typeNewName('a'.repeat(17));
+  expect(execute().disabled).toBe(false);
+});
+
+it("refuses a new name the host's database list already has, replica ones too (case-sensitive, as the engine)", async () => {
+  await render();
+  for (const taken of ['otherdb', 'repdb']) {
+    await typeNewName(taken);
+    expect(execute().disabled).toBe(true);
+    expect(container.textContent).toContain('A database with this name already exists on this host');
+  }
+  await typeNewName('demodb');
+  expect(execute().disabled).toBe(true);
+  expect(container.textContent).not.toContain('already exists');
+  await typeNewName('OtherDB');
+  expect(execute().disabled).toBe(false);
+  expect(container.textContent).not.toContain('already exists');
+});
+
+it('does not refuse a listed name when the database list could not be read again (it may have been deleted since)', async () => {
+  mocks.getStartInfo.mockRejectedValue(new Error('no answer'));
+  await render();
+  await typeNewName('otherdb');
+  expect(container.textContent).not.toContain('already exists');
+  expect(execute().disabled).toBe(false);
 });

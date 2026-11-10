@@ -4,6 +4,7 @@ import {
   deleteDatabaseProfile,
   loginDatabase,
   logoutDatabase,
+  registerDatabase,
   runSelectedDatabasesAction,
 } from './databaseCoreSlice';
 
@@ -82,7 +83,10 @@ async function eachInTurn(rows, run) {
  * Start/stop/restart go to the server in one request; login, logout and
  * forgetting credentials call the per-database endpoints in turn. A login
  * uses the database's saved credentials, or for those without, its entry in
- * `credentials` ({ [dbname]: { id, password } }).
+ * `credentials` ({ [dbname]: { id, password, save } }). With `save` the
+ * entered credentials are stored as the database's profile after the login
+ * succeeds, as the single login dialog does; a profile is never used to log
+ * in on its own.
  *
  * @returns {Promise<{ succeeded: string[], failed: {dbname, error, phase?}[], skipped: {dbname, reason}[] }>}
  */
@@ -104,11 +108,16 @@ export async function runMultiDatabaseAction(dispatch, CM, { hostUid, action, ro
         }
         const entered = credentials?.[row.dbname];
         if (!entered?.id) return { skip: CM.noSavedCredentialsReason };
-        await dispatch(loginDatabase({
-          hostUid,
-          dbname: row.dbname,
-          payload: { id: entered.id, password: entered.password || '' },
-        })).unwrap();
+        const payload = { id: entered.id, password: entered.password || '' };
+        await dispatch(loginDatabase({ hostUid, dbname: row.dbname, payload })).unwrap();
+        if (entered.save) {
+          try {
+            await dispatch(registerDatabase({ hostUid, dbname: row.dbname, payload })).unwrap();
+          } catch {
+            // Logged in; only the profile is missing.
+            throw new Error(CM.credentialsNotSavedMessage);
+          }
+        }
         return null;
       });
     case 'logout':

@@ -9,7 +9,6 @@ class WorkspaceSetupPage {
     this.pickBtn = window.getByTestId('workspace-pick-btn');
     this.continueBtn = window.getByTestId('workspace-continue-btn');
     this.saveBtn = window.getByTestId('workspace-save-btn');
-    this.resetBtn = window.getByTestId('workspace-reset-btn');
   }
 
   async waitForPage() {

@@ -14,6 +14,16 @@ import { findHaPeersNeedingMerge,
 
 export { isHaPostLoginModalOpen, clearHaClusterLinkSessionNotices } from './haPeerUtils';
 
+// A change of the selected host moves the host list's highlight with it, as
+// the list did on its own before (the highlight may differ: a click on a host
+// that is not connected highlights it without selecting it). Keeping the same
+// host (a group click, a list update) leaves the highlight; choosing a host
+// on purpose (setSelectedHost) always moves it.
+function selectHostUid(state, hostUid) {
+  if (state.selectedHostUid !== hostUid) state.highlightedHostUid = hostUid;
+  state.selectedHostUid = hostUid;
+}
+
 function purgeHostClientState(state, hostUid) {
   state.authorizedHosts = state.authorizedHosts.filter((uid) => uid !== hostUid);
   delete state.haInfo[hostUid];
@@ -59,6 +69,11 @@ function applyHostGroupsResponse(state, hostGroups) {
   for (const uid of Object.keys(state.hostAuthErrors)) {
     if (!validUids.has(uid)) delete state.hostAuthErrors[uid];
   }
+  // A highlighted host that is gone (deleted without being selected): back
+  // to the selected host, whose row is then highlighted again.
+  if (state.highlightedHostUid && !validUids.has(state.highlightedHostUid)) {
+    state.highlightedHostUid = validUids.has(state.selectedHostUid) ? state.selectedHostUid : null;
+  }
   syncHaInfoStorage(state);
 }
 
@@ -69,7 +84,7 @@ function syncHostSelection(state) {
     if (groupId) {
       state.selectedGroupUid = groupId;
     } else {
-      state.selectedHostUid = null;
+      selectHostUid(state, null);
     }
   }
 
@@ -276,14 +291,20 @@ export const stopService = createAsyncThunk(
   }
 );
 
+// loginToHost takes a host uid, or { hostUid, changes } to log in with changed
+// settings that the server saves only if the login succeeds.
+const loginHostUid = (arg) => (typeof arg === 'string' ? arg : arg?.hostUid);
+
 // Async thunk to explicitly login/forward to a specific host
 export const loginToHost = createAsyncThunk(
   'host/loginToHost',
-  async (hostUid, { rejectWithValue, getState }) => {
+  async (arg, { rejectWithValue, getState, dispatch }) => {
+    const hostUid = loginHostUid(arg);
+    const changes = typeof arg === 'string' ? undefined : arg?.changes;
     // Same locale source as useCM: the message is stored as shown.
     const CM = getCM(getState().user?.preferences?.uiLocale ?? getStoredLocale());
     try {
-      const response = await hostApi.loginToHost(hostUid);
+      const response = changes ? await hostApi.connectHost(hostUid, changes) : await hostApi.loginToHost(hostUid);
       // The API returns { success: true, isHA: boolean, ... }
       if (
         response === false ||
@@ -292,6 +313,8 @@ export const loginToHost = createAsyncThunk(
       ) {
         return rejectWithValue(CM.hostLoginFailedMsg);
       }
+      // Logged in and saved, but the server could not read the HA details in time.
+      if (response?.haInfoUnavailable) dispatch(refreshHaInfo(hostUid));
       return { hostUid, ...response };
     } catch (err) {
       return rejectWithValue(hostLoginErrorMessage(err, CM));
@@ -391,6 +414,8 @@ export const fetchCmsUsers = createAsyncThunk(
   }
 );
 
+// The user's language, for an error the server reports by code.
+
 export const addCmsUser = createAsyncThunk(
   'host/addCmsUser',
   async ({ hostUid, payload }, { rejectWithValue }) => {
@@ -443,6 +468,9 @@ const initialState = {
   hostToDeleteUid: null,
   hostToDeleteAlias: null,
   hostToEditUid: null,
+  // Edit Host opened because the host turned down its saved password: the
+  // password field starts open instead of behind "change".
+  editHostPasswordRejected: false,
   isServerVersionModalOpen: false,
   serverVersionHostUid: null,
   hosts: [],
@@ -466,6 +494,9 @@ const initialState = {
   hostsAwaitingHaLogin: [], // Host UIDs pending first HA post-login side effects (import/add batch)
   initialHostData: null, // Data to pre-fill AddHostModal
   selectedHostUid: null,
+  // The row highlighted in the host list. A click on a host that is not
+  // connected highlights it without selecting it (that takes a login).
+  highlightedHostUid: null,
   selectedGroupUid: null,
   loading: false,
   isLoggingIntoHost: false,
@@ -490,6 +521,12 @@ const initialState = {
   error: null,
   loginErrorHostUid: null, // host whose failed login wrote `error`
   reconnectQueue: [],
+  // Hosts in reconnectQueue whose saved password no longer works, so the
+  // reconnect window asks for the new one (askHostPassword).
+  reconnectPasswordHosts: [],
+  // Why a host is in reconnectQueue when it is not a lost session:
+  // 'unreachable' (its CMS could not be reached, see hostUnreachable).
+  reconnectReasons: {}, // { [hostUid]: 'unreachable' }
 };
 
 const hostSlice = createSlice({
@@ -504,19 +541,21 @@ const hostSlice = createSlice({
       state.isAddHostModalOpen = false;
       state.initialHostData = null;
     },
+    // A host chosen on purpose (its tab, a click, the dashboard): highlighted
+    // too, even when it was selected already.
     setSelectedHost: (state, action) => {
-      state.selectedHostUid = action.payload;
+      selectHostUid(state, action.payload);
+      state.highlightedHostUid = action.payload;
       const gid = findGroupIdForHost(state.hostGroups, action.payload);
       if (gid) state.selectedGroupUid = gid;
+    },
+    setHighlightedHost: (state, action) => {
+      state.highlightedHostUid = action.payload ?? null;
     },
     setSelectedGroup: (state, action) => {
       const { groupId, hostUid } = action.payload;
       state.selectedGroupUid = groupId;
-      if (hostUid) {
-        state.selectedHostUid = hostUid;
-      } else {
-        state.selectedHostUid = null;
-      }
+      selectHostUid(state, hostUid || null);
     },
     setServiceProgressMessage: (state, action) => {
       state.serviceProgressMessage = action.payload;
@@ -524,9 +563,13 @@ const hostSlice = createSlice({
     revokeHostLogin: (state, action) => {
       const hostUid = action.payload;
       state.authorizedHosts = state.authorizedHosts.filter(uid => uid !== hostUid);
-      // Reset specific host data
+      // Reset specific host data. Its HA role is only known while connected;
+      // the next login reads it again.
       delete state.hostEnvs[hostUid];
+      delete state.haInfo[hostUid];
+      syncHaInfoStorage(state);
       if (state.hostAuthErrors[hostUid]) delete state.hostAuthErrors[hostUid];
+      if (state.reconnectReasons?.[hostUid]) delete state.reconnectReasons[hostUid];
       // Reset general error if it was likely related to this host
       state.error = null;
     },
@@ -540,13 +583,20 @@ const hostSlice = createSlice({
       state.hostToDeleteUid = null;
       state.hostToDeleteAlias = null;
     },
+    // Payload: the hostUid, or { hostUid, passwordRejected } when a login
+    // with the saved password was just turned down.
     openEditHostModal: (state, action) => {
+      const { hostUid, passwordRejected = false } = typeof action.payload === 'object' && action.payload !== null
+        ? action.payload
+        : { hostUid: action.payload };
       state.isEditHostModalOpen = true;
-      state.hostToEditUid = action.payload; // Just need the hostUid, we can look up the rest
+      state.hostToEditUid = hostUid; // Just need the hostUid, we can look up the rest
+      state.editHostPasswordRejected = Boolean(passwordRejected);
     },
     closeEditHostModal: (state) => {
       state.isEditHostModalOpen = false;
       state.hostToEditUid = null;
+      state.editHostPasswordRejected = false;
     },
     openCreateGroupModal: (state) => {
       state.isCreateGroupModalOpen = true;
@@ -689,7 +739,27 @@ const hostSlice = createSlice({
       }
     },
     closeReconnectModal: (state) => {
-      state.reconnectQueue.shift();
+      const hostUid = state.reconnectQueue.shift();
+      state.reconnectPasswordHosts = (state.reconnectPasswordHosts ?? []).filter((uid) => uid !== hostUid);
+      if (hostUid && state.reconnectReasons?.[hostUid]) delete state.reconnectReasons[hostUid];
+    },
+    // The CMS account this host logs in with got a new password (Edit CMS
+    // User): ask for it instead of logging in again with the saved one.
+    askHostPassword: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid) return;
+      if (!state.reconnectQueue.includes(hostUid)) state.reconnectQueue.push(hostUid);
+      state.reconnectPasswordHosts = [...new Set([...(state.reconnectPasswordHosts ?? []), hostUid])];
+    },
+    // The host's CMS could not be reached (stopped, its port changed, the
+    // host down): the reconnect window, saying that. The host stays in
+    // authorizedHosts so Reconnect keeps every screen; its polling pauses
+    // while it is in the queue.
+    hostUnreachable: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid) return;
+      if (!state.reconnectQueue.includes(hostUid)) state.reconnectQueue.push(hostUid);
+      state.reconnectReasons = { ...(state.reconnectReasons ?? {}), [hostUid]: 'unreachable' };
     },
   },
   extraReducers: (builder) => {
@@ -716,6 +786,12 @@ const hostSlice = createSlice({
             }
           }
           state.authorizedHostsHydrated = true;
+          // HA roles saved by an earlier session, for hosts that did not come
+          // back connected, are out of date.
+          for (const uid of Object.keys(state.haInfo)) {
+            if (!state.authorizedHosts.includes(uid)) delete state.haInfo[uid];
+          }
+          syncHaInfoStorage(state);
         }
       })
       .addCase(fetchHosts.rejected, (state, action) => {
@@ -736,7 +812,7 @@ const hostSlice = createSlice({
             state.hostsAwaitingHaLogin.push(newHost.uid);
           }
           if (!state.skipAutoHostLogin) {
-            state.selectedHostUid = newHost.uid;
+            selectHostUid(state, newHost.uid);
             state.selectedGroupUid = findGroupIdForHost(state.hostGroups, newHost.uid);
           }
         }
@@ -752,7 +828,7 @@ const hostSlice = createSlice({
           state.loading = true;
         }
         // Clean up previous error for this host if any
-        clearHostLoginError(state, action.meta.arg);
+        clearHostLoginError(state, loginHostUid(action.meta.arg));
       })
       .addCase(loginToHost.fulfilled, (state, action) => {
         if (!state.isBatchHostLogin) {
@@ -767,6 +843,7 @@ const hostSlice = createSlice({
           state.authorizedHosts.push(hostUid);
         }
         state.reconnectQueue = state.reconnectQueue.filter((uid) => uid !== hostUid);
+        state.reconnectPasswordHosts = (state.reconnectPasswordHosts ?? []).filter((uid) => uid !== hostUid);
         state.haInfo[hostUid] = haInfo;
         localStorage.setItem('cubrid_ha_info', JSON.stringify(state.haInfo));
 
@@ -787,10 +864,17 @@ const hostSlice = createSlice({
           state.isLoggingIntoHost = false;
           state.loading = false;
         }
-        state.hostAuthErrors[action.meta.arg] = action.payload;
+        const hostUid = loginHostUid(action.meta.arg);
+        state.hostAuthErrors[hostUid] = action.payload;
+        // A host still connected (a failed Reconnect keeps its screens) keeps
+        // its HA role; one that is not has none to show.
+        if (!state.authorizedHosts.includes(hostUid) && state.haInfo[hostUid]) {
+          delete state.haInfo[hostUid];
+          syncHaInfoStorage(state);
+        }
         if (!state.isBatchHostLogin) {
           state.error = action.payload;
-          state.loginErrorHostUid = action.meta.arg;
+          state.loginErrorHostUid = hostUid;
         }
       })
       // Silent background refresh — no loading/error state, so a failure
@@ -932,7 +1016,7 @@ const hostSlice = createSlice({
         applyHostGroupsResponse(state, hostGroups);
         const removedSet = new Set(removedHostUids);
         if (removedSet.has(state.selectedHostUid)) {
-          state.selectedHostUid = null;
+          selectHostUid(state, null);
         }
         syncHostSelection(state);
         removedHostUids.forEach((uid) => purgeHostClientState(state, uid));
@@ -1022,6 +1106,7 @@ export const {
   openAddHostModal,
   closeAddHostModal,
   setSelectedHost,
+  setHighlightedHost,
   setSelectedGroup,
   revokeHostLogin,
   openDeleteHostModal,
@@ -1061,6 +1146,8 @@ export const {
   closeEditCmsUserModal,
   openReconnectModal,
   closeReconnectModal,
+  hostUnreachable,
+  askHostPassword,
 } = hostSlice.actions;
 
 /**
@@ -1211,9 +1298,10 @@ export const haFollowUpAction = (followUp, hostState) => {
 /** Login + HA side effects — use instead of bare loginToHost for user-initiated logins. */
 export const loginToHostWithSideEffects = createAsyncThunk(
   'host/loginToHostWithSideEffects',
-  async (hostUid, { dispatch, rejectWithValue }) => {
+  async (arg, { dispatch, rejectWithValue }) => {
+    const hostUid = loginHostUid(arg);
     try {
-      await dispatch(loginToHost(hostUid)).unwrap();
+      await dispatch(loginToHost(arg)).unwrap();
       await dispatch(processHaLoginSideEffects(hostUid)).unwrap();
       return hostUid;
     } catch (err) {

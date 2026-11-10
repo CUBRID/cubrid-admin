@@ -4,6 +4,8 @@ import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
 import { isBrokerRunning } from '../brokerState';
 import { createRateTracker } from '../rateTracker';
+import { hostKey } from '../../host/hostKey';
+import { withRestartsShownOn } from '../brokerRestartState';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Card } from '../../../components/ds/layout/Card';
@@ -40,7 +42,8 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
 
   const { detailedStatus } = useSelector((state) => state.broker, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
-  const status = detailedStatus[brokerName] || { data: {}, loading: false, error: null };
+  const restartingBrokers = useSelector((state) => state.broker.restartingBrokers);
+  const status = detailedStatus[hostKey(hostUid, brokerName)] || { data: {}, loading: false, error: null };
 
   // Basic Information below is read from lastKnownBrokerFromList, fed only
   // by THIS component's own fetchBrokerList dispatches — deliberately not
@@ -124,7 +127,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
 
   /* Loading — also before the first fetch has dispatched (no entry yet), so
      the tables don't flash their "no application servers" message. */
-  const hasStatusEntry = Boolean(detailedStatus[brokerName]);
+  const hasStatusEntry = Boolean(detailedStatus[hostKey(hostUid, brokerName)]);
   if ((!hasStatusEntry || status.loading) && !status.data?.asinfo) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-bk-main h-full">
@@ -155,7 +158,8 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
   // so basic broker info always comes from the broker list instead (kept
   // fresh by this tab's own onFetch above, which populates
   // lastKnownBrokerFromList directly from its own request's result).
-  const brokerFromList = lastKnownBrokerFromList || {};
+  // A broker being restarted shows as before (ON) until the restart ends.
+  const brokerFromList = withRestartsShownOn(lastKnownBrokerFromList ? [lastKnownBrokerFromList] : [], restartingBrokers, hostUid)[0] || {};
   // CMS lists a stopped broker without its settings (getbrokersinfo sends
   // them only for a running one), so they show as unknown, not as defaults.
   // With the whole broker service off the list has no state at all, which
@@ -437,6 +441,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               sortable
               zebra
               maxRows={15}
+              paginate
               emptyMessage={CM.noAppServersActiveMsg}
             />
           </div>
@@ -460,6 +465,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
             sortable
             zebra
             maxRows={15}
+            paginate
             emptyMessage={CM.jobQueueEmptyMsg}
           />
         </Card>

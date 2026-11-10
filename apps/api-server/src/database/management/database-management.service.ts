@@ -42,6 +42,7 @@ import {
 } from '@common';
 import { DatabaseError } from '@error/database/database-error';
 import { HostService } from '@host';
+import { unloadObjectTypeWarningClasses } from './unload-object-type-warning';
 import { Injectable } from '@nestjs/common';
 import {
   AddVolDbCmsRequest,
@@ -279,6 +280,8 @@ export class DatabaseManagementService extends BaseService {
     request: UnloadDatabaseRequest
   ): Promise<UnloadDatabaseCmsResponse['result']> {
     const response = await this.unloadDatabaseCmsResponse(userId, hostUid, dbname, request);
+    // Files written, failed by CMS only on the OBJECT-type warning: no result rows.
+    if (unloadObjectTypeWarningClasses(response)) return [];
     checkCmsStatusError(response);
     return response.result;
   }
@@ -331,9 +334,13 @@ export class DatabaseManagementService extends BaseService {
       'split-schema-files': request['split-schema-files'],
       delimit: request.delimit,
       estimate: request.estimate,
-      prefix: request.prefix,
+      // Without a prefix the engine names its files after the name it was
+      // given, which for an HA database is db@host (CMS adds the host), while
+      // CMS reads the result log and writes unloaddb.info as <db>_...: the
+      // result table came back empty. The database name as the prefix makes
+      // both sides use <db>_..., which is also the default for the others.
+      prefix: request.prefix || dbname,
       cach: request.cach,
-      lofile: request.lofile,
     };
 
     return this.executeAsyncCmsJobRequest<UnloadDatabaseCmsRequest, UnloadDatabaseCmsResponse>(

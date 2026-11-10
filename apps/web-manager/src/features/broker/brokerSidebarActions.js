@@ -1,4 +1,5 @@
 import {
+  markBrokersRestarting,
   fetchBrokerList,
   startBroker,
   stopBroker,
@@ -58,13 +59,29 @@ export const stopAllBrokersAndRefresh = (hostUid) => async (dispatch) => {
   dispatch(refreshAfterBrokerAction(hostUid));
 };
 
-export const restartAllBrokersAndRefresh = (hostUid) => async (dispatch) => {
-  await dispatch(stopAllBrokers(hostUid)).unwrap();
+// ON or SUSPENDED: the broker process is up (CMS maps the engine's
+// FLAG_SUSPEND to SUSPENDED). Case and spaces in the state are ignored.
+const isRunningBroker = (broker) => {
+  const raw = broker?.state ?? broker?.status;
+  const state = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+  return state === 'ON' || state === 'SUSPENDED';
+};
+
+export const restartAllBrokersAndRefresh = (hostUid) => async (dispatch, getState) => {
+  // The running ones keep showing ON until the restart ends.
+  const running = (getState().broker.navigatorBrokersByHost?.[hostUid] || [])
+    .filter(isRunningBroker)
+    .map((broker) => broker.name);
+  dispatch(markBrokersRestarting({ hostUid, names: running, restarting: true }));
+  let stopped = false;
   try {
+    await dispatch(stopAllBrokers(hostUid)).unwrap();
+    stopped = true;
     await dispatch(startAllBrokers(hostUid)).unwrap();
   } finally {
+    dispatch(markBrokersRestarting({ hostUid, names: running, restarting: false }));
     // Also after a failed start: the brokers really are stopped now.
-    dispatch(refreshAfterBrokerAction(hostUid));
+    if (stopped) dispatch(refreshAfterBrokerAction(hostUid));
   }
 };
 

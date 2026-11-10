@@ -16,6 +16,7 @@ import {
   GetAdminLogInfoCmsResponse,
   BaseCmsRequest,
 } from '@type';
+import { topSqlLimitsFromEnv } from '@config/topsql-limits';
 import { BaseService, HandleCmsErrors } from '@common';
 import { DatabaseUserService } from '@database/user/database-user.service';
 
@@ -127,16 +128,16 @@ export class LogService extends BaseService {
    * splice a different file's tail into the captured response.
    */
   async captureLogSnapshot(userId: string, hostUid: string, path: string): Promise<ViewLogClientResponse> {
-    const maxLines = 100_000;
-    const maxBytes = 16 * 1024 * 1024;
+    // cwm.conf TOPSQL_MAX_LOG_LINES / TOPSQL_MAX_LOG_MB, read on every capture.
+    const { maxLines, maxMiB, maxBytes, timeoutMs } = topSqlLimitsFromEnv();
     const response = await this.executeCmsRequest<
       BaseCmsRequest & { path: string; start: string; end: string }, ViewLogCmsResponse
     >(userId, hostUid, { task: 'viewlog', path, start: '1', end: String(maxLines) },
-      { timeoutMs: 30_000, maxResponseBytes: maxBytes });
+      { timeoutMs, maxResponseBytes: maxBytes });
     const total = Number(response.total);
     if (total > maxLines || Buffer.byteLength(JSON.stringify(response), 'utf8') > maxBytes) {
       throw new PayloadTooLargeException({
-        message: 'Log exceeds the analysis limit (100,000 lines or 16 MiB). Select a smaller archived log.',
+        message: `Log exceeds the analysis limit (${maxLines.toLocaleString('en-US')} lines or ${maxMiB} MiB). Select a smaller archived log.`,
         code: 'LOG_TOO_LARGE',
         maxLines,
         maxBytes,
