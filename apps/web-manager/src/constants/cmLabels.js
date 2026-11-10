@@ -1545,6 +1545,8 @@ export const CM = {
   establishingSession: 'Establishing secure session...',
   connectionFailed: 'Connection failed',
   hostLoginFailedMsg: 'Could not log in to the host.',
+  hostNotLoggedIn: 'Not logged in',
+  hostLoginFailedWith: (msg) => (msg ? `Login failed: ${msg}` : 'Login failed'),
   hostLoginNoResponseMsg: 'No response from the CMS. Check that the CMS is running on the host and that the address and port are correct.',
   cmsAdminRequiredErrorMsg: 'Only a host connected as the CMS admin account can manage CMS users.',
   hostLoginTlsErrorMsg: "Could not establish a trusted connection to the CMS. Check the TLS certificate of the host's CMS.",

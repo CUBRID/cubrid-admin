@@ -1,4 +1,5 @@
 import { useCM } from '../../../../constants/useCM';
+import { HostStatusDot, useHostConnectionStatus } from '../../../host/components/HostStatusDot';
 
 const HA_ROLE_CONFIG = {
   master:  { cmKey: 'haMaster',  icon: 'star',                    className: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400' },
@@ -28,6 +29,7 @@ export default function ServerListItem({
   onDragEnd,
 }) {
   const CM = useCM();
+  const hostStatus = useHostConnectionStatus(host.uid);
 
   // The HA role is only known while the host is connected.
   const haRole = isAuthorized && haInfo?.isHA ? haInfo.currentNodeType : null;
@@ -97,20 +99,11 @@ export default function ServerListItem({
         }`}
       />
 
-      {/* Status dot: green = online, yellow = online but HA role unknown, red = not logged in */}
+      {/* Status dot: green connected, yellow not logged in (blinking while
+          logging in), red login failed or connection lost. An unknown HA
+          role has its own badge, so the dot stays green. */}
       <div className="shrink-0 flex items-center justify-center w-4">
-        {isAuthorized ? (
-          <span className="relative flex w-1.5 h-1.5">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-40 ${
-              haRole === 'unknown' ? 'bg-amber-400' : 'bg-emerald-400'
-            }`} />
-            <span className={`relative inline-flex rounded-full w-1.5 h-1.5 ${
-              haRole === 'unknown' ? 'bg-amber-500' : 'bg-emerald-500'
-            }`} />
-          </span>
-        ) : (
-          <span className="w-1.5 h-1.5 rounded-full flex-none bg-rose-500" />
-        )}
+        <HostStatusDot status={hostStatus.status} text={hostStatus.text} ping />
       </div>
 
       {/* Server name. Its own title (the full, unstripped alias) wins over the
