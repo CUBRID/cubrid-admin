@@ -62,9 +62,9 @@ describe('export', () => {
     expect(() => collectWorkspaceEntries(dir('empty'))).toThrow('WORKSPACE_ARCHIVE_NOTHING_TO_EXPORT');
   });
 
-  it('is not readable without the password, and never holds it', () => {
+  it('is not readable without the password, and never holds it', async () => {
     const file = dir('a.cubridws');
-    writeWorkspaceArchiveFile(makeWorkspace(), PASSWORD, file);
+    await writeWorkspaceArchiveFile(makeWorkspace(), PASSWORD, file);
     const bytes = fs.readFileSync(file);
     expect(bytes.subarray(0, 8).toString('ascii')).toBe('CUBRIDWS');
     expect(bytes.includes(Buffer.from(PASSWORD))).toBe(false);
@@ -73,20 +73,23 @@ describe('export', () => {
     expect(fs.readdirSync(tmp).filter((n) => n.includes('.tmp-'))).toEqual([]);
   });
 
-  it('needs a password', () => {
-    expect(() => encryptWorkspaceArchive(collectWorkspaceEntries(makeWorkspace()), '')).toThrow('WORKSPACE_ARCHIVE_PASSWORD_REQUIRED');
+  it('needs a password of 8 characters or more', async () => {
+    const entries = collectWorkspaceEntries(makeWorkspace());
+    await expect(encryptWorkspaceArchive(entries, '')).rejects.toThrow('WORKSPACE_ARCHIVE_PASSWORD_REQUIRED');
+    await expect(encryptWorkspaceArchive(entries, '1234567')).rejects.toThrow('WORKSPACE_ARCHIVE_PASSWORD_TOO_SHORT');
+    await expect(encryptWorkspaceArchive(entries, '12345678')).resolves.toBeInstanceOf(Buffer);
   });
 });
 
 describe('import', () => {
-  const exported = () => {
+  const exported = async () => {
     const file = dir('a.cubridws');
-    writeWorkspaceArchiveFile(makeWorkspace(), PASSWORD, file);
+    await writeWorkspaceArchiveFile(makeWorkspace(), PASSWORD, file);
     return file;
   };
 
-  it('opens with the right password and restores the files with owner-only data/', () => {
-    const entries = readWorkspaceArchiveFile(exported(), PASSWORD);
+  it('opens with the right password and restores the files with owner-only data/', async () => {
+    const entries = await readWorkspaceArchiveFile(await exported(), PASSWORD);
     const target = dir('ws-new');
     assertImportFolderEmpty(target);
     unpackWorkspaceArchive(entries, target);
@@ -104,24 +107,41 @@ describe('import', () => {
     expect(fs.existsSync(path.join(target, 'data', 'instance.lock'))).toBe(false);
   });
 
-  it('says the password is wrong', () => {
-    expect(() => readWorkspaceArchiveFile(exported(), 'wrong')).toThrow('WORKSPACE_ARCHIVE_WRONG_PASSWORD');
+  it('says the password is wrong, a short one too (any length is tried on import)', async () => {
+    const file = await exported();
+    await expect(readWorkspaceArchiveFile(file, 'wrong password')).rejects.toThrow('WORKSPACE_ARCHIVE_WRONG_PASSWORD');
+    await expect(readWorkspaceArchiveFile(file, 'x')).rejects.toThrow('WORKSPACE_ARCHIVE_WRONG_PASSWORD');
   });
 
-  it('says a damaged file is damaged, not that the password is wrong', () => {
-    const bytes = fs.readFileSync(exported());
+  it('says a damaged file is damaged, not that the password is wrong', async () => {
+    const bytes = fs.readFileSync(await exported());
     const flipped = Buffer.from(bytes);
     flipped[flipped.length - 40] ^= 0xff;
-    expect(() => decryptWorkspaceArchive(flipped, PASSWORD)).toThrow('WORKSPACE_ARCHIVE_DAMAGED');
-    expect(() => decryptWorkspaceArchive(bytes.subarray(0, bytes.length - 10), PASSWORD)).toThrow('WORKSPACE_ARCHIVE_DAMAGED');
-    const header = Buffer.from(bytes);
-    header[9] = 30; // scrypt cost no export uses
-    expect(() => decryptWorkspaceArchive(header, PASSWORD)).toThrow('WORKSPACE_ARCHIVE_DAMAGED');
+    await expect(decryptWorkspaceArchive(flipped, PASSWORD)).rejects.toThrow('WORKSPACE_ARCHIVE_DAMAGED');
+    await expect(decryptWorkspaceArchive(bytes.subarray(0, bytes.length - 10), PASSWORD)).rejects.toThrow('WORKSPACE_ARCHIVE_DAMAGED');
   });
 
-  it('says a file that is not a workspace export is not one', () => {
+  it('takes only the scrypt cost version 1 uses (17/8/1), before deriving anything', async () => {
+    const bytes = fs.readFileSync(await exported());
+    expect([...bytes.subarray(9, 12)]).toEqual([17, 8, 1]);
+    for (const [at, value] of [[9, 20], [9, 16], [10, 16], [11, 4], [11, 0]]) {
+      const crafted = Buffer.from(bytes);
+      crafted[at] = value;
+      const started = Date.now();
+      await expect(decryptWorkspaceArchive(crafted, 'any password')).rejects.toThrow('WORKSPACE_ARCHIVE_DAMAGED');
+      expect(Date.now() - started).toBeLessThan(100); // refused before scrypt runs
+    }
+  });
+
+  it('refuses a file larger than an export can be', async () => {
+    write('big.cubridws', '');
+    fs.writeFileSync(dir('big.cubridws'), Buffer.concat([Buffer.from('CUBRIDWS'), Buffer.alloc(16 * 1024 * 1024)]));
+    await expect(readWorkspaceArchiveFile(dir('big.cubridws'), PASSWORD)).rejects.toThrow('WORKSPACE_ARCHIVE_NOT_OURS');
+  });
+
+  it('says a file that is not a workspace export is not one', async () => {
     write('other.zip', 'PK\u0003\u0004 not ours');
-    expect(() => readWorkspaceArchiveFile(dir('other.zip'), PASSWORD)).toThrow('WORKSPACE_ARCHIVE_NOT_OURS');
+    await expect(readWorkspaceArchiveFile(dir('other.zip'), PASSWORD)).rejects.toThrow('WORKSPACE_ARCHIVE_NOT_OURS');
   });
 
   it('refuses a folder that is not empty, and takes a new or empty one', () => {
@@ -130,17 +150,20 @@ describe('import', () => {
     write('file-not-folder', 'x');
     expect(() => assertImportFolderEmpty(dir('file-not-folder'))).toThrow('WORKSPACE_IMPORT_FOLDER_NOT_EMPTY');
     write('finder/.DS_Store', 'x');
+    write('finder/._a.cubridws', 'x');
+    write('finder/Thumbs.db', 'x');
+    write('finder/desktop.ini', 'x');
     expect(() => assertImportFolderEmpty(dir('finder'))).not.toThrow();
     expect(() => assertImportFolderEmpty(dir('does-not-exist'))).not.toThrow();
   });
 
-  it('writes nothing outside the files a workspace export holds', () => {
+  it('writes nothing outside the files a workspace export holds', async () => {
     const entries = [
       { path: 'data/secrets.json', data: Buffer.from(JSON.stringify(SECRETS)) },
       { path: `data/storage/${USER_FILE}`, data: Buffer.from(encryptForStorage(USER)) },
       { path: '../escape.txt', data: Buffer.from('x') },
     ];
-    expect(() => decryptWorkspaceArchive(encryptWorkspaceArchive(entries, PASSWORD), PASSWORD)).toThrow('WORKSPACE_ARCHIVE_DAMAGED');
+    await expect(decryptWorkspaceArchive(await encryptWorkspaceArchive(entries, PASSWORD), PASSWORD)).rejects.toThrow('WORKSPACE_ARCHIVE_DAMAGED');
     expect(() => unpackWorkspaceArchive(entries, dir('ws-escape'))).toThrow('WORKSPACE_ARCHIVE_DAMAGED');
     expect(fs.existsSync(dir('escape.txt'))).toBe(false);
     expect(fs.existsSync(dir('ws-escape'))).toBe(false);

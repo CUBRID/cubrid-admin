@@ -31,11 +31,16 @@ export type DesktopBridge = {
   /** The workspace in use, to a file the user names (null when the dialog is cancelled), locked with `password`. */
   exportWorkspace: (password: string) => Promise<{ filePath: string } | null>;
   pickWorkspaceArchive: () => Promise<string | null>;
-  /** Throws WORKSPACE_ARCHIVE_WRONG_PASSWORD, _DAMAGED, _NOT_OURS or _VERSION unless `password` opens the file. */
-  openWorkspaceArchive: (filePath: string, password: string) => Promise<{ ok: true }>;
+  /**
+   * Opens the export with `password`, kept in the main process for the
+   * import (the token). Throws WORKSPACE_ARCHIVE_WRONG_PASSWORD, _DAMAGED,
+   * _NOT_OURS or _VERSION.
+   */
+  openWorkspaceArchive: (filePath: string, password: string) => Promise<{ token: string }>;
+  forgetWorkspaceArchive: (token: string) => Promise<{ ok: true }>;
   pickImportFolder: () => Promise<string | null>;
-  /** Makes the empty or new `folder` a workspace from the export; the switch to it is setWorkspaceRoot's. */
-  importWorkspaceArchive: (filePath: string, password: string, folder: string) => Promise<{ workspaceRoot: string }>;
+  /** Makes the empty or new `folder` a workspace from the opened export; the switch to it is setWorkspaceRoot's. */
+  importWorkspaceArchive: (token: string, folder: string) => Promise<{ workspaceRoot: string }>;
   revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
   setMenuLanguage: (language: 'en' | 'ko') => Promise<{ ok: true }>;
   setMenuState: (state: Record<string, boolean>) => Promise<{ ok: true }>;

@@ -16,8 +16,13 @@ import { getPortableAppRoot } from '../config/portable-root';
 import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
-import { readWorkspaceArchiveFile, WORKSPACE_ARCHIVE_EXTENSION, writeWorkspaceArchiveFile } from '../workspace/workspace-archive';
-import { importWorkspaceArchive } from '../workspace/workspace-import';
+import {
+  assertExportPassword,
+  readWorkspaceArchiveFile,
+  WORKSPACE_ARCHIVE_EXTENSION,
+  writeWorkspaceArchiveFile,
+} from '../workspace/workspace-archive';
+import { forgetOpenedArchive, heldArchive, holdOpenedArchive, importWorkspaceEntries } from '../workspace/workspace-import';
 import { getDefaultWorkspaceRoot, isSameWorkspaceFolder, resolveWorkspacePaths } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { dialogDefaultDirectory, rememberDialogPath } from '../window/dialog-paths';
@@ -220,9 +225,9 @@ export function registerDesktopIpcHandlers(): void {
 
   // The workspace in use, to a file the user names, locked with `password`.
   ipcMain.handle('desktop:export-workspace', async (_event, password: unknown) => {
-    const secret = requirePassword(password);
+    assertExportPassword(password);
     const running = getRunningWorkspacePaths();
-    if (!running) throw new WorkspaceError('WORKSPACE_ARCHIVE_NOTHING_TO_EXPORT');
+    if (!running) throw new WorkspaceError('WORKSPACE_NOT_RUNNING');
     const L = ARCHIVE_DIALOG_LABELS[getMenuLanguage()];
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const result = await dialog.showSaveDialog({
@@ -234,7 +239,7 @@ export function registerDesktopIpcHandlers(): void {
     const ext = `.${WORKSPACE_ARCHIVE_EXTENSION}`;
     const filePath = result.filePath.endsWith(ext) ? result.filePath : `${result.filePath}${ext}`;
     rememberDialogPath(filePath, false);
-    writeWorkspaceArchiveFile(running.workspaceRoot, secret, filePath);
+    await writeWorkspaceArchiveFile(running.workspaceRoot, password, filePath);
     return { filePath };
   });
 
@@ -250,9 +255,15 @@ export function registerDesktopIpcHandlers(): void {
     return result.filePaths[0];
   });
 
-  // Whether `password` opens the export (the page asks again on a wrong one).
-  ipcMain.handle('desktop:open-workspace-archive', (_event, filePath: unknown, password: unknown) => {
-    readWorkspaceArchiveFile(requireArchivePath(filePath), requirePassword(password));
+  // Opens the export with `password` (the page asks again on a wrong one)
+  // and keeps it here for the import: the token names it.
+  ipcMain.handle('desktop:open-workspace-archive', async (_event, filePath: unknown, password: unknown) => {
+    const entries = await readWorkspaceArchiveFile(requireArchivePath(filePath), requirePassword(password));
+    return { token: holdOpenedArchive(entries) };
+  });
+
+  ipcMain.handle('desktop:forget-workspace-archive', (_event, token: unknown) => {
+    forgetOpenedArchive(token);
     return { ok: true };
   });
 
@@ -267,13 +278,13 @@ export function registerDesktopIpcHandlers(): void {
     return result.filePaths[0];
   });
 
-  ipcMain.handle('desktop:import-workspace-archive', (_event, filePath: unknown, password: unknown, folder: unknown) =>
-    importWorkspaceArchive(
-      requireArchivePath(filePath),
-      requirePassword(password),
-      typeof folder === 'string' ? folder.trim() : ''
-    )
-  );
+  // Into `folder`; on a folder that will not do, the same export may be
+  // tried in another (the token stays until it works or is dropped).
+  ipcMain.handle('desktop:import-workspace-archive', async (_event, token: unknown, folder: unknown) => {
+    const result = await importWorkspaceEntries(heldArchive(token), typeof folder === 'string' ? folder.trim() : '');
+    forgetOpenedArchive(token);
+    return result;
+  });
 
   ipcMain.handle('desktop:set-workspace-root', (_event, workspaceRoot: string, options?: { ignoreUnknownJobs?: unknown }) =>
     changeWorkspace(workspaceRoot?.trim() ?? '', { ignoreUnknownJobs: options?.ignoreUnknownJobs === true })

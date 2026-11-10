@@ -5,20 +5,23 @@ import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
 
 /**
- * The password a workspace export is locked with: entered twice to export
- * (`confirm`), once to import. `error` is shown under the password.
+ * The password a workspace export is locked with: entered twice and at least
+ * `minLength` characters to export (`confirm`), once to import (any length,
+ * as the file was made). `error` is shown under the password.
  */
-export default function WorkspacePasswordDialog({ isOpen, title, submitLabel, confirm = false, busy = false, error = '', onSubmit, onCancel, testId }) {
+export default function WorkspacePasswordDialog({ isOpen, title, submitLabel, confirm = false, minLength = 0, busy = false, error = '', onSubmit, onCancel, testId }) {
   const CM = useCM();
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
   const [mismatch, setMismatch] = useState(false);
+  const [tooShort, setTooShort] = useState(false);
 
   // A new dialog starts empty; nothing typed is kept once it closes.
   useEffect(() => {
     setPassword('');
     setAgain('');
     setMismatch(false);
+    setTooShort(false);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -26,6 +29,11 @@ export default function WorkspacePasswordDialog({ isOpen, title, submitLabel, co
   const canSubmit = !busy && password.length > 0 && (!confirm || again.length > 0);
   const submit = () => {
     if (!canSubmit) return;
+    // Characters as the app counts them (main checks the same).
+    if ([...password].length < minLength) {
+      setTooShort(true);
+      return;
+    }
     if (confirm && password !== again) {
       setMismatch(true);
       return;
@@ -56,8 +64,8 @@ export default function WorkspacePasswordDialog({ isOpen, title, submitLabel, co
           label={CM.workspaceArchivePassword}
           type="password"
           value={password}
-          onChange={(e) => { setPassword(e.target.value); setMismatch(false); }}
-          error={confirm ? undefined : error || undefined}
+          onChange={(e) => { setPassword(e.target.value); setMismatch(false); setTooShort(false); }}
+          error={tooShort ? CM.workspaceArchivePasswordTooShort(minLength) : confirm ? undefined : error || undefined}
           disabled={busy}
           autoFocus
         />

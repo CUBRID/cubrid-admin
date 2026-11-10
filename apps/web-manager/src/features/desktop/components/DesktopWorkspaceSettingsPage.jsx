@@ -10,6 +10,21 @@ import LanguageToggle from '../../layout/components/LanguageToggle';
 import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import WorkspaceExportDialog from './WorkspaceExportDialog';
 import WorkspacePasswordDialog from './WorkspacePasswordDialog';
+import { Modal } from '../../../components/ds/layout/Modal';
+import { Button } from '../../../components/ds/foundation/Button';
+
+// Why a folder will not take an import: another folder may.
+const FOLDER_ERRORS = [
+  'WORKSPACE_IMPORT_FOLDER_NOT_EMPTY',
+  'WORKSPACE_IN_USE',
+  'WORKSPACE_PATH_TOO_LONG',
+  'WORKSPACE_PATH_REQUIRED',
+  'WORKSPACE_NOT_WRITABLE',
+  'WORKSPACE_NOT_READABLE',
+  'WORKSPACE_CANNOT_CREATE_FOLDER',
+  'WORKSPACE_SOCKET_FAILED',
+  'WORKSPACE_IN_APP_BUNDLE',
+];
 
 // For comparing workspace folders as typed: no surrounding spaces or
 // trailing separator ("/ws/" is "/ws").
@@ -49,10 +64,15 @@ export default function DesktopWorkspaceSettingsPage() {
   // The server could not say whether a job runs: switch only if the user says so.
   const [askIgnoreUnknownJobs, setAskIgnoreUnknownJobs] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  // The export file being imported, while its password is asked.
+  // The export file being imported, while its password is asked; then the
+  // opened export (main's token) while a folder is chosen.
   const [importFile, setImportFile] = useState(null);
+  const [importToken, setImportToken] = useState(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState('');
+  const [folderError, setFolderError] = useState('');
+  // Where the last import put the workspace, said with a failed switch to it.
+  const [importedAt, setImportedAt] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -91,6 +111,7 @@ export default function DesktopWorkspaceSettingsPage() {
     setError('');
     const picked = await bridge.pickWorkspaceDirectory();
     if (picked) {
+      setImportedAt('');
       setWorkspaceRoot(picked);
     }
   };
@@ -139,24 +160,63 @@ export default function DesktopWorkspaceSettingsPage() {
     }
   };
 
-  // Import: the export file, its password (asked again while wrong), an
-  // empty folder to make the workspace in; then the same switch as Save (or
-  // Continue on first run), with its checks.
+  // Import: the export file, its password (asked again while wrong), then a
+  // folder (chosen again while it will not do), and the same switch as Save
+  // (or Continue on first run), with its checks. The opened export stays in
+  // the main process between the steps (the token).
   const startImport = async () => {
     if (!bridge) return;
     setError('');
     setMessage('');
+    setImportedAt('');
     const file = await bridge.pickWorkspaceArchive();
     if (!file) return;
     setImportError('');
     setImportFile(file);
   };
 
+  const dropImport = (token = importToken) => {
+    if (token) void bridge.forgetWorkspaceArchive?.(token).catch(() => undefined);
+    setImportToken(null);
+    setImportFile(null);
+    setFolderError('');
+    setImportBusy(false);
+  };
+
+  const chooseImportFolder = async (token) => {
+    setFolderError('');
+    const folder = await bridge.pickImportFolder();
+    if (!folder) return; // the folder step stays open: choose again or cancel
+    setImportBusy(true);
+    let root;
+    try {
+      ({ workspaceRoot: root } = await bridge.importWorkspaceArchive(token, folder));
+    } catch (err) {
+      setImportBusy(false);
+      const text = desktopErrorText(err, CM, CM.workspaceSaveFailedMsg);
+      if (FOLDER_ERRORS.some((code) => String(err?.message ?? '').includes(code))) {
+        setFolderError(text);
+        return;
+      }
+      dropImport(token);
+      setError(text);
+      return;
+    }
+    setImportToken(null);
+    setImportFile(null);
+    setImportBusy(false);
+    setImportedAt(root);
+    setWorkspaceRoot(root);
+    if (setupMode) await handleContinue(root);
+    else await handleSave({ root });
+  };
+
   const importWith = async (password) => {
     setImportBusy(true);
     setImportError('');
+    let token;
     try {
-      await bridge.openWorkspaceArchive(importFile, password);
+      ({ token } = await bridge.openWorkspaceArchive(importFile, password));
     } catch (err) {
       setImportBusy(false);
       const text = desktopErrorText(err, CM, CM.workspaceSaveFailedMsg);
@@ -168,24 +228,10 @@ export default function DesktopWorkspaceSettingsPage() {
       setError(text);
       return;
     }
-    const folder = await bridge.pickImportFolder();
-    if (!folder) {
-      setImportBusy(false);
-      setImportFile(null);
-      return;
-    }
-    try {
-      const { workspaceRoot: root } = await bridge.importWorkspaceArchive(importFile, password, folder);
-      setImportBusy(false);
-      setImportFile(null);
-      setWorkspaceRoot(root);
-      if (setupMode) await handleContinue(root);
-      else await handleSave({ root });
-    } catch (err) {
-      setImportBusy(false);
-      setImportFile(null);
-      setError(desktopErrorText(err, CM, CM.workspaceSaveFailedMsg));
-    }
+    setImportBusy(false);
+    setImportFile(null);
+    setImportToken(token);
+    await chooseImportFolder(token);
   };
 
   // File > Import Workspace opens this page with ?do=import: start once.
@@ -262,7 +308,7 @@ export default function DesktopWorkspaceSettingsPage() {
             data-testid="workspace-root-input"
             label={CM.workspaceFolderLabel}
             value={workspaceRoot}
-            onChange={(e) => setWorkspaceRoot(e.target.value)}
+            onChange={(e) => { setImportedAt(''); setWorkspaceRoot(e.target.value); }}
             placeholder={info?.defaultWorkspaceRoot}
           />
 
@@ -280,6 +326,9 @@ export default function DesktopWorkspaceSettingsPage() {
           {error && (
             <InfoBanner variant="danger" title={CM.error}>
               {error}
+              {importedAt && (
+                <span data-testid="workspace-imported-at" className="block mt-1 font-mono break-all">{CM.workspaceImportedAtMsg(importedAt)}</span>
+              )}
             </InfoBanner>
           )}
           {message && (
@@ -369,6 +418,24 @@ export default function DesktopWorkspaceSettingsPage() {
         onCancel={() => { if (!importBusy) setImportFile(null); }}
         testId="workspace-import"
       />
+      <Modal
+        isOpen={importToken !== null}
+        onClose={() => { if (!importBusy) dropImport(); }}
+        title={CM.importWorkspaceTitle}
+        icon="drive_folder_upload"
+        maxWidth="max-w-[440px]"
+        testId="workspace-import-folder"
+        footer={(
+          <div className="flex justify-end gap-2 w-full">
+            <Button variant="ghost" onClick={() => dropImport()} disabled={importBusy}>{CM.cancel}</Button>
+            <Button data-testid="workspace-import-folder-btn" variant="primary" onClick={() => void chooseImportFolder(importToken)} disabled={importBusy}>
+              {CM.workspaceChooseAnotherFolder}
+            </Button>
+          </div>
+        )}
+      >
+        {folderError && <p role="alert" className="text-14 text-rose-500">{folderError}</p>}
+      </Modal>
     </SettingsShell>
   );
 }

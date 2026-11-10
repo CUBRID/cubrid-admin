@@ -3,6 +3,9 @@ import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
 import WorkspacePasswordDialog from './WorkspacePasswordDialog';
 
+// As the main process requires (workspace-archive MIN_EXPORT_PASSWORD_LENGTH).
+export const MIN_EXPORT_PASSWORD_LENGTH = 8;
+
 /**
  * File > Export Workspace (over the dashboard) and the workspace page's
  * Export: asks the password, then the app asks where to save. `onExported`
@@ -38,6 +41,7 @@ export default function WorkspaceExportDialog({ isOpen, onClose, onExported }) {
       title={CM.exportWorkspaceTitle}
       submitLabel={CM.workspaceExportBtn}
       confirm
+      minLength={MIN_EXPORT_PASSWORD_LENGTH}
       busy={busy}
       error={error}
       onSubmit={(password) => void exportWith(password)}

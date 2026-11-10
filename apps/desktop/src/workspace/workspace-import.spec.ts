@@ -2,8 +2,11 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { storageKeyOf, writeWorkspaceArchiveFile } from './workspace-archive';
-import { importWorkspaceArchive } from './workspace-import';
+import { readWorkspaceArchiveFile, storageKeyOf, writeWorkspaceArchiveFile } from './workspace-archive';
+import { forgetOpenedArchive, heldArchive, holdOpenedArchive, importWorkspaceEntries } from './workspace-import';
+
+const importWorkspaceArchive = async (file: string, password: string, root: string) =>
+  importWorkspaceEntries(await readWorkspaceArchiveFile(file, password), root);
 
 jest.mock('electron', () => ({ app: { isPackaged: false } }));
 
@@ -21,7 +24,7 @@ describe('importWorkspaceArchive', () => {
   let base: string;
   let archive: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-imp-'));
     process.env.CWM_PORTABLE_APP_ROOT = base;
     const source = path.join(base, 'a');
@@ -29,7 +32,7 @@ describe('importWorkspaceArchive', () => {
     fs.writeFileSync(path.join(source, 'data', 'storage', USER_FILE), storageFile({ id: 'desktop' }));
     fs.writeFileSync(path.join(source, 'data', 'secrets.json'), JSON.stringify(SECRETS));
     archive = path.join(base, 'a.cubridws');
-    writeWorkspaceArchiveFile(source, PASSWORD, archive);
+    await writeWorkspaceArchiveFile(source, PASSWORD, archive);
   });
 
   afterEach(() => {
@@ -64,11 +67,25 @@ describe('importWorkspaceArchive', () => {
     fs.writeFileSync(path.join(source, 'data', 'storage', USER_FILE), storageFile({ id: 'desktop' }));
     fs.writeFileSync(path.join(source, 'data', 'secrets.json'), JSON.stringify({ seed: 'c'.repeat(64), salt: 'd'.repeat(32) }));
     const bad = path.join(base, 'bad.cubridws');
-    writeWorkspaceArchiveFile(source, PASSWORD, bad);
+    await writeWorkspaceArchiveFile(source, PASSWORD, bad);
 
     const target = path.join(base, 'empty');
     fs.mkdirSync(target);
     await expect(importWorkspaceArchive(bad, PASSWORD, target)).rejects.toThrow('WORKSPACE_ARCHIVE_UNREADABLE');
     expect(fs.readdirSync(target)).toEqual([]);
+  });
+});
+
+describe('the opened export between the password and the folder', () => {
+  it('is named by its token, one at a time, and gone once forgotten', () => {
+    const entries = [{ path: 'data/secrets.json', data: Buffer.from('{}') }];
+    const first = holdOpenedArchive(entries);
+    expect(heldArchive(first)).toBe(entries);
+    const second = holdOpenedArchive(entries);
+    expect(() => heldArchive(first)).toThrow('WORKSPACE_ARCHIVE_NOT_OPEN');
+    forgetOpenedArchive('someone else');
+    expect(heldArchive(second)).toBe(entries);
+    forgetOpenedArchive(second);
+    expect(() => heldArchive(second)).toThrow('WORKSPACE_ARCHIVE_NOT_OPEN');
   });
 });

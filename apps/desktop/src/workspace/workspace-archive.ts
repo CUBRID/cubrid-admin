@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { promisify } from 'util';
 import * as zlib from 'zlib';
 import { WorkspaceError } from './workspace-check';
 
@@ -28,14 +29,18 @@ const TAG_BYTES = 16;
 const HEADER_BYTES = MAGIC.length + 1 + 3 + SALT_BYTES + IV_BYTES + CHECK_BYTES;
 const PAYLOAD_FORMAT = 'cubrid-admin-workspace';
 
-// scrypt N = 2^17, r = 8, p = 1 (128 MiB). Opening refuses heavier settings
-// so a crafted file cannot take the memory.
+// scrypt N = 2^17, r = 8, p = 1 (128 MiB). Version 1 is opened with exactly
+// these: a file naming others is damaged, so a crafted one cannot make the
+// app spend more memory or time than a real export.
 const KDF = { logN: 17, r: 8, p: 1 };
-const KDF_LIMIT = { logN: 20, r: 16, p: 4 };
-const scryptMaxmem = (logN: number, r: number) => 128 * 2 ** logN * r + 64 * 1024 * 1024;
+const SCRYPT_MAXMEM = 128 * 2 ** KDF.logN * KDF.r + 32 * 1024 * 1024;
+const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number, options: crypto.ScryptOptions) => Promise<Buffer>;
 
-const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
-const MAX_PAYLOAD_BYTES = 256 * 1024 * 1024;
+/** The shortest password an export takes (it locks the key to every saved password). */
+export const MIN_EXPORT_PASSWORD_LENGTH = 8;
+
+const MAX_ARCHIVE_BYTES = 16 * 1024 * 1024;
+const MAX_PAYLOAD_BYTES = 32 * 1024 * 1024;
 
 /** What a workspace export holds; nothing else is written back. */
 const USER_FILE = /^data\/storage\/[0-9a-f]{64}$/;
@@ -78,19 +83,21 @@ export function collectWorkspaceEntries(workspaceRoot: string): ArchiveEntry[] {
   return entries;
 }
 
-function deriveKeys(password: string, salt: Buffer, kdf: { logN: number; r: number; p: number }) {
-  const out = crypto.scryptSync(password, salt, 64, {
-    N: 2 ** kdf.logN,
-    r: kdf.r,
-    p: kdf.p,
-    maxmem: scryptMaxmem(kdf.logN, kdf.r),
-  });
+/** Off the main thread (libuv's pool): the window does not stop while it runs. */
+async function deriveKeys(password: string, salt: Buffer) {
+  const out = await scrypt(password, salt, 64, { N: 2 ** KDF.logN, r: KDF.r, p: KDF.p, maxmem: SCRYPT_MAXMEM });
   return { key: out.subarray(0, 32), check: out.subarray(32) };
 }
 
+/** Throws unless `password` may lock an export: given, and MIN_EXPORT_PASSWORD_LENGTH characters or more. */
+export function assertExportPassword(password: unknown): asserts password is string {
+  if (typeof password !== 'string' || !password) throw new WorkspaceError('WORKSPACE_ARCHIVE_PASSWORD_REQUIRED');
+  if ([...password].length < MIN_EXPORT_PASSWORD_LENGTH) throw new WorkspaceError('WORKSPACE_ARCHIVE_PASSWORD_TOO_SHORT');
+}
+
 /** The encrypted export of `entries`, locked with `password`. */
-export function encryptWorkspaceArchive(entries: ArchiveEntry[], password: string): Buffer {
-  if (!password) throw new WorkspaceError('WORKSPACE_ARCHIVE_PASSWORD_REQUIRED');
+export async function encryptWorkspaceArchive(entries: ArchiveEntry[], password: string): Promise<Buffer> {
+  assertExportPassword(password);
   const payload = zlib.gzipSync(Buffer.from(JSON.stringify({
     format: PAYLOAD_FORMAT,
     version: VERSION,
@@ -99,7 +106,7 @@ export function encryptWorkspaceArchive(entries: ArchiveEntry[], password: strin
   }), 'utf8'));
   const salt = crypto.randomBytes(SALT_BYTES);
   const iv = crypto.randomBytes(IV_BYTES);
-  const { key, check } = deriveKeys(password, salt, KDF);
+  const { key, check } = await deriveKeys(password, salt);
   const header = Buffer.concat([MAGIC, Buffer.from([VERSION, KDF.logN, KDF.r, KDF.p]), salt, iv, check]);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   cipher.setAAD(header);
@@ -112,7 +119,7 @@ export function encryptWorkspaceArchive(entries: ArchiveEntry[], password: strin
  * export), WORKSPACE_ARCHIVE_VERSION (made by a newer app),
  * WORKSPACE_ARCHIVE_WRONG_PASSWORD, or WORKSPACE_ARCHIVE_DAMAGED.
  */
-export function decryptWorkspaceArchive(file: Buffer, password: string): ArchiveEntry[] {
+export async function decryptWorkspaceArchive(file: Buffer, password: string): Promise<ArchiveEntry[]> {
   if (file.length < MAGIC.length || !file.subarray(0, MAGIC.length).equals(MAGIC)) {
     throw new WorkspaceError('WORKSPACE_ARCHIVE_NOT_OURS');
   }
@@ -120,15 +127,14 @@ export function decryptWorkspaceArchive(file: Buffer, password: string): Archive
   let at = MAGIC.length;
   const version = file[at++];
   if (version !== VERSION) throw new WorkspaceError('WORKSPACE_ARCHIVE_VERSION');
-  const kdf = { logN: file[at++], r: file[at++], p: file[at++] };
-  if (kdf.logN < 10 || kdf.logN > KDF_LIMIT.logN || kdf.r < 1 || kdf.r > KDF_LIMIT.r || kdf.p < 1 || kdf.p > KDF_LIMIT.p) {
+  if (file[at++] !== KDF.logN || file[at++] !== KDF.r || file[at++] !== KDF.p) {
     throw new WorkspaceError('WORKSPACE_ARCHIVE_DAMAGED');
   }
   const salt = file.subarray(at, (at += SALT_BYTES));
   const iv = file.subarray(at, (at += IV_BYTES));
   const storedCheck = file.subarray(at, (at += CHECK_BYTES));
   const header = file.subarray(0, HEADER_BYTES);
-  const { key, check } = deriveKeys(password ?? '', salt, kdf);
+  const { key, check } = await deriveKeys(password ?? '', salt);
   if (!crypto.timingSafeEqual(check, storedCheck)) throw new WorkspaceError('WORKSPACE_ARCHIVE_WRONG_PASSWORD');
 
   let parsed: { format?: unknown; version?: unknown; files?: unknown };
@@ -159,7 +165,7 @@ export function decryptWorkspaceArchive(file: Buffer, password: string): Archive
 }
 
 /** Reads an export file from disk, refusing one too large to be ours. */
-export function readWorkspaceArchiveFile(filePath: string, password: string): ArchiveEntry[] {
+export async function readWorkspaceArchiveFile(filePath: string, password: string): Promise<ArchiveEntry[]> {
   let stat: fs.Stats;
   try {
     stat = fs.statSync(filePath);
@@ -172,8 +178,8 @@ export function readWorkspaceArchiveFile(filePath: string, password: string): Ar
 }
 
 /** Writes the export of the workspace at `workspaceRoot` to `filePath` (whole or not at all). */
-export function writeWorkspaceArchiveFile(workspaceRoot: string, password: string, filePath: string): void {
-  const archive = encryptWorkspaceArchive(collectWorkspaceEntries(workspaceRoot), password);
+export async function writeWorkspaceArchiveFile(workspaceRoot: string, password: string, filePath: string): Promise<void> {
+  const archive = await encryptWorkspaceArchive(collectWorkspaceEntries(workspaceRoot), password);
   const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   try {
     fs.writeFileSync(tmp, archive, { mode: 0o600, flag: 'wx' });
@@ -184,14 +190,16 @@ export function writeWorkspaceArchiveFile(workspaceRoot: string, password: strin
   }
 }
 
-// Finder's folder settings; a folder holding only these counts as empty.
-const IGNORED_IN_EMPTY_FOLDER = new Set(['.DS_Store']);
+// Files the OS leaves in a folder (Finder's and Explorer's folder settings,
+// macOS's ._ companions); a folder holding only these counts as empty.
+const OS_FOLDER_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
+const isOsFolderFile = (name: string) => OS_FOLDER_FILES.has(name) || name.startsWith('._');
 
 /** Throws WORKSPACE_IMPORT_FOLDER_NOT_EMPTY unless `root` is missing or empty. */
 export function assertImportFolderEmpty(root: string): void {
   if (!fs.existsSync(root)) return;
   if (!fs.statSync(root).isDirectory()) throw new WorkspaceError('WORKSPACE_IMPORT_FOLDER_NOT_EMPTY');
-  if (fs.readdirSync(root).some((name) => !IGNORED_IN_EMPTY_FOLDER.has(name))) {
+  if (fs.readdirSync(root).some((name) => !isOsFolderFile(name))) {
     throw new WorkspaceError('WORKSPACE_IMPORT_FOLDER_NOT_EMPTY');
   }
 }
@@ -240,7 +248,14 @@ export function unpackWorkspaceArchive(entries: ArchiveEntry[], root: string): v
       if (!isExportedPath(entry.path)) throw new WorkspaceError('WORKSPACE_ARCHIVE_DAMAGED');
       if (entry.path === CONF) makeDir(path.join(root, 'conf'), 0o700);
       const target = path.join(root, ...entry.path.split('/'));
-      fs.writeFileSync(target, entry.data, { mode: 0o600, flag: 'wx' });
+      try {
+        fs.writeFileSync(target, entry.data, { mode: 0o600, flag: 'wx' });
+      } catch (error) {
+        // Made but not finished (a full disk): removed with the rest. One
+        // that was there already (EEXIST) is not ours to remove.
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') written.push(target);
+        throw error;
+      }
       written.push(target);
     }
 
