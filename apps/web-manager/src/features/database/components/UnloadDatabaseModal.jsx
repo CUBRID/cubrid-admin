@@ -206,7 +206,7 @@ export default function UnloadDatabaseModal() {
       if (!wasBackgrounded()) {
         resetAction();
         dispatch(closeUnloadDatabaseModal());
-        dispatch(openUnloadResultModal(job.result ?? {}));
+        dispatch(openUnloadResultModal({ result: job.result ?? {}, warnings: job.warnings ?? [] }));
       }
     } catch (err) {
       if (!wasBackgrounded()) endError(typeof err === 'string' ? err : (err.message || CM.failure));

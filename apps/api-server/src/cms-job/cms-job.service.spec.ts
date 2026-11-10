@@ -80,6 +80,43 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     ]);
   });
 
+  it('ends an unload that CMS failed only on the OBJECT-type warning as succeeded, with the warning', async () => {
+    const job = renameJob({ type: 'unload', dbname: 'refdb', payload: {} as any });
+    store.getJob.mockResolvedValue(job);
+    managementService.unloadDatabaseCmsResponse = jest.fn().mockResolvedValue({
+      status: 'failure', task: 'unloaddb', 'job-status': 'error',
+      note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>",
+    });
+
+    await (service as any).runJob('ukey', 'job-1', 'op-key');
+
+    expect(job.status).toBe('succeeded');
+    expect(job.error).toBeUndefined();
+    expect(job.result).toEqual([]);
+    expect(job.warnings).toEqual([
+      "warning: [dba.tb] has object type. So for class [dba.tb], '--thread-count' option is ignored.",
+      expect.stringContaining('table counts'),
+    ]);
+    expect(job.warningDetails).toEqual([
+      { code: 'UNLOAD_OBJECT_TYPE_THREAD_COUNT_IGNORED', class: 'dba.tb' },
+      { code: 'UNLOAD_RESULT_NOT_RECORDED' },
+    ]);
+  });
+
+  it('still fails an unload whose note has another line besides the warning', async () => {
+    const job = renameJob({ type: 'unload', dbname: 'refdb', payload: {} as any });
+    store.getJob.mockResolvedValue(job);
+    managementService.unloadDatabaseCmsResponse = jest.fn().mockResolvedValue({
+      status: 'failure', task: 'unloaddb',
+      note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>ERROR: out of disk<end>",
+    });
+
+    await (service as any).runJob('ukey', 'job-1', 'op-key');
+
+    expect(job.status).toBe('failed');
+    expect(job.warnings).toBeUndefined();
+  });
+
   it('clears old/new name caches when an orphaned rename reconciles as succeeded after restart', async () => {
     (pollCmsAsyncJob as jest.Mock).mockResolvedValue({ response: { status: 'success' } });
     const job = renameJob();

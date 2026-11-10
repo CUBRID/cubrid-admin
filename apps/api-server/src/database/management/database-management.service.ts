@@ -42,6 +42,7 @@ import {
 } from '@common';
 import { DatabaseError } from '@error/database/database-error';
 import { HostService } from '@host';
+import { unloadObjectTypeWarningClasses } from './unload-object-type-warning';
 import { Injectable } from '@nestjs/common';
 import {
   AddVolDbCmsRequest,
@@ -279,6 +280,8 @@ export class DatabaseManagementService extends BaseService {
     request: UnloadDatabaseRequest
   ): Promise<UnloadDatabaseCmsResponse['result']> {
     const response = await this.unloadDatabaseCmsResponse(userId, hostUid, dbname, request);
+    // Files written, failed by CMS only on the OBJECT-type warning: no result rows.
+    if (unloadObjectTypeWarningClasses(response)) return [];
     checkCmsStatusError(response);
     return response.result;
   }

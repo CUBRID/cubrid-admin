@@ -264,6 +264,26 @@ describe('DatabaseManagementService', () => {
       expect(result).toEqual(mockSuccessResponse.result);
     });
 
+    it('returns no rows instead of failing when CMS failed it only on the OBJECT-type warning', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        status: 'failure', task: 'unloaddb',
+        note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>",
+      });
+
+      await expect(service.unloadDatabase(mockUserId, mockHostUid, mockDbname, baseRequest)).resolves.toEqual([]);
+    });
+
+    it('still fails when the note has other lines besides the OBJECT-type warning, or only others', async () => {
+      cmsClient.postAuthenticated.mockResolvedValue({
+        status: 'failure', task: 'unloaddb',
+        note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>ERROR: out of disk<end>",
+      });
+      await expect(service.unloadDatabase(mockUserId, mockHostUid, mockDbname, baseRequest)).rejects.toBeDefined();
+
+      cmsClient.postAuthenticated.mockResolvedValue({ status: 'failure', task: 'unloaddb', note: 'ERROR: out of disk' });
+      await expect(service.unloadDatabase(mockUserId, mockHostUid, mockDbname, baseRequest)).rejects.toBeDefined();
+    });
+
     it('should successfully unload database with schema only', async () => {
       const request: UnloadDatabaseRequest = {
         ...baseRequest,

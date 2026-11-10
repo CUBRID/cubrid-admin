@@ -44,6 +44,7 @@ const initialState = {
   editBackupPlanData: null,
   autoBackupLogData: null,
   unloadResultData: null,
+  unloadResultWarnings: [],
   transactionInfoData: null,
   killTransactionData: null,
 
@@ -122,7 +123,8 @@ const databaseUISlice = createSlice({
     
     openUnloadResultModal: (state, action) => { 
       state.isUnloadResultModalOpen = true; 
-      state.unloadResultData = action.payload;
+      state.unloadResultData = action.payload?.result ?? null;
+      state.unloadResultWarnings = action.payload?.warnings ?? [];
     },
     closeUnloadResultModal: (state) => { state.isUnloadResultModalOpen = false; },
     

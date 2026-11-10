@@ -23,6 +23,7 @@ import { cmsFieldsFromPayload, failureDetails } from '@error';
 import { busyDatabase } from '@database/lifecycle/database-action-lock';
 import { DatabaseError } from '@error/database/database-error';
 import { DatabaseManagementService } from '@database/management/database-management.service';
+import { unloadObjectTypeWarningClasses, unloadObjectTypeWarnings } from '@database/management/unload-object-type-warning';
 import { DatabaseLifecycleService } from '@database/lifecycle/database-lifecycle.service';
 import { DatabaseBackupService } from '@database/backup/database-backup.service';
 import { CmsHttpsClientService } from '@cms-https-client/cms-https-client.service';
@@ -360,6 +361,16 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
 
       job.status = 'succeeded';
       job.result = res;
+      return true;
+    }
+
+    // The unload's files are written; CMS failed it only on the engine's
+    // OBJECT-type warning (unloadObjectTypeWarningClasses).
+    const objectTypeClasses = job.type === 'unload' ? unloadObjectTypeWarningClasses(cmsResponse) : null;
+    if (objectTypeClasses) {
+      job.status = 'succeeded';
+      job.result = [];
+      addWarnings(job, unloadObjectTypeWarnings(objectTypeClasses));
       return true;
     }
 
