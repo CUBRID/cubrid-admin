@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { useShownBrokers } from '../../broker/brokerRestartState';
-import { brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from '../../broker/brokerState';
+import { brokerAccessModeOf, brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from '../../broker/brokerState';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Card } from '../../../components/ds/layout/Card';
@@ -96,6 +96,8 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     },
     { header: CM.pid,  accessor: 'pid',         render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
     { header: CM.port, accessor: 'port', render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    // The cubrid_broker.conf parameter, named and valued as there in every language.
+    { header: 'ACCESS_MODE', accessor: 'access_mode', render: (_, row) => <span className="font-mono text-14 text-slate-500">{brokerAccessModeOf(row) || '-'}</span> },
     { header: CM.asLabel, accessor: 'as', render: (val) => <span className="font-mono text-14">{val}</span> },
     { header: CM.jqLabel, accessor: 'jq', render: (val) => <span className="font-mono text-14">{val}</span> },
     { header: CM.reqLabel, accessor: 'req', render: (val) => <span className="font-mono text-14 font-semibold">{val}</span> },

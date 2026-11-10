@@ -2,7 +2,7 @@ import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefre
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector , shallowEqual } from 'react-redux';
 import { fetchDetailedBrokerStatus, fetchBrokerList } from '../brokerSlice';
-import { isBrokerRunning } from '../brokerState';
+import { brokerAccessModeOf, isBrokerRunning } from '../brokerState';
 import { createRateTracker } from '../rateTracker';
 import { hostKey } from '../../host/hostKey';
 import { withRestartsShownOn } from '../brokerRestartState';
@@ -348,7 +348,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
         >
           {/* Columns follow the card's own width (the sidebar takes part of the window). */}
           <div className="@container">
-          <div className="grid grid-cols-2 @xl:grid-cols-4 @5xl:grid-cols-7 text-left">
+          <div className="grid grid-cols-2 @xl:grid-cols-4 @5xl:grid-cols-8 text-left">
             {[
               { label: CM.pid,           value: basicInfo.pid                           || '—',    accent: 'emerald' },
               { label: CM.port,          value: basicInfo.port                          || '—',    accent: 'amber'   },
@@ -360,6 +360,7 @@ const Component = function BrokerStatus({ hostUid, brokerName }) {
               { label: 'SQL_LOG',                 value: isBrokerOff ? '-' : basicInfo.sql_log_mode            || 'OFF',  badge: true       },
               { label: 'LONG_TRANSACTION_TIME',   value: isBrokerOff ? '-' : `${basicInfo.long_transaction_time || '0'}s`, accent: 'slate'   },
               { label: 'LONG_QUERY_TIME',         value: isBrokerOff ? '-' : `${basicInfo.long_query_time       || '0'}s`, accent: 'slate'   },
+              { label: 'ACCESS_MODE',             value: brokerAccessModeOf(brokerFromList) || '-', accent: 'slate'   },
             ].map((m, i, arr) => {
               // The engine reports SQL_LOG=OFF as NONE.
               const isActive = m.badge && m.value && !['IDLE', 'OFF', 'NONE', '-'].includes(m.value);
