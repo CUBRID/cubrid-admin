@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { readWorkspaceArchiveFile, storageKeyOf, writeWorkspaceArchiveFile } from './workspace-archive';
-import { forgetOpenedArchive, heldArchive, holdOpenedArchive, importWorkspaceEntries } from './workspace-import';
+import { EventEmitter } from 'events';
+import { forgetOpenedArchive, forgetOpenedArchiveWhenPageGoes, heldArchive, holdOpenedArchive, importWorkspaceEntries } from './workspace-import';
 
 const importWorkspaceArchive = async (file: string, password: string, root: string) =>
   importWorkspaceEntries(await readWorkspaceArchiveFile(file, password), root);
@@ -89,3 +90,33 @@ describe('the opened export between the password and the folder', () => {
     expect(() => heldArchive(second)).toThrow('WORKSPACE_ARCHIVE_NOT_OPEN');
   });
 });
+
+describe('when the page goes', () => {
+  const entries = [{ path: 'data/secrets.json', data: Buffer.from('{}') }];
+  const setup = () => {
+    const contents = new EventEmitter();
+    forgetOpenedArchiveWhenPageGoes(contents as never);
+    return { contents, token: holdOpenedArchive(entries) };
+  };
+
+  it('forgets the opened export on a new document in the main frame (a reload)', () => {
+    const { contents, token } = setup();
+    contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
+    expect(() => heldArchive(token)).toThrow('WORKSPACE_ARCHIVE_NOT_OPEN');
+  });
+
+  it('forgets it when the renderer dies', () => {
+    const { contents, token } = setup();
+    contents.emit('render-process-gone', {}, { reason: 'crashed' });
+    expect(() => heldArchive(token)).toThrow('WORKSPACE_ARCHIVE_NOT_OPEN');
+  });
+
+  it('keeps it through a move inside the page or a subframe', () => {
+    const { contents, token } = setup();
+    contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true });
+    contents.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false });
+    expect(heldArchive(token)).toBe(entries);
+    forgetOpenedArchive(token);
+  });
+});
+

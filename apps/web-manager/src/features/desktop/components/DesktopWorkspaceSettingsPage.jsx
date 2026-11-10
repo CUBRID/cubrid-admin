@@ -73,6 +73,13 @@ export default function DesktopWorkspaceSettingsPage() {
   const [folderError, setFolderError] = useState('');
   // Where the last import put the workspace, said with a failed switch to it.
   const [importedAt, setImportedAt] = useState('');
+  // Leaving the page drops the opened export the main process holds for it.
+  const importTokenRef = useRef(null);
+  importTokenRef.current = importToken;
+  useEffect(() => () => {
+    const token = importTokenRef.current;
+    if (token) void window.desktopBridge?.forgetWorkspaceArchive?.(token)?.catch?.(() => undefined);
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
 

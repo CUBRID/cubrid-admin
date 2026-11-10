@@ -167,6 +167,17 @@ describe('export and import', () => {
     expect(q('workspace-imported-at').textContent).toBe('Imported to: /new-ws');
   });
 
+  it('drops the opened export when the page goes away mid-import', async () => {
+    await render();
+    window.desktopBridge.pickImportFolder.mockResolvedValueOnce(null);
+    await click(q('workspace-import-btn'));
+    await type(q('workspace-import-password-input'), 'pw');
+    await click(q('workspace-import-submit-btn'));
+    expect(q('workspace-import-folder-modal')).not.toBeNull();
+    await act(async () => root.render(<div />));
+    expect(window.desktopBridge.forgetWorkspaceArchive).toHaveBeenCalledWith('t1');
+  });
+
   it('exports only with a password of 8 characters or more', async () => {
     await render();
     await click(q('workspace-export-btn'));

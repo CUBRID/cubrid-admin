@@ -60,3 +60,17 @@ export function heldArchive(token: unknown): ArchiveEntry[] {
 export function forgetOpenedArchive(token?: unknown): void {
   if (!pending || token === undefined || token === pending.token) pending = null;
 }
+
+type NavigationDetails = { isMainFrame?: boolean; isSameDocument?: boolean };
+
+/**
+ * Forgets the opened export when the page that held it is gone: a new
+ * document in the main frame (a reload, the reload after a switch) or a
+ * renderer that died. The page forgets it itself when it unmounts.
+ */
+export function forgetOpenedArchiveWhenPageGoes(webContents: { on(event: string, listener: (...args: never[]) => void): unknown }): void {
+  webContents.on('did-start-navigation', ((details: NavigationDetails) => {
+    if (details?.isMainFrame && !details.isSameDocument) forgetOpenedArchive();
+  }) as (...args: never[]) => void);
+  webContents.on('render-process-gone', () => forgetOpenedArchive());
+}
