@@ -72,7 +72,7 @@ export function menuActionHost(id, { selectedHostUid, highlightedHostUid, author
 
 /** @returns {Record<string, boolean>} enabled flag per action id */
 export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [] }) {
-  const hosts = { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue };
+  const hostState = { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue };
   return {
     [MENU_ACTIONS.addHost]: true,
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
@@ -88,7 +88,7 @@ export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, auth
     [MENU_ACTIONS.checkForUpdates]: true,
     // Read from the host's CMS, so only for a connected host, and not while
     // it waits to reconnect.
-    [MENU_ACTIONS.serverVersion]: menuActionHost(MENU_ACTIONS.serverVersion, hosts).connected,
+    [MENU_ACTIONS.serverVersion]: menuActionHost(MENU_ACTIONS.serverVersion, hostState).connected,
     [MENU_ACTIONS.about]: true,
   };
 }
