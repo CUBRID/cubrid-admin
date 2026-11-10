@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCM } from '../../../constants/useCM';
 import {
   NO_DASHBOARD_MENU_ACTIONS,
   getMenuActionEnabled,
   runMenuAction,
+  MENU_ACTIONS,
 } from '../../layout/menuActions';
+import { isAnyModalOpen, useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
+
+// Stable fallback for a store without the list, so the selector stays equal.
+const NO_HOSTS = [];
+const NO_TABS = [];
 
 // App routes rendered without DashboardLayout (see App.jsx). A stored token
 // keeps isAuthenticated true on /login too, e.g. after the desktop app
 // crashed, since main always opens /login on startup.
-// Stable fallback for a store without the list, so the selector stays equal.
-const NO_HOSTS = [];
-
 const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 
 /**
@@ -28,6 +31,7 @@ const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 export function useDesktopMenuActions() {
   const CM = useCM();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const isAuthenticated = useSelector((state) => state.auth?.isAuthenticated, shallowEqual);
   const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue } = useSelector(
     (state) => ({
@@ -39,18 +43,25 @@ export function useDesktopMenuActions() {
     shallowEqual
   );
 
+  const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
+  const anyModalOpen = useAnyModalOpen();
+
   const { pathname } = useLocation();
   const isDashboardShown = isAuthenticated
     && !NO_DASHBOARD_PATHS.includes(pathname.replace(/\/+$/, '') || '/');
 
   const enabled = isDashboardShown
-    ? getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue })
+    ? {
+      ...getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue }),
+      // Not over an open modal (it would close with what it holds).
+      [MENU_ACTIONS.switchWorkspace]: !anyModalOpen,
+    }
     : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 
   const latest = useRef(null);
-  latest.current = { dispatch, CM, selectedHostUid, highlightedHostUid, enabled: stableEnabled };
+  latest.current = { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, enabled: stableEnabled };
 
   useEffect(() => {
     const setMenuState = window.desktopBridge?.setMenuState;
@@ -67,7 +78,7 @@ export function useDesktopMenuActions() {
       const ctx = latest.current;
       // Main may still show the previous menu for a moment after a state change.
       if (!ctx.enabled[actionId]) return;
-      runMenuAction(actionId, ctx);
+      runMenuAction(actionId, { ...ctx, anyModalOpen: isAnyModalOpen() });
     });
   }, []);
 }

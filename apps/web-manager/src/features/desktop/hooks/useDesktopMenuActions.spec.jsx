@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { configureStore, createSlice } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 // The real slices pull in apiClient/localStorage at import time; the map only
@@ -45,8 +45,9 @@ let bridge;
 
 function Harness() {
   useDesktopMenuActions();
-  return null;
+  return <span data-testid="path">{useLocation().pathname}</span>;
 }
+const currentPath = () => container.querySelector('[data-testid="path"]').textContent;
 
 const render = async ({ isAuthenticated = true, selectedHostUid = null, path = '/home' } = {}) => {
   dispatched = [];
@@ -135,6 +136,14 @@ it('runs a native menu action with the current host', async () => {
   dispatched = [];
   await act(async () => emitMenuAction(MENU_ACTIONS.editHost));
   expect(dispatched).toEqual([{ type: 'host/openEditHostModal', payload: 'h1' }]);
+});
+
+it('opens the workspace page on the native Switch Workspace, which is off on that page', async () => {
+  await render();
+  expect(bridge.setMenuState.mock.lastCall[0][MENU_ACTIONS.switchWorkspace]).toBe(true);
+  await act(async () => emitMenuAction(MENU_ACTIONS.switchWorkspace));
+  expect(currentPath()).toBe('/desktop/workspace');
+  expect(bridge.setMenuState.mock.lastCall[0][MENU_ACTIONS.switchWorkspace]).toBe(false);
 });
 
 it('drops actions that are currently disabled', async () => {

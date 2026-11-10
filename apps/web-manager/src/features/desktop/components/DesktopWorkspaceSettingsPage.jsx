@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useDispatch } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { logout } from '../../auth/authSlice';
+import { isDesktopApp } from '../isDesktopApp';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
+import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
+
+// For comparing workspace folders as typed: no surrounding spaces or
+// trailing separator ("/ws/" is "/ws").
+function normalizeWorkspacePath(value) {
+  const trimmed = (value ?? '').trim();
+  const stripped = trimmed.replace(/[\\/]+$/, '');
+  return stripped || trimmed.slice(0, 1);
+}
 
 function SettingsShell({ children }) {
   return (
@@ -18,21 +26,8 @@ function SettingsShell({ children }) {
   );
 }
 
-function isDesktopApp() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return (
-    window.location.protocol === 'app:' ||
-    window.desktopConfig?.isDesktop === true ||
-    Boolean(window.desktopBridge)
-  );
-}
-
 export default function DesktopWorkspaceSettingsPage() {
   const CM = useCM();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
   const bridge = window.desktopBridge;
   const inDesktopApp = isDesktopApp();
   const [loading, setLoading] = useState(true);
@@ -42,6 +37,9 @@ export default function DesktopWorkspaceSettingsPage() {
   const [info, setInfo] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  // The server could not say whether a job runs: switch only if the user says so.
+  const [askIgnoreUnknownJobs, setAskIgnoreUnknownJobs] = useState(false);
+  const navigate = useNavigate();
 
   const loadInfo = useCallback(async () => {
     if (!bridge) {
@@ -52,13 +50,16 @@ export default function DesktopWorkspaceSettingsPage() {
     setLoading(true);
     setError('');
     try {
-      const [next, setupRequired] = await Promise.all([
+      const [next, setupRequired, startupError] = await Promise.all([
         bridge.getWorkspaceInfo(),
         bridge.isWorkspaceSetupRequired(),
+        bridge.getWorkspaceStartupError?.() ?? null,
       ]);
       setInfo(next);
       setWorkspaceRoot(next.workspaceRoot);
       setSetupMode(setupRequired);
+      // The configured workspace failed at launch: say why (a WORKSPACE_* code).
+      if (startupError) setError(startupError);
     } catch (err) {
       setError(err?.message || CM.workspaceSettingsLoadFailedMsg);
     } finally {
@@ -93,42 +94,39 @@ export default function DesktopWorkspaceSettingsPage() {
     }
   };
 
+  // The app reloads on the new workspace by itself; the buttons stay off until then.
   const afterWorkspaceApplied = () => {
-    dispatch(logout());
-    setMessage(CM.workspaceAppliedRelogMsg);
-    setSaving(false);
-    navigate('/login', { replace: true });
+    setMessage(CM.applyingWorkspaceMsg);
   };
 
-  const handleSave = async () => {
+  const handleSave = async ({ ignoreUnknownJobs = false } = {}) => {
     if (!bridge) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await bridge.setWorkspaceRoot(workspaceRoot);
+      const result = ignoreUnknownJobs
+        ? await bridge.setWorkspaceRoot(workspaceRoot, { ignoreUnknownJobs: true })
+        : await bridge.setWorkspaceRoot(workspaceRoot);
+      // The folder in use, written another way: nothing restarts, back to the dashboard.
+      if (result?.unchanged) {
+        navigate('/home');
+        return;
+      }
       afterWorkspaceApplied();
     } catch (err) {
-      setError(err?.message || CM.workspaceSaveFailedMsg);
       setSaving(false);
+      if (String(err?.message ?? '').includes('WORKSPACE_JOBS_UNKNOWN')) {
+        setAskIgnoreUnknownJobs(true);
+        return;
+      }
+      setError(err?.message || CM.workspaceSaveFailedMsg);
     }
   };
 
-  const handleReset = async () => {
-    if (!bridge || !info) return;
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      await bridge.resetWorkspaceRoot();
-      setWorkspaceRoot(info.defaultWorkspaceRoot);
-      await loadInfo();
-      afterWorkspaceApplied();
-    } catch (err) {
-      setError(err?.message || CM.workspaceResetFailedMsg);
-      setSaving(false);
-    }
-  };
+  // Saving the folder the app already runs on would restart it for nothing.
+  const unchanged = Boolean(info)
+    && normalizeWorkspacePath(workspaceRoot) === normalizeWorkspacePath(info.workspaceRoot);
 
   if (!inDesktopApp) {
     return (
@@ -157,10 +155,16 @@ export default function DesktopWorkspaceSettingsPage() {
   return (
     <SettingsShell>
       <div className="mb-8">
-        {!setupMode && (
-          <Link to="/login" className="inline-flex items-center gap-1 text-14 text-slate-500 hover:text-amber-500 mb-4">
+        {/* Opened from a running app (File > Switch Workspace): back to its dashboard.
+            Not before the page knows it is not the first-run setup. */}
+        {!loading && !setupMode && (
+          <Link
+            to="/home"
+            data-testid="workspace-back-link"
+            className="inline-flex items-center gap-1 text-14 text-slate-500 hover:text-amber-500 mb-4"
+          >
             <Icon name="arrow_back" size="sm" weight={300} />
-            {CM.signIn}
+            {CM.backBtn}
           </Link>
         )}
         <h1 data-testid="workspace-setup-title" className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
@@ -230,32 +234,32 @@ export default function DesktopWorkspaceSettingsPage() {
                 {CM.continueBtn}
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  data-testid="workspace-save-btn"
-                  disabled={saving || !workspaceRoot.trim()}
-                  onClick={() => void handleSave()}
-                  className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
-                >
-                  {CM.save}
-                </button>
-                {info?.isCustomWorkspace && (
-                  <button
-                    type="button"
-                    data-testid="workspace-reset-btn"
-                    disabled={saving}
-                    onClick={() => void handleReset()}
-                    className="h-10 px-4 text-15 font-semibold rounded-xl text-slate-600 dark:text-slate-300"
-                  >
-                    {CM.defaultLocationBtn}
-                  </button>
-                )}
-              </>
+              <button
+                type="button"
+                data-testid="workspace-save-btn"
+                disabled={saving || !workspaceRoot.trim() || unchanged}
+                onClick={() => void handleSave()}
+                className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+              >
+                {CM.save}
+              </button>
             )}
           </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={askIgnoreUnknownJobs}
+        title={CM.workspaceTitle}
+        description={CM.workspaceJobsUnknownDesc}
+        confirmLabel={CM.switchWorkspaceConfirmBtn}
+        variant="danger"
+        onCancel={() => setAskIgnoreUnknownJobs(false)}
+        onConfirm={() => {
+          setAskIgnoreUnknownJobs(false);
+          void handleSave({ ignoreUnknownJobs: true });
+        }}
+        testId="workspace-jobs-unknown"
+      />
     </SettingsShell>
   );
 }

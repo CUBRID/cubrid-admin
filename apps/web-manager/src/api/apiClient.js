@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { nextSeq } from '../infrastructure/utils/singleFlight';
+import { isDesktopApp } from '../features/desktop/isDesktopApp';
 
 export const hostActions = {
   revokeHostLogin: (hostUid) => ({ type: 'host/revokeHostLogin', payload: hostUid }),
@@ -454,7 +455,8 @@ if (initialToken) {
 }
 
 async function handleSystemSessionExpired() {
-  if (isHandlingSystemSessionExpiry) {
+  // The desktop app has no app login to go back to.
+  if (isHandlingSystemSessionExpiry || isDesktopApp()) {
     return;
   }
 

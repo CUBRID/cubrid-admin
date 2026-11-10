@@ -27,5 +27,8 @@ const subscribe = (listener) => {
 };
 const isAnyOpen = () => openCount > 0;
 
+/** True while any modal is open, for code outside React (menu actions). */
+export const isAnyModalOpen = isAnyOpen;
+
 /** True while any modal is open. Polling of what is behind it pauses. */
 export const useAnyModalOpen = () => useSyncExternalStore(subscribe, isAnyOpen, isAnyOpen);

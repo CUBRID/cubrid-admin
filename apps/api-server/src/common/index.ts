@@ -1,5 +1,6 @@
 // Export decorators
 export { Public } from './decorators/public.decorator';
+export { NotOnDesktop } from './decorators/not-on-desktop.decorator';
 export { HandleAuthErrors } from './decorators/handle-auth-errors.decorator';
 export { HandleUserErrors } from './decorators/handle-user-errors.decorator';
 export { HandleHostErrors } from './decorators/handle-host-errors.decorator';

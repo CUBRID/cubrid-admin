@@ -1,17 +1,24 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, SubMenu, MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { MENU_ACTIONS, getMenuActionEnabled, runMenuAction } from '../menuActions';
 import { useCM } from '../../../constants/useCM';
+import { isDesktopApp } from '../../desktop/isDesktopApp';
+import { isAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
+
+const NO_TABS = [];
 
 export default function HeaderMenu() {
   const CM = useCM();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
+  const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
 
   const enabled = getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue });
   const action = (id) => ({
     disabled: !enabled[id],
-    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid }),
+    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, anyModalOpen: isAnyModalOpen() }),
   });
 
   const MenuLabel = ({ children }) => (
@@ -43,6 +50,22 @@ export default function HeaderMenu() {
           label={CM.importHost}
           {...action(MENU_ACTIONS.importHosts)}
         />
+        {isDesktopApp() && (
+          <>
+            <MenuDivider />
+            <MenuItem
+              icon="folder_open"
+              label={CM.switchWorkspace}
+              {...action(MENU_ACTIONS.switchWorkspace)}
+            />
+            <MenuDivider />
+            <MenuItem
+              icon="logout"
+              label={CM.quit}
+              onClick={() => void window.desktopBridge?.quitApp?.()}
+            />
+          </>
+        )}
       </DropdownMenu>
 
       <DropdownMenu label={<MenuLabel>{CM.hostServiceManagement}</MenuLabel>} width="w-60">

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Post, Put, Request } from '@nestjs/commo
 import { UserService } from './user.service';
 import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto } from '@type/index';
 import { UpdateUserInfoRequest, UserResponse } from '@api-interfaces';
+import { NotOnDesktop } from '@common';
 
 /**
  * Controller for handling user-related operations.
@@ -75,6 +76,7 @@ export class UserController {
    * // Body: { oldPassword: "old123", newPassword: "new456" }
    * ```
    */
+  @NotOnDesktop()
   @Post('credential')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req): Promise<void> {
     const userId = req.user.sub;
@@ -98,6 +100,7 @@ export class UserController {
    * // Returns: true
    * ```
    */
+  @NotOnDesktop()
   @Delete('account')
   async deleteUser(@Request() req, @Body() body: DeleteUserDto): Promise<boolean> {
     await this.userService.deleteUser(req.user.sub, body);
@@ -158,6 +161,7 @@ export class UserController {
    * // Body: { department: "Engineering" }
    * ```
    */
+  @NotOnDesktop()
   @Post('account')
   async updateUser(@Request() req, @Body() body: UpdateUserInfoRequest): Promise<void> {
     const userId = req.user.sub;

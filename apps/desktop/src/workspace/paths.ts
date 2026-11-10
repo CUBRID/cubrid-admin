@@ -1,48 +1,30 @@
 import * as path from 'path';
 import { app } from 'electron';
 import { getRepoRoot } from '../config/portable-root';
-import {
-  ensureWorkspaceDirectories,
-  removeStaleUnixSocket,
-  resolveWorkspacePaths,
-  type WorkspacePaths,
-} from './workspace-paths';
+import { resolveWorkspacePaths, type WorkspacePaths } from './workspace-paths';
 
 export { getRepoRoot };
 
 let cachedPaths: WorkspacePaths | null = null;
 
+/** The workspace in use: the one the server was started on, else the configured one. */
 export function getWorkspacePaths(): WorkspacePaths {
   if (!cachedPaths) {
     cachedPaths = resolveWorkspacePaths();
-    ensureWorkspaceDirectories(cachedPaths);
   }
 
   return cachedPaths;
 }
 
+/** Re-reads the configured workspace (desktop-settings.json). */
 export function refreshWorkspacePaths(): WorkspacePaths {
   cachedPaths = resolveWorkspacePaths();
-  ensureWorkspaceDirectories(cachedPaths);
   return cachedPaths;
 }
 
-export function getDataDir(): string {
-  return getWorkspacePaths().dataDir;
-}
-
-export function getStorageDir(): string {
-  return getWorkspacePaths().storageDir;
-}
-
-export function getSslDir(): string {
-  return getWorkspacePaths().sslDir;
-}
-
-export function getApiSocketPath(): string {
-  const paths = getWorkspacePaths();
-  removeStaleUnixSocket(paths.socketPath);
-  return paths.socketPath;
+/** Makes `paths` the workspace in use (its socket name included, a random one on Windows). */
+export function setWorkspacePathsInUse(paths: WorkspacePaths): void {
+  cachedPaths = paths;
 }
 
 export function getRendererDistDir(): string {

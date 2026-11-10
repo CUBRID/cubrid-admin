@@ -15,17 +15,31 @@ export type WorkspaceInfo = {
 
 export type DesktopBridge = {
   isWorkspaceSetupRequired: () => Promise<boolean>;
+  /** Why the server could not start on the configured workspace at launch (a WORKSPACE_* code), or null. */
+  getWorkspaceStartupError: () => Promise<string | null>;
   getWorkspaceInfo: () => Promise<WorkspaceInfo>;
   pickWorkspaceDirectory: () => Promise<string | null>;
-  setWorkspaceRoot: (workspaceRoot: string) => Promise<{ ok: true }>;
-  resetWorkspaceRoot: () => Promise<{ ok: true }>;
+  /** A file chosen in the app's open dialog (with its default folder), as base64; null if cancelled. */
+  pickOpenFile: (accept?: string) => Promise<{ name: string; base64: string } | null>;
+  /**
+   * Moves the app to another workspace. `unchanged` when it is the folder in
+   * use. Throws WORKSPACE_JOBS_UNKNOWN when the running jobs could not be
+   * read; `ignoreUnknownJobs` goes on anyway (the user said so).
+   */
+  setWorkspaceRoot: (workspaceRoot: string, options?: { ignoreUnknownJobs?: boolean }) => Promise<{ ok: true; unchanged?: true }>;
   finishWorkspaceSetup: (workspaceRoot: string) => Promise<{ ok: boolean }>;
   revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
   setMenuLanguage: (language: 'en' | 'ko') => Promise<{ ok: true }>;
   setMenuState: (state: Record<string, boolean>) => Promise<{ ok: true }>;
+  /** A conf tab has unsaved changes: quitting asks about them. */
+  setUnsavedChanges: (unsaved: boolean) => Promise<{ ok: true }>;
   onMenuAction: (callback: (actionId: string) => void) => () => void;
+  /** View > Reload (CmdOrCtrl+R on macOS): re-read the active tab and the host list. */
+  onRefreshView: (callback: () => void) => () => void;
   onCloseActiveTab: (callback: () => void) => () => void;
   closeWindow: () => Promise<void>;
+  /** Quits the app, as File > Quit in the native menu does. */
+  quitApp: () => Promise<void>;
   getAppVersion: () => Promise<string>;
   getUpdateStatus: () => Promise<UpdateStatus>;
   getStartupUpdateNotice: () => Promise<UpdateStatus | null>;
