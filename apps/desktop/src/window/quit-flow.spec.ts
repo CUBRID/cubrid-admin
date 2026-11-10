@@ -3,7 +3,7 @@ import type { BrowserWindow } from 'electron';
 jest.mock('electron', () => ({ app: { getPath: jest.fn(() => '/tmp'), isPackaged: false }, Menu: { buildFromTemplate: jest.fn(), setApplicationMenu: jest.fn() }, shell: {} }));
 
 import { EventEmitter } from 'events';
-import { confirmQuit, createQuitFlow, whenSessionEnds } from './quit-flow';
+import { confirmQuit, createQuitFlow, listenForQuitSignals, whenSessionEnds } from './quit-flow';
 
 const window = {} as BrowserWindow;
 
@@ -134,3 +134,28 @@ describe('whenSessionEnds', () => {
     expect(s.asked()).toBe(1);
   });
 });
+
+describe('listenForQuitSignals', () => {
+  it.each(['SIGINT', 'SIGTERM'] as const)('%s quits, and the close that follows asks nothing, unsaved changes included', (signal) => {
+    const questions = { quit: jest.fn(() => true), quitWithUnsavedChanges: jest.fn(() => true), leaveWithUnsavedChanges: jest.fn(() => true) };
+    const flow = createQuitFlow(questions, () => true);
+    const target = new EventEmitter();
+    const quit = jest.fn();
+    listenForQuitSignals(target as never, flow, quit);
+    target.emit(signal);
+    expect(quit).toHaveBeenCalledTimes(1);
+    expect(flow.onWindowClose()).toBe(true);
+    expect(flow.onPreventUnload()).toBe(true);
+    expect(questions.quit).not.toHaveBeenCalled();
+    expect(questions.quitWithUnsavedChanges).not.toHaveBeenCalled();
+  });
+
+  it('is added once the app is ready, not when main.ts loads (Electron would take the signal first)', () => {
+    const main = require('fs').readFileSync(require('path').join(__dirname, '../main.ts'), 'utf8') as string;
+    const bootstrap = main.slice(main.indexOf('async function bootstrap()'));
+    expect(bootstrap).toContain('listenForQuitSignals(process, quitFlow, requestQuit)');
+    expect(main).not.toMatch(/process\.on\(\s*signal/);
+    expect(main).toContain('app.whenReady().then(bootstrap)');
+  });
+});
+
