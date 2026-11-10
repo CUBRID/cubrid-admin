@@ -11,6 +11,9 @@ import {
 // App routes rendered without DashboardLayout (see App.jsx). A stored token
 // keeps isAuthenticated true on /login too, e.g. after the desktop app
 // crashed, since main always opens /login on startup.
+// Stable fallback for a store without the list, so the selector stays equal.
+const NO_HOSTS = [];
+
 const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 
 /**
@@ -26,10 +29,12 @@ export function useDesktopMenuActions() {
   const CM = useCM();
   const dispatch = useDispatch();
   const isAuthenticated = useSelector((state) => state.auth?.isAuthenticated, shallowEqual);
-  const { selectedHostUid, authorizedHosts } = useSelector(
+  const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue } = useSelector(
     (state) => ({
       selectedHostUid: state.host?.selectedHostUid ?? null,
-      authorizedHosts: state.host?.authorizedHosts ?? [],
+      highlightedHostUid: state.host?.highlightedHostUid ?? null,
+      authorizedHosts: state.host?.authorizedHosts ?? NO_HOSTS,
+      reconnectQueue: state.host?.reconnectQueue ?? NO_HOSTS,
     }),
     shallowEqual
   );
@@ -39,13 +44,13 @@ export function useDesktopMenuActions() {
     && !NO_DASHBOARD_PATHS.includes(pathname.replace(/\/+$/, '') || '/');
 
   const enabled = isDashboardShown
-    ? getMenuActionEnabled({ selectedHostUid, authorizedHosts })
+    ? getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue })
     : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 
   const latest = useRef(null);
-  latest.current = { dispatch, CM, selectedHostUid, enabled: stableEnabled };
+  latest.current = { dispatch, CM, selectedHostUid, highlightedHostUid, enabled: stableEnabled };
 
   useEffect(() => {
     const setMenuState = window.desktopBridge?.setMenuState;

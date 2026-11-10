@@ -17,8 +17,8 @@ export {
 } from './databaseCoreSlice';
 
 export {
-  fetchDatabaseVolumes, fetchDatabaseSpaceInfo, fetchDashboardVolumes, fetchDashboardLocks,
-  fetchDashboardPerformance, fetchDashboardCAS, fetchDashboardData, clearMonitoringError
+  fetchDatabaseVolumes, fetchDatabaseSpaceInfo, fetchDashboardLocks,
+  fetchDashboardPerformance, fetchDashboardCAS, fetchDashboardData, clearMonitoringError, volumesChanged
 } from './databaseMonitoringSlice';
 
 export {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoStartDatabases } from './autoStartDatabases';
+import { autoStartDatabases, splitConfList } from '@api-interfaces';
 
 describe('autoStartDatabases', () => {
   it('reads a plain [service] section', () => {
@@ -24,5 +24,28 @@ describe('autoStartDatabases', () => {
 
   it('is empty when service= does not include server', () => {
     expect(autoStartDatabases(['[service]', 'service=broker,manager', 'server=a'])).toEqual([]);
+  });
+
+  it('splits server= on spaces, commas and colons, as util_service.c does', () => {
+    expect(autoStartDatabases(['[service]', 'service=server', 'server=a b:c,, d'])).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('splits service= on spaces, tabs and commas but not colons, and matches server case-sensitively', () => {
+    expect(autoStartDatabases(['[service]', 'service=broker\tserver', 'server=a'])).toEqual(['a']);
+    expect(autoStartDatabases(['[service]', 'service=server:broker', 'server=a'])).toEqual([]);
+    expect(autoStartDatabases(['[service]', 'service=Server,broker', 'server=a'])).toEqual([]);
+  });
+});
+
+describe('splitConfList', () => {
+  it('drops empty pieces between runs of delimiters', () => {
+    expect(splitConfList(' a,,b : c ')).toEqual(['a', 'b', 'c']);
+    expect(splitConfList('')).toEqual([]);
+    expect(splitConfList(undefined)).toEqual([]);
+  });
+
+  it('splits only on the delimiters given', () => {
+    expect(splitConfList('a\tb,c')).toEqual(['a\tb', 'c']);
+    expect(splitConfList('a\tb:c', ' \t,')).toEqual(['a', 'b:c']);
   });
 });

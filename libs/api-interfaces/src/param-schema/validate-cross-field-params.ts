@@ -1,5 +1,5 @@
 import { ParamSchemaEntry } from './param-schema-entry';
-import { parseGuardInt } from './validate-param-value';
+import { ParamValueIssue, parseGuardInt } from './validate-param-value';
 
 /**
  * Checks every `crossField` constraint in `schema` against `effectiveParams`
@@ -19,7 +19,21 @@ export function validateCrossFieldParams(
   schema: ParamSchemaEntry[],
   effectiveParams: Record<string, unknown>
 ): Record<string, string> {
-  const errors: Record<string, string> = {};
+  return Object.fromEntries(
+    Object.entries(checkCrossFieldParams(schema, effectiveParams)).map(([key, issue]) => [key, issue.message])
+  );
+}
+
+/**
+ * validateCrossFieldParams as ParamValueIssues: code CROSS_FIELD, params
+ * { rule: 'gte' | 'lte', comparedToKey, current } (`current` is the other
+ * key's value).
+ */
+export function checkCrossFieldParams(
+  schema: ParamSchemaEntry[],
+  effectiveParams: Record<string, unknown>
+): Record<string, ParamValueIssue> {
+  const errors: Record<string, ParamValueIssue> = {};
   for (const entry of schema) {
     if (!entry.crossField) continue;
     const selfRaw = effectiveParams[entry.key];
@@ -32,8 +46,12 @@ export function validateCrossFieldParams(
     if (Number.isNaN(selfValue) || Number.isNaN(otherValue)) continue;
     const ok = entry.crossField.rule === 'gte' ? selfValue >= otherValue : selfValue <= otherValue;
     if (!ok) {
-      const op = entry.crossField.rule === 'gte' ? '>=' : '<=';
-      errors[entry.key] = `Must be ${op} ${entry.crossField.comparedToKey} (currently ${otherValue})`;
+      const op = entry.crossField.rule === 'gte' ? '≥' : '≤';
+      errors[entry.key] = {
+        code: 'CROSS_FIELD',
+        message: `Must be ${op} ${entry.crossField.comparedToKey} (currently ${otherValue})`,
+        params: { rule: entry.crossField.rule, comparedToKey: entry.crossField.comparedToKey, current: otherValue },
+      };
     }
   }
   return errors;

@@ -4,6 +4,7 @@ import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
+import { Toggle } from '../../../components/ds/forms/Toggle';
 import { Table } from '../../../components/ds/layout/Table';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
@@ -43,6 +44,8 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
   const [loginPending, setLoginPending] = useState(false);
   // Per database without a saved login: { [dbname]: { id, password } }.
   const [credentialsByDb, setCredentialsByDb] = useState({});
+  // As in the single login dialog: on by default, and off saves nothing.
+  const [saveCredentials, setSaveCredentials] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -50,7 +53,7 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
     setFilter('');
     setLoginPending(false);
     setCredentialsByDb({});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSaveCredentials(true);
   }, [isOpen, hostUid]);
 
   const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.dbname)), [rows, selected]);
@@ -92,7 +95,13 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
       setLoginPending(true);
       return;
     }
-    onAction(action, selectedRows, action === 'login' ? credentialsByDb : undefined);
+    onAction(
+      action,
+      selectedRows,
+      action === 'login'
+        ? Object.fromEntries(Object.entries(credentialsByDb).map(([dbname, entry]) => [dbname, { ...entry, save: saveCredentials }]))
+        : undefined
+    );
   };
 
   const columns = [
@@ -195,6 +204,10 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
                   />
                 </div>
               ))}
+            </div>
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <Typography variant="caption" className="text-slate-500">{CM.savePassword}</Typography>
+              <Toggle variant="primary" checked={saveCredentials} onChange={() => setSaveCredentials((v) => !v)} testId="select-databases-save-credentials" />
             </div>
           </div>
         )}

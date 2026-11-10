@@ -4,6 +4,7 @@ import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs, fetchAdmi
 import { openTab } from '../../layoutSlice';
 import { brokerApi } from '../../../broker/brokerApi';
 import { dbKey } from '../../../database/dbKey';
+import { hostKey } from '../../../host/hostKey';
 import { TreeNode } from '../../../../components/domain/tree/TreeNode';
 import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Typography } from '../../../../components/ds/foundation/Typography';
@@ -49,7 +50,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
     }
   };
 
-  const accessLogs = [...new Map((accessBrokers ?? brokers).flatMap(broker => logsByBroker[broker.name] || [])
+  const accessLogs = [...new Map((accessBrokers ?? brokers).flatMap(broker => logsByBroker[hostKey(hostUid, broker.name)] || [])
     .filter(log => log.type === 'access' || /\.access(?:\.|$)/i.test(log.path))
     .map(log => [log.path, log])).values()];
 
@@ -72,7 +73,6 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
       .filter((key) => !prev.includes(key) && openedDbs.current.has(key) && !dbLogsByDb[key] && !dbLogsLoadingByDb[key])
       .forEach((key) => dispatch(fetchDatabaseLogs({ hostUid, dbname: key.slice(key.lastIndexOf(':') + 1) })));
     // Only a login change triggers this; the lists are read for the check.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, hostUid, hostConnected, loggedInDatabases]);
 
   return (
@@ -147,7 +147,7 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
             onToggle={() => {
               if (!logsLoading) {
                 brokers.forEach(broker => {
-                  if (!logsByBroker[broker.name]) {
+                  if (!logsByBroker[hostKey(hostUid, broker.name)]) {
                     dispatch(fetchBrokerLogs({ hostUid, brokerName: broker.name }));
                   }
                 });
@@ -155,8 +155,9 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
             }}
           >
               {(() => {
-                const errorLogs = Object.values(logsByBroker)
-                  .flat()
+                // This host's brokers only: logsByBroker holds every host's lists.
+                const errorLogs = brokers
+                  .flatMap(broker => logsByBroker[hostKey(hostUid, broker.name)] || [])
                   .filter(log => log.path.toLowerCase().endsWith('.err'));
 
                 if (!logsLoading && errorLogs.length === 0) {

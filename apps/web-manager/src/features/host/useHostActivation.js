@@ -1,10 +1,11 @@
 import { useCallback, useRef } from 'react';
-import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { useDispatch, useSelector, useStore, shallowEqual } from 'react-redux';
 import { loginToHostWithSideEffects, fetchHostEnv, openEditHostModal, setSelectedHost } from './hostSlice';
 import { resetDatabaseState, fetchDatabaseStartInfo } from '../database/databaseCoreSlice';
 import { resetBrokerState, fetchBrokerList } from '../broker/brokerSlice';
 import { setActiveMainTab } from '../layout/layoutSlice';
 import { fetchHaHeartbeatOnly } from '../server/monitoringSlice';
+import { isHostPasswordError } from './hostLoginError';
 
 /**
  * Logs into a host (if not already authorized) then opens its dashboard tab.
@@ -17,7 +18,8 @@ import { fetchHaHeartbeatOnly } from '../server/monitoringSlice';
  */
 export function useHostActivation() {
   const dispatch = useDispatch();
-  const { authorizedHosts, selectedHostUid, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const store = useStore();
+  const { authorizedHosts, selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const loginInProgressRef = useRef(false);
 
   // Sidebar's per-database HA gates (Load/Rename/Restore/Delete Database)
@@ -25,15 +27,21 @@ export function useHostActivation() {
   // fetching it unless the Server Dashboard tab happened to be open — so
   // right-clicking a database straight from the tree saw no heartbeat data
   // and never disabled those items. Kick this off as soon as the host is
-  // known to be HA (haInfo is set at login and persisted across sessions),
-  // so it's populated well before the user reaches a context menu.
+  // known to be HA (haInfo is set at login, and for a reload-restored host
+  // by loadHosts), so it's populated well before the user reaches a context
+  // menu. Read from the store at call time: right after a login, the haInfo
+  // this render saw is from before it (logout clears it).
   const primeHaHeartbeat = useCallback((uid) => {
-    if (haInfo[uid]?.isHA) {
+    if (store.getState().host.haInfo?.[uid]?.isHA) {
       dispatch(fetchHaHeartbeatOnly(uid));
     }
-  }, [dispatch, haInfo]);
+  }, [dispatch, store]);
 
-  const activateHost = useCallback((uid) => {
+  // `openDashboard: false` (a single click in the host list) switches the
+  // host the sidebar shows without bringing up its dashboard: the dashboard
+  // reads its databases' volumes as soon as it is on screen, and a focus
+  // change alone must not do that.
+  const activateHost = useCallback((uid, { openDashboard = true } = {}) => {
     if (!uid) return;
     if (loginInProgressRef.current) return;
 
@@ -50,7 +58,7 @@ export function useHostActivation() {
         dispatch(resetDatabaseState(selectedHostUid));
         dispatch(resetBrokerState(selectedHostUid));
       }
-      dispatch(setActiveMainTab('host:' + uid));
+      if (openDashboard) dispatch(setActiveMainTab('host:' + uid));
       dispatch(fetchDatabaseStartInfo(uid));
       dispatch(fetchBrokerList(uid));
       dispatch(fetchHostEnv(uid));
@@ -75,8 +83,9 @@ export function useHostActivation() {
         console.error('Failed to log into host:', err);
         // Likely a bad/missing password (or other stale connection detail) —
         // open the Edit Host modal so the user can fix it right away instead
-        // of just seeing a dead-end error.
-        dispatch(openEditHostModal(uid));
+        // of just seeing a dead-end error. A turned-down password opens the
+        // password field right away.
+        dispatch(openEditHostModal({ hostUid: uid, passwordRejected: isHostPasswordError(err) }));
       })
       .finally(() => {
         loginInProgressRef.current = false;

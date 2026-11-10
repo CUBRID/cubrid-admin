@@ -1,3 +1,9 @@
+/**
+ * A warning's code (e.g. RENAME_SECTION_KEPT) and the values in its English
+ * text (dbname, oldName, newName, ...), for a client that shows its own text.
+ */
+export type WarningDetail = { code: string; [field: string]: string };
+
 export type CmsJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
 export type CmsJobType =
@@ -58,5 +64,12 @@ export type CmsJobStatusResponse = {
   result?: unknown;
   /** Follow-up work requiring attention after the main operation succeeded. */
   warnings?: string[];
-  error?: { message: string; code?: string; cmsStatus?: string };
+  /** Each warning's code and the values in its text, in the order of `warnings`. */
+  warningDetails?: WarningDetail[];
+  /**
+   * `message` as shown, with what a client maps it by, as in an error
+   * response's `data`: `type`, `code`, `reason`, `cmsNote` (CMS's own text),
+   * `cmsTask`, values like `dbname`.
+   */
+  error?: { message: string; code?: string; cmsStatus?: string; type?: string; cmsNote?: string; [field: string]: unknown };
 };

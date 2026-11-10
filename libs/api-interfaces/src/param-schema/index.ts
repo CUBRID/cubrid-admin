@@ -13,6 +13,7 @@ export * from './validate-params';
 export * from './validate-cross-field-params';
 export * from './validate-effective-params';
 export * from './parse-conf-text';
+export * from './conf-list';
 export * from './validate-conf-text';
 export * from './deprecated-param-replacements';
 export * from './validate-cm-conf-text';

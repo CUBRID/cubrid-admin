@@ -21,6 +21,21 @@ describe('convertExvolArrayToCmsFormat public error message', () => {
     ]);
   });
 
+  it('puts every volume in one object, as CMS createdb reads only the first exvol block', () => {
+    expect(convertExvolArrayToCmsFormat([
+      { v1: base },
+      { v2: { ...base, type: 'index' } },
+      { v3: { ...base, type: 'temp', volpath: '/data/tmp' } },
+    ])).toEqual([
+      { v1: 'data;32768;/data/testdb', v2: 'index;32768;/data/testdb', v3: 'temp;32768;/data/tmp' },
+    ]);
+    expect(convertExvolArrayToCmsFormat([])).toEqual([]);
+  });
+
+  it('refuses two volumes with the same name', () => {
+    expect(() => convertExvolArrayToCmsFormat([{ v1: base }, { v1: base }])).toThrow();
+  });
+
   it('surfaces the size cause through ConvertVolumeFailed', () => {
     expect(publicDetail(() => convertExvolArrayToCmsFormat([{ v1: { ...base, size: 0 } }]))).toEqual({
       code: DatabaseErrorCode.CONVERT_VOLUME_FAILED,

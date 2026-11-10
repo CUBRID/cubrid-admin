@@ -1,4 +1,4 @@
-import { getMaintenanceResult, getMaintenanceSummary, redactMaintenanceText } from './maintenance-job';
+import { getLoadResult, getMaintenanceResult, getMaintenanceSummary, redactMaintenanceText } from './maintenance-job';
 import type { CmsJobRecord } from './cms-job.types';
 
 const job = (patch: Partial<CmsJobRecord> = {}): CmsJobRecord => ({
@@ -54,5 +54,33 @@ describe('maintenance job reporting', () => {
     expect(redactMaintenanceText(job(), undefined, '{"password":"other-secret"}')).toBe('{"password":[redacted]}');
     expect(redactMaintenanceText(job({ payload: { dbpasswd: 'secret-value' } }), undefined, 'Login failed: secret-value'))
       .toBe('Login failed: [redacted]');
+  });
+});
+
+describe('loaddb job result', () => {
+  // CMS loaddb responses as a test host returned them.
+  it('keeps the output lines of a load that succeeded', () => {
+    const response = { status: 'success', line: ['', 'Start object loading.', 'Total 5 object(s) inserted, 0 object(s) failed.'], note: 'none' };
+    expect(getLoadResult(response, true)).toEqual({
+      success: true,
+      log: ['Start object loading.', 'Total 5 object(s) inserted, 0 object(s) failed.'],
+    });
+  });
+
+  it('keeps the failed lines of a load that failed', () => {
+    const response = {
+      status: 'failure',
+      line: ['', 'Start object loading.', 'Line 4:Data overflow on data type "character varying".'],
+      note: 'loaddb failed with exit status: 3',
+    };
+    expect(getLoadResult(response, false)).toEqual({
+      success: false,
+      log: ['Start object loading.', 'Line 4:Data overflow on data type "character varying".'],
+    });
+  });
+
+  it('adds no log when there is no output', () => {
+    expect(getLoadResult({ status: 'success' }, true)).toEqual({ success: true });
+    expect(getLoadResult(undefined, false)).toEqual({ success: false });
   });
 });

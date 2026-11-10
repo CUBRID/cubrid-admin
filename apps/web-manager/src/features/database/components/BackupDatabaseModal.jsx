@@ -15,6 +15,8 @@ import { CaDialogField,
 } from '../../../components/ds/layout/CaDialogLayout';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { BACKUP_THREAD_COUNT_MIN, checkIntInRange } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 import { Select } from '../../../components/ds/forms/Select';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
 import { Typography } from '../../../components/ds/foundation/Typography';
@@ -48,9 +50,14 @@ export default function BackupDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isBackupDatabaseModalOpen, pendingBackupJob } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { backupDbInfo: databaseBackupInfo } = useSelector((state) => state.databaseOperation, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  // CMS backs up a stopped database offline (backupdb --SA-mode), which an
+  // HA database must not be; a running one is backed up online.
+  const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const haStoppedIssue = isHaDb && !isDbRunning ? CM.haBackupDbStoppedMsg : null;
 
   const {
     error,
@@ -187,7 +194,12 @@ export default function BackupDatabaseModal() {
     setFormData(prev => ({ ...prev, backupLevel: level }));
   };
 
+  // backupdb --thread-count: 0 = as many as the CPUs, negative is refused;
+  // empty leaves the option off.
+  const threadsIssue = formData.parallelBackup === '' ? null : checkIntInRange(formData.parallelBackup, BACKUP_THREAD_COUNT_MIN);
+
   const handleBackup = async () => {
+    if (threadsIssue || haStoppedIssue) return;
     if (!formData.backupDir) {
       endError(CM.backupDirRequiredMsg);
       return;
@@ -285,6 +297,14 @@ export default function BackupDatabaseModal() {
         </CaDialogField>
       )}
 
+      {haStoppedIssue && (
+        <CaDialogField fullWidth>
+          <InfoBanner variant="danger" title={CM.warning} icon="warning">
+            {haStoppedIssue}
+          </InfoBanner>
+        </CaDialogField>
+      )}
+
       {existingBackupAtLevel && (
         <CaDialogField fullWidth>
           <InfoBanner variant="danger" title={CM.warning} icon="warning">
@@ -298,6 +318,9 @@ export default function BackupDatabaseModal() {
           type="number"
           value={formData.parallelBackup}
           onChange={(e) => handleInputChange('parallelBackup', e.target.value)}
+          min={BACKUP_THREAD_COUNT_MIN}
+          error={inputIssueText(threadsIssue, CM)}
+          data-testid="backup-database-threads-input"
         />
       </CaDialogField>
 
@@ -387,7 +410,7 @@ export default function BackupDatabaseModal() {
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="backup-database-cancel-btn" variant="secondary" onClick={handleClose}>{CM.cancel}</Button>
-          <Button data-testid="backup-database-run-btn" variant="primary" onClick={handleBackup} icon="play_circle" className="min-w-[140px]">
+          <Button data-testid="backup-database-run-btn" variant="primary" onClick={handleBackup} disabled={Boolean(threadsIssue || haStoppedIssue)} icon="play_circle" className="min-w-[140px]">
             {CM.ok}
           </Button>
         </div>

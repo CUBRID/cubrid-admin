@@ -67,13 +67,54 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     const job = renameJob({ type: 'copy', dbname: 'newdb', payload: { srcdbname: 'olddb', destdbname: 'newdb', move: 'y' } as any });
     store.getJob.mockResolvedValue(job);
     managementService.copyDbCmsResponse = jest.fn().mockResolvedValue({ status: 'success' });
-    managementService.finishCopy = jest.fn().mockResolvedValue(['autostart not updated']);
+    managementService.finishCopy = jest.fn().mockResolvedValue([{ code: 'RENAME_AUTOSTART_NOT_UPDATED', oldName: 'srcdb', newName: 'newdb', message: 'autostart not updated' }]);
     managementService.getDatabaseStartInfo.mockRejectedValue(new Error('CMS unreachable'));
 
     await (service as any).runJob('ukey', 'job-1', 'op-key');
 
     expect(job.status).toBe('succeeded');
     expect(job.warnings).toEqual(['autostart not updated', expect.stringContaining('could not be refreshed')]);
+    expect(job.warningDetails).toEqual([
+      { code: 'RENAME_AUTOSTART_NOT_UPDATED', oldName: 'srcdb', newName: 'newdb' },
+      { code: 'DB_LIST_NOT_REFRESHED', jobType: 'copy' },
+    ]);
+  });
+
+  it('ends an unload that CMS failed only on the OBJECT-type warning as succeeded, with the warning', async () => {
+    const job = renameJob({ type: 'unload', dbname: 'refdb', payload: {} as any });
+    store.getJob.mockResolvedValue(job);
+    managementService.unloadDatabaseCmsResponse = jest.fn().mockResolvedValue({
+      status: 'failure', task: 'unloaddb', 'job-status': 'error',
+      note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>",
+    });
+
+    await (service as any).runJob('ukey', 'job-1', 'op-key');
+
+    expect(job.status).toBe('succeeded');
+    expect(job.error).toBeUndefined();
+    expect(job.result).toEqual([]);
+    expect(job.warnings).toEqual([
+      "warning: [dba.tb] has object type. So for class [dba.tb], '--thread-count' option is ignored.",
+      expect.stringContaining('table counts'),
+    ]);
+    expect(job.warningDetails).toEqual([
+      { code: 'UNLOAD_OBJECT_TYPE_THREAD_COUNT_IGNORED', class: 'dba.tb' },
+      { code: 'UNLOAD_RESULT_NOT_RECORDED' },
+    ]);
+  });
+
+  it('still fails an unload whose note has another line besides the warning', async () => {
+    const job = renameJob({ type: 'unload', dbname: 'refdb', payload: {} as any });
+    store.getJob.mockResolvedValue(job);
+    managementService.unloadDatabaseCmsResponse = jest.fn().mockResolvedValue({
+      status: 'failure', task: 'unloaddb',
+      note: "warning: [dba.tb] has object type.<end>So for class [dba.tb], '--thread-count' option is ignored.<end>ERROR: out of disk<end>",
+    });
+
+    await (service as any).runJob('ukey', 'job-1', 'op-key');
+
+    expect(job.status).toBe('failed');
+    expect(job.warnings).toBeUndefined();
   });
 
   it('clears old/new name caches when an orphaned rename reconciles as succeeded after restart', async () => {
@@ -86,7 +127,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     expect(managementService.clearDbAliasCachesAfterRename).toHaveBeenCalledWith(
       'user-1', 'host-1', 'olddb', 'newdb'
     );
-    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
   });
 
   it('does not clear caches when an orphaned rename reconciles as failed', async () => {
@@ -110,7 +151,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
     await expect((service as any).tryReconcileOrphanedJob('ukey', job)).resolves.toBe(true);
 
     expect(job.status).toBe('succeeded');
-    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job);
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
   });
   it('updates autostart for a normal rename, preserving success if list refresh fails', async () => {
     const job = renameJob();
@@ -200,12 +241,13 @@ describe('CmsJobService delete job', () => {
   it('shows what the cleanup after a delete could not do as job warnings, the job still succeeded', async () => {
     const job = deleteJob();
     store.getJob.mockResolvedValue(job);
-    lifecycleService.forgetDeletedDatabase.mockResolvedValue(['cubrid.conf could not be updated']);
+    lifecycleService.forgetDeletedDatabase.mockResolvedValue([{ code: 'DELETE_CONF_NOT_UPDATED', dbname: 'demodb', message: 'cubrid.conf could not be updated' }]);
 
     await (service as any).runJob('ukey', 'job-2', 'op-key');
 
     expect(job.status).toBe('succeeded');
     expect(job.warnings).toEqual(['cubrid.conf could not be updated']);
+    expect(job.warningDetails).toEqual([{ code: 'DELETE_CONF_NOT_UPDATED', dbname: 'demodb' }]);
   });
 
   it('keeps the stored login and cubrid.conf entry when deletedb fails', async () => {
@@ -218,6 +260,37 @@ describe('CmsJobService delete job', () => {
     expect(job.status).toBe('failed');
     expect(job.error?.message).toContain('database is running');
     expect(lifecycleService.forgetDeletedDatabase).not.toHaveBeenCalled();
+  });
+
+  it('gives a failed job CMS\'s own text apart from the message, without CMS\'s end marker', async () => {
+    const job = deleteJob();
+    store.getJob.mockResolvedValue(job);
+    lifecycleService.deleteDatabaseCmsResponse.mockResolvedValue({
+      task: 'deletedb',
+      status: 'failure',
+      note: 'Unable to mount disk volume "/db/gonedb". The database is in use.<end>',
+    });
+
+    await (service as any).runJob('ukey', 'job-2', 'op-key');
+
+    expect(job.error).toMatchObject({
+      code: 'REQUEST_FAILED',
+      type: '/errors/cms/request_failed',
+      cmsNote: 'Unable to mount disk volume "/db/gonedb". The database is in use.',
+      cmsTask: 'deletedb',
+    });
+  });
+
+  it('hides a password a maintenance job\'s CMS text echoes in its CMS note too', async () => {
+    const status = (service as any).toStatusResponse({
+      jobId: 'job-3', userId: 'user-1', hostUid: 'host-1', dbname: 'demodb',
+      type: 'optimize', status: 'failed', createdAt: '2026-11-02T01:00:00Z',
+      payload: { dbname: 'demodb', dbuser: 'dba', dbpasswd: 's3cret' },
+      error: { message: 'optimizedb failed for dba/s3cret', cmsNote: 'optimizedb failed for dba/s3cret', code: 'REQUEST_FAILED' },
+    });
+
+    expect(status.error?.message).not.toContain('s3cret');
+    expect(status.error?.cmsNote).toBe('optimizedb failed for dba/[redacted]');
   });
 
   it('reports a refused delete (e.g. an HA database) as a failed job', async () => {
@@ -240,5 +313,93 @@ describe('CmsJobService delete job', () => {
 
     expect(job.status).toBe('succeeded');
     expect(lifecycleService.forgetDeletedDatabase).toHaveBeenCalledWith('user-1', 'host-1', 'gonedb');
+  });
+});
+
+describe('CmsJobService: a create job running when the server restarted', () => {
+  let service: CmsJobService;
+  let store: Record<string, jest.Mock>;
+  let managementService: Record<string, jest.Mock>;
+  let lifecycleService: { resumeCreateDatabase: jest.Mock };
+  const createJob = (patch: Partial<CmsJobRecord> = {}): CmsJobRecord => ({
+    jobId: 'job-c', userId: 'user-1', hostUid: 'host-1', dbname: 'newdb', type: 'create', status: 'running',
+    createdAt: '2026-11-05T01:00:00Z', cmsUuid: 'uuid-c',
+    payload: { dbname: 'newdb', setAutoStart: true, updateUser: { userpass: 'pw' } } as any, ...patch,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    store = {
+      saveJob: jest.fn().mockResolvedValue(undefined),
+      finalizeOrphanedJob: jest.fn().mockResolvedValue(undefined),
+      listOrphanedActiveJobs: jest.fn(),
+    };
+    managementService = { getDatabaseStartInfo: jest.fn().mockResolvedValue({ dblist: { dbs: [] } }) };
+    lifecycleService = { resumeCreateDatabase: jest.fn() };
+    service = new CmsJobService(
+      store as any,
+      { withLock: jest.fn((_f: string, fn: () => Promise<unknown>) => fn()) } as any,
+      {} as any,
+      { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) } as any,
+      managementService as any,
+      lifecycleService as any,
+      {} as any,
+      { postAuthenticated: jest.fn() } as any
+    );
+  });
+
+  it('follows the createdb to its end, runs the remaining steps, and only then releases the lock', async () => {
+    let finishCreate!: (v: unknown) => void;
+    lifecycleService.resumeCreateDatabase.mockReturnValue(new Promise((r) => { finishCreate = r; }));
+    const job = createJob();
+
+    const reconciling = (service as any).tryReconcileOrphanedJob('ukey', job);
+    await Promise.resolve();
+    // Still running: the lock (released by finalizeOrphanedJob) is kept.
+    expect(store.finalizeOrphanedJob).not.toHaveBeenCalled();
+    expect(lifecycleService.resumeCreateDatabase).toHaveBeenCalledWith('user-1', 'host-1', job.payload, 'uuid-c');
+
+    finishCreate({ createDatabase: { success: true, data: { success: true } }, startDatabase: { success: true } });
+    await expect(reconciling).resolves.toBe(true);
+    expect(job.status).toBe('succeeded');
+    expect(job.result).toMatchObject({ startDatabase: { success: true } });
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
+  });
+
+  it("ends as failed with CMS's reason when the createdb failed", async () => {
+    lifecycleService.resumeCreateDatabase.mockRejectedValue(Object.assign(new Error('Couldn\'t create database.'), {
+      code: 'REQUEST_FAILED', additionalData: { cmsNote: 'Database "newdb" already exists.' },
+    }));
+    const job = createJob();
+
+    await expect((service as any).tryReconcileOrphanedJob('ukey', job)).resolves.toBe(true);
+    expect(job.status).toBe('failed');
+    expect(job.error?.message).toContain("Couldn't create database.");
+    expect(store.finalizeOrphanedJob).toHaveBeenCalledWith('ukey', job, expect.any(Function));
+  });
+
+  it('ends as interrupted, saying whether the database exists, when CMS no longer knows the task (CMS restarted too)', async () => {
+    lifecycleService.resumeCreateDatabase.mockRejectedValue(Object.assign(new Error('uuid not found'), {
+      code: 'REQUEST_FAILED', additionalData: { cmsNote: 'uuid not found' },
+    }));
+    managementService.getDatabaseStartInfo.mockResolvedValue({ dblist: { dbs: [] } });
+    store.listOrphanedActiveJobs.mockResolvedValue([{ userKey: 'ukey', job: createJob() }]);
+
+    await (service as any).recoverOrphanedJobsOnStartup();
+
+    const [, job] = store.finalizeOrphanedJob.mock.calls[0];
+    expect(job.error).toMatchObject({ code: 'JOB_INTERRUPTED', reason: 'DATABASE_NOT_FOUND', dbname: 'newdb' });
+  });
+
+  it('says whether the database exists when the create cannot be followed (no CMS task id)', async () => {
+    managementService.getDatabaseStartInfo.mockResolvedValue({ dblist: { dbs: [{ dbname: 'newdb' }] } });
+    store.listOrphanedActiveJobs.mockResolvedValue([{ userKey: 'ukey', job: createJob({ cmsUuid: undefined }) }]);
+
+    await (service as any).recoverOrphanedJobsOnStartup();
+
+    const [, job] = store.finalizeOrphanedJob.mock.calls[0];
+    expect(job.status).toBe('failed');
+    expect(job.error).toMatchObject({ code: 'JOB_INTERRUPTED', reason: 'DATABASE_EXISTS', dbname: 'newdb' });
+    expect(lifecycleService.resumeCreateDatabase).not.toHaveBeenCalled();
   });
 });

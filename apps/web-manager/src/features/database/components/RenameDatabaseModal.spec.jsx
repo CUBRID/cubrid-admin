@@ -44,11 +44,13 @@ beforeEach(() => {
   root = createRoot(container);
   const fixed = {
     auth: { isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } },
-    host: { selectedHostUid: 'host-1' },
   };
   store = configureStore({
     reducer: {
       ...Object.fromEntries(Object.entries(fixed).map(([key, value]) => [key, () => value])),
+      // 'test/select-host' switches the host, as a click on another host does.
+      host: (state = { selectedHostUid: 'host-1' }, action) =>
+        action.type === 'test/select-host' ? { ...state, selectedHostUid: action.payload } : state,
       database: databaseCoreReducer,
       databaseUI: uiReducer,
     },
@@ -57,7 +59,7 @@ beforeEach(() => {
         ...databaseCoreReducer(undefined, { type: 'init' }),
         activeHostUid: 'host-1',
         selectedDatabase: 'demodb',
-        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }] },
+        databasesByHost: { 'host-1': [{ dbname: 'demodb', dbdir: '/db/demodb' }, { dbname: 'otherdb', dbdir: '/db/otherdb' }, { dbname: 'repdb', cmsListed: false }] },
         loggedInDatabases: ['host-1:demodb', 'host-1:newdb', 'host-1:otherdb'],
       },
       databaseUI: { ...uiReducer(undefined, { type: 'init' }), isRenameDatabaseModalOpen: true },
@@ -121,6 +123,22 @@ it('still clears both names when the job was backgrounded and finishes later', a
   expect(store.getState().database.loggedInDatabases).toEqual(['host-1:otherdb']);
 });
 
+it('reads the database list of the host it renamed on, also when the job was backgrounded and another host is selected since', async () => {
+  let finish;
+  mocks.run.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  await render();
+  await typeNewName('newdb');
+  await click(container.querySelector('[data-testid="rename-database-execute-btn"]'));
+  const backgroundBtn = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Confirm'));
+  await click(backgroundBtn);
+  await act(async () => store.dispatch({ type: 'test/select-host', payload: 'host-2' }));
+  mocks.getStartInfo.mockClear();
+
+  await act(async () => finish(job));
+
+  expect(mocks.getStartInfo.mock.calls).toEqual([['host-1']]);
+});
+
 it('leaves login state alone when the rename job fails', async () => {
   mocks.run.mockRejectedValue(new Error('renamedb failed'));
   await render();
@@ -139,4 +157,28 @@ it('shows a successful rename with its autostart warning instead of a retry acti
   expect(container.textContent).toContain('Rename Successful');
   expect(container.textContent).not.toContain('Retry Rename');
   expect(mocks.submitRename).toHaveBeenCalledTimes(1);
+});
+
+it("refuses a new name the host's database list already has, replica ones too (case-sensitive, as the engine)", async () => {
+  await render();
+  const execute = () => container.querySelector('[data-testid="rename-database-execute-btn"]');
+  for (const taken of ['otherdb', 'repdb']) {
+    await typeNewName(taken);
+    expect(execute().disabled).toBe(true);
+    expect(container.textContent).toContain('A database with this name already exists on this host');
+  }
+  await typeNewName('demodb');
+  expect(container.textContent).not.toContain('already exists');
+  await typeNewName('OtherDB');
+  expect(execute().disabled).toBe(false);
+  expect(container.textContent).not.toContain('already exists');
+});
+
+it('does not refuse a listed name when the database list could not be read again (it may have been deleted since)', async () => {
+  mocks.getStartInfo.mockRejectedValue(new Error('no answer'));
+  await render();
+  const execute = () => container.querySelector('[data-testid="rename-database-execute-btn"]');
+  await typeNewName('otherdb');
+  expect(container.textContent).not.toContain('already exists');
+  expect(execute().disabled).toBe(false);
 });

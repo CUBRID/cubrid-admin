@@ -2,6 +2,24 @@ import { Injectable } from '@nestjs/common';
 import { HostService } from '@host';
 import { CmsJobStore } from './cms-job.store';
 import { isTerminalJobStatus } from './cms-job.cleanup';
+import { CmsJobRecord } from './cms-job.types';
+import { CopyDbRequest, RenameDatabaseRequest } from '@api-interfaces';
+
+/**
+ * The databases a job works on: its own, and for a copy the source and the
+ * new one, for a rename the old and the new name (the lock key, see
+ * resolveJobDbname, names only one of them).
+ */
+export function jobDatabases(job: Pick<CmsJobRecord, 'type' | 'dbname' | 'payload'>, lockDbname?: string): string[] {
+  const names = [job.dbname, lockDbname];
+  if (job.type === 'copy') {
+    const copy = job.payload as CopyDbRequest;
+    names.push(copy?.srcdbname, copy?.destdbname);
+  } else if (job.type === 'rename') {
+    names.push((job.payload as RenameDatabaseRequest)?.rename);
+  }
+  return [...new Set(names.filter((n): n is string => typeof n === 'string' && n !== ''))];
+}
 
 /**
  * Read-only view of CmsJobService's job-operation locks, split into its own
@@ -57,5 +75,35 @@ export class CmsJobLockService {
     }
 
     return null;
+  }
+
+  /**
+   * Every database on this host that a genuinely active job works on
+   * (jobDatabases), with that job's id. A start, stop or restart of one
+   * database is refused only for these; other databases are not touched by
+   * the job.
+   */
+  async activeJobDatabasesForHost(userId: string, hostUid: string): Promise<Map<string, string>> {
+    const hKey = await this.hostKey(userId, hostUid);
+    const ops = await this.store.readGlobalOperations();
+    const busy = new Map<string, string>();
+
+    for (const [operationKey, entry] of Object.entries(ops)) {
+      let parsedHostKey: string;
+      let lockDbname: string;
+      try {
+        [parsedHostKey, lockDbname] = JSON.parse(operationKey) as [string, string];
+      } catch {
+        continue;
+      }
+      if (parsedHostKey !== hKey) continue;
+      const job = await this.store.getJob(entry.userKey, entry.jobId);
+      if (!job || isTerminalJobStatus(job.status)) continue;
+      for (const dbname of jobDatabases(job, lockDbname)) {
+        if (!busy.has(dbname)) busy.set(dbname, entry.jobId);
+      }
+    }
+
+    return busy;
   }
 }

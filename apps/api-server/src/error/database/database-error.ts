@@ -393,4 +393,19 @@ export class DatabaseError extends AppError {
       additionalData
     );
   }
+
+  /**
+   * An offline backup plan makes cub_auto stop the database before each run
+   * (cm_autojob.cpp), and backupdb backs a stopped database up offline
+   * (--SA-mode): an HA database must be backed up online. `reason`:
+   * BACKUP_PLAN_OFFLINE (a plan saved as offline) or DATABASE_STOPPED (a
+   * backup now while the database is stopped).
+   */
+  static OfflineBackupNotSupportedForHaDatabase(additionalData?: Record<string, any>) {
+    return new DatabaseError(
+      'DATABASE',
+      DatabaseErrorCode.OFFLINE_BACKUP_NOT_SUPPORTED_FOR_HA_DATABASE,
+      additionalData
+    );
+  }
 }

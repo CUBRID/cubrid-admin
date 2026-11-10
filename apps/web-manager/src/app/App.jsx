@@ -90,6 +90,7 @@ import ReconnectHostModal from '../features/host/components/ReconnectHostModal';
 import { Icon } from '../components/ds/foundation/Icon';
 import { useCM } from '../constants/useCM';
 import { useConfirm } from '../infrastructure/hooks/useConfirm';
+import { chooseTab } from './tabSelection';
 
 function DashboardLayout() {
   const CM = useCM();
@@ -259,7 +260,7 @@ function DashboardLayout() {
               activeTab={activeMainTab}
               openTabs={openTabs}
               labels={tabLabels}
-              onTabChange={(tabId) => dispatch(setActiveMainTab(tabId))}
+              onTabChange={(tabId) => chooseTab(dispatch, tabId, activeMainTab)}
               onCloseTab={(tab) => dispatch(closeTab(tab))}
               onCloseOthers={(tabId) => dispatch(closeOtherTabs(tabId))}
               onCloseAll={() => dispatch(closeAllTabs())}

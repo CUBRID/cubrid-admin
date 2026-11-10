@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeBrokerRates, extractBrokerList, mapDiskInfo, volumeGroup } from './hostMetrics';
+import { computeBrokerRates, cpuUsagePercent, extractBrokerList, mapDiskInfo, volumeGroup } from './hostMetrics';
 
 // /broker/list (getbrokersinfo) resolves to [{ broker: [...] }].
 const brokers = (...list) => [{ broker: list }];
@@ -86,5 +86,18 @@ describe('volumeGroup', () => {
     expect(volumeGroup({ type: 'GENERIC' })).toBe('permPerm');
     expect(volumeGroup({ type: 'TEMP' })).toBe('permTemp');
     expect(volumeGroup({ type: 'Active_log' })).toBeNull();
+  });
+});
+
+describe('cpuUsagePercent', () => {
+  const stat = (user, kernel, idle, iowait) => ({ cpu_user: String(user), cpu_kernel: String(kernel), cpu_idle: String(idle), cpu_iowait: String(iowait) });
+
+  it('counts user and kernel time as in use', () => {
+    expect(cpuUsagePercent(stat(100, 100, 700, 100), stat(150, 150, 800, 100))).toBe(50);
+  });
+
+  it('is null without a previous sample or when no time passed', () => {
+    expect(cpuUsagePercent(null, stat(1, 1, 1, 0))).toBeNull();
+    expect(cpuUsagePercent(stat(1, 1, 1, 0), stat(1, 1, 1, 0))).toBeNull();
   });
 });

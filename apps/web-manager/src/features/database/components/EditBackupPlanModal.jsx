@@ -7,6 +7,8 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { BACKUP_THREAD_COUNT_MIN, BACKUPS_TO_KEEP_MIN, checkIntInRange, checkMonthDays } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 import { Select } from '../../../components/ds/forms/Select';
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
@@ -38,7 +40,7 @@ export default function EditBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isEditBackupPlanModalOpen, selectedBackupId } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, activeDatabasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
 
   const { 
@@ -64,16 +66,27 @@ export default function EditBackupPlanModal() {
     updateStatistics: false,
     useCompression: false,
     threads: 0,
-    backupsToKeep: 0,
+    backupsToKeep: 1,
     onlineType: 'offline'
   });
 
   const [formLoaded, setFormLoaded] = useState(false);
+  // As in CA: a plan saved as online, for a database that is stopped, can be
+  // switched to offline but not back; an offline plan keeps both choices.
+  const [savedOnline, setSavedOnline] = useState(false);
+  const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const onlineDisabled = savedOnline && !isDbRunning;
+  // An offline run stops the database first (cub_auto), which an HA
+  // database must not be: a saved offline plan still shows offline, but
+  // only online can be chosen and saved.
+  const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const offlineDisabled = isHaDb;
 
   useEffect(() => {
     if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
       resetAction();
       setFormLoaded(false);
+      setSavedOnline(false);
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: selectedDatabase }))
         .unwrap()
         .then((data) => {
@@ -107,9 +120,12 @@ export default function EditBackupPlanModal() {
                 useCompression: info.zip === 'y',
                 checkConsistency: info.check === 'y',
                 threads: parseInt(info.mt) || 0,
-                backupsToKeep: parseInt(info.bknum) || 0,
+                // A plan saved with 0 (it deleted every older backup) shows
+                // CMS's default 1, and saving needs 1 or more.
+                backupsToKeep: Math.max(BACKUPS_TO_KEEP_MIN, parseInt(info.bknum) || 0),
                 onlineType: info.onoff === 'ON' ? 'online' : 'offline'
               });
+              setSavedOnline(info.onoff === 'ON');
             }
           }
         })
@@ -152,8 +168,22 @@ export default function EditBackupPlanModal() {
     handleInputChange('periodDetail', days);
   };
 
+  // CMS's and the engine's ranges (db-op-input-limits). backupsToKeep 0
+  // would make each run delete every older backup of the level.
+  const planIssues = {
+    threads: checkIntInRange(formData.threads, BACKUP_THREAD_COUNT_MIN),
+    backupsToKeep: checkIntInRange(formData.backupsToKeep, BACKUPS_TO_KEEP_MIN),
+    periodDetail: formData.periodType === 'Monthly'
+      ? checkMonthDays(Array.isArray(formData.periodDetail) ? formData.periodDetail.join(',') : '')
+      : null,
+  };
+  // A saved online plan of a stopped database still saves, as for any
+  // database: cub_auto skips an online run while the database is stopped.
+  const modeIssue = isHaDb && formLoaded && formData.onlineType !== 'online' ? CM.haBackupOnlineOnlyMsg : null;
+  const hasPlanIssue = Object.values(planIssues).some(Boolean) || Boolean(modeIssue);
+
   const handleSave = async () => {
-    if (!selectedDatabase || !selectedHostUid) return;
+    if (!selectedDatabase || !selectedHostUid || hasPlanIssue) return;
 
     startAction();
 
@@ -261,7 +291,7 @@ export default function EditBackupPlanModal() {
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="edit-backup-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-          <Button data-testid="edit-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="save" disabled={!formLoaded} className="min-w-[140px]">{CM.saveChanges}</Button>
+          <Button data-testid="edit-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="save" disabled={!formLoaded || hasPlanIssue} className="min-w-[140px]">{CM.saveChanges}</Button>
         </div>
       }
     >
@@ -270,6 +300,8 @@ export default function EditBackupPlanModal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={CM.planIdLabel} value={formData.backupId} disabled icon="badge" />
             <Input label={CM.path} value={formData.backupPath} onChange={(e) => handleInputChange('backupPath', e.target.value)} placeholder={CM.backupDirPlaceholder} icon="folder_zip" className="font-mono!" />
+            {/* At least 1 or the plan is refused, so not under the advanced settings. */}
+            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" min={BACKUPS_TO_KEEP_MIN} error={inputIssueText(planIssues.backupsToKeep, CM)} data-testid="backup-plan-keep-input" required />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label={CM.type}>
@@ -321,6 +353,9 @@ export default function EditBackupPlanModal() {
           <div className="animate-in fade-in duration-200">
             {formData.periodType === 'Monthly' && (
               <div className="space-y-3">
+                {planIssues.periodDetail && (
+                  <p role="alert" data-testid="backup-plan-days-error" className="text-12 text-rose-500">{inputIssueText(planIssues.periodDetail, CM)}</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {[
                     { id: 'all', label: CM.everyDayPreset },
@@ -444,9 +479,11 @@ export default function EditBackupPlanModal() {
                 type="button"
                 key={mode.value}
                 onClick={() => handleInputChange('onlineType', mode.value)}
+                disabled={mode.value === 'online' ? onlineDisabled : offlineDisabled}
+                data-testid={`backup-plan-mode-${mode.value}`}
                 role="radio"
                 aria-checked={formData.onlineType === mode.value}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left ${
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${
                   formData.onlineType === mode.value
                     ? 'bg-amber-500/8 border-amber-500/50'
                     : 'bg-slate-50 dark:bg-white/4 border-slate-200 dark:border-white/10 hover:border-amber-500/40'
@@ -465,6 +502,9 @@ export default function EditBackupPlanModal() {
               </button>
             ))}
           </div>
+          {modeIssue && (
+            <p role="alert" data-testid="backup-plan-mode-error" className="text-12 text-rose-500">{modeIssue}</p>
+          )}
         </FormSection>
 
         <details className="group rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/4">
@@ -476,8 +516,7 @@ export default function EditBackupPlanModal() {
             <Icon name="expand_more" size="18px" className="transition-transform group-open:rotate-180" />
           </summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 dark:border-white/10 px-4 py-4">
-            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" />
-            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" />
+            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" min={BACKUP_THREAD_COUNT_MIN} error={inputIssueText(planIssues.threads, CM)} data-testid="backup-plan-threads-input" />
           </div>
         </details>
       </div>

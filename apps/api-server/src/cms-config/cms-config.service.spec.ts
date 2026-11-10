@@ -173,9 +173,9 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
         .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cmconf', ['[cm]', 'cm_port=70000', 'auto_job_timeout=abc', 'cm_prot=8001'], [])
         .catch((e) => e);
       expect(error.additionalData.problems).toEqual([
-        { lineNo: 2, key: 'cm_port', message: expect.stringContaining('<= 65535') },
-        { lineNo: 3, key: 'auto_job_timeout', message: expect.stringContaining('32-bit integer') },
-        { lineNo: 4, key: 'cm_prot', message: expect.stringContaining('not a cm.conf parameter') },
+        { lineNo: 2, key: 'cm_port', code: 'MAX', params: { max: 65535 }, message: expect.stringContaining('≤ 65535') },
+        { lineNo: 3, key: 'auto_job_timeout', code: 'NOT_INT32', message: expect.stringContaining('32-bit integer') },
+        { lineNo: 4, key: 'cm_prot', code: 'CM_UNKNOWN_KEY', message: expect.stringContaining('not a cm.conf parameter') },
       ]);
       expect(error.toProblemDetails().problems).toHaveLength(3);
       expect(error.toProblemDetails().status).toBe(400);
@@ -204,10 +204,25 @@ describe('CmsConfigService — raw conf text parsing whitespace & tab format rob
       const error = await service
         .setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'max_clients=5000'], [])
         .catch((e) => e);
-      expect(error.additionalData.problems).toEqual([{ lineNo: 2, key: 'max_clients', message: expect.stringContaining('<= 4000') }]);
+      expect(error.additionalData.problems).toEqual([{
+        lineNo: 2,
+        key: 'max_clients',
+        section: 'common',
+        code: 'MAX',
+        params: { max: 4000 },
+        message: expect.stringContaining('≤ 4000'),
+      }]);
       await expect(
         service.setSystemParamFromRawEdit(mockUserId, mockHostUid, 'cubridconf', ['[common]', 'data_buffer_pages=32768'], [])
-      ).resolves.toMatchObject({ warnings: [expect.stringContaining('use data_buffer_size')] });
+      ).resolves.toMatchObject({
+        warnings: [expect.stringContaining('use data_buffer_size')],
+        warningProblems: [expect.objectContaining({
+          code: 'DEPRECATED_KEY',
+          key: 'data_buffer_pages',
+          section: 'common',
+          params: { replacedBy: 'data_buffer_size' },
+        })],
+      });
     });
   });
   describe('getParamDump — client parameters', () => {

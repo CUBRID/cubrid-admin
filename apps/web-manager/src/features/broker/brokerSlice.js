@@ -6,6 +6,7 @@ import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
 import apiClient from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 import { dbKey } from '../database/dbKey';
+import { hostKey, deleteHostKeys } from '../host/hostKey';
 import { isDbLoginGone, dbOfLoginGone } from '../database/dbLoginGone';
 
 // Module-level so the previous-sample baseline survives across polls and
@@ -17,11 +18,18 @@ const brokerRateTracker = createRateTracker();
 // leave the second at zero.
 const brokerListReads = createSharedReads();
 
+// Do not share a read across login sessions.
+const brokerListKey = (hostUid, skipStatusEnrichment) =>
+  JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, skipStatusEnrichment]);
+
+// Resolves to { brokers, statusByName }: the list, and the bulk status
+// (broker name -> getbrokerstatus entry) it was enriched with, empty when
+// skipped.
 const readBrokerList = async (hostUid, skipStatusEnrichment) => {
   const response = await brokerApi.getBrokerList(hostUid);
   const brokerList = response.result || (Array.isArray(response) ? response[0]?.broker : []);
 
-  if (!brokerList) return [];
+  if (!brokerList) return { brokers: [], statusByName: new Map() };
 
   const formattedBrokers = brokerList.map(item => ({
     ...item,
@@ -39,7 +47,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
     error_query: item.error_query || '0',
   }));
 
-  if (skipStatusEnrichment) return formattedBrokers;
+  if (skipStatusEnrichment) return { brokers: formattedBrokers, statusByName: new Map() };
 
   // One bulk request for every broker's status. A broker missing from
   // the response (or a failed request) counts as a failed status fetch.
@@ -51,7 +59,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
   ));
 
   // A broker whose status could not be read stays listed, without rates.
-  return responses.map((r) => {
+  const brokers = responses.map((r) => {
     if (!r.success) return r.b;
     const asList = r.statusRes?.asinfo;
     if (!asList?.length) return r.b;
@@ -71,6 +79,7 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
       tps: tps === null ? null : tps.toFixed(1),
     };
   });
+  return { brokers, statusByName };
 };
 
 /**
@@ -80,10 +89,22 @@ const readBrokerList = async (hostUid, skipStatusEnrichment) => {
  * `{ result: [...] }` shape of the raw response; rejects like the read.
  */
 export const readSharedBrokerList = async (hostUid) => {
-  const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, false]);
-  const result = await brokerListReads(key, () => readBrokerList(hostUid, false));
+  const result = await brokerListReads(brokerListKey(hostUid, false), () => readBrokerList(hostUid, false));
   if (!result.ok) throw result.error;
-  return { result: result.value };
+  return { result: result.value.brokers };
+};
+
+/**
+ * Every broker's status from the same shared read, for the DB dashboard's
+ * CAS table: its poll fires with the sidebar's broker poll, and sending its
+ * own list and status requests sent each of them twice. Resolves to
+ * `{ brokers, statusByName }`; rejects when the list cannot be read. `fresh`
+ * (a user refresh) waits for a read sent after it was asked for.
+ */
+export const readSharedBrokerStatus = async (hostUid, { fresh = false } = {}) => {
+  const result = await brokerListReads(brokerListKey(hostUid, false), () => readBrokerList(hostUid, false), { fresh });
+  if (!result.ok) throw result.error;
+  return result.value;
 };
 
 export const fetchBrokerList = createAsyncThunk(
@@ -95,15 +116,17 @@ export const fetchBrokerList = createAsyncThunk(
     // Information" panel) can skip the bulk broker status request, which is
     // only needed to compute qps/tps.
     const skipStatusEnrichment = typeof arg === 'object' && !!arg.skipStatusEnrichment;
-    // Do not share a read across login sessions.
-    const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, skipStatusEnrichment]);
     // Only a background poll may take a read already in flight; anything
     // else was asked for by the user or follows an action.
-    const result = await brokerListReads(key, () => readBrokerList(hostUid, skipStatusEnrichment), { fresh: !arg?.isBackground });
+    const result = await brokerListReads(
+      brokerListKey(hostUid, skipStatusEnrichment),
+      () => readBrokerList(hostUid, skipStatusEnrichment),
+      { fresh: !arg?.isBackground }
+    );
     if (!result.ok) {
       return rejectWithValue(result.error.response?.data?.message || 'Failed to fetch broker list', { seq: result.seq });
     }
-    return fulfillWithValue(result.value, { seq: result.seq });
+    return fulfillWithValue(result.value.brokers, { seq: result.seq });
   }
 );
 
@@ -295,9 +318,14 @@ const initialState = {
   activeHostUid: null,
   selectedBroker: null,
   selectedBrokerSubItem: null,
-  detailedStatus: {}, // { brokerName: { data: {}, loading: false, error: null } }
-  logsByBroker: {}, // { brokerName: [logs] }
-  viewingLogs: {}, // { path: { data: {}, loading: false, error: null } }
+  // Keyed by hostKey(hostUid, name): two hosts can have a broker, and a log
+  // file path, of the same name.
+  detailedStatus: {}, // { [hostKey(hostUid, brokerName)]: { data: {}, loading: false, error: null } }
+  logsByBroker: {}, // { [hostKey(hostUid, brokerName)]: [logs] }
+  // Brokers being restarted, by hostKey(hostUid, brokerName): they show as ON
+  // until the restart ends (brokerRestartState.js).
+  restartingBrokers: {},
+  viewingLogs: {}, // { [hostKey(hostUid, path)]: { data: {}, loading: false, error: null } }
   adminLogsByHost: {}, // { hostUid: [logs] }
   loadingByHost: {}, // { hostUid: boolean } — fetchBrokerList's own loading, kept
   // per host like brokersByHost itself: a single shared flag meant closing
@@ -358,6 +386,14 @@ const brokerSlice = createSlice({
     // (and their own in-flight fetches) are untouched. selectedBroker and
     // friends are always cleared since they always belonged to whichever
     // host this reducer is firing for.
+    markBrokersRestarting: (state, action) => {
+      const { hostUid, names, restarting } = action.payload;
+      names.forEach((name) => {
+        const key = hostKey(hostUid, name);
+        if (restarting) state.restartingBrokers[key] = true;
+        else delete state.restartingBrokers[key];
+      });
+    },
     resetBrokerState: (state, action) => {
       const hostUid = action.payload;
       if (hostUid) {
@@ -371,6 +407,7 @@ const brokerSlice = createSlice({
       state.selectedBrokerSubItem = null;
       state.detailedStatus = {};
       state.logsByBroker = {};
+      state.restartingBrokers = {};
       state.dbLogsByDb = {};
       state.dbLogsLoadingByDb = {};
       state.dbLogsFailedByDb = {};
@@ -428,22 +465,24 @@ const brokerSlice = createSlice({
         }
       })
       .addCase(fetchDetailedBrokerStatus.pending, (state, action) => {
-        const { brokerName } = action.meta.arg;
-        if (!state.detailedStatus[brokerName]) {
-          state.detailedStatus[brokerName] = { data: {}, loading: true, error: null };
+        const key = hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName);
+        if (!state.detailedStatus[key]) {
+          state.detailedStatus[key] = { data: {}, loading: true, error: null };
         }
-        state.detailedStatus[brokerName].loading = true;
-        state.detailedStatus[brokerName].error = null;
+        state.detailedStatus[key].loading = true;
+        state.detailedStatus[key].error = null;
       })
       .addCase(fetchDetailedBrokerStatus.fulfilled, (state, action) => {
-        const { brokerName, data } = action.payload;
-        state.detailedStatus[brokerName].loading = false;
-        state.detailedStatus[brokerName].data = data;
+        const entry = state.detailedStatus[hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName)];
+        if (!entry) return; // tab or host closed since
+        entry.loading = false;
+        entry.data = action.payload.data;
       })
       .addCase(fetchDetailedBrokerStatus.rejected, (state, action) => {
-        const { brokerName } = action.meta.arg;
-        state.detailedStatus[brokerName].loading = false;
-        state.detailedStatus[brokerName].error = action.payload;
+        const entry = state.detailedStatus[hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName)];
+        if (!entry) return;
+        entry.loading = false;
+        entry.error = action.payload;
       })
       .addCase(startBroker.pending, (state, action) => {
         state.actionLoading = true;
@@ -512,27 +551,29 @@ const brokerSlice = createSlice({
       .addCase(fetchBrokerLogs.fulfilled, (state, action) => {
         state.logsLoadingCount = Math.max(0, state.logsLoadingCount - 1);
         state.logsLoading = state.logsLoadingCount > 0;
-        state.logsByBroker[action.payload.brokerName] = action.payload.logs;
+        state.logsByBroker[hostKey(action.meta.arg.hostUid, action.meta.arg.brokerName)] = action.payload.logs;
       })
       .addCase(fetchBrokerLogs.rejected, (state) => {
         state.logsLoadingCount = Math.max(0, state.logsLoadingCount - 1);
         state.logsLoading = state.logsLoadingCount > 0;
       })
       .addCase(fetchLogContent.pending, (state, action) => {
-        const path = action.meta.arg.path;
-        if (!state.viewingLogs[path]) state.viewingLogs[path] = {};
-        state.viewingLogs[path].loading = true;
-        state.viewingLogs[path].error = null;
+        const key = hostKey(action.meta.arg.hostUid, action.meta.arg.path);
+        if (!state.viewingLogs[key]) state.viewingLogs[key] = {};
+        state.viewingLogs[key].loading = true;
+        state.viewingLogs[key].error = null;
       })
       .addCase(fetchLogContent.fulfilled, (state, action) => {
-        const { path, data } = action.payload;
-        state.viewingLogs[path].loading = false;
-        state.viewingLogs[path].data = data;
+        const entry = state.viewingLogs[hostKey(action.meta.arg.hostUid, action.meta.arg.path)];
+        if (!entry) return; // tab or host closed since
+        entry.loading = false;
+        entry.data = action.payload.data;
       })
       .addCase(fetchLogContent.rejected, (state, action) => {
-        const path = action.meta.arg.path;
-        state.viewingLogs[path].loading = false;
-        state.viewingLogs[path].error = action.payload;
+        const entry = state.viewingLogs[hostKey(action.meta.arg.hostUid, action.meta.arg.path)];
+        if (!entry) return;
+        entry.loading = false;
+        entry.error = action.payload;
       })
       .addCase(fetchAdminLogs.pending, (state) => {
         state.adminLogsLoading = true;
@@ -605,25 +646,26 @@ const brokerSlice = createSlice({
         (action) => action.type === 'layout/closeTab',
         (state, action) => {
           const tabId = action.payload;
-          const statusMatch = tabId.match(/^broker_status:[^:]+:([^:]+)/);
-          const logMatch = tabId.match(/^log:[^:]+:(.+)/);
-          const allLogsMatch = tabId.match(/^all_logs:[^:]+:([^:]+)/);
+          const statusMatch = tabId.match(/^broker_status:([^:]+):([^:]+)/);
+          const logMatch = tabId.match(/^log:([^:]+):(.+)/);
+          const allLogsMatch = tabId.match(/^all_logs:([^:]+):([^:]+)/);
           const allDbLogsMatch = tabId.match(/^all_db_logs:([^:]+):([^:]+)/);
           
           if (statusMatch) {
-            delete state.detailedStatus[statusMatch[1]];
+            delete state.detailedStatus[hostKey(statusMatch[1], statusMatch[2])];
           } else if (logMatch) {
-            delete state.viewingLogs[logMatch[1]];
+            delete state.viewingLogs[hostKey(logMatch[1], logMatch[2])];
           } else if (allLogsMatch) {
-            const brokerName = allLogsMatch[1];
-            const logs = state.logsByBroker[brokerName] || [];
+            const hostUid = allLogsMatch[1];
+            const logs = state.logsByBroker[hostKey(hostUid, allLogsMatch[2])] || [];
             logs.forEach(log => {
-              delete state.viewingLogs[log.path];
+              delete state.viewingLogs[hostKey(hostUid, log.path)];
             });
           } else if (allDbLogsMatch) {
-            const logs = state.dbLogsByDb[dbKey(allDbLogsMatch[1], allDbLogsMatch[2])] || [];
+            const hostUid = allDbLogsMatch[1];
+            const logs = state.dbLogsByDb[dbKey(hostUid, allDbLogsMatch[2])] || [];
             logs.forEach(log => {
-              delete state.viewingLogs[log.path];
+              delete state.viewingLogs[hostKey(hostUid, log.path)];
             });
           }
         }
@@ -648,6 +690,10 @@ const brokerSlice = createSlice({
           // evicted, or it would sit in brokersByHost forever.
           delete state.adminLogsByHost[hostUid];
           delete state.cmsLogsByHost[hostUid];
+          deleteHostKeys(state.detailedStatus, hostUid);
+          deleteHostKeys(state.logsByBroker, hostUid);
+          deleteHostKeys(state.restartingBrokers, hostUid);
+          deleteHostKeys(state.viewingLogs, hostUid);
           delete state.brokerConfig[hostUid];
           delete state.brokersByHost[hostUid];
           delete state.navigatorBrokersByHost[hostUid];
@@ -670,6 +716,7 @@ const brokerSlice = createSlice({
 });
 
 export const { 
+  markBrokersRestarting,
   setSelectedBroker, 
   setSelectedBrokerSubItem, 
   openBrokerPropertyModal, 

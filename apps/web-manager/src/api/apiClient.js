@@ -4,6 +4,9 @@ import { nextSeq } from '../infrastructure/utils/singleFlight';
 export const hostActions = {
   revokeHostLogin: (hostUid) => ({ type: 'host/revokeHostLogin', payload: hostUid }),
   openReconnectModal: (hostUid) => ({ type: 'host/openReconnectModal', payload: hostUid }),
+  // The host's CMS could not be reached (stopped, its port changed, the host
+  // down): the same reconnect window, saying so.
+  hostUnreachable: (hostUid) => ({ type: 'host/hostUnreachable', payload: hostUid }),
   loginToHost: null,
   clearReconnectingHost: null,
 };
@@ -60,6 +63,49 @@ export const clearReconnectingHost = (hostUid) => {
   reconnectingHosts.delete(hostUid);
 };
 
+// A host-scoped request the server could not send to its CMS
+// (/errors/cms/no_response, or a TLS failure). A refused or unreachable
+// connection (CMS stopped, its port changed, the host down) opens the
+// reconnect window at once. A timeout, or a connection CMS reset, can be a
+// busy CMS (it stalls for 30 s or more under CPU contention) or an idle
+// keep-alive socket CMS had closed, so those count as separate moments: the
+// requests of one refresh time out together and count once (within
+// CMS_NO_RESPONSE_SAME_MOMENT_MS of the last counted one), and it takes
+// CMS_NO_RESPONSE_MAX_TIMEOUTS such moments within the window. Requests
+// that take long by nature (log reads) and the host connect's own deadline
+// (no socket code) are not counted. Without this the host stayed
+// "connected" and every screen kept its last values. Polling pauses for a
+// host in the reconnect queue, so nothing keeps asking.
+const CMS_NO_RESPONSE_TYPE = '/errors/cms/no_response';
+const CMS_TLS_ERROR_TYPE = '/errors/cms/tls_error';
+const CMS_UNREACHABLE_REASONS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN']);
+const CMS_SLOW_REASONS = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET']);
+const CMS_LONG_REQUEST_PATHS = ['/log/', '/cms-auth/'];
+export const CMS_NO_RESPONSE_MAX_TIMEOUTS = 3;
+export const CMS_NO_RESPONSE_SAME_MOMENT_MS = 10000;
+const CMS_NO_RESPONSE_WINDOW_MS = 5 * 60 * 1000;
+const hostNoResponseFailures = new Map(); // hostUid -> { count, firstAt, lastAt }
+
+const isHostUnreachableError = (hostUid, requestUrl, apiData) => {
+  const type = apiData?.data?.type || apiData?.type || '';
+  if (type === CMS_TLS_ERROR_TYPE) return true;
+  if (type !== CMS_NO_RESPONSE_TYPE) return false;
+  const reason = apiData?.data?.reason || apiData?.reason;
+  if (CMS_UNREACHABLE_REASONS.has(reason)) return true;
+  if (!CMS_SLOW_REASONS.has(reason)) return false;
+  if (CMS_LONG_REQUEST_PATHS.some((part) => requestUrl.includes(part))) return false;
+  const now = Date.now();
+  const entry = hostNoResponseFailures.get(hostUid);
+  if (entry && now - entry.lastAt < CMS_NO_RESPONSE_SAME_MOMENT_MS) return false;
+  if (entry && now - entry.firstAt < CMS_NO_RESPONSE_WINDOW_MS) {
+    entry.count += 1;
+    entry.lastAt = now;
+  } else {
+    hostNoResponseFailures.set(hostUid, { count: 1, firstAt: now, lastAt: now });
+  }
+  return hostNoResponseFailures.get(hostUid).count >= CMS_NO_RESPONSE_MAX_TIMEOUTS;
+};
+
 const isDesktopRuntime = () =>
   typeof window !== 'undefined' &&
   (Boolean(window.desktopConfig?.apiBaseUrl) || window.location.protocol === 'app:');
@@ -113,18 +159,34 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// An expired session (the app opened after the token ran out, or a request
+// right after waking) is refreshed before the request goes out, instead of
+// sending it to get a 401 first.
+apiClient.interceptors.request.use(async (config) => {
+  const url = config.url || '';
+  if (!sessionRefreshEnabled() || url.includes('/auth/')) return config;
+  const token = currentAccessToken();
+  const expiresAt = token ? accessTokenExpiresAt(token) : null;
+  if (expiresAt === null || expiresAt > Date.now()) return config;
+  try {
+    const fresh = await refreshSession();
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${fresh}`;
+  } catch (err) {
+    if (err?.response?.status === 401) await handleSystemSessionExpired();
+  }
+  return config;
+});
+
 export const setAuthToken = (token) => {
   if (token) {
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
   }
+  scheduleSessionRefresh(token);
 };
 
-const initialToken = localStorage.getItem('token');
-if (initialToken) {
-  setAuthToken(initialToken);
-}
 
 const refreshingHosts = new Map();
 // Circuit breaker for the silent "session expired -> revoke, re-login,
@@ -164,37 +226,231 @@ function notifyAccessTokenRefreshFailed(err) {
   accessTokenRefreshWaiters = [];
 }
 
-async function refreshAccessToken() {
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) {
-    throw new Error('No refresh token');
-  }
+// The refresh is a plain axios call (not apiClient, whose 401 handling would
+// loop back here), so it gets its own limit. Without one, a refresh that
+// never answers (a connection left half-open by a sleep or a network change)
+// kept isRefreshingAccessToken set for good: every later 401 then waited on
+// it forever and the screens stopped refreshing until the page was reloaded.
+export const ACCESS_TOKEN_REFRESH_TIMEOUT_MS = 15000;
 
-  const response = await axios.post(
-    `${resolveApiBaseUrl()}/auth/refresh`,
-    { refreshToken },
-    {
-      headers: { 'Content-Type': 'application/json' },
-      ...(isDesktopRuntime() ? { adapter: 'fetch' } : {}),
+// ── App session refresh ─────────────────────────────────────────────────
+// The server rotates the refresh token on every refresh and, if an old one
+// is used again, revokes the whole session. So one refresh path serves the
+// 401 handler, the timer before expiry, the window becoming visible again
+// (a laptop waking up) and the first request of an expired session; within
+// a tab one refresh runs at a time, and across tabs the Web Locks API (or,
+// without it, a lease in localStorage) lets one tab refresh while the others
+// take the tokens it stored.
+
+/** Refresh this long before the access token expires. */
+export const SESSION_REFRESH_LEAD_MS = 5 * 60 * 1000;
+
+const jwtClaims = (token) => {
+  try {
+    const part = String(token).split('.')[1];
+    return JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+  } catch {
+    return null;
+  }
+};
+
+/** The access token's expiry (epoch ms) from its JWT `exp`, or null. */
+export function accessTokenExpiresAt(token) {
+  const exp = jwtClaims(token)?.exp;
+  return Number.isFinite(exp) ? exp * 1000 : null;
+}
+
+// How long before expiry to refresh: SESSION_REFRESH_LEAD_MS, but at most
+// half the token's life, so a short-lived token isn't refreshed at once
+// again and again.
+const refreshLeadMs = (token) => {
+  const { exp, iat } = jwtClaims(token) ?? {};
+  return Number.isFinite(exp) && Number.isFinite(iat)
+    ? Math.min(SESSION_REFRESH_LEAD_MS, ((exp - iat) * 1000) / 2)
+    : SESSION_REFRESH_LEAD_MS;
+};
+
+const currentAccessToken = () => {
+  const header = apiClient.defaults.headers.common['Authorization'];
+  return typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : null;
+};
+
+const refreshesSoon = (token, now = Date.now()) => {
+  const expiresAt = accessTokenExpiresAt(token);
+  return expiresAt !== null && expiresAt - now <= refreshLeadMs(token);
+};
+
+// The desktop app has no app login (no token), so none of this runs there.
+const sessionRefreshEnabled = () => !isDesktopRuntime();
+
+// Web Locks exist only in a secure context (https, or localhost). A server
+// opened over plain http on another address has none, so there tabs take
+// turns through a lease in localStorage instead: a tab writes its own lease,
+// waits a moment and reads it back; only the tab whose lease is still there
+// refreshes, and the others wait for it to finish and then take the tokens
+// it stored. A lease left by a closed tab ends on its own.
+const STORAGE_LOCK_KEY = 'cwm-session-refresh-lock';
+const STORAGE_LOCK_LEASE_MS = ACCESS_TOKEN_REFRESH_TIMEOUT_MS + 5000;
+export const STORAGE_LOCK_SETTLE_MS = 100;
+const STORAGE_LOCK_POLL_MS = 100;
+const tabLockId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const readStorageLease = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY));
+  } catch {
+    return null;
+  }
+};
+
+async function withStorageLock(run) {
+  let lease = null;
+  try {
+    for (;;) {
+      const held = readStorageLease();
+      if (!held || !(held.until > Date.now())) {
+        lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
+        localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
+        await sleep(STORAGE_LOCK_SETTLE_MS);
+        // Two tabs that wrote at once: the later write is the one both read back.
+        if (readStorageLease()?.owner === tabLockId) break;
+        lease = null;
+      } else {
+        await sleep(STORAGE_LOCK_POLL_MS);
+      }
     }
-  );
-
-  const tokens = unwrapAuthTokens(response.data);
-  if (!tokens?.token) {
-    throw new Error('Refresh response missing access token');
+  } catch {
+    // Storage unusable: refresh as this tab alone.
+    lease = null;
   }
-
-  localStorage.setItem('token', tokens.token);
-  if (tokens.refreshToken) {
-    localStorage.setItem('refreshToken', tokens.refreshToken);
+  try {
+    return await run();
+  } finally {
+    try {
+      if (lease && readStorageLease()?.owner === tabLockId) localStorage.removeItem(STORAGE_LOCK_KEY);
+    } catch { /* storage unusable */ }
   }
-  setAuthToken(tokens.token);
+}
 
+// One tab at a time across the browser.
+const withSessionRefreshLock = (run) => (
+  typeof navigator !== 'undefined' && navigator.locks?.request
+    ? navigator.locks.request('cwm-session-refresh', run)
+    : withStorageLock(run)
+);
+
+// Another tab's refresh (or login) stored new tokens: use them here too.
+async function adoptStoredTokens(token, refreshToken) {
+  setAuthToken(token);
   const { store } = await import('../app/store');
   const { sessionRefreshed } = await import('../features/auth/authSlice');
-  store.dispatch(sessionRefreshed(tokens));
+  store.dispatch(sessionRefreshed({ token, refreshToken }));
+  return token;
+}
 
-  return tokens.token;
+async function requestSessionRefresh(tokenInUse) {
+  return withSessionRefreshLock(async () => {
+    // Another tab refreshed while this one waited for the lock: its tokens
+    // are in storage, and the refresh token this tab knew is already spent.
+    const stored = localStorage.getItem('token');
+    const storedExpiresAt = stored ? accessTokenExpiresAt(stored) : null;
+    if (stored && stored !== tokenInUse && storedExpiresAt !== null && !refreshesSoon(stored)) {
+      return adoptStoredTokens(stored, localStorage.getItem('refreshToken'));
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token');
+    }
+
+    const response = await axios.post(
+      `${resolveApiBaseUrl()}/auth/refresh`,
+      { refreshToken },
+      {
+        timeout: ACCESS_TOKEN_REFRESH_TIMEOUT_MS,
+        headers: { 'Content-Type': 'application/json' },
+        ...(isDesktopRuntime() ? { adapter: 'fetch' } : {}),
+      }
+    );
+
+    const tokens = unwrapAuthTokens(response.data);
+    if (!tokens?.token) {
+      throw new Error('Refresh response missing access token');
+    }
+
+    localStorage.setItem('token', tokens.token);
+    if (tokens.refreshToken) {
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+    }
+    return adoptStoredTokens(tokens.token, tokens.refreshToken);
+  });
+}
+
+let sessionRefreshInFlight = null;
+
+/** Refreshes the app session once per tab at a time; resolves to the new access token. */
+export function refreshSession() {
+  if (!sessionRefreshInFlight) {
+    sessionRefreshInFlight = requestSessionRefresh(currentAccessToken())
+      .finally(() => { sessionRefreshInFlight = null; });
+  }
+  return sessionRefreshInFlight;
+}
+
+// Before expiry, on the visible window, or before a request: a refresh the
+// session can't get (refresh token expired or revoked) ends the session as
+// the 401 path does; one that only failed to answer leaves it to that path.
+async function refreshSessionAhead() {
+  try {
+    await refreshSession();
+  } catch (err) {
+    if (err?.response?.status === 401) await handleSystemSessionExpired();
+  }
+}
+
+let sessionRefreshTimer = null;
+
+function scheduleSessionRefresh(token) {
+  if (sessionRefreshTimer) {
+    clearTimeout(sessionRefreshTimer);
+    sessionRefreshTimer = null;
+  }
+  if (!token || !sessionRefreshEnabled()) return;
+  const expiresAt = accessTokenExpiresAt(token);
+  if (expiresAt === null) return;
+  // setTimeout's limit is about 24.8 days; a longer token is checked again then.
+  const delay = Math.min(Math.max(expiresAt - refreshLeadMs(token) - Date.now(), 0), 2_000_000_000);
+  sessionRefreshTimer = setTimeout(() => {
+    sessionRefreshTimer = null;
+    if (currentAccessToken() === token) void refreshSessionAhead();
+  }, delay);
+}
+
+// Timers stop while a laptop sleeps: check again when the window is back.
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const checkOnReturn = () => {
+    if (document.visibilityState !== 'visible' || !sessionRefreshEnabled()) return;
+    const token = currentAccessToken();
+    if (token && refreshesSoon(token)) void refreshSessionAhead();
+  };
+  document.addEventListener('visibilitychange', checkOnReturn);
+  window.addEventListener('focus', checkOnReturn);
+  // A token another tab stored (refresh or login) is used here at once.
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'token' || !event.newValue || event.newValue === currentAccessToken()) return;
+    void adoptStoredTokens(event.newValue, localStorage.getItem('refreshToken'));
+  });
+}
+
+async function refreshAccessToken() {
+  return refreshSession();
+}
+
+// After the session refresh above is set up: the token kept from the last
+// visit, with its refresh scheduled.
+const initialToken = localStorage.getItem('token');
+if (initialToken) {
+  setAuthToken(initialToken);
 }
 
 async function handleSystemSessionExpired() {
@@ -254,7 +510,10 @@ apiClient.interceptors.response.use(
     // fine again — reset the circuit breaker so a future real disconnect
     // gets its own fresh attempts instead of inheriting an old count.
     const successHostUid = getHostUidFromUrl(response.config?.url);
-    if (successHostUid) hostAutoReloginFailures.delete(successHostUid);
+    if (successHostUid) {
+      hostAutoReloginFailures.delete(successHostUid);
+      hostNoResponseFailures.delete(successHostUid);
+    }
 
     const rawData = response.data;
     if (rawData && typeof rawData === 'object' && Object.prototype.hasOwnProperty.call(rawData, 'data')) {
@@ -477,6 +736,27 @@ apiClient.interceptors.response.use(
 
       await handleSystemSessionExpired();
       return Promise.reject(error);
+    }
+
+    // The server could not reach the host's CMS (see isHostUnreachableError):
+    // the host goes to the reconnect window, where Reconnect tries the login
+    // again and Disconnect closes its screens, instead of staying "connected"
+    // with its last values on screen. A host login reports its own failure.
+    if (!requestUrl.includes('/cms-auth/login')) {
+      const hostUid = getHostUidFromUrl(requestUrl);
+      if (hostUid && !reconnectingHosts.has(hostUid) && isHostUnreachableError(hostUid, requestUrl, apiData)) {
+        try {
+          const { store } = await import('../app/store');
+          if (store.getState().host?.authorizedHosts?.includes(hostUid)) {
+            reconnectingHosts.add(hostUid);
+            store.dispatch(hostActions.hostUnreachable(hostUid));
+          }
+        } catch (e) {
+          reconnectingHosts.delete(hostUid);
+          console.error('Failed to dispatch hostUnreachable:', e);
+        }
+        return Promise.reject(error);
+      }
     }
 
     // ensureDbLogin (api-server) only accepts a live login the user made; a

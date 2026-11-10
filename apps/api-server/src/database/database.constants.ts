@@ -21,6 +21,9 @@ export const CMS_CONFNAME_CM = 'cmconf' as const;
  */
 export const CMS_CONFNAME_HACONF = 'haconf' as const;
 
+/** CMS getallsysparam confname for $CUBRID_DATABASES/databases.txt. */
+export const CMS_CONFNAME_DATABASES = 'databases' as const;
+
 /**
  * Constants used across database module.
  *

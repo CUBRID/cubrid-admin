@@ -17,6 +17,8 @@ export {
   isCmsStatusFailure,
 } from './decorators/handle-cms-status-errors.decorator';
 export { HandleCmsErrors } from './decorators/handle-cms-errors.decorator';
+export { warningFields } from './warning';
+export type { Warning } from './warning';
 export type { HandleCmsErrorsOptions } from './decorators/handle-cms-errors.decorator';
 export { HandleDatabaseErrors } from './decorators/handle-database-errors.decorator';
 export { HandleResourceMonitoringErrors } from './decorators/handle-resource-monitoring-errors.decorator';

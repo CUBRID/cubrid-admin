@@ -17,16 +17,11 @@ import {
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { inputIssueText } from '../inputIssueText';
+import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
+import { useFreshDbList } from '../useFreshDbList';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
 
-const validateDbName = (name) => {
-  if (!name) return false;
-  if (name.includes(' ')) return false;
-  if (name.startsWith('#') || name.startsWith('-')) return false;
-  if (name === '.' || name === '..') return false;
-  if (name.length > 17) return false;
-  return /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name);
-};
 
 export default function RenameDatabaseModal() {
   const CM = useCM();
@@ -34,6 +29,8 @@ export default function RenameDatabaseModal() {
   const { isRenameDatabaseModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
+  const hostDbs = useSelector((state) => state.database.databasesByHost[selectedHostUid]);
+  const dbListFresh = useFreshDbList(selectedHostUid, isRenameDatabaseModalOpen);
 
   const {
     error,
@@ -102,13 +99,15 @@ export default function RenameDatabaseModal() {
       // if backgrounded — it uses the names captured at submit time above.
       dispatch(clearDatabaseLogin({ hostUid, dbname: oldName }));
       dispatch(clearDatabaseLogin({ hostUid, dbname: renameTo }));
+      // The host's database list shows the new name, also when the job ran
+      // in the background (as after a delete).
+      dispatch(fetchDatabaseStartInfo(hostUid));
       // This job may have been backgrounded (and the modal reopened for a
       // different database) by the time it settles — its outcome then
       // belongs to the global job tray, not this now-reused modal instance.
       if (!wasBackgrounded()) {
         setWarnings(job.warnings ?? []);
         setRenamedFromDb(selectedDatabase);
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
         endSuccess(CM.databaseRenamedMsg(selectedDatabase, newDbName.trim()));
       }
     } catch (err) {
@@ -126,7 +125,10 @@ export default function RenameDatabaseModal() {
     resetAction();
   };
 
-  const isNameValid = validateDbName(newDbName);
+  // The shared new-name rule (also used by create and copy, and the server),
+  // and no other database on the host by that name.
+  const nameIssue = newDbNameIssue(newDbName, dbListFresh ? takenDbNames(hostDbs, selectedDatabase) : null);
+  const isNameValid = nameIssue === null;
   const isNameChanged = newDbName.trim() !== selectedDatabase;
 
   const isFormValid = isNameValid && isNameChanged;
@@ -224,7 +226,7 @@ export default function RenameDatabaseModal() {
             placeholder={`${selectedDatabase}_v2`}
             className="w-full"
             autoFocus
-            error={newDbName && !validateDbName(newDbName) ? "Name must be 1-17 alphanumeric, underscore or hyphen characters" : undefined}
+            error={newDbName ? inputIssueText(nameIssue, CM) : undefined}
           />
         </div>
 

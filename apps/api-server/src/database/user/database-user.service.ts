@@ -145,6 +145,24 @@ export class DatabaseUserService extends BaseService {
     }
   }
 
+  /**
+   * Drops every database login of the host without logging back in, and
+   * stops re-logins still running: the host now points at another CMS server
+   * or account, where these logins do not exist and the saved DB passwords
+   * must not be sent.
+   */
+  forgetDbLoginsOfHost(userId: string, hostUid: string): void {
+    const prefix = `${userId}:${hostUid}:`;
+    const keys = new Set([...this.dbLoginCache.keys(), ...this.pendingRelogins.keys()].filter((key) => key.startsWith(prefix)));
+    for (const key of keys) {
+      const dbname = key.slice(prefix.length);
+      // A re-login still running fails its generation check and sets nothing.
+      this.logoutGenerations.set(key, this.logoutGeneration(userId, hostUid, dbname) + 1);
+      this.dbLoginCache.delete(key);
+      this.pendingRelogins.delete(key);
+    }
+  }
+
   /** Whether a re-login of this database after a host login is still running. */
   isDbLoginRestoring(userId: string, hostUid: string, dbname: string): boolean {
     return this.pendingRelogins.has(`${userId}:${hostUid}:${dbname}`);
@@ -313,7 +331,7 @@ export class DatabaseUserService extends BaseService {
     );
 
     if (this.logoutGeneration(userId, hostUid, dbname) !== generation) {
-      throw DatabaseError.LoginDatabaseFailed({ dbname, message: 'Logged out while logging in.' });
+      throw DatabaseError.LoginDatabaseFailed({ dbname, reason: 'LOGGED_OUT_WHILE_LOGGING_IN', message: 'Logged out while logging in.' });
     }
 
     // Freshen ensureDbLogin's cache regardless of which credentials were
@@ -388,6 +406,7 @@ export class DatabaseUserService extends BaseService {
       throw DatabaseError.GetUserInfoFailed({
         dbname,
         username,
+        reason: 'USER_NOT_IN_USERINFO',
         message:
           `Cannot change password for "${username}": could not confirm their current ` +
           `groups/authorization on "${dbname}" (user not found in userinfo response).`,
