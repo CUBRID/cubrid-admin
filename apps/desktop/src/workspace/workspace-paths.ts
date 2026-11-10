@@ -54,13 +54,21 @@ export function resolveWorkspacePaths(root: string = resolveWorkspaceRoot()): Wo
 
 /**
  * Creates what a workspace needs that is missing. data/ (secrets, user data,
- * the server's socket) is owner-only, also when it already existed.
+ * the server's socket) and ssl/ (the server's TLS key) are owner-only, also
+ * when they already existed. Not on Windows, which has no such modes.
  */
 export function ensureWorkspaceDirectories(paths: WorkspacePaths): void {
   fs.mkdirSync(paths.dataDir, { recursive: true, mode: 0o700 });
   fs.chmodSync(paths.dataDir, 0o700);
   fs.mkdirSync(paths.storageDir, { recursive: true });
-  fs.mkdirSync(paths.sslDir, { recursive: true });
+  fs.mkdirSync(paths.sslDir, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') {
+    try {
+      fs.chmodSync(paths.sslDir, 0o700);
+    } catch (error) {
+      console.warn(`[desktop] could not make ${paths.sslDir} owner-only: ${(error as Error).message}`);
+    }
+  }
 }
 
 /** Throws WORKSPACE_NOT_WRITABLE (see DesktopWorkspaceSettingsPage) with the OS reason. */
