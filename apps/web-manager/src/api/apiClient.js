@@ -547,7 +547,8 @@ apiClient.interceptors.response.use(
     if (successHostUid) {
       hostAutoReloginFailures.delete(successHostUid);
       hostNoResponseFailures.delete(successHostUid);
-      if (reachesCms(response.config?.url)) void setHostNotResponding(successHostUid, false);
+      // 202: the server took a job without asking CMS yet (CmsJobService).
+      if (response.status !== 202 && reachesCms(response.config?.url)) void setHostNotResponding(successHostUid, false);
     }
 
     const rawData = response.data;

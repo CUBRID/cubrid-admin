@@ -83,3 +83,11 @@ it('is not cleared by a request the server answers without CMS', async () => {
   await get(`/${HOST}/database/users/logout/demodb`, succeed);
   expect(types()).toEqual(['hostNotResponding:HOST']);
 });
+
+it('is not cleared by a job the server accepted (202) without asking CMS yet', async () => {
+  await get(`/${HOST}/database/start-info`, failWith(500, noResponse('ECONNABORTED')));
+  apiClient.defaults.adapter = (config) => Promise.resolve({ status: 202, data: { data: { jobId: 'j1' } }, headers: {}, config });
+  await apiClient.post(`/${HOST}/database/unload`, {}, { validateStatus: (s) => s === 202 }).catch(() => undefined);
+  await flush();
+  expect(types()).toEqual(['hostNotResponding:HOST']);
+});
