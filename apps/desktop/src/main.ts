@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session, type MessageBoxSyncOptions } from 'electron';
+import { app, BrowserWindow, dialog, powerMonitor, session, type MessageBoxSyncOptions } from 'electron';
 import { isDesktopApiQuitting, startApiForWorkspace, stopDesktopApiOnQuit } from './api/api-runtime';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
@@ -13,7 +13,7 @@ import { createAppWindow, toAppRouteUrl } from './window/app-window';
 import { getMainWindow, setMainWindow } from './window/window-registry';
 import { installDownloadDialogDefaults } from './window/dialog-paths';
 import { confirmUnloadWithUnsavedChanges } from './window/unsaved-changes';
-import { confirmQuit, createQuitFlow, hasPageUnsavedChanges, setPageUnsavedChanges } from './window/quit-flow';
+import { confirmQuit, createQuitFlow, hasPageUnsavedChanges, setPageUnsavedChanges, whenSessionEnds } from './window/quit-flow';
 
 registerPrivilegedAppScheme();
 
@@ -87,6 +87,7 @@ async function bootstrap(): Promise<void> {
   const requiresSetup = needsWorkspaceSetup();
   const mainWindow = createAppWindow(DESKTOP_API_BASE_URL);
   setMainWindow(mainWindow);
+  whenSessionEnds(quitFlow, powerMonitor, mainWindow);
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (

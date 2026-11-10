@@ -2,7 +2,8 @@ import type { BrowserWindow } from 'electron';
 
 jest.mock('electron', () => ({ app: { getPath: jest.fn(() => '/tmp'), isPackaged: false }, Menu: { buildFromTemplate: jest.fn(), setApplicationMenu: jest.fn() }, shell: {} }));
 
-import { confirmQuit, createQuitFlow } from './quit-flow';
+import { EventEmitter } from 'events';
+import { confirmQuit, createQuitFlow, whenSessionEnds } from './quit-flow';
 
 const window = {} as BrowserWindow;
 
@@ -101,5 +102,35 @@ describe('createQuitFlow', () => {
     const { flow, questions } = setup({ leaveUnsaved: false });
     expect(flow.onPreventUnload()).toBe(false);
     expect(questions.leaveWithUnsavedChanges).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('whenSessionEnds', () => {
+  const setup = () => {
+    const questions = { quit: jest.fn(() => true), quitWithUnsavedChanges: jest.fn(() => true), leaveWithUnsavedChanges: jest.fn(() => true) };
+    const flow = createQuitFlow(questions, () => true);
+    const powerMonitor = new EventEmitter();
+    const win = new EventEmitter();
+    whenSessionEnds(flow, powerMonitor as never, win as never);
+    const asked = () => questions.quit.mock.calls.length + questions.quitWithUnsavedChanges.mock.calls.length
+      + questions.leaveWithUnsavedChanges.mock.calls.length;
+    return { flow, powerMonitor, win, asked };
+  };
+
+  it.each([
+    ['macOS or Linux shutting down or logging out', 'powerMonitor', 'shutdown'],
+    ['Windows ending the session', 'win', 'session-end'],
+  ] as const)('%s: the quit that follows asks nothing, unsaved changes included', (_name, source, event) => {
+    const s = setup();
+    s[source].emit(event);
+    expect(s.flow.onWindowClose()).toBe(true);
+    expect(s.flow.onPreventUnload()).toBe(true);
+    expect(s.asked()).toBe(0);
+  });
+
+  it('asks as before when neither came', () => {
+    const s = setup();
+    s.flow.onWindowClose();
+    expect(s.asked()).toBe(1);
   });
 });

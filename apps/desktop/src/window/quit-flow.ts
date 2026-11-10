@@ -1,4 +1,4 @@
-import type { BrowserWindow, MessageBoxSyncOptions } from 'electron';
+import type { BrowserWindow, MessageBoxSyncOptions, PowerMonitor } from 'electron';
 import { MENU_LABELS, PRODUCT_NAME, type MenuLanguage } from '../menu/application-menu';
 
 type ShowMessageBoxSync = (window: BrowserWindow, options: MessageBoxSyncOptions) => number;
@@ -65,8 +65,9 @@ export function createQuitFlow(questions: QuitQuestions, hasUnsavedChanges: () =
     },
 
     /**
-     * Quit with no question at all (SIGINT, SIGTERM: a logout or shutdown
-     * must not wait on a box), unsaved changes included.
+     * Quit with no question at all, unsaved changes included: on SIGINT or
+     * SIGTERM, and when the OS logs out or shuts down (whenSessionEnds),
+     * which must not wait on a box.
      */
     quitWithoutAsking(): void {
       answered = 'unsaved';
@@ -83,4 +84,18 @@ export function createQuitFlow(questions: QuitQuestions, hasUnsavedChanges: () =
       return unload;
     },
   };
+}
+
+/**
+ * An OS logout or shutdown arrives as an app quit that closes the window, not
+ * as SIGTERM: powerMonitor 'shutdown' says so first on macOS and Linux, the
+ * window's 'session-end' on Windows. From then on the quit asks nothing.
+ */
+export function whenSessionEnds(
+  quitFlow: { quitWithoutAsking: () => void },
+  powerMonitor: Pick<PowerMonitor, 'on'>,
+  window: Pick<BrowserWindow, 'on'>
+): void {
+  powerMonitor.on('shutdown', () => quitFlow.quitWithoutAsking());
+  window.on('session-end', () => quitFlow.quitWithoutAsking());
 }
