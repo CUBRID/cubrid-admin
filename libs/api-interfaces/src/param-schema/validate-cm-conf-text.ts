@@ -1,5 +1,5 @@
 import { ParamSchemaEntry } from './param-schema-entry';
-import { validateParamValue } from './validate-param-value';
+import { checkParamValue } from './validate-param-value';
 import type { ConfTextProblem } from './validate-conf-text';
 
 export interface CmConfEntry {
@@ -61,7 +61,7 @@ export function validateCmConfText(input: string | string[], { schema, pending =
   for (const { key, lineNo } of skipped) {
     if (key.startsWith('[')) continue;
     if (lookup(schema, key) || lookup(pending, key)) {
-      problems.push({ lineNo, key, message: `${key} — has no value; CMS skips this line.` });
+      problems.push({ lineNo, key, code: 'CM_NO_VALUE', message: `${key} — has no value; CMS skips this line.` });
     }
   }
 
@@ -71,22 +71,28 @@ export function validateCmConfText(input: string | string[], { schema, pending =
     const pendingEntry = entry ? undefined : lookup(pending, key);
     if (!entry && !pendingEntry) {
       if (templateOnly.some((k) => k.toLowerCase() === key.toLowerCase())) {
-        problems.push({ lineNo, key, severity: 'warning', message: `${key} — not read by CMS; this line has no effect.` });
+        problems.push({ lineNo, key, severity: 'warning', code: 'CM_NOT_READ', message: `${key} — not read by CMS; this line has no effect.` });
       } else {
-        problems.push({ lineNo, key, message: `${key} — not a cm.conf parameter; CMS ignores unknown keys, so this setting would have no effect. Check the spelling.` });
+        problems.push({
+          lineNo, key, code: 'CM_UNKNOWN_KEY',
+          message: `${key} — not a cm.conf parameter; CMS ignores unknown keys, so this setting would have no effect. Check the spelling.`,
+        });
       }
       continue;
     }
     if (key.length > CMS_MAX_TOKEN || value.length > CMS_MAX_TOKEN) {
-      problems.push({ lineNo, key, message: `${key} — longer than ${CMS_MAX_TOKEN} characters; CMS truncates it.` });
+      problems.push({ lineNo, key, code: 'CM_TOO_LONG', params: { max: CMS_MAX_TOKEN }, message: `${key} — longer than ${CMS_MAX_TOKEN} characters; CMS truncates it.` });
       continue;
     }
     const target = (entry ?? pendingEntry) as ParamSchemaEntry;
-    const reason = validateParamValue(target.guard, value);
-    if (!reason) continue;
+    const issue = checkParamValue(target.guard, value);
+    if (!issue) continue;
+    // A key only some CMS builds read: params.pendingCms tells the client.
+    const params = { ...issue.params, ...(pendingEntry ? { pendingCms: true } : {}) };
+    const coded = { code: issue.code, ...(Object.keys(params).length > 0 ? { params } : {}) };
     problems.push(pendingEntry
-      ? { lineNo, key, severity: 'warning', message: `${key} — ${reason} (read only by CMS builds from develop/feature-webmanager, which then fall back to the default).` }
-      : { lineNo, key, message: `${key} — ${reason}` });
+      ? { lineNo, key, severity: 'warning', ...coded, message: `${key} — ${issue.message} (read only by CMS builds from develop/feature-webmanager, which then fall back to the default).` }
+      : { lineNo, key, ...coded, message: `${key} — ${issue.message}` });
   }
   return problems.sort((a, b) => (a.lineNo ?? 0) - (b.lineNo ?? 0));
 }

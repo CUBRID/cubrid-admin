@@ -12,13 +12,13 @@ export default function HeaderMenu() {
   const CM = useCM();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { selectedHostUid, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
   const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
 
-  const enabled = getMenuActionEnabled({ selectedHostUid, authorizedHosts });
+  const enabled = getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue });
   const action = (id) => ({
     disabled: !enabled[id],
-    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, navigate, dirtyTabs, anyModalOpen: isAnyModalOpen() }),
+    onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, anyModalOpen: isAnyModalOpen() }),
   });
 
   const MenuLabel = ({ children }) => (

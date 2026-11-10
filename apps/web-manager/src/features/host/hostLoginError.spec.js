@@ -16,7 +16,7 @@ vi.mock('./hostApi', () => ({ hostApi: { loginToHost: vi.fn() } }));
 
 import reducer, { loginToHost } from './hostSlice';
 import { hostApi } from './hostApi';
-import { hostLoginErrorMessage } from './hostLoginError';
+import { hostLoginErrorMessage, isHostPasswordError } from './hostLoginError';
 import { CM as CM_EN } from '../../constants/cmLabels';
 import { CM_KO } from '../../constants/cmLabels.ko';
 
@@ -96,5 +96,17 @@ describe('loginToHost', () => {
 
     expect(state.hostAuthErrors).toEqual({ h2: 'No response' });
     expect(state.error).toBe('No response');
+  });
+});
+
+describe('isHostPasswordError', () => {
+  it('is true only for the CMS answer to a wrong password', () => {
+    expect(isHostPasswordError('Incorrect password')).toBe(true);
+    expect(isHostPasswordError(new Error('Incorrect password'))).toBe(true);
+    // CMS login errors that name the password but are not a wrong one.
+    expect(isHostPasswordError('password file open error')).toBe(false);
+    expect(isHostPasswordError('parameter(password) is missing in request.')).toBe(false);
+    expect(isHostPasswordError('No response')).toBe(false);
+    expect(isHostPasswordError(undefined)).toBe(false);
   });
 });

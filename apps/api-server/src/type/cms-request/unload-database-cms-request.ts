@@ -102,12 +102,6 @@ export type UnloadDatabaseCmsRequest = BaseCmsRequest & {
   cach?: string;
 
   /**
-   * lo file COUNT per a directory
-   * Default: 0
-   */
-  lofile?: string;
-
-  /**
    * ID for dbuser
    */
   dbuser?: string;

@@ -247,6 +247,38 @@ export abstract class BaseService {
   }
 
   /**
+   * Follows a CMS async task this server already submitted (its uuid kept on
+   * the job), e.g. after the server restarted while it ran: polls
+   * `gettaskstatus` until it ends and fails as executeAsyncCmsJobRequest
+   * does when CMS reports a failure.
+   */
+  protected async resumeAsyncCmsJobRequest<TResponse>(
+    userId: string,
+    hostUid: string,
+    task: string,
+    uuid: string
+  ): Promise<TResponse> {
+    const host = await this.hostService.findHostInternal(userId, hostUid);
+    const url = `https://${host.address}:${host.port}/cm_api`;
+    const timeoutMs = getLongJobCmsTimeoutMs();
+    const initialResponse = await this.cmsClient.postAuthenticated<{ task: string; token: string; uuid: string }, any>(
+      url,
+      { task: 'gettaskstatus', token: host.token || '', uuid }
+    );
+    const { response } = await pollCmsAsyncJob(
+      { hostService: this.hostService, cmsClient: this.cmsClient },
+      userId,
+      hostUid,
+      task,
+      initialResponse,
+      { deadlineMs: timeoutMs }
+    );
+    checkCmsTokenError(response);
+    checkCmsStatusError(response);
+    return response as TResponse;
+  }
+
+  /**
    * Extracts domain-only data from CMS response by removing envelope fields.
    *
    * @param response CMS response with envelope fields

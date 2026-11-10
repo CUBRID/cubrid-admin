@@ -2,6 +2,7 @@
 export * from './error-kind';
 export * from './client-error-messages';
 export * from './app-error';
+export * from './failure-details';
 
 // Domain-specific errors
 export * from './host/host-error';

@@ -1,4 +1,4 @@
-import { parseConfText } from '@api-interfaces';
+import { CONF_LIST_DELIMITERS, parseConfText, splitConfList } from '@api-interfaces';
 
 // Edits to cubrid.conf that change only the part they must: the database
 // names inside a `[service] server=` value, or the name inside a `[@dbname]`
@@ -6,6 +6,8 @@ import { parseConfText } from '@api-interfaces';
 // line are kept as the file had them.
 
 const isIniSpace = (c: string) => c === ' ' || c === '\t' || c === '\n' || c === '\v' || c === '\f' || c === '\r';
+
+const SEPARATOR_RUNS = new RegExp(`[${CONF_LIST_DELIMITERS}]+`, 'g');
 
 function trimIniEnd(s: string): string {
   let end = s.length;
@@ -32,9 +34,12 @@ function logicalLine(confdata: string[], start: number): { end: number; line: st
  * `line` (a `server=` key) with its database names passed through `edit`, or
  * null when they don't change. The value is found as the engine reads it
  * (parseKeyValue): inside the quotes when quoted, otherwise up to the first
- * `;` or `#`. A name keeps the spacing of the list position it lands on;
- * for a key that was `continued` over lines, the spacing a continuation
- * line's indentation left between names becomes a single space.
+ * `;` or `#`, and its names are split as the engine splits them
+ * (splitConfList: spaces, commas, colons). Each separator between two names
+ * stays where it was; a name added at the end gets the first one (or a
+ * comma), and separators before the first or after the last name are
+ * dropped. For a key that was `continued` over lines, the spaces a
+ * continuation line's indentation left in a separator become one.
  */
 function editServerValue(line: string, edit: (names: string[]) => string[], continued: boolean): string | null {
   const eq = line.indexOf('=');
@@ -54,19 +59,19 @@ function editServerValue(line: string, edit: (names: string[]) => string[], cont
   const pre = value.match(/^\s*/)?.[0] ?? '';
   const core = value.trim();
   const post = core === '' ? value.slice(pre.length) : value.slice(value.lastIndexOf(core) + core.length);
-  const raw = core === '' ? [] : core.split(',');
-  const names = raw.map((token) => token.trim()).filter(Boolean);
+  const names = splitConfList(core);
   const edited = edit(names);
   if (edited.length === names.length && edited.every((name, i) => name === names[i])) return null;
 
-  const lead = raw.map((token, i) => {
-    const ws = token.match(/^\s*/)?.[0] ?? '';
-    return continued && i > 0 && ws !== '' ? ' ' : ws;
-  });
-  const trail = raw.map((token) => token.slice(token.trimEnd().length));
-  const sepLead = lead.find((ws, i) => i > 0) ?? '';
-  const tokens = edited.map((name, i) => (i < raw.length ? `${lead[i]}${name}${trail[i]}` : `${sepLead}${name}`));
-  return `${line.slice(0, from)}${pre}${tokens.join(',').trimEnd()}${post}${line.slice(to)}`;
+  // separators[i] is the one between names[i] and names[i + 1].
+  const separators = core.match(SEPARATOR_RUNS) ?? [];
+  if (core !== '' && CONF_LIST_DELIMITERS.includes(core[0])) separators.shift();
+  const between = (i: number) => {
+    const separator = (i < names.length - 1 ? separators[i] : separators[0]) ?? ',';
+    return continued ? separator.replace(/ +/g, ' ') : separator;
+  };
+  const list = edited.map((name, i) => (i < edited.length - 1 ? `${name}${between(i)}` : name)).join('');
+  return `${line.slice(0, from)}${pre}${list}${post}${line.slice(to)}`;
 }
 
 /**
@@ -110,12 +115,10 @@ export function serviceHeaderLine(confdata: string[]): number | undefined {
   return parseConfText(confdata).sections.find((section) => section.name === 'service')?.lineNo;
 }
 
-const listNames = (value: string) => value.split(',').map((name) => name.trim()).filter(Boolean);
-
 /** Whether `dbname` is in the autostart list the engine uses: the last `[service] server=` key. */
 export function isAutostart(confdata: string[], dbname: string): boolean {
   const entries = serverEntries(confdata);
-  return entries.length > 0 && listNames(entries[entries.length - 1].value).includes(dbname);
+  return entries.length > 0 && splitConfList(entries[entries.length - 1].value).includes(dbname);
 }
 
 /** `oldName` renamed in every autostart list; a resulting duplicate is dropped. */

@@ -26,15 +26,21 @@ const MetricBar = ({ pct }) => (
 );
 
 import { useCM } from '../../../constants/useCM';
+import { DEFAULT_SERVICE_VOLUME_INTERVAL } from '@api-interfaces';
+import { volumesDue } from '../serviceVolumeInterval';
 
 const ignoreRefreshError = () => undefined;
 
 const Component = function ServiceDashboard() {
   const CM = useCM();
   const dispatch = useDispatch();
-  const { hosts, hostGroups, authorizedHosts, haInfo } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, hostGroups, authorizedHosts, haInfo, reconnectQueue } = useSelector((state) => state.host, shallowEqual);
   const { summaries } = useSelector((state) => state.globalMonitoring, shallowEqual);
   const { preferences } = useSelector((state) => state.user, shallowEqual);
+  // While a connected host waits in the reconnect window its row is not
+  // read: the badge says so instead of "Live".
+  const isPendingReconnect = (reconnectQueue ?? []).some((uid) => authorizedHosts.includes(uid));
+  const liveStatus = isPendingReconnect ? 'lost' : preferences.dashboardInterval > 0 ? 'live' : 'paused';
   // Rows come from the registered host list (fetchHosts); while it loads the
   // table must not say "No data available".
   const hostsLoading = useSelector((state) => state.host.loading);
@@ -44,6 +50,25 @@ const Component = function ServiceDashboard() {
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
   const activateHost = useHostActivation();
 
+  // A volume added on a host (volumesChanged): read its volume usage now if
+  // this dashboard is on screen, otherwise with its next read.
+  const volumesChangedSeq = useSelector((state) => state.databaseMonitoring?.volumesChangedSeq, shallowEqual);
+  const isOnScreen = useSelector((state) => state.layout?.activeMainTab === 'service_dashboard');
+  const seenVolumesChangedSeq = React.useRef(volumesChangedSeq);
+  React.useEffect(() => {
+    const before = seenVolumesChangedSeq.current ?? {};
+    seenVolumesChangedSeq.current = volumesChangedSeq;
+    Object.entries(volumesChangedSeq ?? {})
+      .filter(([hostUid, seq]) => seq !== before[hostUid] && authorizedHosts.includes(hostUid))
+      .forEach(([hostUid]) => {
+        if (isOnScreen && visibleHostsRef.current.includes(hostUid)) {
+          dispatch(fetchHostSummary({ hostUid, isBackground: true })).unwrap().catch(ignoreRefreshError);
+        } else {
+          volumesChangedHostsRef.current.add(hostUid);
+        }
+      });
+  }, [volumesChangedSeq, authorizedHosts, isOnScreen, dispatch]);
+
   const handleColumnSort = (accessor) => {
     setSortConfig((prev) => {
       if (prev?.key === accessor) {
@@ -52,14 +77,35 @@ const Component = function ServiceDashboard() {
       return { key: accessor, direction: 'asc' };
     });
   };
+  // The hosts the table shows (not in a collapsed group, not filtered out):
+  // only these are read, each with its databases' volume-info.
+  const visibleHostsRef = React.useRef([]);
+  const volumeIntervalSeconds = preferences.serviceVolumeInterval ?? DEFAULT_SERVICE_VOLUME_INTERVAL;
+  // Hosts whose volumes changed here (a volume added): their next read
+  // includes the volumes whatever the interval.
+  const volumesChangedHostsRef = React.useRef(new Set());
   const { isManualRefreshing, lastRefreshed, handleRefresh: refreshAll } = usePollingRefresh({
     hostUid: 'global',
     tabId: 'service_dashboard',
     pollingIntervalSeconds: preferences.dashboardInterval,
-    onFetch: (silent) => async (dispatch) => {
-      if (authorizedHosts.length === 0) return;
-      await Promise.all(authorizedHosts.map(hostUid => 
-        dispatch(fetchHostSummary(silent ? { hostUid, isBackground: true } : hostUid)).unwrap().catch(ignoreRefreshError)
+    onFetch: (silent) => async (dispatch, getState) => {
+      // A host waiting in the reconnect window (session lost, or its CMS not
+      // reachable) is not read until the user decides, as its own dashboard does.
+      const targets = authorizedHosts.filter((hostUid) =>
+        visibleHostsRef.current.includes(hostUid) && !(reconnectQueue ?? []).includes(hostUid));
+      if (targets.length === 0) return;
+      // Volume usage (a spacedb per database) on its own interval; the rest
+      // at every refresh. A refresh the user asks for reads everything.
+      const summaries = getState().globalMonitoring?.summaries ?? {};
+      await Promise.all(targets.map(hostUid =>
+        dispatch(fetchHostSummary(silent
+          ? {
+            hostUid,
+            isBackground: true,
+            withVolumes: volumesChangedHostsRef.current.delete(hostUid)
+              || volumesDue(summaries[hostUid]?.volumesReadAt, volumeIntervalSeconds, Date.now()),
+          }
+          : hostUid)).unwrap().catch(ignoreRefreshError)
       ));
     }
   });
@@ -147,6 +193,20 @@ const Component = function ServiceDashboard() {
 
     return { tableRows: rows, hostMetaByUid: metaByUid };
   }, [hostGroups, collapsedGroups, haInfo, roleFilter, CM]);
+
+  const visibleHostUids = React.useMemo(() => tableRows.filter((row) => row._type === 'host').map((row) => row.uid), [tableRows]);
+  visibleHostsRef.current = visibleHostUids;
+  // A host that comes into view (a group expanded, a filter cleared) is read
+  // once then, not left empty until the next refresh.
+  const shownBefore = React.useRef(null);
+  React.useEffect(() => {
+    const before = shownBefore.current;
+    shownBefore.current = visibleHostUids;
+    if (before === null) return;
+    visibleHostUids
+      .filter((hostUid) => !before.includes(hostUid) && authorizedHosts.includes(hostUid))
+      .forEach((hostUid) => dispatch(fetchHostSummary({ hostUid, isBackground: true })).unwrap().catch(ignoreRefreshError));
+  }, [visibleHostUids, authorizedHosts, dispatch]);
 
   // Sort host rows within each group while keeping group headers in place.
   const sortedTableRows = React.useMemo(() => {
@@ -333,8 +393,19 @@ const Component = function ServiceDashboard() {
         const isConnected = authorizedHosts.includes(row.uid);
         const v = isConnected ? summaries[row.uid]?.[accessor] : undefined;
         if (v === undefined || v === -1 || Number.isNaN(v)) return <span className="text-slate-300">—</span>;
-        // Percent in use: the fuller the volumes, the more urgent.
-        return <Badge variant={v >= 90 ? 'danger' : v >= 70 ? 'warning' : 'success'}>{v}%</Badge>;
+        // Percent in use: the fuller the volumes, the more urgent. The first
+        // volume column also shows when they were read (own interval).
+        const readAt = accessor === 'permUsed' ? summaries[row.uid]?.volumesReadAt : null;
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <Badge variant={v >= 90 ? 'danger' : v >= 70 ? 'warning' : 'success'}>{v}%</Badge>
+            {readAt && (
+              <span className="text-10 font-mono text-slate-400" title={CM.volumesReadAtTitle} data-testid={`volumes-read-at-${row.uid}`}>
+                {new Date(readAt).toLocaleTimeString()}
+              </span>
+            )}
+          </span>
+        );
       }
     })),
     {
@@ -393,8 +464,8 @@ const Component = function ServiceDashboard() {
         if (!s) return <span className="text-slate-300">—</span>;
         return (
           <div className="min-w-[80px]">
-            <span className="font-mono text-13 font-semibold text-slate-700 dark:text-slate-200">{(s.cpu || 0).toFixed(1)}%</span>
-            <MetricBar pct={s.cpu} />
+            <span className="font-mono text-13 font-semibold text-slate-700 dark:text-slate-200">{s.cpu == null ? '-' : `${s.cpu.toFixed(1)}%`}</span>
+            <MetricBar pct={s.cpu ?? 0} />
           </div>
         );
       }
@@ -430,10 +501,10 @@ const Component = function ServiceDashboard() {
               <Typography variant="h1" className="text-15 font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight">
                 {CM.serviceDashboard}
               </Typography>
-              <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${preferences.dashboardInterval > 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
-                <div className={`w-1 h-1 rounded-full ${preferences.dashboardInterval > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <span className={`text-11 font-bold ${preferences.dashboardInterval > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {preferences.dashboardInterval > 0 ? CM.live : CM.paused}
+              <div data-testid="dashboard-live-badge" className={`px-2 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 transition-all duration-300 ${liveStatus === 'live' ? 'bg-emerald-500/10 border-emerald-500/30' : liveStatus === 'lost' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
+                <div className={`w-1 h-1 rounded-full ${liveStatus === 'live' ? 'bg-emerald-500 animate-pulse' : liveStatus === 'lost' ? 'bg-rose-500' : 'bg-slate-400'}`} />
+                <span className={`text-11 font-bold ${liveStatus === 'live' ? 'text-emerald-600 dark:text-emerald-400' : liveStatus === 'lost' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {liveStatus === 'live' ? CM.live : liveStatus === 'lost' ? CM.connectionLost : CM.paused}
                 </span>
               </div>
             </div>
@@ -488,7 +559,7 @@ const Component = function ServiceDashboard() {
           </button>
 
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
-          <MonitoringSettingsPopover />
+          <MonitoringSettingsPopover showServiceVolumeInterval />
 
           <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
           <div className="flex items-center gap-4 px-3 py-1 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg shadow-xs">
@@ -509,6 +580,7 @@ const Component = function ServiceDashboard() {
         <Card testId="service-dashboard-table" noPadding className="overflow-hidden border-slate-200 dark:border-white/10 shadow-sm rounded-xl bg-white dark:bg-white/1">
           <Table
             maxRows={15}
+            paginate
             columns={columns}
             data={sortedTableRows}
             onRowClick={handleRowClick}

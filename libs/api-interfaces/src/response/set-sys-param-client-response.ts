@@ -1,4 +1,5 @@
 import type { CmsSuccessClientResponse } from './cms-success-client-response';
+import type { ConfTextProblem } from '../param-schema/validate-conf-text';
 
 /**
  * Client-facing response for setting system parameters (CMS envelope fields removed).
@@ -12,4 +13,6 @@ export type SetSysParamClientResponse = CmsSuccessClientResponse & {
    * (e.g. a deprecated key), formatted "Line N: ..." — the save went through.
    */
   warnings?: string[];
+  /** The same notes as problems (code, params, line, key), in the same order. */
+  warningProblems?: ConfTextProblem[];
 };

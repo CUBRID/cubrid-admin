@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeAddBackupPlanModal, addBackupSchedule, fetchBackupSchedule, fetchBackupDbInfo } from '../databaseSlice';
 import { dbKey } from '../dbKey';
@@ -9,6 +9,8 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
+import { BACKUP_THREAD_COUNT_MIN, BACKUPS_TO_KEEP_MIN, checkIntInRange, checkMonthDays } from '@api-interfaces';
+import { inputIssueText } from '../inputIssueText';
 import { Select } from '../../../components/ds/forms/Select';
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
@@ -40,11 +42,19 @@ export default function AddBackupPlanModal() {
   const CM = useCM();
   const dispatch = useDispatch();
   const { isAddBackupPlanModalOpen } = useSelector((state) => state.databaseUI, shallowEqual);
-  const { selectedDatabase, databasesByHost } = useSelector((state) => state.database, shallowEqual);
+  const { selectedDatabase, databasesByHost, activeDatabasesByHost, haDbNamesByHost } = useSelector((state) => state.database, shallowEqual);
   const { backupDbInfo: databaseBackupInfo } = useSelector((state) => state.databaseOperation, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const databases = databasesByHost[selectedHostUid] || [];
   const currentDb = databases?.find((db) => db.dbname === selectedDatabase);
+  // As in CA: a running database defaults to an online backup; a stopped one
+  // can only be backed up offline.
+  const isDbRunning = (activeDatabasesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const onlineDisabled = !isDbRunning;
+  // An offline run stops the database first (cub_auto), which an HA
+  // database must not be: online only, and a stopped one gets no plan.
+  const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
+  const offlineDisabled = isHaDb;
 
   const { 
     error: actionError, 
@@ -69,16 +79,25 @@ export default function AddBackupPlanModal() {
     updateStatistics: false,
     useCompression: true,
     threads: 0,
-    backupsToKeep: 0,
+    // CMS's own default; 0 would delete every older backup on each run.
+    backupsToKeep: 1,
     onlineType: 'online'
   });
   const [errors, setErrors] = useState({});
 
+  // Where the database lives, from the list or an earlier backup-info read.
+  const knownDbdir = currentDb?.dbdir || databaseBackupInfo?.[dbKey(selectedHostUid, selectedDatabase)]?.dbdir;
+  // Read when the dialog opens; later changes (a list refresh, the database
+  // starting or stopping) must not reset what the user typed.
+  const atOpen = useRef({});
+  atOpen.current = { knownDbdir, isDbRunning, isHaDb };
+
   useEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
+      const { knownDbdir: dbdirAtOpen, isDbRunning: runningAtOpen, isHaDb: haAtOpen } = atOpen.current;
       resetAction();
       setErrors({});
-      const initialPath = deriveBackupDir(currentDb?.dbdir || databaseBackupInfo?.[dbKey(selectedHostUid, selectedDatabase)]?.dbdir);
+      const initialPath = deriveBackupDir(dbdirAtOpen);
       setFormData({
         backupLevel: '0',
         backupPath: initialPath,
@@ -91,8 +110,8 @@ export default function AddBackupPlanModal() {
         updateStatistics: false,
         useCompression: false,
         threads: 0,
-        backupsToKeep: 0,
-        onlineType: 'offline'
+        backupsToKeep: 1,
+        onlineType: runningAtOpen || haAtOpen ? 'online' : 'offline'
       });
 
       if (selectedHostUid && !initialPath) {
@@ -106,9 +125,46 @@ export default function AddBackupPlanModal() {
           .catch(() => undefined);
       }
     }
-  }, [isAddBackupPlanModalOpen, selectedDatabase, currentDb, selectedHostUid, databaseBackupInfo, dispatch, resetAction]);
+  }, [isAddBackupPlanModalOpen, selectedDatabase, selectedHostUid, dispatch, resetAction]);
+
+  // The database stopped while the dialog is open: online is no longer a
+  // choice. An HA database stays online (saving is refused while stopped).
+  useEffect(() => {
+    if (isAddBackupPlanModalOpen && onlineDisabled && !isHaDb) {
+      setFormData((prev) => (prev.onlineType === 'online' ? { ...prev, onlineType: 'offline' } : prev));
+    }
+  }, [isAddBackupPlanModalOpen, onlineDisabled, isHaDb]);
+
+  // Known as an HA database after the dialog opened: offline is no choice.
+  useEffect(() => {
+    if (isAddBackupPlanModalOpen && isHaDb) {
+      setFormData((prev) => (prev.onlineType === 'offline' ? { ...prev, onlineType: 'online' } : prev));
+    }
+  }, [isAddBackupPlanModalOpen, isHaDb]);
+
+  // The folder became known after the dialog opened: fill an empty path only.
+  useEffect(() => {
+    if (isAddBackupPlanModalOpen && knownDbdir) {
+      setFormData((prev) => (prev.backupPath ? prev : { ...prev, backupPath: deriveBackupDir(knownDbdir) }));
+    }
+  }, [isAddBackupPlanModalOpen, knownDbdir]);
 
   if (!isAddBackupPlanModalOpen) return null;
+
+  // CMS's and the engine's ranges (db-op-input-limits). backupsToKeep 0
+  // would make each run delete every older backup of the level.
+  const planIssues = {
+    threads: checkIntInRange(formData.threads, BACKUP_THREAD_COUNT_MIN),
+    backupsToKeep: checkIntInRange(formData.backupsToKeep, BACKUPS_TO_KEEP_MIN),
+    periodDetail: formData.periodType === 'Monthly'
+      ? checkMonthDays(Array.isArray(formData.periodDetail) ? formData.periodDetail.join(',') : '')
+      : null,
+  };
+  const modeIssue = !isHaDb ? null
+    : formData.onlineType !== 'online' ? CM.haBackupOnlineOnlyMsg
+    : onlineDisabled ? CM.haBackupDbStoppedMsg
+    : null;
+  const hasPlanIssue = Object.values(planIssues).some(Boolean) || Boolean(modeIssue);
 
   const validate = () => {
     const errs = {};
@@ -156,7 +212,7 @@ export default function AddBackupPlanModal() {
   };
 
   const handleSave = async () => {
-    if (!selectedDatabase || !selectedHostUid) return;
+    if (!selectedDatabase || !selectedHostUid || hasPlanIssue) return;
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -271,7 +327,7 @@ export default function AddBackupPlanModal() {
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button data-testid="add-backup-plan-cancel-btn" variant="ghost" onClick={handleClose}>{CM.cancel}</Button>
-          <Button data-testid="add-backup-plan-save-btn" variant="primary" onClick={handleSave} icon="backup_table" className="min-w-[140px]">{CM.createBackupPlan}</Button>
+          <Button data-testid="add-backup-plan-save-btn" variant="primary" onClick={handleSave} disabled={hasPlanIssue} icon="backup_table" className="min-w-[140px]">{CM.createBackupPlan}</Button>
         </div>
       }
     >
@@ -281,6 +337,8 @@ export default function AddBackupPlanModal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={CM.planIdLabel} value={formData.backupId} onChange={(e) => handleInputChange('backupId', e.target.value)} error={errors.backupId} placeholder={CM.backupPlanIdPlaceholder} icon="badge" required />
             <Input label={CM.path} value={formData.backupPath} onChange={(e) => handleInputChange('backupPath', e.target.value)} error={errors.backupPath} placeholder={CM.backupDirPlaceholder} icon="folder_zip" className="font-mono!" required />
+            {/* At least 1 or the plan is refused, so not under the advanced settings. */}
+            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" min={BACKUPS_TO_KEEP_MIN} error={inputIssueText(planIssues.backupsToKeep, CM)} data-testid="backup-plan-keep-input" required />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label={CM.type}>
@@ -332,6 +390,9 @@ export default function AddBackupPlanModal() {
             <div className="animate-in fade-in duration-200">
               {formData.periodType === 'Monthly' && (
                 <div className="space-y-3">
+                  {planIssues.periodDetail && (
+                    <p role="alert" data-testid="backup-plan-days-error" className="text-12 text-rose-500">{inputIssueText(planIssues.periodDetail, CM)}</p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {[
                       { id: 'all', label: CM.everyDayPreset, icon: 'select_all' },
@@ -433,9 +494,11 @@ export default function AddBackupPlanModal() {
               type="button"
               key={mode.value}
               onClick={() => handleInputChange('onlineType', mode.value)}
+              disabled={mode.value === 'online' ? onlineDisabled : offlineDisabled}
+              data-testid={`backup-plan-mode-${mode.value}`}
               role="radio"
               aria-checked={formData.onlineType === mode.value}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left ${
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed ${
                 formData.onlineType === mode.value 
                   ? 'bg-amber-500/8 border-amber-500/50'
                   : 'bg-slate-50 dark:bg-white/4 border-slate-200 dark:border-white/10 hover:border-amber-500/40'
@@ -451,6 +514,9 @@ export default function AddBackupPlanModal() {
             </button>
           ))}
           </div>
+          {modeIssue && (
+            <p role="alert" data-testid="backup-plan-mode-error" className="text-12 text-rose-500">{modeIssue}</p>
+          )}
         </FormSection>
 
         <details className="group rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/4">
@@ -462,8 +528,7 @@ export default function AddBackupPlanModal() {
             <Icon name="expand_more" size="18px" className="transition-transform group-open:rotate-180" />
           </summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 dark:border-white/10 px-4 py-4">
-            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" />
-            <Input type="number" label={CM.retentionLabel} value={formData.backupsToKeep} onChange={(e) => handleInputChange('backupsToKeep', parseInt(e.target.value) || 0)} icon="history" suffix="SETS" />
+            <Input type="number" label={CM.concurrentThreads} value={formData.threads} onChange={(e) => handleInputChange('threads', parseInt(e.target.value) || 0)} icon="speed" suffix="CORES" min={BACKUP_THREAD_COUNT_MIN} error={inputIssueText(planIssues.threads, CM)} data-testid="backup-plan-threads-input" />
           </div>
         </details>
 

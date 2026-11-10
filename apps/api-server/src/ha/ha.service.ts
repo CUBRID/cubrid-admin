@@ -59,11 +59,22 @@ export class HaService extends BaseService {
     };
   }
 
+  /**
+   * `dbmodeall` 'y' also runs `cubrid changemode` for every database
+   * (hadbinfolist); 'n' with no dblist gives only the nodes
+   * (currentnode, currentnodestate, hanodelist), which is all a caller that
+   * only needs node roles should ask for (CMS cm_job_task.cpp
+   * ts_heartbeat_list, record_ha_topology_to_struct).
+   */
   @HandleCmsErrors()
-  async heartbeatlistInternal(userId: string, hostUid: string): Promise<HeartbeatListCmsResponse> {
+  async heartbeatlistInternal(
+    userId: string,
+    hostUid: string,
+    dbmodeall: 'y' | 'n' = 'y'
+  ): Promise<HeartbeatListCmsResponse> {
     const cmsRequest: HeartbeatListCmsRequest = {
       task: 'heartbeatlist',
-      dbmodeall: 'y',
+      dbmodeall,
     };
     return this.executeCmsRequest(userId, hostUid, cmsRequest);
   }

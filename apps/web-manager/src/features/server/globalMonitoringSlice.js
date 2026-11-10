@@ -3,7 +3,7 @@ import { hostApi } from '../host/hostApi';
 import { databaseApi } from '../database/databaseApi';
 import { brokerApi } from '../broker/brokerApi';
 import monitoringApi from './monitoringApi';
-import { computeBrokerRates, extractBrokerList, volumeGroup } from './hostMetrics';
+import { computeBrokerRates, cpuUsagePercent, extractBrokerList, volumeGroup } from './hostMetrics';
 
 const usedPct = (totalPages, freePages) => (totalPages > 0 ? Math.round(((totalPages - freePages) * 100) / totalPages) : -1);
 
@@ -14,6 +14,9 @@ export const fetchHostSummary = createAsyncThunk(
   'globalMonitoring/fetchHostSummary',
   async (arg, { getState, rejectWithValue }) => {
     const hostUid = typeof arg === 'string' ? arg : arg.hostUid;
+    // `withVolumes: false` keeps the volume usage of the last read (the
+    // service dashboard reads it on its own, longer interval).
+    const withVolumes = typeof arg === 'string' || arg.withVolumes !== false;
     try {
       // 1. Fetch concurrent data
       const [hostStat, brokersResponse, dbInfo, envInfo] = await Promise.all([
@@ -30,9 +33,10 @@ export const fetchHostSummary = createAsyncThunk(
       // databases that are running and logged in: volume-info is a per-db
       // request, and the server refuses it for a db with no DB login.
       const active = dbInfo?.activelist?.active;
-      const dbnames = (Array.isArray(active) ? active : active ? [active] : [])
-        .filter((a) => a?.isLoggedIn === true && a.dbname)
-        .map((a) => a.dbname);
+      const activeList = Array.isArray(active) ? active : active ? [active] : [];
+      const dbnames = withVolumes
+        ? activeList.filter((a) => a?.isLoggedIn === true && a.dbname).map((a) => a.dbname)
+        : [];
       const volumesData = await Promise.all(
         dbnames.map(dbname => databaseApi.getVolumeInfo(hostUid, dbname).catch(() => null))
       );
@@ -75,7 +79,7 @@ export const fetchHostSummary = createAsyncThunk(
       // (null until two samples can be compared, or if the list failed).
       const prev = getState().globalMonitoring.snapshots[hostUid];
       let totalErrorQ = 0;
-      let brokerPorts = [];
+      const brokerPorts = [];
       const brokerList = extractBrokerList(brokersResponse);
       brokerList.forEach(b => {
         totalErrorQ += parseFloat(b.error_query || 0);
@@ -85,26 +89,23 @@ export const fetchHostSummary = createAsyncThunk(
         ? computeBrokerRates(prev?.brokerSample, brokersResponse, Date.now())
         : { sample: prev?.brokerSample ?? null, rates: { tps: null, qps: null } };
 
-      // 5. CPU Delta Calculation (Legacy Parity)
+      // 5. CPU % against this host's previous sample (0 until there is one)
       const snapshot = {
-        user: parseInt(hostStat.cpu_user || 0, 10),
-        kernel: parseInt(hostStat.cpu_kernel || 0, 10),
-        idle: parseInt(hostStat.cpu_idle || 0, 10),
-        iowait: parseInt(hostStat.cpu_iowait || 0, 10),
+        cpu_user: hostStat.cpu_user,
+        cpu_kernel: hostStat.cpu_kernel,
+        cpu_idle: hostStat.cpu_idle,
+        cpu_iowait: hostStat.cpu_iowait,
         brokerSample,
       };
+      // Null until there are two samples to compare; shown as "-".
+      const cpuPercent = cpuUsagePercent(prev, snapshot);
 
-      let cpuPercent = 0;
-      if (prev) {
-        const dUser = snapshot.user - prev.user;
-        const dKernel = snapshot.kernel - prev.kernel;
-        const dIdle = snapshot.idle - prev.idle;
-        const dIo = snapshot.iowait - prev.iowait;
-        const total = dUser + dKernel + dIdle + dIo;
-        if (total > 0) {
-          cpuPercent = (dUser / total) * 100;
-        }
-      }
+      // ON: the running databases; OFF: the others start-info knows of. A
+      // running database can be missing from dblist, so both lists count.
+      const runningNames = new Set(activeList.map((a) => a?.dbname).filter(Boolean));
+      const knownNames = new Set([...(dbInfo?.dblist?.dbs || []).map((d) => d?.dbname).filter(Boolean), ...runningNames]);
+      const memTotal = parseFloat(hostStat.mem_phy_total || 0);
+      const memUsed = memTotal - parseFloat(hostStat.mem_phy_free || 0);
 
       // 6. Build Final Summary Node
       return {
@@ -113,21 +114,28 @@ export const fetchHostSummary = createAsyncThunk(
         summary: {
           hostUid,
           cpu: cpuPercent,
-          memTotal: parseFloat(hostStat.mem_phy_total || 0),
-          memUsed: parseFloat(hostStat.mem_phy_total || 0) - parseFloat(hostStat.mem_phy_free || 0),
+          memTotal,
+          memUsed,
+          readAt: Date.now(),
+          memory: memTotal > 0 ? (memUsed / memTotal) * 100 : 0,
           disk: hostStat.disk_usage || '0/0',
-          freespaceOnStorage,
           tps: brokerRates.tps,
           qps: brokerRates.qps,
           errorQ: totalErrorQ,
-          dbOn: dbInfo?.activelist?.active?.length || 0,
-          dbOff: (dbInfo?.dblist?.dbs?.length || 0) - (dbInfo?.activelist?.active?.length || 0),
+          dbOn: runningNames.size,
+          dbOff: [...knownNames].filter((dbname) => !runningNames.has(dbname)).length,
           version: envInfo?.os_info || envInfo?.os || 'Unknown',
           brokerPorts: brokerPorts.join(', '),
-          // Percent of each volume group in use (-1 = the host has none).
-          permUsed: usedPct(totalPagePerm, freePagePerm),
-          permTempUsed: usedPct(totalPagePermTemp, freePagePermTemp),
-          tempTempUsed: usedPct(totalPageTempTemp, freePageTempTemp),
+          ...(withVolumes
+            ? {
+              freespaceOnStorage,
+              // Percent of each volume group in use (-1 = the host has none).
+              permUsed: usedPct(totalPagePerm, freePagePerm),
+              permTempUsed: usedPct(totalPagePermTemp, freePagePermTemp),
+              tempTempUsed: usedPct(totalPageTempTemp, freePageTempTemp),
+              volumesReadAt: Date.now(),
+            }
+            : volumesOf(getState().globalMonitoring.summaries[hostUid])),
         }
       };
     } catch (err) {
@@ -136,11 +144,20 @@ export const fetchHostSummary = createAsyncThunk(
   }
 );
 
+// The volume usage of a summary, kept when a read skips the volumes.
+const volumesOf = (summary) => ({
+  freespaceOnStorage: summary?.freespaceOnStorage ?? 0,
+  permUsed: summary?.permUsed ?? -1,
+  permTempUsed: summary?.permTempUsed ?? -1,
+  tempTempUsed: summary?.tempTempUsed ?? -1,
+  volumesReadAt: summary?.volumesReadAt ?? null,
+});
+
 const globalMonitoringSlice = createSlice({
   name: 'globalMonitoring',
   initialState: {
     summaries: {}, // { [hostUid]: summary }
-    snapshots: {}, // { [hostUid]: { user, kernel, idle, iowait } }
+    snapshots: {}, // { [hostUid]: { cpu_user, cpu_kernel, cpu_idle, cpu_iowait, brokerSample } }
     loading: {},
     error: {}
   },

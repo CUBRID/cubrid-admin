@@ -35,6 +35,13 @@ export type OperationResult<T = unknown> = {
      * Additional error details (optional)
      */
     details?: any;
+
+    /**
+     * What a client maps the error by, as in an error response's `data`:
+     * `type`, `reason`, `cmsNote`, `cmsTask`, values like `dbname`.
+     */
+    type?: string;
+    [field: string]: unknown;
   };
 };
 

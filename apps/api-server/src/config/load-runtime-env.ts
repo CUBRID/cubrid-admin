@@ -3,9 +3,13 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { config as loadEnv } from 'dotenv';
 import { parseCliArgs } from './parse-cli-args';
+import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from './cms-concurrency';
+import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from './topsql-limits';
 
 const CWM_CONF_FILENAME = 'cwm.conf';
 const CWM_CONF_SUBDIR = 'conf';
+/** Keys the desktop app reads from its workspace cwm.conf (CWM_CONF_PATH). */
+const DESKTOP_CONF_KEYS = [CMS_MAX_CONCURRENT_REQUESTS_PER_HOST, TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB] as const;
 
 const CWM_VAULT_DIRNAME = 'cwm-vault';
 const CWM_VAULT_SECRETS_FILENAME = 'secrets.json';
@@ -136,6 +140,9 @@ function resolveCwmConfDir(baseDir: string): string | null {
  * rather than re-deriving (and potentially drifting from) the logic.
  */
 export function resolveCwmConfPath(): string {
+  // The desktop app keeps cwm.conf in its workspace and passes the path.
+  const explicit = process.env.CWM_CONF_PATH?.trim();
+  if (explicit) return explicit;
   const isPkg = !!(process as any).pkg;
   const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
   const confDir = resolveCwmConfDir(baseDir);
@@ -172,6 +179,13 @@ export function readCwmConfSafe(confPath: string): CwmConf | null {
  */
 export function loadRuntimeEnv(): void {
   if ((process.env.CWM_DESKTOP ?? '').trim() === '1') {
+    // The desktop app sets everything else itself; from the workspace
+    // cwm.conf it takes only the keys that change how CMS is called
+    // and how much of a log Top SQL reads.
+    const conf = process.env.CWM_CONF_PATH ? readCwmConfSafe(process.env.CWM_CONF_PATH) : null;
+    for (const key of DESKTOP_CONF_KEYS) {
+      if (conf && key in conf && process.env[key] === undefined) process.env[key] = String(conf[key]);
+    }
     return;
   }
   // Desktop mode drops the app login, so only the environment the desktop

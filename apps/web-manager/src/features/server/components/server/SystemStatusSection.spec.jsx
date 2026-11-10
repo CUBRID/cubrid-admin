@@ -68,8 +68,9 @@ describe('SystemStatusSection', () => {
     expect(text).toContain('512 MiB / 1 GiB (50.0%)');
     expect(text).toContain(CM.diskRootFilesystem);
     expect(text).toContain('12.5%');
-    expect(text).toContain('3.50');
-    expect(text).toContain('20.00');
+    // TPS and QPS with one decimal, as the other dashboards show them.
+    const cells = [...nowRow().querySelectorAll('td')].map((td) => td.textContent);
+    expect(cells.slice(-2)).toEqual(['3.5', '20.0']);
   });
 
   describe('refresh', () => {

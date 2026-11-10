@@ -10,11 +10,13 @@ import {
 } from '../../layout/menuActions';
 import { isAnyModalOpen, useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
+// Stable fallback for a store without the list, so the selector stays equal.
+const NO_HOSTS = [];
+const NO_TABS = [];
+
 // App routes rendered without DashboardLayout (see App.jsx). A stored token
 // keeps isAuthenticated true on /login too, e.g. after the desktop app
 // crashed, since main always opens /login on startup.
-const NO_TABS = [];
-
 const NO_DASHBOARD_PATHS = ['/', '/login', '/register', '/desktop/workspace'];
 
 /**
@@ -31,10 +33,12 @@ export function useDesktopMenuActions() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const isAuthenticated = useSelector((state) => state.auth?.isAuthenticated, shallowEqual);
-  const { selectedHostUid, authorizedHosts } = useSelector(
+  const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue } = useSelector(
     (state) => ({
       selectedHostUid: state.host?.selectedHostUid ?? null,
-      authorizedHosts: state.host?.authorizedHosts ?? [],
+      highlightedHostUid: state.host?.highlightedHostUid ?? null,
+      authorizedHosts: state.host?.authorizedHosts ?? NO_HOSTS,
+      reconnectQueue: state.host?.reconnectQueue ?? NO_HOSTS,
     }),
     shallowEqual
   );
@@ -48,7 +52,7 @@ export function useDesktopMenuActions() {
 
   const enabled = isDashboardShown
     ? {
-      ...getMenuActionEnabled({ selectedHostUid, authorizedHosts }),
+      ...getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue }),
       // Not over an open modal (it would close with what it holds).
       [MENU_ACTIONS.switchWorkspace]: !anyModalOpen,
     }
@@ -57,7 +61,7 @@ export function useDesktopMenuActions() {
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 
   const latest = useRef(null);
-  latest.current = { dispatch, CM, selectedHostUid, navigate, dirtyTabs, enabled: stableEnabled };
+  latest.current = { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, enabled: stableEnabled };
 
   useEffect(() => {
     const setMenuState = window.desktopBridge?.setMenuState;

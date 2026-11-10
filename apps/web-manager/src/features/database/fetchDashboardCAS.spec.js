@@ -17,7 +17,8 @@ vi.mock('../broker/brokerApi', () => ({
 }));
 
 import { brokerApi } from '../broker/brokerApi';
-import reducer, { fetchDashboardCAS } from './databaseMonitoringSlice';
+import { fetchBrokerList } from '../broker/brokerSlice';
+import reducer, { fetchDashboardCAS, fetchDashboardData } from './databaseMonitoringSlice';
 
 const DB = 'demodb';
 
@@ -90,5 +91,63 @@ describe('fetchDashboardCAS bulk broker status', () => {
 
     expect(result.brokersCAS).toEqual([]);
     expect(brokerApi.getBrokerStatusBulk).not.toHaveBeenCalled();
+  });
+});
+
+// The sidebar's broker poll (MonitoringProvider) and the DB dashboard's poll
+// fire at the same moment while a DB tab is open.
+describe('fetchDashboardCAS with the sidebar broker poll', () => {
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise((r) => { resolve = r; });
+    return { promise, resolve };
+  };
+  const bulk = { brokers: [{ bname: 'broker1', time: 't', asinfo: [cas({ as_id: '5' })] }] };
+
+  it('joins the sidebar poll in flight: one list and one status request', async () => {
+    const list = deferred();
+    brokerApi.getBrokerList.mockReturnValue(list.promise);
+    brokerApi.getBrokerStatusBulk.mockResolvedValue(bulk);
+    const store = makeStore();
+
+    const sidebar = store.dispatch(fetchBrokerList({ hostUid: 'join-host-1', isBackground: true }));
+    const dashboard = store.dispatch(fetchDashboardData({ hostUid: 'join-host-1', dbname: DB, isBackground: true }));
+    list.resolve(brokerList(['broker1']));
+    await Promise.all([sidebar, dashboard]);
+
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(1);
+    expect(brokerApi.getBrokerStatusBulk).toHaveBeenCalledTimes(1);
+    expect(store.getState().databaseMonitoring.dashboardData[`join-host-1:${DB}`].brokersCAS.map((row) => row.id)).toEqual(['5']);
+  });
+
+  it('reads anew on a user refresh instead of taking the poll in flight', async () => {
+    const first = deferred();
+    brokerApi.getBrokerList.mockReturnValueOnce(first.promise).mockResolvedValueOnce(brokerList(['broker1']));
+    brokerApi.getBrokerStatusBulk.mockResolvedValue(bulk);
+    const store = makeStore();
+
+    const sidebar = store.dispatch(fetchBrokerList({ hostUid: 'join-host-2', isBackground: true }));
+    const refresh = store.dispatch(fetchDashboardCAS({ hostUid: 'join-host-2', dbname: DB }));
+    first.resolve(brokerList(['broker1']));
+    await Promise.all([sidebar, refresh]);
+
+    expect(brokerApi.getBrokerList).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the sidebar broker list alone', async () => {
+    brokerApi.getBrokerList.mockResolvedValue(brokerList(['broker1']));
+    brokerApi.getBrokerStatusBulk.mockResolvedValue(bulk);
+    const actions = [];
+    const store = configureStore({
+      reducer: { databaseMonitoring: reducer },
+      middleware: (getDefault) => getDefault().concat(() => (next) => (action) => {
+        actions.push(action.type);
+        return next(action);
+      }),
+    });
+
+    await store.dispatch(fetchDashboardCAS({ hostUid: 'join-host-3', dbname: DB, isBackground: true }));
+
+    expect(actions.filter((type) => type.startsWith('broker/'))).toEqual([]);
   });
 });

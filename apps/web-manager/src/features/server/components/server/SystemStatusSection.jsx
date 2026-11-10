@@ -24,7 +24,7 @@ const MetricBar = ({ pct }) => (
 
 // CPU and TPS/QPS are derived from deltas between polls: null means there is
 // no value yet (first sample), shown as "-" rather than a fake 0.
-const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(2));
+const formatRate = (value) => (value === null || value === undefined ? '-' : value.toFixed(1));
 const cpuCell = (value) => (value === null || value === undefined ? null : { display: `${value.toFixed(1)}%`, pct: value });
 
 /**

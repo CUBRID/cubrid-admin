@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
-import { fetchDashboardVolumes } from '../../databaseSlice';
+import { fetchDatabaseSpaceInfo } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { Table } from '../../../../components/ds/layout/Table';
 import { Typography } from '../../../../components/ds/foundation/Typography';
@@ -10,7 +10,7 @@ import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../../constants/useCM';
 import { useRefreshWhenShown } from './useRefreshWhenShown';
-import { pageCount } from '../../volumePages';
+import { pageCount, pagesToSize } from '../../volumePages';
 
 export default function DBVolumesSection({ volumes, volumesStatus, pollingProps }) {
   const CM = useCM();
@@ -18,11 +18,12 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
 
+  // The same read as the file-space section's; its result fills both.
   const refresh = () => {
-    if (hostUid && dbname) dispatch(fetchDashboardVolumes({ hostUid, dbname }));
+    if (hostUid && dbname) dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
   };
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'volumes' }, refresh);
 
   useEffect(() => {
     let interval;
@@ -84,7 +85,7 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
             <ProgressBar 
               pct={isNaNData ? 0 : usedPct} 
               showValue 
-              valueLabel={`${used.toLocaleString()} / ${total.toLocaleString()}`}
+              valueLabel={`${pagesToSize(used, row.pageSize)} / ${pagesToSize(total, row.pageSize)}`}
               variant="auto"
             />
           </div>
@@ -123,6 +124,7 @@ export default function DBVolumesSection({ volumes, volumesStatus, pollingProps 
         data={volumes}
         emptyState={<FetchEmptyState status={volumesStatus} title={CM.storageVolumes} />}
         maxRows={15}
+        paginate
       />
     </Card>
   );

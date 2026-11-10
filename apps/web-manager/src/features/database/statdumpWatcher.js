@@ -35,6 +35,31 @@ const warn = (action, hostUid, dbname) => (err) => {
 const start = (api, hostUid, dbname) =>
   api.startStatDumpWatcher(hostUid, dbname).catch(warn('start', hostUid, dbname));
 
+// Starts the watcher now and keeps re-issuing the start on the period.
+const runWatcher = (entry) => {
+  const { api, hostUid, dbname } = entry;
+  start(api, hostUid, dbname);
+  entry.timer = setInterval(() => start(api, hostUid, dbname), WATCHER_REFRESH_MS);
+};
+
+/**
+ * Pauses or resumes a held watcher's periodic start, as the dashboard's own
+ * polling pauses: nothing goes to a host waiting in the reconnect window,
+ * or while a modal covers the screen. Resuming starts at once, which also
+ * renews the api-server lease if it ran out meanwhile.
+ */
+export function setStatdumpWatcherPaused(hostUid, dbname, paused) {
+  const entry = watchers.get(dbKey(hostUid, dbname));
+  if (!entry || entry.paused === paused) return;
+  entry.paused = paused;
+  if (paused) {
+    clearInterval(entry.timer);
+    entry.timer = null;
+  } else {
+    runWatcher(entry);
+  }
+}
+
 /**
  * Hold a watcher for host+db; ref-counted across dashboards in this app.
  * Returns the release function. The last release stops the watcher.
@@ -45,7 +70,7 @@ const start = (api, hostUid, dbname) =>
  * preferred over leaving a statdump process and server-side perf tracking
  * running indefinitely after everyone has left.
  */
-export function acquireStatdumpWatcher(hostUid, dbname, api = databaseApi) {
+export function acquireStatdumpWatcher(hostUid, dbname, api = databaseApi, { paused = false } = {}) {
   const key = dbKey(hostUid, dbname);
   let entry = watchers.get(key);
   if (entry) {
@@ -53,10 +78,9 @@ export function acquireStatdumpWatcher(hostUid, dbname, api = databaseApi) {
     clearTimeout(entry.stopTimer);
     entry.stopTimer = null;
   } else {
-    entry = { hostUid, dbname, api, count: 1, lastRestartAt: 0, timer: null, stopTimer: null };
+    entry = { hostUid, dbname, api, count: 1, lastRestartAt: 0, timer: null, stopTimer: null, paused };
     watchers.set(key, entry);
-    start(api, hostUid, dbname);
-    entry.timer = setInterval(() => start(api, hostUid, dbname), WATCHER_REFRESH_MS);
+    if (!paused) runWatcher(entry);
   }
 
   let released = false;
@@ -84,7 +108,7 @@ export function acquireStatdumpWatcher(hostUid, dbname, api = databaseApi) {
 export function restartFrozenStatdumpWatcher(hostUid, dbname, unchangedSince, now = Date.now(), api = databaseApi) {
   const key = dbKey(hostUid, dbname);
   const entry = watchers.get(key);
-  if (!entry || entry.count === 0 || !unchangedSince) return false;
+  if (!entry || entry.count === 0 || entry.paused || !unchangedSince) return false;
   if (now - unchangedSince < FROZEN_RESTART_MS) return false;
   if (now - entry.lastRestartAt < RESTART_COOLDOWN_MS) return false;
   entry.lastRestartAt = now;
@@ -112,8 +136,8 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('pageshow', (event) => {
     if (!event.persisted) return;
-    watchers.forEach(({ hostUid, dbname, api, count }) => {
-      if (count > 0) start(api, hostUid, dbname);
+    watchers.forEach(({ hostUid, dbname, api, count, paused }) => {
+      if (count > 0 && !paused) start(api, hostUid, dbname);
     });
   });
 }
