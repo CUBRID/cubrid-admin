@@ -12,7 +12,7 @@ describe('confirmQuit', () => {
     const show = jest.fn().mockReturnValue(0);
     expect(confirmQuit(window, { language: 'ko', showMessageBoxSync: show })).toBe(true);
     const options = show.mock.calls[0][1];
-    expect(options).toMatchObject({ message: '종료하시겠습니까?', buttons: ['종료', '취소'], cancelId: 1, title: 'Next CUBRID Admin' });
+    expect(options).toMatchObject({ message: '종료하시겠습니까?', buttons: ['종료', '취소'], cancelId: 1, title: 'CUBRID Admin' });
     expect(options.detail).toBeUndefined();
   });
 
