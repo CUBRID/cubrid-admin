@@ -57,9 +57,24 @@ export function engineVersionHostUid({ selectedHostUid, highlightedHostUid }) {
   return highlightedHostUid ?? selectedHostUid ?? null;
 }
 
+/**
+ * The host a header menu item acts on, and whether it is connected: Host
+ * Engine Version the highlighted host (engineVersionHostUid), connected only
+ * outside the reconnect queue; every other item the selected host. Whether
+ * the item is on and the reason shown when it is off both go by it.
+ */
+export function menuActionHost(id, { selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [] }) {
+  if (id === MENU_ACTIONS.serverVersion) {
+    const hostUid = engineVersionHostUid({ selectedHostUid, highlightedHostUid });
+    return { hostUid, connected: Boolean(hostUid) && authorizedHosts.includes(hostUid) && !reconnectQueue.includes(hostUid) };
+  }
+  const hostUid = selectedHostUid ?? null;
+  return { hostUid, connected: Boolean(hostUid) && authorizedHosts.includes(hostUid) };
+}
+
 /** @returns {Record<string, boolean>} enabled flag per action id */
 export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts = [], reconnectQueue = [], hosts = [] }) {
-  const versionHostUid = engineVersionHostUid({ selectedHostUid, highlightedHostUid });
+  const hostState = { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue };
   return {
     [MENU_ACTIONS.addHost]: true,
     [MENU_ACTIONS.editHost]: Boolean(selectedHostUid),
@@ -78,8 +93,7 @@ export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, auth
     [MENU_ACTIONS.checkForUpdates]: true,
     // Read from the host's CMS, so only for a connected host, and not while
     // it waits to reconnect.
-    [MENU_ACTIONS.serverVersion]: Boolean(versionHostUid)
-      && authorizedHosts.includes(versionHostUid) && !reconnectQueue.includes(versionHostUid),
+    [MENU_ACTIONS.serverVersion]: menuActionHost(MENU_ACTIONS.serverVersion, hostState).connected,
     [MENU_ACTIONS.about]: true,
   };
 }
