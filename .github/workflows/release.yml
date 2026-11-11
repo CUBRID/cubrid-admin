@@ -90,9 +90,20 @@ jobs:
       # in two runs. A packaging command that prints nothing for 3 min (5 for the
       # Linux one, whose rpm compression is quiet for a while) is stopped with the
       # list of processes still running, instead of hanging until the timeout.
+      # A disk image still attached, or an hdiutil / dmgbuild process left over,
+      # has kept this step from ending after its dmg files were written: clean up
+      # before and after, and end the step once every file is complete.
       - name: Build desktop packages (macOS, Windows)
         timeout-minutes: 25
-        run: scripts/ci/run-with-idle-timeout.sh 180 npx nx run desktop:package -- --mac --win --x64 --arm64
+        run: |
+          scripts/ci/clean-disk-images.sh
+          v='${{ steps.version.outputs.version }}'
+          done_check="cd dist/portable && for f in macos-arm64.dmg macos-arm64.zip macos-x64.dmg macos-x64.zip windows-x64-setup.exe windows-arm64-setup.exe; do [ -s CUBRID-Admin-desktop-$v-\$f.blockmap ] || exit 1; done; for f in windows-x64-portable.exe windows-arm64-portable.exe; do [ -s CUBRID-Admin-desktop-$v-\$f ] || exit 1; done"
+          scripts/ci/run-with-idle-timeout.sh 180 --done-check "$done_check" npx nx run desktop:package -- --mac --win --x64 --arm64
+
+      - name: Detach disk images
+        if: always()
+        run: scripts/ci/clean-disk-images.sh
 
       - name: Build desktop packages (Linux)
         timeout-minutes: 20
