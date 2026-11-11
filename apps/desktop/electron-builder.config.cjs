@@ -4,7 +4,7 @@
 // major.minor.patch.commit_num, numbers only (e.g. 0.1.0.0001).
 const { productVersion } = require('../../scripts/product-version.cjs');
 
-const { base, version } = productVersion();
+const { base, commitNum, version } = productVersion();
 
 module.exports = {
   appId: 'com.cubrid.webmanager',
@@ -12,6 +12,8 @@ module.exports = {
   electronVersion: '35.7.5',
   asar: false,
   buildVersion: version,
+  // Windows ProductVersion: major.minor.patch.<buildNumber>.
+  buildNumber: commitNum,
   directories: {
     output: 'dist/portable',
     // CUBRID icons: icon.png (512), icon.icns (mac), icon.ico (win) — see build-resources/README
