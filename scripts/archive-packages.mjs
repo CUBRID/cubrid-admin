@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 /**
- * Packs the built server executables and desktop apps into release files
- * named with the product version (major.minor.patch.commit_num):
+ * Collects the release files, named with the product version
+ * (major.minor.patch.commit_num), into dist/release:
  *
- *   dist/release/CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz
- *   dist/release/CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.zip
- *   dist/release/SHA256SUMS.txt
+ *   server, packed here:
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz
+ *   desktop, built by electron-builder under these names (apps/desktop/electron-builder.config.cjs):
+ *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.dmg            installer
+ *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.zip            portable (.app)
+ *     CUBRID-Admin-desktop-0.1.0.0001-windows-x64-setup.exe      installer
+ *     CUBRID-Admin-desktop-0.1.0.0001-windows-x64-portable.exe   portable
+ *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.rpm              installer (only with rpmbuild)
+ *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.AppImage         portable
+ *   SHA256SUMS.txt over all of them.
  *
  * Run after `npm run package:server` and/or `npm run package:electron*`.
- * Run from the same commit. Only what was built is packed.
+ * Run from the same commit. Only what was built is collected.
  *
- * Needs `tar` and `zip` on PATH.
+ * Needs `tar` and `zip` on PATH (server packages).
  */
 
 import { execFileSync } from 'child_process';
@@ -33,14 +40,16 @@ const SERVER = [
   { exe: 'cubrid-admin.exe', platform: 'windows-x64', kind: 'zip' },
 ];
 
-// electron-builder's output folder for each target (dir target).
+// electron-builder's unpacked app folder for each OS and arch, and the
+// release files built from it. Linux packages carry the Linux arch name
+// (x86_64, aarch64) in electron-builder's file name; the release name uses x64 and arm64.
 const DESKTOP = [
-  { dir: 'mac-arm64', platform: 'macos-arm64', kind: 'zip' },
-  { dir: 'mac', platform: 'macos-x64', kind: 'zip' },
-  { dir: 'win-unpacked', platform: 'windows-x64', kind: 'zip' },
-  { dir: 'win-arm64-unpacked', platform: 'windows-arm64', kind: 'zip' },
-  { dir: 'linux-unpacked', platform: 'linux-x64', kind: 'tar.gz' },
-  { dir: 'linux-arm64-unpacked', platform: 'linux-arm64', kind: 'tar.gz' },
+  { dir: 'mac-arm64', platform: 'macos-arm64', files: ['.dmg', '.zip'] },
+  { dir: 'mac', platform: 'macos-x64', files: ['.dmg', '.zip'] },
+  { dir: 'win-unpacked', platform: 'windows-x64', files: ['-setup.exe', '-portable.exe'] },
+  { dir: 'win-arm64-unpacked', platform: 'windows-arm64', files: ['-setup.exe', '-portable.exe'] },
+  { dir: 'linux-unpacked', platform: 'linux-x64', built: ['linux-x64', 'linux-x86_64'], files: ['.rpm', '.AppImage'] },
+  { dir: 'linux-arm64-unpacked', platform: 'linux-arm64', built: ['linux-arm64', 'linux-aarch64'], files: ['.rpm', '.AppImage'] },
 ];
 
 function pack(name, kind) {
@@ -104,20 +113,28 @@ for (const { exe, platform, kind } of SERVER) {
   written.push(pack(name, kind));
 }
 
-for (const { dir, platform, kind } of DESKTOP) {
+for (const { dir, platform, built = [platform], files } of DESKTOP) {
   const source = path.join(PORTABLE, dir);
   if (!fs.existsSync(source)) {
     continue;
   }
   assertDesktopApp(source, version);
-  const name = `${PRODUCT}-desktop-${version}-${platform}`;
-  // Moved, not copied (the apps are large), and moved back after packing.
-  const staged = path.join(STAGE, name);
-  fs.renameSync(source, staged);
-  try {
-    written.push(pack(name, kind));
-  } finally {
-    fs.renameSync(staged, source);
+  let collected = 0;
+  for (const suffix of files) {
+    const from = built
+      .map((name) => path.join(PORTABLE, `${PRODUCT}-desktop-${version}-${name}${suffix}`))
+      .find((file) => fs.existsSync(file));
+    if (!from) {
+      continue;
+    }
+    const file = `${PRODUCT}-desktop-${version}-${platform}${suffix}`;
+    fs.rmSync(path.join(OUT, file), { force: true });
+    fs.copyFileSync(from, path.join(OUT, file), fs.constants.COPYFILE_FICLONE);
+    written.push(file);
+    collected += 1;
+  }
+  if (collected === 0) {
+    throw new Error(`${dir} was built, but none of its release files (${files.join(', ')}) for ${version} are in dist/portable. Package again from this commit.`);
   }
 }
 

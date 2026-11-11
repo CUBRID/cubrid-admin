@@ -8,6 +8,24 @@ const { productVersion } = require('../../scripts/product-version.cjs');
 
 const { base, commitNum, version } = productVersion();
 
+const BOTH_ARCHS = ['x64', 'arm64'];
+const targets = (...names) => names.map((target) => ({ target, arch: BOTH_ARCHS }));
+// Release file names (scripts/archive-packages.mjs collects them into dist/release):
+// CUBRID-Admin-desktop-<version>-<os>-<arch>[-setup|-portable].<ext>. Linux packages
+// get the Linux arch name (x86_64, aarch64); the archive script renames them to x64 and arm64.
+const fileName = (os, form = '') => `CUBRID-Admin-desktop-${version}-${os}-\${arch}${form}.\${ext}`;
+
+// The Linux rpm needs rpmbuild on the build host; without it only the rpm is left out.
+function hasRpmbuild() {
+  try {
+    execFileSync('rpmbuild', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    console.log('  • rpmbuild not found: the Linux rpm package is skipped (install rpm to build it)');
+    return false;
+  }
+}
+
 module.exports = {
   appId: 'com.cubrid.webmanager',
   productName: 'CUBRID Admin',
@@ -39,17 +57,36 @@ module.exports = {
     },
     { from: 'dist/apps/api-server/node_modules', to: 'api-server/node_modules' },
   ],
-  // Local portable builds: no Apple Developer signing / notarization (see README Desktop).
+  // No Apple Developer signing / notarization (see README Desktop).
   forceCodeSigning: false,
   mac: {
     notarize: false,
     gatekeeperAssess: false,
     // Skip Developer ID lookup (avoids hanging when no cert is configured).
     identity: null,
-    target: ['dir'],
+    // Installer: dmg. Portable: zip of the .app.
+    target: targets('dmg', 'zip'),
+    artifactName: fileName('macos'),
   },
-  win: { target: ['dir'] },
-  linux: { target: ['dir'] },
+  // Installer: nsis (per user, the user picks the folder). Portable: one exe that
+  // keeps its settings beside itself (PORTABLE_EXECUTABLE_DIR).
+  win: { target: targets('nsis', 'portable') },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    // One installer per arch, not one with both.
+    buildUniversalInstaller: false,
+    artifactName: fileName('windows', '-setup'),
+  },
+  portable: { buildUniversalInstaller: false, artifactName: fileName('windows', '-portable') },
+  // Installer: rpm. Portable: AppImage.
+  linux: {
+    target: hasRpmbuild() ? targets('rpm', 'AppImage') : targets('AppImage'),
+    artifactName: fileName('linux'),
+  },
   // Without a Developer ID the app keeps Electron's own ad-hoc signature, which
   // no longer matches the packed bundle ("code has no resources but signature
   // indicates they must be present"), so a downloaded copy is reported as
