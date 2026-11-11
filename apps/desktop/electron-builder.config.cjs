@@ -54,7 +54,7 @@ function hasRpmbuild() {
 module.exports = {
   appId: 'com.cubrid.webmanager',
   productName: 'CUBRID Admin',
-  electronVersion: '35.7.5',
+  electronVersion: '45.3.0',
   // main, preload, update-check and tslib are packed in resources/app.asar;
   // web-manager and api-server stay outside it (extraResources).
   asar: true,

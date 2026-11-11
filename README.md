@@ -9,7 +9,7 @@ cubrid-webmanager/
 ├── apps/
 │   ├── web-manager/     # React 19 + Vite + Ant Design (프론트엔드)
 │   ├── api-server/      # NestJS 11 + TypeScript (백엔드 API)
-│   └── desktop/         # Electron 35 (데스크톱 래퍼)
+│   └── desktop/         # Electron 45 (데스크톱 래퍼)
 ├── libs/
 │   └── api-interfaces/  # 공유 TypeScript 타입 (Request/Response)
 ├── scripts/             # 빌드 보조 스크립트
@@ -240,7 +240,7 @@ E2E 환경과 실제 CMS 테스트 규칙은 [`e2e/README.md`](e2e/README.md)를
 |------|------|
 | Frontend | React 19, Vite 7, Ant Design 5, Redux Toolkit, Tailwind CSS 4 |
 | Backend | NestJS 11, TypeScript, Passport JWT |
-| Desktop | Electron 35 |
+| Desktop | Electron 45 |
 | Tooling | Nx 22, Webpack, Node.js single executable applications (SEA), Jest, ESLint |
 
 ---
