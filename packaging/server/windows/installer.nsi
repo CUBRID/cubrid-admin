@@ -162,13 +162,26 @@ Section "Install"
   ; Administrators first, and only then renamed into place: the rename fails
   ; if someone created the name in the meantime, so nothing else can slip in.
   ${IfNot} ${FileExists} "$DataDir\*.*"
-    System::Call 'kernel32::GetTickCount() i .r3'
+    ; An unguessable name (a GUID) that must not exist yet.
+    System::Call 'ole32::CoCreateGuid(g .r3)'
     StrCpy $4 "$DataDir.new-$3"
+    ${If} ${FileExists} "$4\*.*"
+      MessageBox MB_ICONSTOP "$4 already exists. Remove it, then run setup again." /SD IDOK
+      Abort
+    ${EndIf}
     CreateDirectory "$4"
     nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$4" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q'
     !insertmacro StopOnFailure "restrict access to the new data folder"
     nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$4" /setowner *S-1-5-32-544 /T /C /Q'
     !insertmacro StopOnFailure "give the new data folder to Administrators"
+    ; Until the lock above, it had the ProgramData access: anything put in it
+    ; meanwhile is not ours. Once locked, nobody else can add to it.
+    ${DirState} "$4" $5
+    ${If} $5 != 0
+      RMDir /r "$4"
+      MessageBox MB_ICONSTOP "Something was put into the new data folder while setup was creating it. Setup stopped; run it again." /SD IDOK
+      Abort
+    ${EndIf}
     ClearErrors
     Rename "$4" "$DataDir"
     ${If} ${Errors}
