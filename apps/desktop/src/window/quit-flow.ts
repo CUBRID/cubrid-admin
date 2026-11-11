@@ -99,3 +99,24 @@ export function whenSessionEnds(
   powerMonitor.on('shutdown', () => quitFlow.quitWithoutAsking());
   window.on('session-end', () => quitFlow.quitWithoutAsking());
 }
+
+/**
+ * SIGINT and SIGTERM (a terminal's Ctrl+C, `kill`, a Linux session ending)
+ * quit with no question. Call once the app is ready: a listener added before
+ * that is never called (Electron, measured on 35.7.5 macOS), Electron quits
+ * on its own and the window asks as for any quit. Added after, it replaces
+ * Electron's handling, so it must quit itself.
+ */
+export function listenForQuitSignals(
+  target: { on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown },
+  quitFlow: { quitWithoutAsking: () => void },
+  quit: () => void
+): void {
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    target.on(signal, () => {
+      quitFlow.quitWithoutAsking();
+      quit();
+    });
+  }
+}
+
