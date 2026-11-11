@@ -220,7 +220,10 @@ async function main() {
     config,
     JSON.stringify(
       {
-        main: mainJs,
+        // Relative to the server build folder (the cwd below): the blob keeps
+        // this name as the script's file name, shown in stack traces, so an
+        // absolute path would put the build machine's folders in the executable.
+        main: 'main.js',
         output: blob,
         disableExperimentalSEAWarning: true,
         // Code cache and snapshots are tied to the platform that made them;
@@ -234,7 +237,7 @@ async function main() {
     )
   );
   console.log(`  blob: ${Object.keys(assets).length} embedded files, made by Node.js ${hostVersion}`);
-  run(hostNode, ['--experimental-sea-config', config]);
+  run(hostNode, ['--experimental-sea-config', config], { cwd: SERVER });
 
   fs.mkdirSync(OUT, { recursive: true });
   const postject = path.join(ROOT, 'node_modules', 'postject', 'dist', 'cli.js');

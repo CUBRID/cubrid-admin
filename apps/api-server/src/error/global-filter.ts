@@ -65,11 +65,16 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         };
       }
 
-      this.logger.error(
-        `HTTP Exception [${status}]: ${exception.message}`,
-        exception.stack,
-        `${req.method} ${req.url}`
-      );
+      if (status === HttpStatus.UNAUTHORIZED) {
+        // A request without a valid login: expected traffic, not a server fault.
+        this.logger.warn(`Unauthorized: ${exception.message}`, `${req.method} ${req.url}`);
+      } else {
+        this.logger.error(
+          `HTTP Exception [${status}]: ${exception.message}`,
+          exception.stack,
+          `${req.method} ${req.url}`
+        );
+      }
     } else if (exception instanceof AppError) {
       const problemDetails = exception.toProblemDetails(req.url);
 
@@ -88,12 +93,17 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         detail: note,
       };
 
-      const logDetails = exception.toLogDetails(req.url);
-      this.logger.error(
-        `App Error [${exception.kind}:${exception.code}]: ${exception.message}`,
-        JSON.stringify(logDetails, null, 2),
-        `${req.method} ${req.url}`
-      );
+      if (status === HttpStatus.UNAUTHORIZED) {
+        // A request without a valid login: expected traffic, not a server fault.
+        this.logger.warn(`Unauthorized [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
+      } else {
+        const logDetails = exception.toLogDetails(req.url);
+        this.logger.error(
+          `App Error [${exception.kind}:${exception.code}]: ${exception.message}`,
+          JSON.stringify(logDetails, null, 2),
+          `${req.method} ${req.url}`
+        );
+      }
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       // Do not expose raw internal exception messages to clients
