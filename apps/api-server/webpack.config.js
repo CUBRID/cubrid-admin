@@ -1,6 +1,8 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { DefinePlugin, IgnorePlugin } = require('webpack');
 const { join } = require('path');
+// A build script of this repository, not a project module: the version is read at build time.
+// eslint-disable-next-line @nx/enforce-module-boundaries
 const { productVersion } = require('../../scripts/product-version.cjs');
 
 // Every dependency is bundled into main.js, so the server runs without a
