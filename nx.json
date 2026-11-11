@@ -67,7 +67,7 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
+      "inputs": ["production", "^production", { "runtime": "node scripts/product-version.cjs" }]
     }
   },
   "namedInputs": {
