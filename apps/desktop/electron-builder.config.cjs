@@ -30,7 +30,9 @@ module.exports = {
   appId: 'com.cubrid.webmanager',
   productName: 'CUBRID Admin',
   electronVersion: '35.7.5',
-  asar: false,
+  // main, preload, update-check and tslib are packed in resources/app.asar;
+  // web-manager and api-server stay outside it (extraResources).
+  asar: true,
   buildVersion: version,
   // Windows ProductVersion: major.minor.patch.<buildNumber>.
   buildNumber: commitNum,
