@@ -39,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Check the version
@@ -56,9 +56,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # rpmbuild for the Linux rpm packages (without it electron-builder skips them).
-      - name: Install rpm
-        run: brew install rpm
+      # rpmbuild (desktop and server rpm), dpkg-deb (server deb) and GNU ar
+      # (desktop deb); without them those packages are skipped.
+      - name: Install packaging tools
+        run: brew install rpm dpkg binutils
+
+      # The server executables embed Node.js scripts/build-server-sea.mjs
+      # NODE_VERSION; the build itself must run on the same major version.
+      - name: Check the Node.js version
+        run: |
+          sea=$(sed -n "s/^export const NODE_VERSION = 'v\([0-9]*\)\..*/\1/p" scripts/build-server-sea.mjs)
+          runner=$(node -p 'process.versions.node.split(".")[0]')
+          echo "runner Node.js $runner, server executables Node.js $sea"
+          [ -n "$sea" ] && [ "$runner" = "$sea" ]
 
       - name: Build server packages
         run: npm run package:server
@@ -82,17 +92,21 @@ jobs:
             desktop-$version-macos-x64.dmg desktop-$version-macos-x64.zip \
             desktop-$version-windows-x64-setup.exe desktop-$version-windows-x64-portable.exe \
             desktop-$version-windows-arm64-setup.exe desktop-$version-windows-arm64-portable.exe \
-            desktop-$version-linux-x64.rpm desktop-$version-linux-x64.AppImage \
-            desktop-$version-linux-arm64.rpm desktop-$version-linux-arm64.AppImage \
-            server-$version-linux-x64.tar.gz server-$version-macos-x64.tar.gz \
-            server-$version-windows-x64.zip; do
+            desktop-$version-linux-x64.rpm desktop-$version-linux-x64.deb desktop-$version-linux-x64.AppImage \
+            desktop-$version-linux-arm64.rpm desktop-$version-linux-arm64.deb desktop-$version-linux-arm64.AppImage \
+            server-$version-linux-x64.tar.gz server-$version-linux-x64.rpm server-$version-linux-x64.deb \
+            server-$version-linux-arm64.tar.gz server-$version-linux-arm64.rpm server-$version-linux-arm64.deb \
+            server-$version-linux-x64-el7.tar.gz server-$version-linux-x64-el7.rpm \
+            server-$version-macos-x64.tar.gz server-$version-macos-arm64.tar.gz \
+            server-$version-windows-x64.zip server-$version-windows-x64-setup.exe; do
             if [ ! -f "CUBRID-Admin-$name" ]; then
               echo "::error::Missing CUBRID-Admin-$name"
               missing=1
             fi
           done
           [ "$missing" = 0 ]
-          [ "$(wc -l < SHA256SUMS.txt)" -eq 15 ]
+          # 26 files: desktop 14, server 12.
+          [ "$(wc -l < SHA256SUMS.txt)" -eq 26 ]
           shasum -a 256 -c SHA256SUMS.txt
           file CUBRID-Admin-desktop-*
           for rpm in CUBRID-Admin-desktop-*.rpm; do
@@ -148,6 +162,14 @@ jobs:
           Windows: SmartScreen 경고가 뜨면 '추가 정보' > '실행'을 누릅니다.
 
           파일 확인: `shasum -a 256 -c SHA256SUMS.txt` (Windows는 `certutil -hashfile <파일> SHA256`)
+
+          macOS 13 이상이 필요합니다. Apple silicon Mac에서는 arm64 빌드를 쓰세요(x64 빌드는 Rosetta로 실행되어 시작과 종료가 느립니다).
+
+          Linux AppImage: `chmod +x` 후 실행합니다. GTK 3, NSS, ALSA, libgbm 같은 데스크톱 라이브러리가 시스템에 있어야 합니다(rpm, deb 패키지는 함께 설치합니다).
+
+          이전 테스트 빌드를 쓰던 경우: 설정과 기본 워크스페이스 위치가 바뀌었습니다(설치형은 사용자 데이터 폴더, 포터블은 앱 옆).
+
+          RHEL/CentOS 7 서버: el7 패키지(`linux-x64-el7.rpm`, `linux-x64-el7.tar.gz`)를 쓰세요.
           NOTES
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "$TAG" --notes-file "$RUNNER_TEMP/first-run.md" --generate-notes \
