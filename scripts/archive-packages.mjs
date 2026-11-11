@@ -3,14 +3,20 @@
  * Collects the release files, named with the product version
  * (major.minor.patch.commit_num), into dist/release:
  *
- *   server, packed here:
- *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz
+ *   server portable (executable + conf/), packed here:
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz           also linux-arm64, macos-x64
+ *     CUBRID-Admin-server-0.1.0.0001-windows-x64.zip
+ *   server installers, built by scripts/package-server-installers.mjs:
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.rpm              also linux-arm64 (only with rpmbuild)
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.deb              also linux-arm64 (only with dpkg-deb)
+ *     CUBRID-Admin-server-0.1.0.0001-windows-x64-setup.exe
  *   desktop, built by electron-builder under these names (apps/desktop/electron-builder.config.cjs):
  *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.dmg            installer
  *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.zip            portable (.app)
  *     CUBRID-Admin-desktop-0.1.0.0001-windows-x64-setup.exe      installer
  *     CUBRID-Admin-desktop-0.1.0.0001-windows-x64-portable.exe   portable
  *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.rpm              installer (only with rpmbuild)
+ *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.deb              installer (only with GNU ar)
  *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.AppImage         portable
  *   SHA256SUMS.txt over all of them.
  *
@@ -31,6 +37,7 @@ import productVersionModule from './product-version.cjs';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXECUTABLES = path.join(ROOT, 'dist', 'executables');
 const PORTABLE = path.join(ROOT, 'dist', 'portable');
+const SERVER_INSTALLERS = path.join(ROOT, 'dist', 'server-installers');
 const OUT = path.join(ROOT, 'dist', 'release');
 const STAGE = path.join(OUT, '.stage');
 const PRODUCT = 'CUBRID-Admin';
@@ -45,14 +52,21 @@ const SERVER = [
 
 // electron-builder's unpacked app folder for each OS and arch, and the
 // release files built from it. Linux packages carry the Linux arch name
-// (x86_64, aarch64) in electron-builder's file name; the release name uses x64 and arm64.
+// (x86_64, aarch64, amd64) in electron-builder's file name; the release name uses x64 and arm64.
+const SERVER_INSTALLER_FILES = [
+  'linux-x64.rpm', 'linux-x64.deb', 'linux-arm64.rpm', 'linux-arm64.deb', 'linux-x64-el7.rpm', 'windows-x64-setup.exe',
+];
+// The Linux tar.gz also carries install.sh / uninstall.sh: the same layout and
+// service as the rpm and deb, for a distribution that takes neither.
+const LINUX_INSTALL_FILES = ['install.sh', 'uninstall.sh', 'cubrid-admin-setup.sh', 'cubrid-admin.service'];
+
 const DESKTOP = [
   { dir: 'mac-arm64', platform: 'macos-arm64', files: ['.dmg', '.zip'] },
   { dir: 'mac', platform: 'macos-x64', files: ['.dmg', '.zip'] },
   { dir: 'win-unpacked', platform: 'windows-x64', files: ['-setup.exe', '-portable.exe'] },
   { dir: 'win-arm64-unpacked', platform: 'windows-arm64', files: ['-setup.exe', '-portable.exe'] },
-  { dir: 'linux-unpacked', platform: 'linux-x64', built: ['linux-x64', 'linux-x86_64'], files: ['.rpm', '.AppImage'] },
-  { dir: 'linux-arm64-unpacked', platform: 'linux-arm64', built: ['linux-arm64', 'linux-aarch64'], files: ['.rpm', '.AppImage'] },
+  { dir: 'linux-unpacked', platform: 'linux-x64', built: ['linux-x64', 'linux-x86_64', 'linux-amd64'], files: ['.rpm', '.deb', '.AppImage'] },
+  { dir: 'linux-arm64-unpacked', platform: 'linux-arm64', built: ['linux-arm64', 'linux-aarch64'], files: ['.rpm', '.deb', '.AppImage'] },
 ];
 
 function pack(name, kind) {
@@ -61,7 +75,8 @@ function pack(name, kind) {
   if (kind === 'zip') {
     execFileSync('zip', ['-qry', '-X', file, name], { cwd: STAGE, stdio: 'inherit' });
   } else {
-    execFileSync('tar', ['-czf', file, name], { cwd: STAGE, stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' } });
+    // No extended attributes: macOS adds com.apple.* ones that GNU tar warns about.
+    execFileSync('tar', ['--no-xattrs', '-czf', file, name], { cwd: STAGE, stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' } });
   }
   return path.basename(file);
 }
@@ -124,7 +139,22 @@ for (const { exe, platform, kind } of SERVER) {
       fs.copyFileSync(confSource, path.join(dir, 'conf', conf));
     }
   }
+  if (platform.startsWith('linux-')) {
+    for (const file of LINUX_INSTALL_FILES) {
+      fs.copyFileSync(path.join(ROOT, 'packaging', 'server', 'linux', file), path.join(dir, file));
+    }
+  }
   written.push(pack(name, kind));
+}
+
+for (const suffix of SERVER_INSTALLER_FILES) {
+  const file = `${PRODUCT}-server-${version}-${suffix}`;
+  const source = path.join(SERVER_INSTALLERS, file);
+  if (fs.existsSync(source)) {
+    fs.rmSync(path.join(OUT, file), { force: true });
+    fs.copyFileSync(source, path.join(OUT, file), fs.constants.COPYFILE_FICLONE);
+    written.push(file);
+  }
 }
 
 for (const { dir, platform, built = [platform], files } of DESKTOP) {

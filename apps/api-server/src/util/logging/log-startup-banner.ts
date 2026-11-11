@@ -3,25 +3,22 @@ import * as path from 'path';
 import { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import { getStoragePath } from '../resolve-storage-path';
+import { resolveCwmConfPath } from '@config/load-runtime-env';
+import { serverHome } from '@config/server-home';
 import { cmsMaxConcurrentFromEnv } from '@config/cms-concurrency';
 import { topSqlLimitsFromEnv } from '@config/topsql-limits';
-import { isStandaloneExecutable } from '../standalone-executable';
 
 export type StartupListenInfo =
   | { kind: 'unixSocket'; socketPath: string }
   | { kind: 'tcp'; host: string; port: string };
 
 function resolveConfSource(): string {
-  const isStandalone = isStandaloneExecutable();
-  const baseDir = isStandalone ? path.dirname(process.execPath) : process.cwd();
-  const confPath = path.join(baseDir, 'conf', 'cwm.conf');
+  const confPath = resolveCwmConfPath();
   return fs.existsSync(confPath) ? confPath : '(none found — using defaults)';
 }
 
 function resolveVaultSource(): string {
-  const isStandalone = isStandaloneExecutable();
-  const baseDir = isStandalone ? path.dirname(process.execPath) : process.cwd();
-  const vaultPath = path.join(baseDir, 'cwm-vault', 'secrets.json');
+  const vaultPath = path.join(serverHome(process.cwd()), 'cwm-vault', 'secrets.json');
 
   if (!fs.existsSync(vaultPath)) {
     return process.env.SEED !== undefined ? 'env/.env' : '(will be generated on this run)';

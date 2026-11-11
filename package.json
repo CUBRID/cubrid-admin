@@ -168,7 +168,7 @@
     "build:server": "npm run build:web-manager && npm run build:api-server && node scripts/copy-web-to-api.mjs",
     "build": "nx run-many -t build --all",
     "start": "node dist/apps/api-server/main.js",
-    "package:server": "npm run build:web-manager && nx run api-server:build:exe:all && node scripts/assemble-package.mjs all",
+    "package:server": "npm run build:web-manager && nx run api-server:build:exe:all && node scripts/assemble-package.mjs all && node scripts/package-server-installers.mjs",
     "package:server:linux": "npm run build:web-manager && nx run api-server:build:exe:linux && node scripts/assemble-package.mjs linux linux-el7 linux-arm64",
     "package:server:win": "npm run build:web-manager && nx run api-server:build:exe:windows && node scripts/assemble-package.mjs win",
     "package:server:mac": "npm run build:web-manager && nx run api-server:build:exe:macos && node scripts/assemble-package.mjs mac",

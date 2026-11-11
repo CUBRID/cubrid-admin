@@ -1,25 +1,24 @@
 import * as path from 'path';
-import { isStandaloneExecutable } from './standalone-executable';
+import { serverHome } from '../config/server-home';
 
 /**
  * Determines the appropriate storage path based on the execution environment.
- * If running as the single executable, it uses the executable's directory.
- * Otherwise (development mode), it uses the project's root directory.
+ * CWM_HOME when set (installers); the single executable uses its own directory;
+ * otherwise (development mode) the project's root directory.
  *
  * @returns The absolute path to the storage directory.
  * @category Utilities
  * @since 1.0.0
  */
 export function getStoragePath() {
-  const isStandalone = isStandaloneExecutable();
   // Packaged executables are meant to be launchable from any working
   // directory (e.g. `nohup ./cwm-linux &` from $HOME) — resolving a relative
   // STORAGE_PATH against process.cwd() would then silently pick a different
   // directory every time depending on where it was started from, making
   // previously-stored users/hosts disappear. Anchor relative paths to the
-  // executable's own directory instead, matching the no-override default
-  // below; only a genuinely absolute STORAGE_PATH is taken as-is.
-  const baseDir = isStandalone ? path.dirname(process.execPath) : path.resolve(__dirname, '..', '..');
+  // executable's own directory (CWM_HOME for the installers), matching the no-override
+  // default below; only a genuinely absolute STORAGE_PATH is taken as-is.
+  const baseDir = serverHome(path.resolve(__dirname, '..', '..'));
 
   const configuredPath = process.env.STORAGE_PATH?.trim();
   if (configuredPath) {

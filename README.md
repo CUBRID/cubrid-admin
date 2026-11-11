@@ -97,6 +97,7 @@ npm run package:server:mac       # macOS용
 ```
 dist/executables/
   ├── cubrid-admin-linux          # Linux 실행파일 (Node.js + 프론트엔드 내장)
+  ├── cubrid-admin-linux-arm64    # Linux arm64 실행파일
   ├── cubrid-admin-macos          # macOS 실행파일
   ├── cubrid-admin.exe            # Windows 실행파일
   └── conf/
@@ -104,6 +105,11 @@ dist/executables/
 ```
 
 업데이트 시 실행파일만 교체하면 된다. `conf/`는 건드리지 않는다.
+
+설치형(`dist/server-installers/`, `package:server`가 함께 만듦):
+- Linux rpm (x64, arm64, rpmbuild가 있을 때만): `/opt/cubrid-admin`에 설치, 설정 `/etc/cubrid-admin/cwm.conf`, 데이터 `/var/lib/cubrid-admin`, 로그 `/var/log/cubrid-admin`. `cubrid-admin` 사용자로 도는 `cubrid-admin` systemd 서비스로 등록된다(처음 설치 때는 시작하지 않음: `PORT`를 정한 뒤 `systemctl start cubrid-admin`).
+- Windows setup.exe (x64): `Program Files\CUBRID Admin Server`에 설치, 설정과 데이터 `%ProgramData%\CUBRID Admin Server`. `CUBRID Admin Server` Windows 서비스(WinSW)로 등록된다(처음 설치 때는 시작하지 않음).
+- 업그레이드와 제거는 설정, `cwm-vault/`, 데이터, 로그를 지우지 않는다. 경로 표는 [`cwm.conf.reference.md`](cwm.conf.reference.md) 참고.
 
 #### cwm.conf 설정
 
