@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { version as rootVersion } from '../../../../../../package.json';
 import AboutModal from './AboutModal';
 
 let container;
@@ -32,10 +31,12 @@ afterEach(async () => {
   container.remove();
 });
 
-it('shows the product version from the root package.json, not a hardcoded one', async () => {
+it('shows the product version baked in at build time, not a hardcoded one', async () => {
   await render('en');
 
-  expect(rootVersion).toMatch(/^\d+\.\d+\.\d+/);
+  // vite.config.mjs injects major.minor.patch.commit_num (scripts/product-version.cjs).
+  const rootVersion = import.meta.env.VITE_APP_VERSION;
+  expect(rootVersion).toMatch(/^\d+\.\d+\.\d+\.\d{4,}$/);
   expect(container.querySelector('[data-testid="about-app-version"]').textContent.trim()).toBe(`v${rootVersion}`);
   expect(container.textContent).not.toContain('0.0.1 Alpha');
 });

@@ -6,10 +6,10 @@ export interface ReleaseAsset {
 }
 
 /**
- * Naming convention CI is expected to produce for release assets, e.g.:
- *   cubrid-admin-desktop-1.4.2-mac-arm64.zip
- *   cubrid-admin-desktop-1.4.2-win-x64.zip
- *   cubrid-webmanager-server-1.4.2.tar.gz
+ * Release file names, as scripts/archive-packages.mjs writes them, e.g.:
+ *   CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.zip
+ *   CUBRID-Admin-desktop-0.1.0.0001-windows-x64.zip
+ *   CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz
  */
 const ASSET_NAME_PATTERNS: Record<PackageType, RegExp> = {
   'desktop-mac-arm64': /desktop.*mac.*arm64/i,
