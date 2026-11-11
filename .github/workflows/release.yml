@@ -1,0 +1,138 @@
+# Release: on a pushed version tag (v<major>.<minor>.<patch>.<commit_num>),
+# build all server and desktop packages and publish them as a GitHub release.
+# Run it by hand (workflow_dispatch) to build the packages only, without a release.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*.*']
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: 'Build the packages only, without a release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build packages
+    # macOS builds every package: desktop for macOS, Windows and Linux
+    # (arm64 and x64) and the server for Linux, macOS and Windows (x64).
+    runs-on: macos-15
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # commit_num in the version counts commits: needs the full history.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Check the version
+        id: version
+        run: |
+          version="$(node scripts/product-version.cjs)"
+          echo "Version $version"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the version of this commit (v$version)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build server packages
+        run: npm run package:server
+
+      # After the server: the desktop app needs the web-manager build made for Electron.
+      - name: Build desktop packages (macOS)
+        run: npm run package:electron:mac -- --x64 --arm64
+
+      - name: Build desktop packages (Windows)
+        run: npm run package:electron:win -- --x64 --arm64
+
+      - name: Build desktop packages (Linux)
+        run: npm run package:electron:linux -- --x64 --arm64
+
+      - name: Pack release files
+        run: npm run package:archive
+
+      - name: Check release files
+        working-directory: dist/release
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          missing=0
+          for name in \
+            desktop-$version-macos-arm64.zip desktop-$version-macos-x64.zip \
+            desktop-$version-windows-arm64.zip desktop-$version-windows-x64.zip \
+            desktop-$version-linux-arm64.tar.gz desktop-$version-linux-x64.tar.gz \
+            server-$version-linux-x64.tar.gz server-$version-macos-x64.tar.gz \
+            server-$version-windows-x64.zip; do
+            if [ ! -f "CUBRID-Admin-$name" ]; then
+              echo "::error::Missing CUBRID-Admin-$name"
+              missing=1
+            fi
+          done
+          [ "$missing" = 0 ]
+          [ "$(wc -l < SHA256SUMS.txt)" -eq 9 ]
+          shasum -a 256 -c SHA256SUMS.txt
+          ls -l
+
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.version.outputs.version }}
+          path: |
+            dist/release/CUBRID-Admin-*
+            dist/release/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
+          # The packages are already compressed.
+          compression-level: 0
+
+  release:
+    name: Publish release
+    needs: build
+    if: >-
+      github.repository == 'CUBRID/cubrid-admin' &&
+      github.ref_type == 'tag' &&
+      (github.event_name == 'push' || !inputs.build_only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.build.outputs.version }}
+          path: release
+
+      - name: Check release files
+        working-directory: release
+        run: sha256sum -c SHA256SUMS.txt
+
+      - name: Create release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$TAG" --generate-notes \
+            CUBRID-Admin-* SHA256SUMS.txt
