@@ -9,7 +9,8 @@ import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/reg
 import { getRendererDistDir, getWorkspacePaths, refreshWorkspacePaths } from './workspace/paths';
 import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
 import { waitForWorkspaceSetupComplete } from './workspace/workspace-setup';
-import { createAppWindow, toAppRouteUrl } from './window/app-window';
+import { createAppWindow } from './window/app-window';
+import { loadRoute } from './window/load-route';
 import { getMainWindow, setMainWindow } from './window/window-registry';
 import { installDownloadDialogDefaults } from './window/dialog-paths';
 import { confirmUnloadWithUnsavedChanges } from './window/unsaved-changes';
@@ -43,10 +44,6 @@ const quitFlow = createQuitFlow(
   },
   hasPageUnsavedChanges
 );
-
-async function loadRoute(window: BrowserWindow, routePath: string): Promise<void> {
-  await window.loadURL(toAppRouteUrl(routePath));
-}
 
 /**
  * Starts the server on the configured workspace. When it cannot (say the
