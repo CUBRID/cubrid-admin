@@ -60,14 +60,9 @@ jobs:
         run: npm run package:server
 
       # After the server: the desktop app needs the web-manager build made for Electron.
-      - name: Build desktop packages (macOS)
-        run: npm run package:electron:mac -- --x64 --arm64
-
-      - name: Build desktop packages (Windows)
-        run: npm run package:electron:win -- --x64 --arm64
-
-      - name: Build desktop packages (Linux)
-        run: npm run package:electron:linux -- --x64 --arm64
+      # One electron-builder run makes all 6 (no signing, no Wine needed).
+      - name: Build desktop packages
+        run: npx nx run desktop:package -- --mac --win --linux --x64 --arm64
 
       - name: Pack release files
         run: npm run package:archive
