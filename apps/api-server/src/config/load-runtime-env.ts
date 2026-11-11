@@ -89,14 +89,42 @@ function readSecrets(secretsPath: string): CwmSecrets | null {
   return parsed as CwmSecrets;
 }
 
-function writeSecrets(vaultDir: string, secrets: CwmSecrets): void {
+/**
+ * Creates secrets.json with `secrets`, all or nothing: the content is written
+ * and synced to a temporary file in the same folder, which is then linked into
+ * place only if no secrets.json exists. A failed write leaves no secrets.json;
+ * when another start created it first, that file is read and its keys returned.
+ */
+function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
   fs.mkdirSync(vaultDir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(
-    path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME),
-    JSON.stringify(secrets, null, 2),
-    // wx: only ever creates the file, never replaces one.
-    { encoding: 'utf8', mode: 0o600, flag: 'wx' }
-  );
+  const target = path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME);
+  const temp = path.join(vaultDir, `.${CWM_VAULT_SECRETS_FILENAME}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+  try {
+    const fd = fs.openSync(temp, 'wx', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(secrets, null, 2), 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    try {
+      // A hard link never replaces an existing file.
+      fs.linkSync(temp, target);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST') {
+        return readSecrets(target) as CwmSecrets;
+      }
+      if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
+        throw err;
+      }
+      // A file system without hard links: a copy that still never replaces a file.
+      fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+    }
+    return secrets;
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
 }
 
 /**
@@ -125,7 +153,7 @@ function loadOrCreateVaultSecrets(baseDir: string): void {
       salt: crypto.randomBytes(32).toString('hex'),
     };
     try {
-      writeSecrets(vaultDir, secrets);
+      secrets = writeSecrets(vaultDir, secrets);
     } catch (err) {
       throw new Error(`Cannot create ${secretsPath}: ${(err as Error).message}.`);
     }
