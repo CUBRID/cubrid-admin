@@ -72,6 +72,25 @@ Function SkipDirectoryOnUpgrade
   ${EndIf}
 FunctionEnd
 
+; Drops the line break and spaces at the end of a command's output. nsExec
+; returns the output as printed, with its trailing CR LF (PowerShell prints
+; "S-1-5-32-544" + CR LF), so it must be trimmed before any comparison:
+; without this the owner check failed on every Windows and an upgrade moved
+; the data folder, and its secrets.json, aside.
+!macro TrimOutput var
+  ${Do}
+    StrCpy $R9 ${var} 1 -1
+    ${If} $R9 == "$\r"
+    ${OrIf} $R9 == "$\n"
+    ${OrIf} $R9 == " "
+    ${OrIf} $R9 == "$\t"
+      StrCpy ${var} ${var} -1
+    ${Else}
+      ${ExitDo}
+    ${EndIf}
+  ${Loop}
+!macroend
+
 ; Stops setup when a step that protects the data folder fails.
 !macro StopOnFailure what
   Pop $0
@@ -118,6 +137,7 @@ Section "Install"
     nsExec::ExecToStack '"${SERVICE}" status'
     Pop $0
     Pop $1
+    !insertmacro TrimOutput $1
     StrCpy $1 $1 7
     ${If} $1 == "Started"
       StrCpy $WasRunning 1
@@ -154,6 +174,7 @@ Section "Install"
       nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "[Console]::Write((Get-Acl -LiteralPath '$DataDir').GetOwner([System.Security.Principal.SecurityIdentifier]).Value)"`
       Pop $3
       Pop $4
+      !insertmacro TrimOutput $4
       DetailPrint "Owner of $DataDir: $4 (exit code $3)"
       ${If} $3 != 0
       ${OrIf} $4 == ""
