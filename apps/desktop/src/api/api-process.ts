@@ -22,6 +22,39 @@ function getNodeExecutable(): string {
   return process.execPath;
 }
 
+/**
+ * The server's environment. Every folder the server writes to is in the
+ * workspace: the server's own defaults (logs/, ssl/, storage beside main.js)
+ * would point into the installed app, which is read-only or root-owned
+ * (/Applications, /opt, AppImage) or a temporary folder (Windows portable).
+ * CWM_HOME is removed (even when set in the environment): it would make the
+ * server keep its own cwm-vault and files outside the workspace.
+ */
+export function apiServerEnv(
+  paths: WorkspacePaths,
+  secrets: { seed: string; salt: string },
+  baseEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { CWM_HOME, ...inherited } = baseEnv;
+  return {
+    ...inherited,
+    ELECTRON_RUN_AS_NODE: '1',
+    CWM_DESKTOP: '1',
+    ENVIRONMENT: 'development',
+    LISTEN_UNIX_SOCKET: paths.socketPath,
+    SEED: secrets.seed,
+    SALT: secrets.salt,
+    STORAGE_PATH: paths.storageDir,
+    CWM_SSL_DIR: paths.sslDir,
+    LOG_DIR: path.join(paths.workspaceRoot, 'logs'),
+    ALLOWED_ORIGINS: resolveDesktopAllowedOrigin(),
+    // Settings the server reads from cwm.conf (such as how many requests
+    // go to one CMS host at once) live in the workspace.
+    CWM_CONF_PATH: path.join(paths.workspaceRoot, 'conf', 'cwm.conf'),
+  };
+}
+
 export function startApiServer(paths: WorkspacePaths, secrets: { seed: string; salt: string }): ApiProcessHandle {
   const entry = getApiServerEntry();
   if (!fs.existsSync(entry)) {
@@ -30,21 +63,7 @@ export function startApiServer(paths: WorkspacePaths, secrets: { seed: string; s
 
   const child = spawn(getNodeExecutable(), [entry], {
     cwd: getApiServerDir(),
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
-      CWM_DESKTOP: '1',
-      ENVIRONMENT: 'development',
-      LISTEN_UNIX_SOCKET: paths.socketPath,
-      SEED: secrets.seed,
-      SALT: secrets.salt,
-      STORAGE_PATH: paths.storageDir,
-      CWM_SSL_DIR: paths.sslDir,
-      ALLOWED_ORIGINS: resolveDesktopAllowedOrigin(),
-      // Settings the server reads from cwm.conf (such as how many requests
-      // go to one CMS host at once) live in the workspace.
-      CWM_CONF_PATH: path.join(paths.workspaceRoot, 'conf', 'cwm.conf'),
-    },
+    env: apiServerEnv(paths, secrets),
     stdio: ['ignore', 'inherit', 'pipe'],
   });
 

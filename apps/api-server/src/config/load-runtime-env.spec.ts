@@ -55,6 +55,27 @@ describe('loadRuntimeEnv', () => {
       delete process.env.SALT;
     });
 
+    it('reads no .env file at all, in CWM_HOME or in the working folder', () => {
+      fs.writeFileSync(path.join(home, '.env'), 'CWM_TEST_FROM_DOTENV=home\nSEED=planted\nSALT=planted\n');
+      fs.writeFileSync(path.join(dir, '.env'), 'CWM_TEST_FROM_DOTENV=cwd\n');
+
+      loadRuntimeEnv();
+
+      expect(process.env.CWM_TEST_FROM_DOTENV).toBeUndefined();
+      expect(process.env.SEED).not.toBe('planted');
+      expect(process.env.SALT).not.toBe('planted');
+    });
+
+    it('still reads .env without CWM_HOME (portable and source)', () => {
+      delete process.env.CWM_HOME;
+      delete process.env.CWM_CONF_PATH;
+      fs.writeFileSync(path.join(dir, '.env'), 'CWM_TEST_FROM_DOTENV=cwd\n');
+
+      loadRuntimeEnv();
+
+      expect(process.env.CWM_TEST_FROM_DOTENV).toBe('cwd');
+    });
+
     it('reads cwm.conf from CWM_CONF_PATH, not from the working folder', () => {
       fs.writeFileSync(path.join(etc, 'cwm.conf'), JSON.stringify({ CWM_TEST_FROM_CONF: 'etc' }));
       fs.writeFileSync(path.join(dir, 'conf', 'cwm.conf'), JSON.stringify({ CWM_TEST_FROM_CONF: 'cwd' }));
@@ -77,6 +98,45 @@ describe('loadRuntimeEnv', () => {
 
       expect(fs.readFileSync(secretsPath, 'utf8')).toBe(first);
       expect(fs.existsSync(path.join(dir, 'cwm-vault'))).toBe(false);
+    });
+
+    describe('an existing secrets.json that cannot be used is never replaced', () => {
+      const secretsPath = () => path.join(home, 'cwm-vault', 'secrets.json');
+      const writeVault = (text: string) => {
+        fs.mkdirSync(path.dirname(secretsPath()), { recursive: true });
+        fs.writeFileSync(secretsPath(), text);
+      };
+
+      it('stops on broken JSON, naming the file, and leaves it as it was', () => {
+        writeVault('{"seed": "abc", ');
+        expect(() => loadRuntimeEnv()).toThrow(secretsPath());
+        expect(fs.readFileSync(secretsPath(), 'utf8')).toBe('{"seed": "abc", ');
+        expect(process.env.SEED).toBeUndefined();
+      });
+
+      it('stops when seed or salt is missing', () => {
+        writeVault(JSON.stringify({ seed: 'only-seed' }));
+        expect(() => loadRuntimeEnv()).toThrow(/has no seed or salt/);
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: 'only-seed' });
+      });
+
+      const canTestPermissions = process.platform !== 'win32' && process.getuid?.() !== 0;
+      (canTestPermissions ? it : it.skip)('stops when the file cannot be read', () => {
+        writeVault(JSON.stringify({ seed: 's', salt: 't' }));
+        fs.chmodSync(secretsPath(), 0o000);
+        try {
+          expect(() => loadRuntimeEnv()).toThrow(secretsPath());
+        } finally {
+          fs.chmodSync(secretsPath(), 0o600);
+        }
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: 's', salt: 't' });
+      });
+
+      it('creates it only when it does not exist', () => {
+        expect(fs.existsSync(secretsPath())).toBe(false);
+        loadRuntimeEnv();
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: process.env.SEED, salt: process.env.SALT });
+      });
     });
   });
 });
