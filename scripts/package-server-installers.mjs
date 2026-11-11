@@ -105,7 +105,11 @@ async function winswExecutable() {
 }
 
 async function makensisCommand() {
-  const nsisDir = await require('app-builder-lib/out/targets/nsis/nsisUtil').NSIS_PATH();
+  const nsisUtil = require('app-builder-lib/out/targets/nsis/nsisUtil');
+  // NSIS_PATH waits for an NSIS target's options; with the defaults it gives
+  // the same pinned NSIS that electron-builder uses for the desktop setup.
+  nsisUtil.NsisTargetOptions.resolve({});
+  const nsisDir = await nsisUtil.NSIS_PATH();
   const binary =
     process.platform === 'win32'
       ? path.join(nsisDir, 'makensis.exe')

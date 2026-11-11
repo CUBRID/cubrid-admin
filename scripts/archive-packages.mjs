@@ -3,8 +3,12 @@
  * Collects the release files, named with the product version
  * (major.minor.patch.commit_num), into dist/release:
  *
- *   server, packed here:
- *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz
+ *   server portable (executable + conf/), packed here:
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz           also linux-arm64, macos-x64
+ *     CUBRID-Admin-server-0.1.0.0001-windows-x64.zip
+ *   server installers, built by scripts/package-server-installers.mjs:
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.rpm              also linux-arm64 (only with rpmbuild)
+ *     CUBRID-Admin-server-0.1.0.0001-windows-x64-setup.exe
  *   desktop, built by electron-builder under these names (apps/desktop/electron-builder.config.cjs):
  *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.dmg            installer
  *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.zip            portable (.app)
@@ -31,12 +35,14 @@ import productVersionModule from './product-version.cjs';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXECUTABLES = path.join(ROOT, 'dist', 'executables');
 const PORTABLE = path.join(ROOT, 'dist', 'portable');
+const SERVER_INSTALLERS = path.join(ROOT, 'dist', 'server-installers');
 const OUT = path.join(ROOT, 'dist', 'release');
 const STAGE = path.join(OUT, '.stage');
 const PRODUCT = 'CUBRID-Admin';
 
 const SERVER = [
   { exe: 'cubrid-admin-linux', platform: 'linux-x64', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-linux-arm64', platform: 'linux-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin-macos', platform: 'macos-x64', kind: 'tar.gz' },
   { exe: 'cubrid-admin.exe', platform: 'windows-x64', kind: 'zip' },
 ];
@@ -44,6 +50,8 @@ const SERVER = [
 // electron-builder's unpacked app folder for each OS and arch, and the
 // release files built from it. Linux packages carry the Linux arch name
 // (x86_64, aarch64) in electron-builder's file name; the release name uses x64 and arm64.
+const SERVER_INSTALLER_FILES = ['linux-x64.rpm', 'linux-arm64.rpm', 'windows-x64-setup.exe'];
+
 const DESKTOP = [
   { dir: 'mac-arm64', platform: 'macos-arm64', files: ['.dmg', '.zip'] },
   { dir: 'mac', platform: 'macos-x64', files: ['.dmg', '.zip'] },
@@ -123,6 +131,16 @@ for (const { exe, platform, kind } of SERVER) {
     }
   }
   written.push(pack(name, kind));
+}
+
+for (const suffix of SERVER_INSTALLER_FILES) {
+  const file = `${PRODUCT}-server-${version}-${suffix}`;
+  const source = path.join(SERVER_INSTALLERS, file);
+  if (fs.existsSync(source)) {
+    fs.rmSync(path.join(OUT, file), { force: true });
+    fs.copyFileSync(source, path.join(OUT, file), fs.constants.COPYFILE_FICLONE);
+    written.push(file);
+  }
 }
 
 for (const { dir, platform, built = [platform], files } of DESKTOP) {
