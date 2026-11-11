@@ -85,6 +85,19 @@ Function un.onInit
   SetRegView 64
 FunctionEnd
 
+; Moves a data folder that setup did not make out of the way, and says where.
+Function MoveDataFolderAside
+  ${GetTime} "" "L" $3 $4 $5 $6 $7 $8 $9
+  StrCpy $9 "$DataDir.preexisting-$5$4$3-$7$8$9"
+  Rename "$DataDir" "$9"
+  ${If} ${FileExists} "$DataDir\*.*"
+    MessageBox MB_ICONSTOP "$DataDir already exists and was not made by ${PRODUCT} setup. Move it away, then run setup again." /SD IDOK
+    Abort
+  ${EndIf}
+  DetailPrint "$DataDir was not made by ${PRODUCT} setup: moved it to $9."
+  MessageBox MB_ICONINFORMATION "$DataDir was not made by ${PRODUCT} setup, so it was moved to:$\r$\n$9$\r$\n$\r$\nSetup creates a new, empty data folder." /SD IDOK
+FunctionEnd
+
 Section "Install"
   SetShellVarContext all
   StrCpy $DataDir "$APPDATA\${PRODUCT}" ; ProgramData (all users)
@@ -123,38 +136,36 @@ Section "Install"
   ; It holds cwm-vault\secrets.json, which decrypts every saved password. Only
   ; SYSTEM, Administrators and the service account may use it, and it must be
   ; owned by Administrators or SYSTEM: an owner can always change its access.
-  ; An existing folder is kept only when setup made it (our record, a
-  ; registered service or an install entry) AND Administrators or SYSTEM own
-  ; it; otherwise it may hold settings or keys planted by another local user,
-  ; so it is moved aside and a new one is made.
+  ;  - Installed now (a registered service or our install entry, i.e. an
+  ;    upgrade or a repair): the folder is ours, locked since that install,
+  ;    so it is kept as it is. Its secrets.json must never change.
+  ;  - Not installed, but our record says setup made it (uninstall keeps it):
+  ;    kept if Administrators or SYSTEM still own it; if the owner cannot be
+  ;    read, setup stops and changes nothing.
+  ;  - Otherwise it may hold settings or keys planted by another local user,
+  ;    so it is moved aside (and the user is told where) and a new one is made.
   ReadRegStr $0 HKLM "${DATA_KEY}" "DataFolder"
   ReadRegStr $1 HKLM "${UNINSTALL_KEY}" "InstallLocation"
   ${If} ${FileExists} "$DataDir\*.*"
-    StrCpy $2 0
-    ${If} $0 == $DataDir
-    ${OrIf} $Registered == 1
+    ${If} $Registered == 1
     ${OrIf} $1 != ""
+      DetailPrint "Keeping the data folder of the installed ${PRODUCT}: $DataDir"
+    ${ElseIf} $0 == $DataDir
       nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "[Console]::Write((Get-Acl -LiteralPath '$DataDir').GetOwner([System.Security.Principal.SecurityIdentifier]).Value)"`
       Pop $3
       Pop $4
-      ${If} $3 == 0
-      ${AndIf} $4 == "S-1-5-32-544"
-        StrCpy $2 1
-      ${ElseIf} $3 == 0
-      ${AndIf} $4 == "S-1-5-18"
-        StrCpy $2 1
-      ${EndIf}
-    ${EndIf}
-    ${If} $2 == 0
-      ${GetTime} "" "L" $3 $4 $5 $6 $7 $8 $9
-      StrCpy $9 "$DataDir.preexisting-$5$4$3-$7$8$9"
-      Rename "$DataDir" "$9"
-      ${If} ${FileExists} "$DataDir\*.*"
-        MessageBox MB_ICONSTOP "$DataDir already exists and was not made by ${PRODUCT} setup. Move it away, then run setup again." /SD IDOK
+      DetailPrint "Owner of $DataDir: $4 (exit code $3)"
+      ${If} $3 != 0
+      ${OrIf} $4 == ""
+        MessageBox MB_ICONSTOP "Setup could not check who owns $DataDir (exit code $3). Nothing was changed. Run setup again as an administrator." /SD IDOK
         Abort
       ${EndIf}
-      DetailPrint "$DataDir was not made by ${PRODUCT} setup: moved it to $9."
-      MessageBox MB_ICONINFORMATION "$DataDir was not made by ${PRODUCT} setup, so it was moved to:$\r$\n$9$\r$\n$\r$\nSetup creates a new, empty data folder." /SD IDOK
+      ${If} $4 != "S-1-5-32-544"
+      ${AndIf} $4 != "S-1-5-18"
+        Call MoveDataFolderAside
+      ${EndIf}
+    ${Else}
+      Call MoveDataFolderAside
     ${EndIf}
   ${EndIf}
 
