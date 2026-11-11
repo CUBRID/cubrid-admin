@@ -5,7 +5,7 @@ import { config as loadEnv } from 'dotenv';
 import { parseCliArgs } from './parse-cli-args';
 import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from './cms-concurrency';
 import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from './topsql-limits';
-import { serverHome } from './server-home';
+import { refuseInstalledCopyWithoutHome, serverHome } from './server-home';
 import { isStandaloneExecutable } from '../util/standalone-executable';
 
 const CWM_CONF_FILENAME = 'cwm.conf';
@@ -245,6 +245,7 @@ export function loadRuntimeEnv(): void {
 }
 
 function loadRuntimeEnvFiles(): void {
+  refuseInstalledCopyWithoutHome();
   const args = parseCliArgs(process.argv.slice(2));
   const rawMode = (
     args.ENV ??

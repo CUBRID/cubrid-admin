@@ -21,7 +21,22 @@ systemd_running() {
   [ -d /run/systemd/system ]
 }
 
+# A folder made before this install by someone else could hold planted
+# settings or cwm-vault/secrets.json: use only folders owned by root or $NAME.
+check_owner() {
+  [ -e "$1" ] || return 0
+  owner=$(stat -c %U "$1")
+  if [ "$owner" != root ] && [ "$owner" != "$NAME" ]; then
+    echo "CUBRID Admin Server: $1 already exists and belongs to $owner, not root or $NAME." >&2
+    echo "Move it away (or check its contents and chown it to $NAME), then install again." >&2
+    exit 1
+  fi
+}
+
 configure() {
+  check_owner "$CONF_DIR"
+  check_owner "$DATA_DIR"
+  check_owner "$LOG_DIR"
   if ! getent group "$NAME" >/dev/null; then
     groupadd -r "$NAME"
   fi

@@ -19,6 +19,9 @@ WorkingDirectory=/var/lib/cubrid-admin
 ExecStart=/opt/cubrid-admin/cubrid-admin
 Restart=on-failure
 RestartSec=5
+# The same limit for systemd 219 (RHEL/CentOS 7), which reads it only here.
+StartLimitInterval=600
+StartLimitBurst=5
 # Lets a PORT below 1024 (e.g. 443) work without running as root.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 NoNewPrivileges=yes
