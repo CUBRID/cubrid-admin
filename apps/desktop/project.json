@@ -33,10 +33,18 @@
         "cwd": "{workspaceRoot}"
       }
     },
+    "prepare-app": {
+      "executor": "nx:run-commands",
+      "dependsOn": [{ "target": "build", "projects": "self" }],
+      "options": {
+        "command": "node scripts/stage-desktop-app.mjs",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "package": {
       "executor": "nx:run-commands",
       "dependsOn": [
-        { "target": "build", "projects": "self" },
+        { "target": "prepare-app", "projects": "self" },
         { "target": "build", "projects": "api-server" },
         { "target": "prepare-api-runtime", "projects": "self" },
         { "target": "build-electron", "projects": "web-manager" }

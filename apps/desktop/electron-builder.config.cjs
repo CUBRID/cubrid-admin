@@ -17,6 +17,9 @@ module.exports = {
   // Windows ProductVersion: major.minor.patch.<buildNumber>.
   buildNumber: commitNum,
   directories: {
+    // Only the desktop app's own runtime files and dependencies go into
+    // resources/app (scripts/stage-desktop-app.mjs, run by desktop:package).
+    app: 'dist/apps/desktop-app',
     output: 'dist/portable',
     // CUBRID icons: icon.png (512), icon.icns (mac), icon.ico (win) — see build-resources/README
     buildResources: 'apps/desktop/build-resources',
