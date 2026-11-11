@@ -61,6 +61,7 @@ jobs:
       # rpmbuild (desktop and server rpm), dpkg-deb (server deb) and GNU ar
       # (desktop deb); without them those packages are skipped.
       - name: Install packaging tools
+        timeout-minutes: 15
         run: brew install rpm dpkg binutils
 
       # The server executables embed Node.js scripts/build-server-sea.mjs
@@ -73,15 +74,23 @@ jobs:
           [ -n "$sea" ] && [ "$runner" = "$sea" ]
 
       - name: Build server packages
+        timeout-minutes: 25
         run: npm run package:server
 
       # After the server: the desktop app needs the web-manager build made for Electron.
-      # One electron-builder run makes all 12: installer and portable for each OS
-      # and arch (no signing, no Wine needed).
-      - name: Build desktop packages
-        run: npx nx run desktop:package -- --mac --win --linux --x64 --arm64
+      # Installer and portable for each OS and arch (no signing, no Wine needed),
+      # in two runs so a stuck Linux packaging step (fpm/rpmbuild) fails on its own
+      # instead of taking the whole job's time.
+      - name: Build desktop packages (macOS, Windows)
+        timeout-minutes: 25
+        run: npx nx run desktop:package -- --mac --win --x64 --arm64
+
+      - name: Build desktop packages (Linux)
+        timeout-minutes: 20
+        run: npx nx run desktop:package -- --linux --x64 --arm64
 
       - name: Collect release files
+        timeout-minutes: 10
         run: npm run package:archive
 
       - name: Check release files
