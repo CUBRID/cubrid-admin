@@ -16,11 +16,17 @@ const SECRETS_FILE = 'secrets.json';
 export function loadOrCreateDesktopSecrets(dataDir: string): DesktopSecrets {
   const filePath = path.join(dataDir, SECRETS_FILE);
   if (fs.existsSync(filePath)) {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as DesktopSecrets;
-    if (!parsed.seed || !parsed.salt) {
+    // Never replaced: it holds the keys of the workspace's saved hosts and passwords.
+    let parsed: Partial<DesktopSecrets>;
+    try {
+      parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (error) {
+      throw new Error(`Cannot read ${filePath}: ${(error as Error).message}`);
+    }
+    if (!parsed?.seed || !parsed?.salt) {
       throw new Error(`Invalid secrets file: ${filePath}`);
     }
-    return parsed;
+    return parsed as DesktopSecrets;
   }
 
   const created: DesktopSecrets = {

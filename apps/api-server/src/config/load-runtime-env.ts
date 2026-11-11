@@ -67,14 +67,25 @@ function getVaultDir(baseDir: string): string {
   return path.join(baseDir, CWM_VAULT_DIRNAME);
 }
 
+const SECRETS_KEPT =
+  'It holds the keys of the saved hosts and passwords, so it is never replaced. ' +
+  'Restore it from a backup or fix its permissions, then start again.';
+
+/** The saved SEED/SALT, or null when there is no secrets.json yet. Never null for a file that exists. */
 function readSecrets(secretsPath: string): CwmSecrets | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8')) as CwmSecrets;
-    if (parsed.seed && parsed.salt) return parsed;
-    return null;
-  } catch {
+  if (!fs.existsSync(secretsPath)) {
     return null;
   }
+  let parsed: Partial<CwmSecrets>;
+  try {
+    parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+  } catch (err) {
+    throw new Error(`Cannot read ${secretsPath}: ${(err as Error).message}. ${SECRETS_KEPT}`);
+  }
+  if (!parsed?.seed || !parsed?.salt) {
+    throw new Error(`${secretsPath} has no seed or salt. ${SECRETS_KEPT}`);
+  }
+  return parsed as CwmSecrets;
 }
 
 function writeSecrets(vaultDir: string, secrets: CwmSecrets): void {
@@ -82,7 +93,8 @@ function writeSecrets(vaultDir: string, secrets: CwmSecrets): void {
   fs.writeFileSync(
     path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME),
     JSON.stringify(secrets, null, 2),
-    { encoding: 'utf8', mode: 0o600 }
+    // wx: only ever creates the file, never replaces one.
+    { encoding: 'utf8', mode: 0o600, flag: 'wx' }
   );
 }
 
@@ -104,17 +116,19 @@ function loadOrCreateVaultSecrets(baseDir: string): void {
   let secrets = readSecrets(secretsPath);
 
   if (!secrets) {
-    // Only generate new secrets for values not already set.
+    // Only when there is no secrets.json at all. Keys that cannot be saved
+    // would be lost on the next start, together with everything encrypted with
+    // them, so a failed write stops the start too.
     secrets = {
       seed: crypto.randomBytes(32).toString('hex'),
       salt: crypto.randomBytes(32).toString('hex'),
     };
     try {
       writeSecrets(vaultDir, secrets);
-      console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
     } catch (err) {
-      console.warn(`[cwm-vault] could not write secrets:`, (err as Error).message);
+      throw new Error(`Cannot create ${secretsPath}: ${(err as Error).message}.`);
     }
+    console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
   }
 
   if (process.env.SEED === undefined) process.env.SEED = secrets.seed;
