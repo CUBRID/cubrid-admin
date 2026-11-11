@@ -45,6 +45,7 @@ const PRODUCT = 'CUBRID-Admin';
 const SERVER = [
   { exe: 'cubrid-admin-linux', platform: 'linux-x64', kind: 'tar.gz' },
   { exe: 'cubrid-admin-linux-arm64', platform: 'linux-arm64', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-linux-el7', platform: 'linux-x64-el7', kind: 'tar.gz' },
   { exe: 'cubrid-admin-macos', platform: 'macos-x64', kind: 'tar.gz' },
   { exe: 'cubrid-admin.exe', platform: 'windows-x64', kind: 'zip' },
 ];
@@ -52,7 +53,9 @@ const SERVER = [
 // electron-builder's unpacked app folder for each OS and arch, and the
 // release files built from it. Linux packages carry the Linux arch name
 // (x86_64, aarch64, amd64) in electron-builder's file name; the release name uses x64 and arm64.
-const SERVER_INSTALLER_FILES = ['linux-x64.rpm', 'linux-x64.deb', 'linux-arm64.rpm', 'linux-arm64.deb', 'windows-x64-setup.exe'];
+const SERVER_INSTALLER_FILES = [
+  'linux-x64.rpm', 'linux-x64.deb', 'linux-arm64.rpm', 'linux-arm64.deb', 'linux-x64-el7.rpm', 'windows-x64-setup.exe',
+];
 // The Linux tar.gz also carries install.sh / uninstall.sh: the same layout and
 // service as the rpm and deb, for a distribution that takes neither.
 const LINUX_INSTALL_FILES = ['install.sh', 'uninstall.sh', 'cubrid-admin-setup.sh', 'cubrid-admin.service'];

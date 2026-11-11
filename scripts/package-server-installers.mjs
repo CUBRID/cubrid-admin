@@ -34,9 +34,12 @@ const PACKAGING = path.join(ROOT, 'packaging', 'server');
 const CONF_SAMPLE = path.join(ROOT, 'cwm.conf.sample');
 const CONF_REFERENCE = path.join(ROOT, 'cwm.conf.reference.md');
 
+// One entry per Linux executable in dist/executables; a missing one is skipped.
+// el7: an executable for glibc 2.17 (RHEL/CentOS 7), packed as an rpm only.
 const LINUX = [
   { exe: 'cubrid-admin-linux', rpmArch: 'x86_64', debArch: 'amd64', platform: 'linux-x64' },
   { exe: 'cubrid-admin-linux-arm64', rpmArch: 'aarch64', debArch: 'arm64', platform: 'linux-arm64' },
+  { exe: 'cubrid-admin-linux-el7', rpmArch: 'x86_64', platform: 'linux-x64-el7' },
 ];
 const LINUX_FILES = path.join(PACKAGING, 'linux');
 
@@ -58,7 +61,7 @@ function hasCommand(command) {
 }
 
 function buildRpm({ exe, rpmArch: arch, platform }, version, release) {
-  const top = path.join(WORK, `rpm-${arch}`);
+  const top = path.join(WORK, `rpm-${platform}`);
   const sources = path.join(top, 'SOURCES');
   fs.rmSync(top, { recursive: true, force: true });
   fs.mkdirSync(sources, { recursive: true });
@@ -217,7 +220,7 @@ for (const target of LINUX) {
     continue;
   }
   if (canRpm) written.push(buildRpm(target, version, release));
-  if (canDeb) written.push(buildDeb(target, version, release));
+  if (canDeb && target.debArch) written.push(buildDeb(target, version, release));
 }
 
 const setup = await buildWindowsSetup(version);
