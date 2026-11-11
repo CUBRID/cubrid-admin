@@ -216,8 +216,13 @@ function loadRuntimeEnvFiles(): void {
   const isInstalled = Boolean(process.env.CWM_HOME?.trim());
 
   // 1. .env first — so legacy SEED/SALT are in process.env before vault runs.
+  //    Not for the installed server (CWM_HOME set by its service): its settings
+  //    come only from the service definition and cwm.conf, so a file another
+  //    local user drops into the data folder is never read.
   const candidates: string[] = [];
-  if (isProduction) {
+  if (isInstalled) {
+    // no .env
+  } else if (isProduction) {
     candidates.push('/etc/cubrid-webmanager.env');
     candidates.push(path.join(baseDir, 'apps/api-server/.env'));
     candidates.push(path.join(baseDir, '.env'));

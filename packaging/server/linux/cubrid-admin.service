@@ -2,6 +2,10 @@
 Description=CUBRID Admin Server
 After=network-online.target
 Wants=network-online.target
+# Restart at most 5 times in 10 minutes, then stay failed (a port in use or a
+# broken cwm.conf does not loop forever). systemctl reset-failed clears it.
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 Type=simple
