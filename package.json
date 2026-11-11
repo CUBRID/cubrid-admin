@@ -124,6 +124,7 @@
     "e2e:report:save": "node tools/save-report.js",
     "e2e:check": "npx playwright test --config=e2e/web/playwright.config.js --list && npx playwright test --config=e2e/electron/playwright.config.js --list && npx playwright test --config=e2e/electron/packaged.playwright.config.js --list",
     "build:web-manager": "nx build web-manager",
+    "check:offline": "node apps/web-manager/scripts/check-offline-assets.mjs dist/apps/web-manager",
     "build:api-server": "nx build api-server",
     "build:server": "npm run build:web-manager && npm run build:api-server && node scripts/copy-web-to-api.mjs",
     "build": "nx run-many -t build --all",
