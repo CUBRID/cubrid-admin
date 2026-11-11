@@ -22,6 +22,8 @@ export type WaitOptions = {
   /** Called after each softLimitMs of waiting; "stop" ends the wait. */
   onSoftLimit?: (elapsedMs: number) => Promise<ApiStartDecision>;
   softLimitMs?: number;
+  /** Checked on every round: true ends the wait at once (Stop pressed any time). */
+  shouldStop?: () => boolean;
 };
 
 /**
@@ -35,7 +37,7 @@ export async function waitForApiReady(
   socketPath: string,
   exited: Promise<unknown>,
   signal: Promise<ApiSignal> = new Promise(() => undefined),
-  { onProgress, onSoftLimit, softLimitMs = SOFT_LIMIT_MS }: WaitOptions = {}
+  { onProgress, onSoftLimit, softLimitMs = SOFT_LIMIT_MS, shouldStop }: WaitOptions = {}
 ): Promise<void> {
   const started = Date.now();
   const elapsed = () => Date.now() - started;
@@ -63,7 +65,7 @@ export async function waitForApiReady(
       throw new Error(`API server exited before it was ready on ${socketPath} (after ${seconds()})`);
     }
     if (await tryConnect(socketPath)) return;
-    if (decision === 'stop') throw new ApiStartStoppedError();
+    if (decision === 'stop' || shouldStop?.()) throw new ApiStartStoppedError();
     if (decision === 'wait') decision = null;
 
     if (onProgress && elapsed() >= nextProgress) {

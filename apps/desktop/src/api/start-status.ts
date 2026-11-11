@@ -16,6 +16,9 @@ type Listener = (status: ApiStartStatus) => void;
 let status: ApiStartStatus = { state: 'idle' };
 let listener: Listener = () => undefined;
 let pendingDecision: ((decision: ApiStartDecision) => void) | null = null;
+// Stop counts whenever it is pressed, also after an earlier "Keep waiting"
+// (the notice stays up while the start goes on).
+let stopRequested = false;
 
 /** Main sets how a change reaches the page (main.ts sends it to the window). */
 export function onApiStartStatus(next: Listener): void {
@@ -46,7 +49,18 @@ export function askKeepWaiting(elapsedMs: number): Promise<ApiStartDecision> {
 
 /** The page's answer to the slow notice. */
 export function decideApiStart(decision: ApiStartDecision): void {
+  if (decision === 'stop') stopRequested = true;
   const resolve = pendingDecision;
   pendingDecision = null;
   resolve?.(decision);
+}
+
+/** Whether Stop was pressed during the current start. */
+export function isApiStartStopRequested(): boolean {
+  return stopRequested;
+}
+
+/** A new start: an earlier Stop does not apply to it. */
+export function resetApiStartStop(): void {
+  stopRequested = false;
 }

@@ -1,7 +1,29 @@
-import { askKeepWaiting, decideApiStart, getApiStartStatus, onApiStartStatus, setApiStartStatus } from './start-status';
+import {
+  askKeepWaiting,
+  decideApiStart,
+  getApiStartStatus,
+  isApiStartStopRequested,
+  onApiStartStatus,
+  resetApiStartStop,
+  setApiStartStatus,
+} from './start-status';
 
 describe('api start status', () => {
-  afterEach(() => setApiStartStatus({ state: 'idle' }));
+  afterEach(() => {
+    setApiStartStatus({ state: 'idle' });
+    resetApiStartStop();
+  });
+
+  it('takes Stop after the question was already answered with Keep waiting', async () => {
+    const first = askKeepWaiting(120_000);
+    decideApiStart('wait');
+    await expect(first).resolves.toBe('wait');
+    expect(isApiStartStopRequested()).toBe(false);
+    decideApiStart('stop');
+    expect(isApiStartStopRequested()).toBe(true);
+    resetApiStartStop();
+    expect(isApiStartStopRequested()).toBe(false);
+  });
 
   it('passes every change to the page', () => {
     const seen: string[] = [];

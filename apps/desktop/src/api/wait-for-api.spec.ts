@@ -71,6 +71,22 @@ describe('waitForApiReady', () => {
     expect(asked[0]).toBeGreaterThanOrEqual(300);
   });
 
+  it('Stop after an earlier "Keep waiting" ends the wait within a second', async () => {
+    let stop = false;
+    setTimeout(() => {
+      stop = true;
+    }, 700);
+    const started = Date.now();
+    await expect(
+      waitForApiReady(socketPath, never(), never(), {
+        softLimitMs: 300,
+        onSoftLimit: async () => 'wait',
+        shouldStop: () => stop,
+      })
+    ).rejects.toBeInstanceOf(ApiStartStoppedError);
+    expect(Date.now() - started).toBeLessThan(700 + 1_000);
+  });
+
   it('after the soft limit, "stop" ends the wait', async () => {
     await expect(
       waitForApiReady(socketPath, never(), never(), { softLimitMs: 300, onSoftLimit: async () => 'stop' })

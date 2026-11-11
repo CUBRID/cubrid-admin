@@ -5,7 +5,13 @@ import { setWorkspacePathsInUse } from '../workspace/paths';
 import { WorkspaceError } from '../workspace/workspace-check';
 import { ensureWorkspaceDirectories, type WorkspacePaths } from '../workspace/workspace-paths';
 import { ApiProcessHandle, startApiServer, stopApiServer } from './api-process';
-import { askKeepWaiting, getApiStartStatus, setApiStartStatus } from './start-status';
+import {
+  askKeepWaiting,
+  getApiStartStatus,
+  isApiStartStopRequested,
+  resetApiStartStop,
+  setApiStartStatus,
+} from './start-status';
 import { ApiStartStoppedError, waitForApiReady } from './wait-for-api';
 
 let apiProcess: ApiProcessHandle | null = null;
@@ -49,12 +55,14 @@ export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiPr
     handle = startApiServer(paths, loadOrCreateDesktopSecrets(paths.dataDir));
     startingProcess = handle;
     setAppProtocolApiSocket(paths.socketPath);
+    resetApiStartStop();
     setApiStartStatus({ state: 'starting', elapsedMs: 0 });
     await waitForApiReady(paths.socketPath, handle.exited, handle.signal, {
       // Keeps the slow notice up while it counts.
       onProgress: (elapsedMs) =>
         setApiStartStatus({ state: getApiStartStatus().state === 'slow' ? 'slow' : 'starting', elapsedMs }),
       onSoftLimit: askKeepWaiting,
+      shouldStop: isApiStartStopRequested,
     });
     if (startingProcess !== handle) {
       throw new Error('The server was stopped while it started.');
