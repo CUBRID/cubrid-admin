@@ -90,6 +90,39 @@ function readSecrets(secretsPath: string): CwmSecrets | null {
 }
 
 /**
+ * For a file system without hard links: copies the synced temporary file to
+ * secrets.json, never replacing one. A copy that fails part-way is removed again
+ * (only when it is our own partial copy), and one another start made first is read.
+ */
+function copySecretsIntoPlace(temp: string, target: string, secrets: CwmSecrets): CwmSecrets {
+  const content = fs.readFileSync(temp);
+  try {
+    fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+    const fd = fs.openSync(target, 'r+');
+    try {
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return secrets;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      return readSecrets(target) as CwmSecrets;
+    }
+    let left: Buffer | null = null;
+    try {
+      left = fs.readFileSync(target);
+    } catch {
+      // nothing was created
+    }
+    if (left && content.subarray(0, left.length).equals(left)) {
+      fs.rmSync(target, { force: true });
+    }
+    throw err;
+  }
+}
+
+/**
  * Creates secrets.json with `secrets`, all or nothing: the content is written
  * and synced to a temporary file in the same folder, which is then linked into
  * place only if no secrets.json exists. A failed write leaves no secrets.json;
@@ -118,8 +151,7 @@ function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
       if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
         throw err;
       }
-      // A file system without hard links: a copy that still never replaces a file.
-      fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+      return copySecretsIntoPlace(temp, target, secrets);
     }
     return secrets;
   } finally {
