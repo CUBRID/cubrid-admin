@@ -64,7 +64,7 @@ function tempDir() {
 function findResources(dir) {
   for (const candidate of [
     'CUBRID Admin.app/Contents/Resources',
-    'opt/CUBRID Admin/resources',
+    'opt/cubrid-admin-desktop/resources',
     'resources',
   ]) {
     const full = path.join(dir, candidate);
