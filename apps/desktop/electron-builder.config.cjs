@@ -30,7 +30,9 @@ module.exports = {
   appId: 'com.cubrid.webmanager',
   productName: 'CUBRID Admin',
   electronVersion: '35.7.5',
-  asar: false,
+  // main, preload, update-check and tslib are packed in resources/app.asar;
+  // web-manager and api-server stay outside it (extraResources).
+  asar: true,
   buildVersion: version,
   // Windows ProductVersion: major.minor.patch.<buildNumber>.
   buildNumber: commitNum,
@@ -56,12 +58,8 @@ module.exports = {
   },
   extraResources: [
     { from: 'dist/apps/web-manager', to: 'web-manager' },
-    {
-      from: 'dist/apps/api-server',
-      to: 'api-server',
-      filter: ['**/*', '!node_modules/**', '!**/*.map'],
-    },
-    { from: 'dist/apps/api-server/node_modules', to: 'api-server/node_modules' },
+    // The api-server bundles its dependencies into main.js: no node_modules.
+    { from: 'dist/apps/api-server', to: 'api-server', filter: ['**/*', '!node_modules/**', '!**/*.map'] },
   ],
   // No Apple Developer signing / notarization (see README Desktop).
   forceCodeSigning: false,

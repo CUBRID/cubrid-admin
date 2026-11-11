@@ -25,6 +25,7 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import asar from '@electron/asar';
 import productVersionModule from './product-version.cjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,15 +69,26 @@ function pack(name, kind) {
 // The file name must carry the version the app itself shows.
 function assertDesktopApp(dir, version) {
   const candidates = [
-    path.join(dir, 'CUBRID Admin.app', 'Contents', 'Resources', 'app'),
-    path.join(dir, 'resources', 'app'),
+    path.join(dir, 'CUBRID Admin.app', 'Contents', 'Resources', 'app.asar'),
+    path.join(dir, 'resources', 'app.asar'),
   ];
-  const appDir = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!appDir || !fs.existsSync(path.join(appDir, 'node_modules', 'tslib', 'package.json'))) {
+  const archive = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!archive) {
+    throw new Error(`No resources/app.asar in ${dir}: package again from this commit.`);
+  }
+  const has = (file) => {
+    try {
+      asar.statFile(archive, file);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (!has(path.join('node_modules', 'tslib', 'package.json'))) {
     throw new Error(`Incomplete desktop app in ${dir}: node_modules/tslib is missing (run npm ci, then package again).`);
   }
-  const versionFile = path.join(appDir, 'dist', 'apps', 'desktop', 'product-version.json');
-  const built = fs.existsSync(versionFile) ? JSON.parse(fs.readFileSync(versionFile, 'utf8')).version : 'none';
+  const versionFile = path.join('dist', 'apps', 'desktop', 'product-version.json');
+  const built = has(versionFile) ? JSON.parse(asar.extractFile(archive, versionFile).toString('utf8')).version : 'none';
   if (built !== version) {
     throw new Error(`The desktop app in ${dir} was built as ${built}, but this checkout is ${version}. Package again from this commit.`);
   }

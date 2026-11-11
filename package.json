@@ -203,8 +203,6 @@
     ],
     "assets": [
       "assets/**/*",
-      "node_modules/axios/**/*",
-      "node_modules/@nestjs/axios/**/*",
       "public/**/*"
     ],
     "targets": [
