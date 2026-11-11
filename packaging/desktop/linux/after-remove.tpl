@@ -1,12 +1,12 @@
 #!/bin/bash
 # electron-builder 26.18.1's templates/linux/after-remove.tpl with the install folder fixed to
-# /opt/cubrid-admin (see apps/desktop/electron-builder.config.cjs beforePack).
+# /opt/cubrid-admin-desktop (see apps/desktop/electron-builder.config.cjs beforePack).
 
 # Delete the link to the binary
 # update-alternatives --remove <name> <path>: 'path' must be the registered alternative binary,
 # not the generic symlink — see https://man7.org/linux/man-pages/man1/update-alternatives.1.html
 if type update-alternatives >/dev/null 2>&1; then
-    update-alternatives --remove '${executable}' '/opt/cubrid-admin/${executable}' >/dev/null 2>&1 || true
+    update-alternatives --remove '${executable}' '/opt/cubrid-admin-desktop/${executable}' >/dev/null 2>&1 || true
 else
     rm -f '/usr/bin/${executable}'
 fi

@@ -17,7 +17,7 @@ const targets = (...names) => names.map((target) => ({ target, arch: BOTH_ARCHS 
 // packages do (0.1.0.0001-1), not electron-builder's 0.1.0-0001; fpm takes the
 // last --version / --iteration it is given.
 const linuxPackageVersion = ['--version', version, '--iteration', '1'];
-// Install and remove scripts for /opt/cubrid-admin (see beforePack below).
+// Install and remove scripts for /opt/cubrid-admin-desktop (see beforePack below).
 const linuxScripts = {
   afterInstall: path.join(__dirname, '..', '..', 'packaging', 'desktop', 'linux', 'after-install.tpl'),
   afterRemove: path.join(__dirname, '..', '..', 'packaging', 'desktop', 'linux', 'after-remove.tpl'),
@@ -150,8 +150,9 @@ module.exports = {
       'libXfixes.so.3', 'libXrandr.so.2', 'libgbm.so.1', 'libexpat.so.1', 'libxcb.so.1', 'libxkbcommon.so.0',
       'libudev.so.1', 'libasound.so.2', 'libatspi.so.0',
     ].map((soname) => `${soname}()(64bit)`),
-    // Own the folders under /opt/cubrid-admin, so rpm -e leaves none behind;
-    // after an upgrade from a test build, drop the empty "/opt/CUBRID Admin" tree.
+    // Own the folders under /opt/cubrid-admin-desktop, so rpm -e leaves none
+    // behind; after an upgrade from a test build, drop the empty folders it
+    // left in "/opt/CUBRID Admin" or /opt/cubrid-admin.
     fpm: [
       ...linuxPackageVersion,
       '--rpm-auto-add-directories',
@@ -180,15 +181,16 @@ module.exports = {
   // indicates they must be present"), so a downloaded copy is reported as
   // damaged. Sign the whole bundle ad-hoc again. afterSign does not run when
   // signing is skipped, so this is afterPack.
-  // Linux packages install to /opt/cubrid-admin, not /opt/CUBRID Admin: with a
-  // space in the path Chromium's setuid sandbox helper does not start
+  // Linux packages install to /opt/cubrid-admin-desktop, not /opt/CUBRID Admin:
+  // with a space in the path Chromium's setuid sandbox helper does not start
   // ("execvp: /opt/CUBRID") on systems without unprivileged user namespaces.
+  // Not /opt/cubrid-admin either: the server packages install there.
   // electron-builder names that folder (and the /usr/bin link, chrome-sandbox
   // and AppArmor paths) after the product name, so only the Linux packager's
   // copy changes; the name users see stays "CUBRID Admin".
   beforePack: (context) => {
     if (context.electronPlatformName === 'linux') {
-      context.packager.appInfo.sanitizedProductName = 'cubrid-admin';
+      context.packager.appInfo.sanitizedProductName = 'cubrid-admin-desktop';
     }
   },
   afterPack: (context) => {

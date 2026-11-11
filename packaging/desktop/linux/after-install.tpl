@@ -1,23 +1,23 @@
 #!/bin/bash
 # electron-builder 26.18.1's templates/linux/after-install.tpl with the install folder fixed to
-# /opt/cubrid-admin (see apps/desktop/electron-builder.config.cjs beforePack).
+# /opt/cubrid-admin-desktop (see apps/desktop/electron-builder.config.cjs beforePack).
 
 if type update-alternatives >/dev/null 2>&1; then
     # Remove previous link if it doesn't use update-alternatives
     if [ -L '/usr/bin/${executable}' -a -e '/usr/bin/${executable}' -a "`readlink '/usr/bin/${executable}'`" != '/etc/alternatives/${executable}' ]; then
         rm -f '/usr/bin/${executable}'
     fi
-    update-alternatives --install '/usr/bin/${executable}' '${executable}' '/opt/cubrid-admin/${executable}' 100 || ln -sf '/opt/cubrid-admin/${executable}' '/usr/bin/${executable}'
+    update-alternatives --install '/usr/bin/${executable}' '${executable}' '/opt/cubrid-admin-desktop/${executable}' 100 || ln -sf '/opt/cubrid-admin-desktop/${executable}' '/usr/bin/${executable}'
 else
-    ln -sf '/opt/cubrid-admin/${executable}' '/usr/bin/${executable}'
+    ln -sf '/opt/cubrid-admin-desktop/${executable}' '/usr/bin/${executable}'
 fi
 
 # Check if user namespaces are supported by the kernel and working with a quick test:
 if ! { [[ -L /proc/self/ns/user ]] && unshare --user true 2>/dev/null; }; then
     # Use SUID chrome-sandbox only on systems without user namespaces:
-    chmod 4755 '/opt/cubrid-admin/chrome-sandbox' || true
+    chmod 4755 '/opt/cubrid-admin-desktop/chrome-sandbox' || true
 else
-    chmod 0755 '/opt/cubrid-admin/chrome-sandbox' || true
+    chmod 0755 '/opt/cubrid-admin-desktop/chrome-sandbox' || true
 fi
 
 if hash update-mime-database 2>/dev/null; then
@@ -39,7 +39,7 @@ fi
 # Unfortunately, at the moment AppArmor doesn't have a good story for backwards compatibility.
 # https://askubuntu.com/questions/1517272/writing-a-backwards-compatible-apparmor-profile
 if apparmor_status --enabled > /dev/null 2>&1; then
-  APPARMOR_PROFILE_SOURCE='/opt/cubrid-admin/resources/apparmor-profile'
+  APPARMOR_PROFILE_SOURCE='/opt/cubrid-admin-desktop/resources/apparmor-profile'
   APPARMOR_PROFILE_TARGET='/etc/apparmor.d/${executable}'
   if apparmor_parser --skip-kernel-load --debug "$APPARMOR_PROFILE_SOURCE" > /dev/null 2>&1; then
     cp -f "$APPARMOR_PROFILE_SOURCE" "$APPARMOR_PROFILE_TARGET"
