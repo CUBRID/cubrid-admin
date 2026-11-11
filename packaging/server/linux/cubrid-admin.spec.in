@@ -1,0 +1,72 @@
+# Built by scripts/package-server-installers.mjs (rpmbuild --target <arch>-linux).
+# The executable is a pkg binary with its files appended: do not strip it or
+# add debug info.
+%global debug_package %{nil}
+%global __os_install_post %{nil}
+%global _build_id_links none
+%define _binary_payload w6.xzdio
+
+Name:           cubrid-admin
+Version:        @VERSION@
+Release:        @RELEASE@
+Summary:        CUBRID Admin Server
+License:        BSD-3-Clause
+URL:            https://github.com/CUBRID/cubrid-admin
+AutoReqProv:    no
+Requires(pre):  shadow-utils
+Requires:       systemd
+
+%description
+CUBRID Admin Server, the web-based administration tool for CUBRID,
+run as the cubrid-admin systemd service.
+
+%install
+install -D -m 0755 %{_sourcedir}/cubrid-admin %{buildroot}/opt/cubrid-admin/cubrid-admin
+install -D -m 0644 %{_sourcedir}/cwm.conf.sample %{buildroot}/opt/cubrid-admin/cwm.conf.sample
+install -D -m 0644 %{_sourcedir}/cwm.conf.reference.md %{buildroot}/opt/cubrid-admin/cwm.conf.reference.md
+install -D -m 0644 %{_sourcedir}/cubrid-admin.service %{buildroot}/usr/lib/systemd/system/cubrid-admin.service
+install -d -m 0750 %{buildroot}/etc/cubrid-admin %{buildroot}/var/lib/cubrid-admin %{buildroot}/var/log/cubrid-admin
+
+%pre
+getent group cubrid-admin >/dev/null || groupadd -r cubrid-admin
+getent passwd cubrid-admin >/dev/null || \
+  useradd -r -g cubrid-admin -d /var/lib/cubrid-admin -s /sbin/nologin -c "CUBRID Admin Server" cubrid-admin
+exit 0
+
+%post
+# cwm.conf is not a package file: an upgrade or removal never changes or deletes it.
+if [ ! -e /etc/cubrid-admin/cwm.conf ]; then
+  install -m 0640 -o root -g cubrid-admin /opt/cubrid-admin/cwm.conf.sample /etc/cubrid-admin/cwm.conf
+fi
+systemctl daemon-reload >/dev/null 2>&1 || :
+if [ "$1" -eq 1 ]; then
+  # Enabled for the next boot, but not started now: PORT (8080 by default) may be in use.
+  systemctl enable cubrid-admin.service >/dev/null 2>&1 || :
+  echo "CUBRID Admin Server: set PORT in /etc/cubrid-admin/cwm.conf, then run: systemctl start cubrid-admin"
+fi
+exit 0
+
+%preun
+if [ "$1" -eq 0 ]; then
+  systemctl disable --now cubrid-admin.service >/dev/null 2>&1 || :
+fi
+exit 0
+
+%postun
+systemctl daemon-reload >/dev/null 2>&1 || :
+if [ "$1" -ge 1 ]; then
+  # Upgrade: restart only if it was running.
+  systemctl try-restart cubrid-admin.service >/dev/null 2>&1 || :
+fi
+exit 0
+
+%files
+%dir /opt/cubrid-admin
+/opt/cubrid-admin/cubrid-admin
+/opt/cubrid-admin/cwm.conf.sample
+/opt/cubrid-admin/cwm.conf.reference.md
+/usr/lib/systemd/system/cubrid-admin.service
+# Kept on removal while they hold files (settings, cwm-vault, storage, ssl, logs).
+%dir %attr(0750,root,cubrid-admin) /etc/cubrid-admin
+%dir %attr(0750,cubrid-admin,cubrid-admin) /var/lib/cubrid-admin
+%dir %attr(0750,cubrid-admin,cubrid-admin) /var/log/cubrid-admin

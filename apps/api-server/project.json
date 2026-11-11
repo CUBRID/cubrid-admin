@@ -105,6 +105,8 @@
             "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-admin.exe",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-x64",
             "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-admin-linux",
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-arm64",
+            "npx pkg dist/apps/api-server/package.json --targets node18-linux-arm64 --output dist/executables/cubrid-admin-linux-arm64",
             "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-macos-x64",
             "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-admin-macos"
           ],
