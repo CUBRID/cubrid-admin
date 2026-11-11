@@ -5,6 +5,7 @@ import { config as loadEnv } from 'dotenv';
 import { parseCliArgs } from './parse-cli-args';
 import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from './cms-concurrency';
 import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from './topsql-limits';
+import { serverHome } from './server-home';
 
 const CWM_CONF_FILENAME = 'cwm.conf';
 const CWM_CONF_SUBDIR = 'conf';
@@ -47,8 +48,7 @@ function injectIntoEnv(conf: CwmConf): void {
   }
 }
 
-function loadCwmConf(confDir: string): void {
-  const confPath = path.join(confDir, CWM_CONF_FILENAME);
+function loadCwmConf(confPath: string): void {
   const conf = readCwmConf(confPath);
 
   // SEED/SALT belong in cwm-vault/secrets.json, not here.
@@ -140,12 +140,11 @@ function resolveCwmConfDir(baseDir: string): string | null {
  * rather than re-deriving (and potentially drifting from) the logic.
  */
 export function resolveCwmConfPath(): string {
-  // The desktop app keeps cwm.conf in its workspace and passes the path.
+  // The desktop app keeps cwm.conf in its workspace and passes the path; the
+  // Linux installer passes /etc/cubrid-admin/cwm.conf.
   const explicit = process.env.CWM_CONF_PATH?.trim();
   if (explicit) return explicit;
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
-  const confDir = resolveCwmConfDir(baseDir);
+  const confDir = resolveCwmConfDir(serverHome(process.cwd()));
   return path.join(confDir, CWM_CONF_FILENAME);
 }
 
@@ -212,7 +211,9 @@ function loadRuntimeEnvFiles(): void {
   ).toLowerCase();
   const isProduction = rawMode === 'production';
   const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+  // CWM_HOME (installers), beside the executable (portable) or the working folder (source).
+  const baseDir = serverHome(process.cwd());
+  const isInstalled = Boolean(process.env.CWM_HOME?.trim());
 
   // 1. .env first — so legacy SEED/SALT are in process.env before vault runs.
   const candidates: string[] = [];
@@ -229,16 +230,13 @@ function loadRuntimeEnvFiles(): void {
     loadEnv({ path: envFilePath, override: false });
   }
 
-  // 2. conf/cwm.conf — user-editable settings (throws on parse error).
-  const confDir = resolveCwmConfDir(baseDir);
-  const confPath = confDir ? path.join(confDir, CWM_CONF_FILENAME) : null;
-  if (confPath && (isPkg || fs.existsSync(confPath))) {
-    loadCwmConf(confDir ?? baseDir);
-  }
+  // 2. cwm.conf — user-editable settings (throws on parse error): CWM_CONF_PATH
+  //    when set, otherwise conf/cwm.conf (or cwm.conf) in the base folder.
+  loadCwmConf(resolveCwmConfPath());
 
   // 3. cwm-vault — SEED/SALT, only for values not already set above.
   const vaultExists = fs.existsSync(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
-  if (isPkg || vaultExists) {
+  if (isPkg || isInstalled || vaultExists) {
     loadOrCreateVaultSecrets(baseDir);
   }
 }

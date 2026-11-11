@@ -4,7 +4,7 @@ import * as path from 'path';
 import { loadRuntimeEnv } from './load-runtime-env';
 
 describe('loadRuntimeEnv', () => {
-  const keys = ['CWM_DESKTOP', 'CWM_TEST_FROM_CONF', 'CWM_TEST_FROM_DOTENV', 'SEED', 'SALT'];
+  const keys = ['CWM_DESKTOP', 'CWM_TEST_FROM_CONF', 'CWM_TEST_FROM_DOTENV', 'SEED', 'SALT', 'CWM_HOME', 'CWM_CONF_PATH'];
   let saved: Record<string, string | undefined>;
   let cwd: string;
   let dir: string;
@@ -38,5 +38,45 @@ describe('loadRuntimeEnv', () => {
     expect(process.env.CWM_TEST_FROM_CONF).toBe('yes');
     expect(process.env.CWM_TEST_FROM_DOTENV).toBe('yes');
     expect(process.env.CWM_DESKTOP).toBeUndefined();
+  });
+
+  describe('installed (CWM_HOME and CWM_CONF_PATH set by the service)', () => {
+    let home: string;
+    let etc: string;
+
+    beforeEach(() => {
+      home = path.join(dir, 'var-lib');
+      etc = path.join(dir, 'etc');
+      fs.mkdirSync(home);
+      fs.mkdirSync(etc);
+      process.env.CWM_HOME = home;
+      process.env.CWM_CONF_PATH = path.join(etc, 'cwm.conf');
+      delete process.env.SEED;
+      delete process.env.SALT;
+    });
+
+    it('reads cwm.conf from CWM_CONF_PATH, not from the working folder', () => {
+      fs.writeFileSync(path.join(etc, 'cwm.conf'), JSON.stringify({ CWM_TEST_FROM_CONF: 'etc' }));
+      fs.writeFileSync(path.join(dir, 'conf', 'cwm.conf'), JSON.stringify({ CWM_TEST_FROM_CONF: 'cwd' }));
+
+      loadRuntimeEnv();
+
+      expect(process.env.CWM_TEST_FROM_CONF).toBe('etc');
+    });
+
+    it('creates cwm-vault/secrets.json in CWM_HOME once, and reuses it on the next start', () => {
+      loadRuntimeEnv();
+      const secretsPath = path.join(home, 'cwm-vault', 'secrets.json');
+      const first = fs.readFileSync(secretsPath, 'utf8');
+      expect(JSON.parse(first)).toEqual({ seed: process.env.SEED, salt: process.env.SALT });
+      expect(fs.statSync(secretsPath).mode & 0o777).toBe(0o600);
+
+      delete process.env.SEED;
+      delete process.env.SALT;
+      loadRuntimeEnv();
+
+      expect(fs.readFileSync(secretsPath, 'utf8')).toBe(first);
+      expect(fs.existsSync(path.join(dir, 'cwm-vault'))).toBe(false);
+    });
   });
 });
