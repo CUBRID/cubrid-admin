@@ -8,6 +8,7 @@
  *     CUBRID-Admin-server-0.1.0.0001-windows-x64.zip
  *   server installers, built by scripts/package-server-installers.mjs:
  *     CUBRID-Admin-server-0.1.0.0001-linux-x64.rpm              also linux-arm64 (only with rpmbuild)
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.deb              also linux-arm64 (only with dpkg-deb)
  *     CUBRID-Admin-server-0.1.0.0001-windows-x64-setup.exe
  *   desktop, built by electron-builder under these names (apps/desktop/electron-builder.config.cjs):
  *     CUBRID-Admin-desktop-0.1.0.0001-macos-arm64.dmg            installer
@@ -15,6 +16,7 @@
  *     CUBRID-Admin-desktop-0.1.0.0001-windows-x64-setup.exe      installer
  *     CUBRID-Admin-desktop-0.1.0.0001-windows-x64-portable.exe   portable
  *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.rpm              installer (only with rpmbuild)
+ *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.deb              installer (only with GNU ar)
  *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.AppImage         portable
  *   SHA256SUMS.txt over all of them.
  *
@@ -49,16 +51,19 @@ const SERVER = [
 
 // electron-builder's unpacked app folder for each OS and arch, and the
 // release files built from it. Linux packages carry the Linux arch name
-// (x86_64, aarch64) in electron-builder's file name; the release name uses x64 and arm64.
-const SERVER_INSTALLER_FILES = ['linux-x64.rpm', 'linux-arm64.rpm', 'windows-x64-setup.exe'];
+// (x86_64, aarch64, amd64) in electron-builder's file name; the release name uses x64 and arm64.
+const SERVER_INSTALLER_FILES = ['linux-x64.rpm', 'linux-x64.deb', 'linux-arm64.rpm', 'linux-arm64.deb', 'windows-x64-setup.exe'];
+// The Linux tar.gz also carries install.sh / uninstall.sh: the same layout and
+// service as the rpm and deb, for a distribution that takes neither.
+const LINUX_INSTALL_FILES = ['install.sh', 'uninstall.sh', 'cubrid-admin-setup.sh', 'cubrid-admin.service'];
 
 const DESKTOP = [
   { dir: 'mac-arm64', platform: 'macos-arm64', files: ['.dmg', '.zip'] },
   { dir: 'mac', platform: 'macos-x64', files: ['.dmg', '.zip'] },
   { dir: 'win-unpacked', platform: 'windows-x64', files: ['-setup.exe', '-portable.exe'] },
   { dir: 'win-arm64-unpacked', platform: 'windows-arm64', files: ['-setup.exe', '-portable.exe'] },
-  { dir: 'linux-unpacked', platform: 'linux-x64', built: ['linux-x64', 'linux-x86_64'], files: ['.rpm', '.AppImage'] },
-  { dir: 'linux-arm64-unpacked', platform: 'linux-arm64', built: ['linux-arm64', 'linux-aarch64'], files: ['.rpm', '.AppImage'] },
+  { dir: 'linux-unpacked', platform: 'linux-x64', built: ['linux-x64', 'linux-x86_64', 'linux-amd64'], files: ['.rpm', '.deb', '.AppImage'] },
+  { dir: 'linux-arm64-unpacked', platform: 'linux-arm64', built: ['linux-arm64', 'linux-aarch64'], files: ['.rpm', '.deb', '.AppImage'] },
 ];
 
 function pack(name, kind) {
@@ -128,6 +133,11 @@ for (const { exe, platform, kind } of SERVER) {
     const confSource = path.join(EXECUTABLES, 'conf', conf);
     if (fs.existsSync(confSource)) {
       fs.copyFileSync(confSource, path.join(dir, 'conf', conf));
+    }
+  }
+  if (platform.startsWith('linux-')) {
+    for (const file of LINUX_INSTALL_FILES) {
+      fs.copyFileSync(path.join(ROOT, 'packaging', 'server', 'linux', file), path.join(dir, file));
     }
   }
   written.push(pack(name, kind));

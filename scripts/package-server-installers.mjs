@@ -3,12 +3,14 @@
  * Builds the server installers from the executables in dist/executables
  * (npm run package:server), into dist/server-installers:
  *
- *   CUBRID-Admin-server-<version>-linux-x64.rpm      needs rpmbuild; skipped without it
- *   CUBRID-Admin-server-<version>-linux-arm64.rpm    needs rpmbuild; skipped without it
+ *   CUBRID-Admin-server-<version>-linux-x64.rpm      (and arm64) needs rpmbuild; skipped without it
+ *   CUBRID-Admin-server-<version>-linux-x64.deb      (and arm64) needs dpkg-deb; skipped without it
  *   CUBRID-Admin-server-<version>-windows-x64-setup.exe
  *
- * Sources: packaging/server/linux (rpm spec, systemd unit) and
- * packaging/server/windows (NSIS script, WinSW service settings).
+ * Sources: packaging/server/linux (rpm spec, deb control files, systemd unit,
+ * the setup script both packages run) and packaging/server/windows (NSIS
+ * script, WinSW service settings). Neither Linux package depends on other
+ * packages, so the rpm installs on the Red Hat family and SUSE alike.
  * NSIS comes from electron-builder's download cache; the Windows service
  * wrapper is WinSW v2.12.0, downloaded once and checked against its SHA-256.
  *
@@ -32,10 +34,11 @@ const PACKAGING = path.join(ROOT, 'packaging', 'server');
 const CONF_SAMPLE = path.join(ROOT, 'cwm.conf.sample');
 const CONF_REFERENCE = path.join(ROOT, 'cwm.conf.reference.md');
 
-const RPM = [
-  { exe: 'cubrid-admin-linux', arch: 'x86_64', platform: 'linux-x64' },
-  { exe: 'cubrid-admin-linux-arm64', arch: 'aarch64', platform: 'linux-arm64' },
+const LINUX = [
+  { exe: 'cubrid-admin-linux', rpmArch: 'x86_64', debArch: 'amd64', platform: 'linux-x64' },
+  { exe: 'cubrid-admin-linux-arm64', rpmArch: 'aarch64', debArch: 'arm64', platform: 'linux-arm64' },
 ];
+const LINUX_FILES = path.join(PACKAGING, 'linux');
 
 const WINSW = {
   url: 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe',
@@ -54,25 +57,21 @@ function hasCommand(command) {
   }
 }
 
-function buildRpm({ exe, arch, platform }, version, release) {
-  const binary = path.join(EXECUTABLES, exe);
-  if (!fs.existsSync(binary)) {
-    console.log(`  • skipped ${platform} rpm: dist/executables/${exe} is missing`);
-    return null;
-  }
+function buildRpm({ exe, rpmArch: arch, platform }, version, release) {
   const top = path.join(WORK, `rpm-${arch}`);
   const sources = path.join(top, 'SOURCES');
   fs.rmSync(top, { recursive: true, force: true });
   fs.mkdirSync(sources, { recursive: true });
   fs.mkdirSync(path.join(top, 'SPECS'));
-  fs.copyFileSync(binary, path.join(sources, 'cubrid-admin'));
+  fs.copyFileSync(path.join(EXECUTABLES, exe), path.join(sources, 'cubrid-admin'));
   fs.copyFileSync(CONF_SAMPLE, path.join(sources, 'cwm.conf.sample'));
   fs.copyFileSync(CONF_REFERENCE, path.join(sources, 'cwm.conf.reference.md'));
-  fs.copyFileSync(path.join(PACKAGING, 'linux', 'cubrid-admin.service'), path.join(sources, 'cubrid-admin.service'));
+  fs.copyFileSync(path.join(LINUX_FILES, 'cubrid-admin.service'), path.join(sources, 'cubrid-admin.service'));
+  fs.copyFileSync(path.join(LINUX_FILES, 'cubrid-admin-setup.sh'), path.join(sources, 'cubrid-admin-setup.sh'));
   const spec = path.join(top, 'SPECS', 'cubrid-admin.spec');
   fs.writeFileSync(
     spec,
-    fs.readFileSync(path.join(PACKAGING, 'linux', 'cubrid-admin.spec.in'), 'utf8')
+    fs.readFileSync(path.join(LINUX_FILES, 'cubrid-admin.spec.in'), 'utf8')
       .replaceAll('@VERSION@', version)
       .replaceAll('@RELEASE@', release)
   );
@@ -85,6 +84,50 @@ function buildRpm({ exe, arch, platform }, version, release) {
   const built = path.join(top, 'RPMS', arch, `cubrid-admin-${version}-${release}.${arch}.rpm`);
   const file = `CUBRID-Admin-server-${version}-${platform}.rpm`;
   fs.copyFileSync(built, path.join(OUT, file));
+  return file;
+}
+
+function folderSizeKb(dir) {
+  let bytes = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (entry.isFile()) bytes += fs.statSync(path.join(entry.parentPath, entry.name)).size;
+  }
+  return Math.ceil(bytes / 1024);
+}
+
+// Same layout as the rpm; dpkg-deb --root-owner-group makes every file root:root.
+function buildDeb({ exe, debArch: arch, platform }, version, release) {
+  const root = path.join(WORK, `deb-${arch}`);
+  fs.rmSync(root, { recursive: true, force: true });
+  const program = path.join(root, 'opt', 'cubrid-admin');
+  const units = path.join(root, 'usr', 'lib', 'systemd', 'system');
+  const control = path.join(root, 'DEBIAN');
+  for (const dir of [program, units, control]) fs.mkdirSync(dir, { recursive: true });
+  const put = (from, to, mode) => {
+    fs.copyFileSync(from, to);
+    fs.chmodSync(to, mode);
+  };
+  put(path.join(EXECUTABLES, exe), path.join(program, 'cubrid-admin'), 0o755);
+  put(path.join(LINUX_FILES, 'cubrid-admin-setup.sh'), path.join(program, 'cubrid-admin-setup.sh'), 0o755);
+  put(CONF_SAMPLE, path.join(program, 'cwm.conf.sample'), 0o644);
+  put(CONF_REFERENCE, path.join(program, 'cwm.conf.reference.md'), 0o644);
+  put(path.join(LINUX_FILES, 'cubrid-admin.service'), path.join(units, 'cubrid-admin.service'), 0o644);
+  for (const script of ['postinst', 'prerm', 'postrm']) {
+    put(path.join(LINUX_FILES, 'deb', script), path.join(control, script), 0o755);
+  }
+  const sizeKb = folderSizeKb(path.join(root, 'opt')) + folderSizeKb(path.join(root, 'usr'));
+  fs.writeFileSync(
+    path.join(control, 'control'),
+    fs.readFileSync(path.join(LINUX_FILES, 'deb', 'control.in'), 'utf8')
+      .replaceAll('@VERSION@', version)
+      .replaceAll('@RELEASE@', release)
+      .replaceAll('@ARCH@', arch)
+      .replaceAll('@SIZE_KB@', String(sizeKb))
+  );
+  const file = `CUBRID-Admin-server-${version}-${platform}.deb`;
+  execFileSync('dpkg-deb', ['--root-owner-group', '-Zxz', '--build', root, path.join(OUT, file)], {
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
   return file;
 }
 
@@ -164,13 +207,17 @@ const release = (process.env.CWM_PACKAGE_RELEASE ?? '1').trim() || '1';
 fs.mkdirSync(OUT, { recursive: true });
 const written = [];
 
-if (hasCommand('rpmbuild')) {
-  for (const target of RPM) {
-    const file = buildRpm(target, version, release);
-    if (file) written.push(file);
+const canRpm = hasCommand('rpmbuild');
+const canDeb = hasCommand('dpkg-deb');
+if (!canRpm) console.log('  • rpmbuild not found: the Linux server rpm packages are skipped (install rpm to build them)');
+if (!canDeb) console.log('  • dpkg-deb not found: the Linux server deb packages are skipped (install dpkg to build them)');
+for (const target of LINUX) {
+  if (!fs.existsSync(path.join(EXECUTABLES, target.exe))) {
+    console.log(`  • skipped ${target.platform} rpm and deb: dist/executables/${target.exe} is missing`);
+    continue;
   }
-} else {
-  console.log('  • rpmbuild not found: the Linux server rpm packages are skipped (install rpm to build them)');
+  if (canRpm) written.push(buildRpm(target, version, release));
+  if (canDeb) written.push(buildDeb(target, version, release));
 }
 
 const setup = await buildWindowsSetup(version);
