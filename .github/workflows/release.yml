@@ -73,6 +73,14 @@ jobs:
           echo "runner Node.js $runner, server executables Node.js $sea"
           [ -n "$sea" ] && [ "$runner" = "$sea" ]
 
+      # electron-builder's tool downloads (fpm, appimage, nsis, ...), reused between runs.
+      - name: Cache electron-builder tools
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron-builder
+          key: electron-builder-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-builder-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Build server packages
         timeout-minutes: 25
         run: npm run package:server
