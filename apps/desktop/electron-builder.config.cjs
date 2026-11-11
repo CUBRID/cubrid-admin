@@ -56,12 +56,8 @@ module.exports = {
   },
   extraResources: [
     { from: 'dist/apps/web-manager', to: 'web-manager' },
-    {
-      from: 'dist/apps/api-server',
-      to: 'api-server',
-      filter: ['**/*', '!node_modules/**', '!**/*.map'],
-    },
-    { from: 'dist/apps/api-server/node_modules', to: 'api-server/node_modules' },
+    // The api-server bundles its dependencies into main.js: no node_modules.
+    { from: 'dist/apps/api-server', to: 'api-server', filter: ['**/*', '!node_modules/**', '!**/*.map'] },
   ],
   // No Apple Developer signing / notarization (see README Desktop).
   forceCodeSigning: false,

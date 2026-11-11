@@ -1,7 +1,6 @@
 import { loadRuntimeEnv } from './config/load-runtime-env';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import 'module-alias/register';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as net from 'net';
