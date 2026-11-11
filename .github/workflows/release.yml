@@ -87,15 +87,16 @@ jobs:
 
       # After the server: the desktop app needs the web-manager build made for Electron.
       # Installer and portable for each OS and arch (no signing, no Wine needed),
-      # in two runs so a stuck Linux packaging step (fpm/rpmbuild) fails on its own
-      # instead of taking the whole job's time.
+      # in two runs. A packaging command that prints nothing for 3 min (5 for the
+      # Linux one, whose rpm compression is quiet for a while) is stopped with the
+      # list of processes still running, instead of hanging until the timeout.
       - name: Build desktop packages (macOS, Windows)
         timeout-minutes: 25
-        run: npx nx run desktop:package -- --mac --win --x64 --arm64
+        run: scripts/ci/run-with-idle-timeout.sh 180 npx nx run desktop:package -- --mac --win --x64 --arm64
 
       - name: Build desktop packages (Linux)
         timeout-minutes: 20
-        run: npx nx run desktop:package -- --linux --x64 --arm64
+        run: scripts/ci/run-with-idle-timeout.sh 300 npx nx run desktop:package -- --linux --x64 --arm64
 
       - name: Collect release files
         timeout-minutes: 10
