@@ -14,6 +14,7 @@ import { getMainWindow, setMainWindow } from './window/window-registry';
 import { installDownloadDialogDefaults } from './window/dialog-paths';
 import { confirmUnloadWithUnsavedChanges } from './window/unsaved-changes';
 import { confirmQuit, createQuitFlow, hasPageUnsavedChanges, listenForQuitSignals, setPageUnsavedChanges, whenSessionEnds } from './window/quit-flow';
+import { forgetOpenedArchiveWhenPageGoes } from './workspace/workspace-import';
 
 registerPrivilegedAppScheme();
 
@@ -91,6 +92,7 @@ async function bootstrap(): Promise<void> {
   const mainWindow = createAppWindow(DESKTOP_API_BASE_URL);
   setMainWindow(mainWindow);
   whenSessionEnds(quitFlow, powerMonitor, mainWindow);
+  forgetOpenedArchiveWhenPageGoes(mainWindow.webContents);
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (

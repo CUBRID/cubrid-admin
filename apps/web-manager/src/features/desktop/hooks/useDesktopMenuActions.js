@@ -56,6 +56,8 @@ export function useDesktopMenuActions() {
       ...getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts }),
       // Not over an open modal (it would close with what it holds).
       [MENU_ACTIONS.switchWorkspace]: !anyModalOpen,
+      [MENU_ACTIONS.exportWorkspace]: !anyModalOpen,
+      [MENU_ACTIONS.importWorkspace]: !anyModalOpen,
     }
     : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);

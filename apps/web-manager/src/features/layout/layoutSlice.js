@@ -16,6 +16,9 @@ const initialState = {
   dirtyTabs: [], // Tracks tab IDs with unsaved changes
   // Desktop File > Switch Workspace asked while a tab has unsaved changes.
   workspaceSwitchConfirmOpen: false,
+  // What the workspace page does once open: 'import' (File > Import Workspace), or nothing.
+  workspaceSwitchIntent: null,
+  workspaceExportOpen: false,
   statusModal: {
     isOpen: false,
     type: 'success', // success, error, info
@@ -143,8 +146,15 @@ const layoutSlice = createSlice({
     closeStatusModal: (state) => {
       state.statusModal.isOpen = false;
     },
-    askWorkspaceSwitch: (state) => {
+    askWorkspaceSwitch: (state, action) => {
       state.workspaceSwitchConfirmOpen = true;
+      state.workspaceSwitchIntent = action?.payload ?? null;
+    },
+    openWorkspaceExport: (state) => {
+      state.workspaceExportOpen = true;
+    },
+    closeWorkspaceExport: (state) => {
+      state.workspaceExportOpen = false;
     },
     closeWorkspaceSwitchConfirm: (state) => {
       state.workspaceSwitchConfirmOpen = false;
@@ -193,6 +203,8 @@ export const {
   showStatusModal,
   closeStatusModal,
   askWorkspaceSwitch,
+  openWorkspaceExport,
+  closeWorkspaceExport,
   closeWorkspaceSwitchConfirm,
   clearDirtyTabs,
   triggerRefreshActiveTab,
