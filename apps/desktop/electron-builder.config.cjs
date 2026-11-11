@@ -13,6 +13,10 @@ const { base, commitNum, version } = productVersion();
 const BOTH_ARCHS = ['x64', 'arm64'];
 const targets = (...names) => names.map((target) => ({ target, arch: BOTH_ARCHS }));
 // Release file names (scripts/archive-packages.mjs collects them into dist/release):
+// The Linux packages carry the full version with release 1, as the server
+// packages do (0.1.0.0001-1), not electron-builder's 0.1.0-0001; fpm takes the
+// last --version / --iteration it is given.
+const linuxPackageVersion = ['--version', version, '--iteration', '1'];
 // CUBRID-Admin-desktop-<version>-<os>-<arch>[-setup|-portable].<ext>. Linux packages
 // get the Linux arch name (x86_64, aarch64, amd64); the archive script renames them to x64 and arm64.
 const fileName = (os, form = '') => `CUBRID-Admin-desktop-${version}-${os}-\${arch}${form}.\${ext}`;
@@ -134,6 +138,7 @@ module.exports = {
       'libXfixes.so.3', 'libXrandr.so.2', 'libgbm.so.1', 'libexpat.so.1', 'libxcb.so.1', 'libxkbcommon.so.0',
       'libudev.so.1', 'libasound.so.2', 'libatspi.so.0',
     ].map((soname) => `${soname}()(64bit)`),
+    fpm: linuxPackageVersion,
   },
   // The deb keeps electron-builder's default package names (the same on Debian
   // and Ubuntu) and adds the two libraries they miss. Ubuntu 24.04 renamed some
@@ -144,6 +149,7 @@ module.exports = {
       'libgtk-3-0t64 | libgtk-3-0', 'libnotify4', 'libnss3', 'libxss1', 'libxtst6', 'xdg-utils',
       'libatspi2.0-0t64 | libatspi2.0-0', 'libuuid1', 'libsecret-1-0', 'libasound2t64 | libasound2', 'libgbm1',
     ],
+    fpm: linuxPackageVersion,
   },
   // AppImage runtime 20251108: the older one (default) needs libz.so on arm64,
   // which a desktop system has only with the zlib development package.
