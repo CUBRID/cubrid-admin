@@ -17,6 +17,12 @@ const targets = (...names) => names.map((target) => ({ target, arch: BOTH_ARCHS 
 // packages do (0.1.0.0001-1), not electron-builder's 0.1.0-0001; fpm takes the
 // last --version / --iteration it is given.
 const linuxPackageVersion = ['--version', version, '--iteration', '1'];
+// Install and remove scripts for /opt/cubrid-admin (see beforePack below).
+const linuxScripts = {
+  afterInstall: path.join(__dirname, '..', '..', 'packaging', 'desktop', 'linux', 'after-install.tpl'),
+  afterRemove: path.join(__dirname, '..', '..', 'packaging', 'desktop', 'linux', 'after-remove.tpl'),
+  appArmorProfile: path.join(__dirname, '..', '..', 'packaging', 'desktop', 'linux', 'apparmor-profile.tpl'),
+};
 // CUBRID-Admin-desktop-<version>-<os>-<arch>[-setup|-portable].<ext>. Linux packages
 // get the Linux arch name (x86_64, aarch64, amd64); the archive script renames them to x64 and arm64.
 const fileName = (os, form = '') => `CUBRID-Admin-desktop-${version}-${os}-\${arch}${form}.\${ext}`;
@@ -79,6 +85,9 @@ module.exports = {
     // Electron names the app (and its userData folder) after productName:
     // ~/Library/Application Support/CUBRID Admin, %APPDATA%\CUBRID Admin, ~/.config/CUBRID Admin.
     productName: 'CUBRID Admin',
+    // Linux: the .desktop file is cubrid-admin.desktop, and Electron uses this
+    // as the window's app_id / WM_CLASS, so StartupWMClass matches it.
+    desktopName: 'cubrid-admin.desktop',
     // Windows CompanyName and FileDescription of the app and the installer / portable exe.
     author: { name: 'CUBRID Corporation' },
     description: 'CUBRID Admin',
@@ -121,6 +130,9 @@ module.exports = {
   // Installer: rpm. Portable: AppImage.
   // Installers: rpm (Red Hat family and SUSE) and deb (Debian family). Portable: AppImage.
   linux: {
+    // The .desktop file is named after desktopName (cubrid-admin.desktop), as
+    // Wayland matches the window's app_id to the .desktop file name.
+    syncDesktopName: true,
     target: targets(...(hasRpmbuild() ? ['rpm'] : []), ...(hasGnuAr() ? ['deb'] : []), 'AppImage'),
     // rpm and deb need a maintainer; without it electron-builder asks for an author email.
     maintainer: 'CUBRID Corporation',
@@ -139,6 +151,7 @@ module.exports = {
       'libudev.so.1', 'libasound.so.2', 'libatspi.so.0',
     ].map((soname) => `${soname}()(64bit)`),
     fpm: linuxPackageVersion,
+    ...linuxScripts,
   },
   // The deb keeps electron-builder's default package names (the same on Debian
   // and Ubuntu) and adds the two libraries they miss. Ubuntu 24.04 renamed some
@@ -150,6 +163,7 @@ module.exports = {
       'libatspi2.0-0t64 | libatspi2.0-0', 'libuuid1', 'libsecret-1-0', 'libasound2t64 | libasound2', 'libgbm1',
     ],
     fpm: linuxPackageVersion,
+    ...linuxScripts,
   },
   // AppImage runtime 20251108: the older one (default) needs libz.so on arm64,
   // which a desktop system has only with the zlib development package.
@@ -159,6 +173,17 @@ module.exports = {
   // indicates they must be present"), so a downloaded copy is reported as
   // damaged. Sign the whole bundle ad-hoc again. afterSign does not run when
   // signing is skipped, so this is afterPack.
+  // Linux packages install to /opt/cubrid-admin, not /opt/CUBRID Admin: with a
+  // space in the path Chromium's setuid sandbox helper does not start
+  // ("execvp: /opt/CUBRID") on systems without unprivileged user namespaces.
+  // electron-builder names that folder (and the /usr/bin link, chrome-sandbox
+  // and AppArmor paths) after the product name, so only the Linux packager's
+  // copy changes; the name users see stays "CUBRID Admin".
+  beforePack: (context) => {
+    if (context.electronPlatformName === 'linux') {
+      context.packager.appInfo.sanitizedProductName = 'cubrid-admin';
+    }
+  },
   afterPack: (context) => {
     if (context.electronPlatformName !== 'darwin') {
       return;
