@@ -19,12 +19,15 @@ import { fileURLToPath } from 'url';
 
 const SCANNED = /\.(html|css|js|mjs|webmanifest)$/;
 const URL_PATTERN = /https?:\/\/[^\s"'`)<>\\]+/g;
+// In HTML and CSS a protocol-relative //host/path is loaded too (src="//…", url(//…), @import '//…').
+const RELATIVE_PROTOCOL_PATTERN = /(?:\bsrc\s*=\s*|\bhref\s*=\s*|url\(\s*|@import\s+)["']?(\/\/[^\s"'`)<>\\]+)/g;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Allowed URLs in JS: exact or prefix, optionally only in some files. */
 export const ALLOWED = [
   { prefix: 'http://www.w3.org/', anyFile: true, reason: 'XML namespace names (SVG, XHTML, XLink): identifiers, never fetched' },
-  { prefix: 'https://www.cubrid.org', reason: 'Help menu and About links the user clicks' },
+  { prefix: 'https://www.cubrid.org/', reason: 'Help menu and About links the user clicks' },
+  { exact: 'https://www.cubrid.org', reason: 'About link the user clicks' },
   { prefix: 'http://jira.cubrid.org/', reason: '"Report a bug" link the user clicks' },
   { prefix: 'https://www.reddit.com/r/CUBRID/', reason: 'forum link the user clicks' },
   { prefix: 'https://github.com/CUBRID/', reason: 'project and license links the user clicks' },
@@ -84,6 +87,13 @@ export function findOutsideUrls(dir) {
     for (const match of text.matchAll(URL_PATTERN)) {
       if (!isAllowed(match[0], file)) {
         found.push({ file: path.relative(dir, file), url: match[0] });
+      }
+    }
+    if (/\.(html|css)$/.test(file)) {
+      for (const match of text.matchAll(RELATIVE_PROTOCOL_PATTERN)) {
+        if (!isLocal(`https:${match[1]}`)) {
+          found.push({ file: path.relative(dir, file), url: match[1] });
+        }
       }
     }
   }

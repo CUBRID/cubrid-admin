@@ -41,6 +41,10 @@ function assemble(platform) {
   }
 
   const exeSrc = path.join(EXECUTABLES_DIR, info.src);
+  if (!fs.existsSync(exeSrc) && skipMissingMac && info.src.startsWith('cubrid-admin-macos')) {
+    console.log(`  skipped ${info.src}: it needs a macOS build machine (codesign)`);
+    return;
+  }
   if (!fs.existsSync(exeSrc)) {
     console.error(`Executable not found: ${exeSrc}`);
     console.error(`Build the server executables first (nx run api-server:build:exe).`);
@@ -73,6 +77,8 @@ if (args.length === 0) {
   process.exit(1);
 }
 
+// 'all' off macOS: the SEA build leaves out the macOS executables there.
+const skipMissingMac = args.includes('all') && process.platform !== 'darwin';
 for (const platform of args.includes('all') ? Object.keys(PLATFORM_MAP) : args) {
   assemble(platform);
 }

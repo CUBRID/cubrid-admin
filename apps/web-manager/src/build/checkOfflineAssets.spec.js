@@ -45,4 +45,15 @@ describe('check:offline (apps/web-manager/scripts/check-offline-assets.mjs)', ()
     write('assets/index-abc.js', 'new Worker("https://unpkg.com/x/worker.js");fetch("https://example.com/data.json");');
     expect(findOutsideUrls(dir).map((found) => found.url)).toEqual(['https://unpkg.com/x/worker.js', 'https://example.com/data.json']);
   });
+
+  it('does not let a look-alike host through an allowed prefix', () => {
+    write('assets/index-abc.js', 'load("https://www.cubrid.org.evil.example/x.js");open("https://www.cubrid.org");open("https://www.cubrid.org/docs");');
+    expect(findOutsideUrls(dir).map((found) => found.url)).toEqual(['https://www.cubrid.org.evil.example/x.js']);
+  });
+
+  it('catches protocol-relative URLs in HTML and CSS', () => {
+    write('index.html', '<script src="//cdn.example.com/lib.js"></script><link href="//fonts.example.com/a.css" rel="stylesheet">');
+    write('assets/index.css', "@import '//cdn.example.com/x.css';@font-face{src:url(//fonts.example.com/f.woff2)}.a{background:url(//localhost/ok.png)}");
+    expect(findOutsideUrls(dir).map((found) => found.url).sort()).toEqual(['//cdn.example.com/lib.js', '//cdn.example.com/x.css', '//fonts.example.com/a.css', '//fonts.example.com/f.woff2']);
+  });
 });
