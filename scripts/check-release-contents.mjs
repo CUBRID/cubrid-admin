@@ -159,6 +159,7 @@ const SERVER_EXE = {
   'linux-x64-el7': 'cubrid-admin-linux-el7',
   'linux-arm64': 'cubrid-admin-linux-arm64',
   'macos-x64': 'cubrid-admin-macos',
+  'macos-arm64': 'cubrid-admin-macos-arm64',
   'windows-x64': 'cubrid-admin.exe',
 };
 for (const file of releaseFiles.filter((name) => name.includes('-server-'))) {
