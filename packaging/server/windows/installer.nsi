@@ -16,6 +16,9 @@ SetCompressor /SOLID lzma
 !define PRODUCT "CUBRID Admin Server"
 !define COMPANY "CUBRID Corporation"
 !define SERVICE "$INSTDIR\cubrid-admin-service.exe"
+; The service runs as this virtual account, not LocalSystem (WinSW 2.12 has no
+; setting for virtual accounts, so sc.exe sets it after WinSW registers the service).
+!define SERVICE_ACCOUNT "NT SERVICE\cubrid-admin"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\CUBRID Admin Server"
 
 Name "${PRODUCT}"
@@ -43,6 +46,7 @@ VIAddVersionKey "LegalCopyright" "Copyright © ${YEAR} ${COMPANY}"
 
 Var DataDir
 Var WasRunning
+Var Registered
 
 Function .onInit
   ${IfNot} ${RunningX64}
@@ -60,9 +64,19 @@ Section "Install"
   SetShellVarContext all
   StrCpy $DataDir "$APPDATA\${PRODUCT}" ; ProgramData (all users)
 
-  ; Upgrade: stop the service before its files are replaced, and remember whether it ran.
+  ; Upgrade: is the service registered (sc.exe query exits 0) and running? Stop it
+  ; with stopwait, which returns only once it has stopped, so its executable is
+  ; no longer locked when it is replaced.
+  StrCpy $Registered 0
   StrCpy $WasRunning 0
-  ${If} ${FileExists} "${SERVICE}"
+  nsExec::ExecToStack '"$SYSDIR\sc.exe" query cubrid-admin'
+  Pop $0
+  Pop $1
+  ${If} $0 == 0
+    StrCpy $Registered 1
+  ${EndIf}
+  ${If} $Registered == 1
+  ${AndIf} ${FileExists} "${SERVICE}"
     nsExec::ExecToStack '"${SERVICE}" status'
     Pop $0
     Pop $1
@@ -70,7 +84,7 @@ Section "Install"
     ${If} $1 == "Started"
       StrCpy $WasRunning 1
     ${EndIf}
-    nsExec::ExecToLog '"${SERVICE}" stop'
+    nsExec::ExecToLog '"${SERVICE}" stopwait'
   ${EndIf}
 
   SetOutPath "$INSTDIR"
@@ -87,10 +101,23 @@ Section "Install"
     CopyFiles /SILENT "$INSTDIR\cwm.conf.sample" "$DataDir\conf\cwm.conf"
   ${EndIf}
 
-  ; Register the service on a new install; an upgrade keeps the registered one.
-  ${If} $WasRunning == 0
+  ; Register the service only when it is not registered yet (an upgrade keeps it),
+  ; then make it run as the virtual account (also on upgrade, for older installs).
+  ${If} $Registered == 0
     nsExec::ExecToLog '"${SERVICE}" install'
-  ${Else}
+  ${EndIf}
+  nsExec::ExecToLog '"$SYSDIR\sc.exe" config cubrid-admin obj= "${SERVICE_ACCOUNT}"'
+
+  ; The data folder holds cwm-vault\secrets.json, which decrypts every saved
+  ; password: only SYSTEM, Administrators and the service account may use it.
+  ; Drop the inherited ProgramData access (Users may read and create there),
+  ; and make everything below inherit only these grants. Applied on every
+  ; install and upgrade. (*S-1-5-18 = SYSTEM, *S-1-5-32-544 = Administrators,
+  ; by SID so a localized Windows works too.)
+  nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$DataDir" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F "${SERVICE_ACCOUNT}:(OI)(CI)F" /Q'
+  nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$DataDir\*" /reset /T /C /Q'
+
+  ${If} $WasRunning == 1
     nsExec::ExecToLog '"${SERVICE}" start'
   ${EndIf}
 
@@ -107,7 +134,8 @@ SectionEnd
 
 Section "Uninstall"
   SetShellVarContext all
-  nsExec::ExecToLog '"${SERVICE}" stop'
+  ; stopwait: the files below can only be deleted once the service has stopped.
+  nsExec::ExecToLog '"${SERVICE}" stopwait'
   nsExec::ExecToLog '"${SERVICE}" uninstall'
   Delete "$INSTDIR\cubrid-admin.exe"
   Delete "$INSTDIR\cubrid-admin-service.exe"

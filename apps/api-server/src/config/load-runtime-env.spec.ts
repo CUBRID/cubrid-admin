@@ -55,6 +55,27 @@ describe('loadRuntimeEnv', () => {
       delete process.env.SALT;
     });
 
+    it('reads no .env file at all, in CWM_HOME or in the working folder', () => {
+      fs.writeFileSync(path.join(home, '.env'), 'CWM_TEST_FROM_DOTENV=home\nSEED=planted\nSALT=planted\n');
+      fs.writeFileSync(path.join(dir, '.env'), 'CWM_TEST_FROM_DOTENV=cwd\n');
+
+      loadRuntimeEnv();
+
+      expect(process.env.CWM_TEST_FROM_DOTENV).toBeUndefined();
+      expect(process.env.SEED).not.toBe('planted');
+      expect(process.env.SALT).not.toBe('planted');
+    });
+
+    it('still reads .env without CWM_HOME (portable and source)', () => {
+      delete process.env.CWM_HOME;
+      delete process.env.CWM_CONF_PATH;
+      fs.writeFileSync(path.join(dir, '.env'), 'CWM_TEST_FROM_DOTENV=cwd\n');
+
+      loadRuntimeEnv();
+
+      expect(process.env.CWM_TEST_FROM_DOTENV).toBe('cwd');
+    });
+
     it('reads cwm.conf from CWM_CONF_PATH, not from the working folder', () => {
       fs.writeFileSync(path.join(etc, 'cwm.conf'), JSON.stringify({ CWM_TEST_FROM_CONF: 'etc' }));
       fs.writeFileSync(path.join(dir, 'conf', 'cwm.conf'), JSON.stringify({ CWM_TEST_FROM_CONF: 'cwd' }));
