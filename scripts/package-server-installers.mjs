@@ -81,7 +81,10 @@ function buildRpm({ exe, rpmArch: arch, platform }, version, release) {
 
   execFileSync(
     'rpmbuild',
-    ['-bb', '--target', `${arch}-linux`, '--define', `_topdir ${top}`, spec],
+    // rpm format 4: rpmbuild 6 makes format 6 by default, which rpm 4.11
+    // (RHEL/CentOS 7) cannot read ("rpmlib(LargeFiles)", "cpio: Bad magic");
+    // format 4 installs on every rpm from 4.11 on.
+    ['-bb', '--target', `${arch}-linux`, '--define', `_topdir ${top}`, '--define', '_rpmformat 4', spec],
     { stdio: ['ignore', 'ignore', 'inherit'] }
   );
   const built = path.join(top, 'RPMS', arch, `cubrid-admin-${version}-${release}.${arch}.rpm`);
