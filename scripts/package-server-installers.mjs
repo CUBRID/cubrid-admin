@@ -150,17 +150,24 @@ async function winswExecutable() {
   return WINSW.cache;
 }
 
+// The makensis electron-builder uses for the desktop setup (the same NSIS
+// version: the desktop config sets no toolsets.nsis either). This is not a
+// public API of app-builder-lib; it moved in 26.x, so fail clearly if it moves again.
 async function makensisCommand() {
-  const nsisUtil = require('app-builder-lib/out/targets/nsis/nsisUtil');
-  // NSIS_PATH waits for an NSIS target's options; with the defaults it gives
-  // the same pinned NSIS that electron-builder uses for the desktop setup.
-  nsisUtil.NsisTargetOptions.resolve({});
-  const nsisDir = await nsisUtil.NSIS_PATH();
-  const binary =
-    process.platform === 'win32'
-      ? path.join(nsisDir, 'makensis.exe')
-      : path.join(nsisDir, process.platform === 'darwin' ? 'mac' : 'linux', 'makensis');
-  return { binary, env: { ...process.env, NSISDIR: nsisDir } };
+  let getMakeNsisPath;
+  try {
+    ({ getMakeNsisPath } = require('app-builder-lib/out/toolsets/windows'));
+  } catch {
+    // reported below
+  }
+  if (typeof getMakeNsisPath !== 'function') {
+    const version = require('app-builder-lib/package.json').version;
+    throw new Error(
+      `app-builder-lib ${version} has no getMakeNsisPath in out/toolsets/windows: update makensisCommand() in scripts/package-server-installers.mjs.`
+    );
+  }
+  const makensis = await getMakeNsisPath(undefined, undefined);
+  return { binary: makensis.path, env: { ...process.env, ...(makensis.env ?? {}) } };
 }
 
 async function buildWindowsSetup(version) {
