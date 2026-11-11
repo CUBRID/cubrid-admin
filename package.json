@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "commitNumAfter": "2026-11-11T11:08:00+09:00",
+  "commitNumAfter": "2026-11-11T14:20:00+09:00",
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@monaco-editor/react": "^4.7.0",
