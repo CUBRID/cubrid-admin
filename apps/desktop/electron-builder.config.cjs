@@ -91,6 +91,8 @@ module.exports = {
   // Installer: rpm. Portable: AppImage.
   linux: {
     target: hasRpmbuild() ? targets('rpm', 'AppImage') : targets('AppImage'),
+    // The rpm needs a maintainer; without it electron-builder asks for an author email.
+    maintainer: 'CUBRID Corporation',
     artifactName: fileName('linux'),
   },
   // Without a Developer ID the app keeps Electron's own ad-hoc signature, which
