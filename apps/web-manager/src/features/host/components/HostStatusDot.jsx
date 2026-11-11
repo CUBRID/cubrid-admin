@@ -1,12 +1,7 @@
 import React from 'react';
-import { shallowEqual, useSelector } from 'react-redux';
-import { useCM } from '../../../constants/useCM';
 import {
   HOST_CONNECTED, HOST_DISCONNECTED, HOST_LOGGING_IN, HOST_LOGIN_FAILED, HOST_NOT_RESPONDING,
-  hostConnectionStatus, hostConnectionStatusText,
 } from '../hostConnectionStatus';
-
-const NO_HOST_STATE = {};
 
 const DOT_COLOR = {
   [HOST_CONNECTED]: 'bg-emerald-500',
@@ -15,23 +10,6 @@ const DOT_COLOR = {
   [HOST_DISCONNECTED]: 'bg-rose-500',
   [HOST_NOT_RESPONDING]: 'bg-rose-500',
 };
-
-/** A host's status and its text (for title / aria-label), from the host slice. */
-export function useHostConnectionStatus(hostUid) {
-  const CM = useCM();
-  const host = useSelector((state) => {
-    const h = state.host ?? NO_HOST_STATE;
-    return {
-      authorizedHosts: h.authorizedHosts,
-      reconnectQueue: h.reconnectQueue,
-      hostAuthErrors: h.hostAuthErrors,
-      hostNotResponding: h.hostNotResponding,
-      loggingInHosts: h.loggingInHosts,
-    };
-  }, shallowEqual);
-  const status = hostConnectionStatus(hostUid, host);
-  return { status, text: hostConnectionStatusText(status, hostUid, host, CM) };
-}
 
 /**
  * Green connected, yellow not logged in (blinking while logging in), red

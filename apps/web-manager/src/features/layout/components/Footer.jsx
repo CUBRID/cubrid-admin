@@ -2,7 +2,8 @@ import { useSelector, shallowEqual } from 'react-redux';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
-import { HostStatusDot, useHostConnectionStatus } from '../../host/components/HostStatusDot';
+import { HostStatusDot } from '../../host/components/HostStatusDot';
+import { useHostConnectionStatus } from '../../host/useHostConnectionStatus';
 import { HOST_CONNECTED } from '../../host/hostConnectionStatus';
 
 export default function Footer() {

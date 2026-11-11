@@ -1,5 +1,6 @@
 import { useCM } from '../../../../constants/useCM';
-import { HostStatusDot, useHostConnectionStatus } from '../../../host/components/HostStatusDot';
+import { HostStatusDot } from '../../../host/components/HostStatusDot';
+import { useHostConnectionStatus } from '../../../host/useHostConnectionStatus';
 
 const HA_ROLE_CONFIG = {
   master:  { cmKey: 'haMaster',  icon: 'star',                    className: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400' },
