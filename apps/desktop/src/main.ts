@@ -13,7 +13,7 @@ import { createAppWindow, toAppRouteUrl } from './window/app-window';
 import { getMainWindow, setMainWindow } from './window/window-registry';
 import { installDownloadDialogDefaults } from './window/dialog-paths';
 import { confirmUnloadWithUnsavedChanges } from './window/unsaved-changes';
-import { confirmQuit, createQuitFlow, hasPageUnsavedChanges, setPageUnsavedChanges, whenSessionEnds } from './window/quit-flow';
+import { confirmQuit, createQuitFlow, hasPageUnsavedChanges, listenForQuitSignals, setPageUnsavedChanges, whenSessionEnds } from './window/quit-flow';
 import { forgetOpenedArchiveWhenPageGoes } from './workspace/workspace-import';
 
 registerPrivilegedAppScheme();
@@ -74,6 +74,9 @@ async function startApiOrAskForWorkspace(window: BrowserWindow): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
+  // Only now (see listenForQuitSignals): before ready, Electron's own handler
+  // takes SIGINT/SIGTERM and the window then asks.
+  listenForQuitSignals(process, quitFlow, requestQuit);
   installApplicationMenu();
   registerDesktopIpcHandlers();
   installDownloadDialogDefaults(session.defaultSession, () => app.getPath('documents'));
@@ -168,9 +171,3 @@ app.on('will-quit', () => {
   void stopDesktopApiOnQuit();
 });
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => {
-    quitFlow.quitWithoutAsking();
-    requestQuit();
-  });
-}
