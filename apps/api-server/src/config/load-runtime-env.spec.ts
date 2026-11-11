@@ -99,5 +99,89 @@ describe('loadRuntimeEnv', () => {
       expect(fs.readFileSync(secretsPath, 'utf8')).toBe(first);
       expect(fs.existsSync(path.join(dir, 'cwm-vault'))).toBe(false);
     });
+
+    describe('an existing secrets.json that cannot be used is never replaced', () => {
+      const secretsPath = () => path.join(home, 'cwm-vault', 'secrets.json');
+      const writeVault = (text: string) => {
+        fs.mkdirSync(path.dirname(secretsPath()), { recursive: true });
+        fs.writeFileSync(secretsPath(), text);
+      };
+
+      it('stops on broken JSON, naming the file, and leaves it as it was', () => {
+        writeVault('{"seed": "abc", ');
+        expect(() => loadRuntimeEnv()).toThrow(secretsPath());
+        expect(fs.readFileSync(secretsPath(), 'utf8')).toBe('{"seed": "abc", ');
+        expect(process.env.SEED).toBeUndefined();
+      });
+
+      it('stops when seed or salt is missing', () => {
+        writeVault(JSON.stringify({ seed: 'only-seed' }));
+        expect(() => loadRuntimeEnv()).toThrow(/has no seed or salt/);
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: 'only-seed' });
+      });
+
+      const canTestPermissions = process.platform !== 'win32' && process.getuid?.() !== 0;
+      (canTestPermissions ? it : it.skip)('stops when the file cannot be read', () => {
+        writeVault(JSON.stringify({ seed: 's', salt: 't' }));
+        fs.chmodSync(secretsPath(), 0o000);
+        try {
+          expect(() => loadRuntimeEnv()).toThrow(secretsPath());
+        } finally {
+          fs.chmodSync(secretsPath(), 0o600);
+        }
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: 's', salt: 't' });
+      });
+
+      it('leaves no secrets.json when writing it fails part-way, so the next start can create it', () => {
+        // The fs module object itself: the namespace import above cannot be spied on.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const nodeFs: typeof fs = require('fs');
+        const realWrite = nodeFs.writeFileSync;
+        const spy = jest.spyOn(nodeFs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
+          if (typeof file === 'number') {
+            throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+          }
+          return (realWrite as (...args: unknown[]) => void)(file, ...rest);
+        }) as typeof fs.writeFileSync);
+        try {
+          expect(() => loadRuntimeEnv()).toThrow(/Cannot create .*ENOSPC/);
+        } finally {
+          spy.mockRestore();
+        }
+        expect(fs.existsSync(secretsPath())).toBe(false);
+        expect(fs.readdirSync(path.dirname(secretsPath()))).toEqual([]);
+
+        delete process.env.SEED;
+        delete process.env.SALT;
+        loadRuntimeEnv();
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8')).seed).toBe(process.env.SEED);
+      });
+
+      it('uses the secrets.json another start created first, instead of stopping', () => {
+        const other = { seed: 'other-start-seed', salt: 'other-start-salt' };
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const nodeFs: typeof fs = require('fs');
+        const realLink = nodeFs.linkSync;
+        const spy = jest.spyOn(nodeFs, 'linkSync').mockImplementation(((existing: fs.PathLike, created: fs.PathLike) => {
+          nodeFs.writeFileSync(created, JSON.stringify(other));
+          return realLink(existing, created);
+        }) as typeof fs.linkSync);
+        try {
+          loadRuntimeEnv();
+        } finally {
+          spy.mockRestore();
+        }
+        expect(process.env.SEED).toBe(other.seed);
+        expect(process.env.SALT).toBe(other.salt);
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual(other);
+        expect(fs.readdirSync(path.dirname(secretsPath()))).toEqual(['secrets.json']);
+      });
+
+      it('creates it only when it does not exist', () => {
+        expect(fs.existsSync(secretsPath())).toBe(false);
+        loadRuntimeEnv();
+        expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: process.env.SEED, salt: process.env.SALT });
+      });
+    });
   });
 });

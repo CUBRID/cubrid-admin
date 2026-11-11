@@ -67,23 +67,63 @@ function getVaultDir(baseDir: string): string {
   return path.join(baseDir, CWM_VAULT_DIRNAME);
 }
 
+const SECRETS_KEPT =
+  'It holds the keys of the saved hosts and passwords, so it is never replaced. ' +
+  'Restore it from a backup or fix its permissions, then start again.';
+
+/** The saved SEED/SALT, or null when there is no secrets.json yet. Never null for a file that exists. */
 function readSecrets(secretsPath: string): CwmSecrets | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8')) as CwmSecrets;
-    if (parsed.seed && parsed.salt) return parsed;
-    return null;
-  } catch {
+  if (!fs.existsSync(secretsPath)) {
     return null;
   }
+  let parsed: Partial<CwmSecrets>;
+  try {
+    parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+  } catch (err) {
+    throw new Error(`Cannot read ${secretsPath}: ${(err as Error).message}. ${SECRETS_KEPT}`);
+  }
+  if (!parsed?.seed || !parsed?.salt) {
+    throw new Error(`${secretsPath} has no seed or salt. ${SECRETS_KEPT}`);
+  }
+  return parsed as CwmSecrets;
 }
 
-function writeSecrets(vaultDir: string, secrets: CwmSecrets): void {
+/**
+ * Creates secrets.json with `secrets`, all or nothing: the content is written
+ * and synced to a temporary file in the same folder, which is then linked into
+ * place only if no secrets.json exists. A failed write leaves no secrets.json;
+ * when another start created it first, that file is read and its keys returned.
+ */
+function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
   fs.mkdirSync(vaultDir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(
-    path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME),
-    JSON.stringify(secrets, null, 2),
-    { encoding: 'utf8', mode: 0o600 }
-  );
+  const target = path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME);
+  const temp = path.join(vaultDir, `.${CWM_VAULT_SECRETS_FILENAME}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+  try {
+    const fd = fs.openSync(temp, 'wx', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(secrets, null, 2), 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    try {
+      // A hard link never replaces an existing file.
+      fs.linkSync(temp, target);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST') {
+        return readSecrets(target) as CwmSecrets;
+      }
+      if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
+        throw err;
+      }
+      // A file system without hard links: a copy that still never replaces a file.
+      fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+    }
+    return secrets;
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
 }
 
 /**
@@ -104,17 +144,19 @@ function loadOrCreateVaultSecrets(baseDir: string): void {
   let secrets = readSecrets(secretsPath);
 
   if (!secrets) {
-    // Only generate new secrets for values not already set.
+    // Only when there is no secrets.json at all. Keys that cannot be saved
+    // would be lost on the next start, together with everything encrypted with
+    // them, so a failed write stops the start too.
     secrets = {
       seed: crypto.randomBytes(32).toString('hex'),
       salt: crypto.randomBytes(32).toString('hex'),
     };
     try {
-      writeSecrets(vaultDir, secrets);
-      console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
+      secrets = writeSecrets(vaultDir, secrets);
     } catch (err) {
-      console.warn(`[cwm-vault] could not write secrets:`, (err as Error).message);
+      throw new Error(`Cannot create ${secretsPath}: ${(err as Error).message}.`);
     }
+    console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
   }
 
   if (process.env.SEED === undefined) process.env.SEED = secrets.seed;
