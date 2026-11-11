@@ -72,9 +72,26 @@ const SECRETS_KEPT =
   'It holds the keys of the saved hosts and passwords, so it is never replaced. ' +
   'Restore it from a backup or fix its permissions, then start again.';
 
+/**
+ * True when secrets.json exists, false only when it really does not (ENOENT).
+ * Any other error (EPERM/EACCES from an ACL, an I/O error) stops the start:
+ * fs.existsSync would report those as "absent", and new keys would be made.
+ */
+function secretsFileExists(secretsPath: string): boolean {
+  try {
+    fs.statSync(secretsPath);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+    throw new Error(`Cannot check ${secretsPath}: ${(err as Error).message}. ${SECRETS_KEPT}`);
+  }
+}
+
 /** The saved SEED/SALT, or null when there is no secrets.json yet. Never null for a file that exists. */
 function readSecrets(secretsPath: string): CwmSecrets | null {
-  if (!fs.existsSync(secretsPath)) {
+  if (!secretsFileExists(secretsPath)) {
     return null;
   }
   let parsed: Partial<CwmSecrets>;
@@ -87,6 +104,15 @@ function readSecrets(secretsPath: string): CwmSecrets | null {
     throw new Error(`${secretsPath} has no seed or salt. ${SECRETS_KEPT}`);
   }
   return parsed as CwmSecrets;
+}
+
+/** secrets.json that another start created first (EEXIST): it must be there and usable. */
+function readExistingSecrets(target: string): CwmSecrets {
+  const secrets = readSecrets(target);
+  if (!secrets) {
+    throw new Error(`${target} was reported as existing but cannot be found. ${SECRETS_KEPT}`);
+  }
+  return secrets;
 }
 
 /**
@@ -107,7 +133,7 @@ function copySecretsIntoPlace(temp: string, target: string, secrets: CwmSecrets)
     return secrets;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-      return readSecrets(target) as CwmSecrets;
+      return readExistingSecrets(target);
     }
     let left: Buffer | null = null;
     try {
@@ -146,7 +172,7 @@ function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'EEXIST') {
-        return readSecrets(target) as CwmSecrets;
+        return readExistingSecrets(target);
       }
       if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
         throw err;
@@ -180,16 +206,20 @@ function loadOrCreateVaultSecrets(baseDir: string): void {
     // Only when there is no secrets.json at all. Keys that cannot be saved
     // would be lost on the next start, together with everything encrypted with
     // them, so a failed write stops the start too.
-    secrets = {
+    const generated: CwmSecrets = {
       seed: crypto.randomBytes(32).toString('hex'),
       salt: crypto.randomBytes(32).toString('hex'),
     };
     try {
-      secrets = writeSecrets(vaultDir, secrets);
+      secrets = writeSecrets(vaultDir, generated);
     } catch (err) {
       throw new Error(`Cannot create ${secretsPath}: ${(err as Error).message}.`);
     }
-    console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
+    console.log(
+      secrets === generated
+        ? `[cwm-vault] secrets generated: ${secretsPath}`
+        : `[cwm-vault] secrets loaded (created by another start): ${secretsPath}`
+    );
   }
 
   if (process.env.SEED === undefined) process.env.SEED = secrets.seed;
@@ -316,7 +346,7 @@ function loadRuntimeEnvFiles(): void {
   loadCwmConf(resolveCwmConfPath());
 
   // 3. cwm-vault — SEED/SALT, only for values not already set above.
-  const vaultExists = fs.existsSync(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
+  const vaultExists = secretsFileExists(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
   if (isStandalone || isInstalled || vaultExists) {
     loadOrCreateVaultSecrets(baseDir);
   }

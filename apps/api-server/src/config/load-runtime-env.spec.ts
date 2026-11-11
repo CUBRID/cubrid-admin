@@ -216,6 +216,25 @@ describe('loadRuntimeEnv', () => {
         });
       });
 
+      it('stops, and creates nothing, when checking the file fails with anything but ENOENT (an ACL)', () => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const nodeFs: typeof fs = require('fs');
+        const realStat = nodeFs.statSync;
+        const spy = jest.spyOn(nodeFs, 'statSync').mockImplementation(((p: fs.PathLike, ...rest: unknown[]) => {
+          if (String(p).endsWith('secrets.json')) {
+            throw Object.assign(new Error('EPERM: operation not permitted, stat'), { code: 'EPERM' });
+          }
+          return (realStat as (...args: unknown[]) => unknown)(p, ...rest);
+        }) as typeof fs.statSync);
+        try {
+          expect(() => loadRuntimeEnv()).toThrow(/Cannot check .*secrets\.json.*EPERM/);
+        } finally {
+          spy.mockRestore();
+        }
+        expect(fs.existsSync(path.dirname(secretsPath())) && fs.readdirSync(path.dirname(secretsPath())).length).toBeFalsy();
+        expect(process.env.SEED).toBeUndefined();
+      });
+
       it('creates it only when it does not exist', () => {
         expect(fs.existsSync(secretsPath())).toBe(false);
         loadRuntimeEnv();

@@ -55,4 +55,18 @@ describe('loadOrCreateDesktopSecrets', () => {
       expect(JSON.parse(fs.readFileSync(file(), 'utf8'))).toEqual({ seed: 's', salt: 't' });
     });
   });
+
+  it('stops, and creates nothing, when checking the file fails with anything but ENOENT', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodeFs: typeof fs = require('fs');
+    const spy = jest.spyOn(nodeFs, 'statSync').mockImplementation((() => {
+      throw Object.assign(new Error('EACCES: permission denied, stat'), { code: 'EACCES' });
+    }) as typeof fs.statSync);
+    try {
+      expect(() => loadOrCreateDesktopSecrets(base)).toThrow(/Cannot check .*secrets\.json.*EACCES/);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(fs.existsSync(path.join(base, 'secrets.json'))).toBe(false);
+  });
 });
