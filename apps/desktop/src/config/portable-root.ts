@@ -32,13 +32,24 @@ function isInApplicationsFolder(bundlePath: string): boolean {
   );
 }
 
-function isWritableFolder(folder: string): boolean {
+/**
+ * Whether a file can really be created in `folder`: creates and deletes a probe
+ * file. fs.access(W_OK) is not enough, because on Windows it ignores ACLs and
+ * the read-only attribute of folders (Program Files, a read-only share).
+ */
+export function isWritableFolder(folder: string): boolean {
+  const probe = path.join(folder, `.cubrid-admin-write-test-${process.pid}-${Date.now()}`);
   try {
-    fs.accessSync(folder, fs.constants.W_OK);
-    return true;
+    fs.closeSync(fs.openSync(probe, 'wx'));
   } catch {
     return false;
   }
+  try {
+    fs.unlinkSync(probe);
+  } catch {
+    // Created but not removable: the folder is still writable.
+  }
+  return true;
 }
 
 /**
@@ -54,18 +65,22 @@ function cannotKeepFilesBeside(bundlePath: string): boolean {
  * The folder a portable build keeps its files in, or `null` for an installed build:
  * - Windows portable exe: the folder of the original exe (it runs from a temp folder);
  * - Linux AppImage: the folder of the AppImage file;
+ *   (either only when that folder is writable)
  * - macOS: the folder that contains the .app, unless the .app is under
  *   /Applications or ~/Applications (installed), or runs translocated or read-only.
  * The Windows installer (NSIS) and the Linux rpm are installed.
  */
 export function getPortableFolder(): string | null {
+  // A Windows portable exe or an AppImage in a folder it cannot write to
+  // (read-only share, a CD, Program Files) keeps its files in userData instead.
   if (process.platform === 'win32') {
-    return process.env.PORTABLE_EXECUTABLE_DIR?.trim() || null;
+    const folder = process.env.PORTABLE_EXECUTABLE_DIR?.trim();
+    return folder && isWritableFolder(folder) ? folder : null;
   }
 
   if (process.platform === 'linux') {
     const appImage = process.env.APPIMAGE?.trim();
-    return appImage ? path.dirname(appImage) : null;
+    return appImage && isWritableFolder(path.dirname(appImage)) ? path.dirname(appImage) : null;
   }
 
   if (process.platform === 'darwin') {

@@ -6,7 +6,8 @@ const path = require('path');
 const { config: loadEnv } = require('dotenv');
 
 function loadWorkspaceEnv() {
-  const baseDir = process.pkg ? path.dirname(process.execPath) : process.cwd();
+  // A development tool: it always runs from the repository, never inside the server executable.
+  const baseDir = process.cwd();
   const candidates = [
     path.join(baseDir, 'apps/api-server/.env'),
     path.join(baseDir, '.env'),

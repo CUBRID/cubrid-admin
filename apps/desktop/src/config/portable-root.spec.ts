@@ -7,7 +7,7 @@ const USER_DATA = '/Users/me/Library/Application Support/CUBRID Admin';
 const mockApp = { isPackaged: true, getPath: jest.fn((name: string) => (name === 'userData' ? USER_DATA : `/other/${name}`)) };
 jest.mock('electron', () => ({ app: mockApp }));
 
-import { getDesktopDataRoot, getPortableFolder } from './portable-root';
+import { getDesktopDataRoot, getPortableFolder, isWritableFolder } from './portable-root';
 
 const ENV_KEYS = ['CWM_PORTABLE_APP_ROOT', 'PORTABLE_EXECUTABLE_DIR', 'APPIMAGE'] as const;
 const realPlatform = process.platform;
@@ -58,28 +58,80 @@ describe('desktop data root', () => {
     expect(mockApp.getPath).not.toHaveBeenCalled();
   });
 
-  describe('Windows', () => {
-    it('portable exe: the folder of the original exe, not the temp folder it runs from', () => {
-      runAs('win32', 'C:\\Users\\me\\AppData\\Local\\Temp\\2abc\\CUBRID Admin.exe', { PORTABLE_EXECUTABLE_DIR: 'D:\\tools\\cubrid' });
-      expect(getPortableFolder()).toBe('D:\\tools\\cubrid');
-      expect(getDesktopDataRoot()).toBe('D:\\tools\\cubrid');
+  describe('Windows and Linux portable', () => {
+    let folder: string;
+
+    beforeEach(() => {
+      folder = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-portable-'));
     });
 
-    it('installed (NSIS): the user data folder, not the install folder', () => {
-      runAs('win32', 'C:\\Users\\me\\AppData\\Local\\Programs\\CUBRID Admin\\CUBRID Admin.exe');
+    afterEach(() => {
+      fs.chmodSync(folder, 0o755);
+      fs.rmSync(folder, { recursive: true, force: true });
+    });
+
+    it('Windows portable exe: the folder of the original exe, not the temp folder it runs from', () => {
+      runAs('win32', 'C:\\Users\\me\\AppData\\Local\\Temp\\2abc\\CUBRID Admin.exe', { PORTABLE_EXECUTABLE_DIR: folder });
+      expect(getPortableFolder()).toBe(folder);
+      expect(getDesktopDataRoot()).toBe(folder);
+    });
+
+    it('Windows portable exe in a read-only folder: the user data folder', () => {
+      fs.chmodSync(folder, 0o555);
+      runAs('win32', 'C:\\Users\\me\\AppData\\Local\\Temp\\2abc\\CUBRID Admin.exe', { PORTABLE_EXECUTABLE_DIR: folder });
+      expect(getPortableFolder()).toBeNull();
+      expect(getDesktopDataRoot()).toBe(USER_DATA);
+    });
+
+    it('AppImage: the folder of the AppImage file', () => {
+      runAs('linux', '/tmp/.mount_CUBRIDxyz/cubrid-admin-desktop', { APPIMAGE: path.join(folder, 'CUBRID-Admin.AppImage') });
+      expect(getPortableFolder()).toBe(folder);
+      expect(getDesktopDataRoot()).toBe(folder);
+    });
+
+    it('AppImage in a read-only folder: the user data folder', () => {
+      fs.chmodSync(folder, 0o555);
+      runAs('linux', '/tmp/.mount_CUBRIDxyz/cubrid-admin-desktop', { APPIMAGE: path.join(folder, 'CUBRID-Admin.AppImage') });
       expect(getPortableFolder()).toBeNull();
       expect(getDesktopDataRoot()).toBe(USER_DATA);
     });
   });
 
-  describe('Linux', () => {
-    it('AppImage: the folder of the AppImage file', () => {
-      runAs('linux', '/tmp/.mount_CUBRIDxyz/cubrid-admin-desktop', { APPIMAGE: '/home/me/apps/CUBRID-Admin.AppImage' });
-      expect(getPortableFolder()).toBe('/home/me/apps');
-      expect(getDesktopDataRoot()).toBe('/home/me/apps');
+  describe('write probe', () => {
+    let folder: string;
+
+    beforeEach(() => {
+      folder = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-probe-'));
     });
 
-    it('installed (rpm): the user data folder, not the install folder', () => {
+    afterEach(() => {
+      fs.chmodSync(folder, 0o755);
+      fs.rmSync(folder, { recursive: true, force: true });
+    });
+
+    it('creates a file to decide, and leaves nothing behind', () => {
+      expect(isWritableFolder(folder)).toBe(true);
+      expect(fs.readdirSync(folder)).toEqual([]);
+    });
+
+    it('is false for a folder where no file can be created', () => {
+      fs.chmodSync(folder, 0o555);
+      expect(isWritableFolder(folder)).toBe(false);
+    });
+
+    it('is false for a missing folder', () => {
+      expect(isWritableFolder(path.join(folder, 'missing'))).toBe(false);
+    });
+  });
+
+  describe('installed', () => {
+    it('Windows (NSIS): the user data folder, not the install folder', () => {
+      runAs('win32', 'C:\\Users\\me\\AppData\\Local\\Programs\\CUBRID Admin\\CUBRID Admin.exe');
+      expect(getPortableFolder()).toBeNull();
+      expect(getDesktopDataRoot()).toBe(USER_DATA);
+    });
+
+    it('Linux (rpm or deb): the user data folder, not the install folder', () => {
       runAs('linux', '/opt/CUBRID Admin/cubrid-admin-desktop');
       expect(getPortableFolder()).toBeNull();
       expect(getDesktopDataRoot()).toBe(USER_DATA);

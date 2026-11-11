@@ -4,7 +4,7 @@
  * (major.minor.patch.commit_num), into dist/release:
  *
  *   server portable (executable + conf/), packed here:
- *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz           also linux-arm64, macos-x64
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz           also linux-arm64, linux-x64-el7, macos-x64, macos-arm64
  *     CUBRID-Admin-server-0.1.0.0001-windows-x64.zip
  *   server installers, built by scripts/package-server-installers.mjs:
  *     CUBRID-Admin-server-0.1.0.0001-linux-x64.rpm              also linux-arm64 (only with rpmbuild)
@@ -49,6 +49,7 @@ const SERVER = [
   { exe: 'cubrid-admin-linux-el7', platform: 'linux-x64-el7', kind: 'tar.gz' },
   { exe: 'cubrid-admin-linux-arm64', platform: 'linux-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin-macos', platform: 'macos-x64', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-macos-arm64', platform: 'macos-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin.exe', platform: 'windows-x64', kind: 'zip' },
 ];
 

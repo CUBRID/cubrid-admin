@@ -16,3 +16,22 @@ export function serverHome(devDefault: string): string {
   }
   return isStandaloneExecutable() ? path.dirname(process.execPath) : devDefault;
 }
+
+/** Where the rpm, the deb and install.sh put the executable; its service sets CWM_HOME. */
+export const INSTALLED_PROGRAM_DIR = '/opt/cubrid-admin';
+
+/**
+ * The installed executable run by hand (without the service's CWM_HOME) would
+ * create a second set of settings and data in /opt/cubrid-admin: refuse instead.
+ */
+export function refuseInstalledCopyWithoutHome(): void {
+  if (process.env.CWM_HOME?.trim() || !isStandaloneExecutable()) {
+    return;
+  }
+  if (path.dirname(process.execPath) === INSTALLED_PROGRAM_DIR) {
+    throw new Error(
+      'This is the installed CUBRID Admin Server: start it with "systemctl start cubrid-admin" ' +
+        '(settings in /etc/cubrid-admin/cwm.conf), or set CWM_HOME to run it by hand.'
+    );
+  }
+}

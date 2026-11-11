@@ -30,6 +30,13 @@ install -m 0644 %{_sourcedir}/cwm.conf.sample %{buildroot}/opt/cubrid-admin/cwm.
 install -m 0644 %{_sourcedir}/cwm.conf.reference.md %{buildroot}/opt/cubrid-admin/cwm.conf.reference.md
 install -m 0644 %{_sourcedir}/cubrid-admin.service %{buildroot}/usr/lib/systemd/system/cubrid-admin.service
 
+%pre
+if [ -e /opt/cubrid-admin/.installed-by-install-sh ]; then
+  echo "CUBRID Admin Server was installed with install.sh: remove it with its uninstall.sh first (settings and data are kept)." >&2
+  exit 1
+fi
+exit 0
+
 %post
 # The user, /etc/cubrid-admin/cwm.conf, /var/lib/cubrid-admin and /var/log/cubrid-admin
 # are not package files: an upgrade or removal never changes or deletes them.
