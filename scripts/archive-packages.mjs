@@ -37,6 +37,8 @@ const PRODUCT = 'CUBRID-Admin';
 
 const SERVER = [
   { exe: 'cubrid-admin-linux', platform: 'linux-x64', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-linux-el7', platform: 'linux-x64-el7', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-linux-arm64', platform: 'linux-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin-macos', platform: 'macos-x64', kind: 'tar.gz' },
   { exe: 'cubrid-admin.exe', platform: 'windows-x64', kind: 'zip' },
 ];

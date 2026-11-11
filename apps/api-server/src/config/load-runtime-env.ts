@@ -5,6 +5,7 @@ import { config as loadEnv } from 'dotenv';
 import { parseCliArgs } from './parse-cli-args';
 import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from './cms-concurrency';
 import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from './topsql-limits';
+import { isStandaloneExecutable } from '../util/standalone-executable';
 
 const CWM_CONF_FILENAME = 'cwm.conf';
 const CWM_CONF_SUBDIR = 'conf';
@@ -143,8 +144,8 @@ export function resolveCwmConfPath(): string {
   // The desktop app keeps cwm.conf in its workspace and passes the path.
   const explicit = process.env.CWM_CONF_PATH?.trim();
   if (explicit) return explicit;
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+  const isStandalone = isStandaloneExecutable();
+  const baseDir = isStandalone ? path.dirname(process.execPath) : process.cwd();
   const confDir = resolveCwmConfDir(baseDir);
   return path.join(confDir, CWM_CONF_FILENAME);
 }
@@ -167,7 +168,7 @@ export function readCwmConfSafe(confPath: string): CwmConf | null {
 // ── entry point ──────────────────────────────────────────────────────────────
 
 /**
- * Loads env before Nest bootstrap (pkg-aware base dir).
+ * Loads env before Nest bootstrap (base dir beside the single executable when run as one).
  *
  * Priority (highest to lowest):
  *   1. process.env already set (systemd EnvironmentFile etc.)
@@ -211,8 +212,8 @@ function loadRuntimeEnvFiles(): void {
     'development'
   ).toLowerCase();
   const isProduction = rawMode === 'production';
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+  const isStandalone = isStandaloneExecutable();
+  const baseDir = isStandalone ? path.dirname(process.execPath) : process.cwd();
 
   // 1. .env first — so legacy SEED/SALT are in process.env before vault runs.
   const candidates: string[] = [];
@@ -232,13 +233,13 @@ function loadRuntimeEnvFiles(): void {
   // 2. conf/cwm.conf — user-editable settings (throws on parse error).
   const confDir = resolveCwmConfDir(baseDir);
   const confPath = confDir ? path.join(confDir, CWM_CONF_FILENAME) : null;
-  if (confPath && (isPkg || fs.existsSync(confPath))) {
+  if (confPath && (isStandalone || fs.existsSync(confPath))) {
     loadCwmConf(confDir ?? baseDir);
   }
 
   // 3. cwm-vault — SEED/SALT, only for values not already set above.
   const vaultExists = fs.existsSync(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
-  if (isPkg || vaultExists) {
+  if (isStandalone || vaultExists) {
     loadOrCreateVaultSecrets(baseDir);
   }
 }

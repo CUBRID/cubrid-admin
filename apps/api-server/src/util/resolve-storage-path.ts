@@ -1,8 +1,9 @@
 import * as path from 'path';
+import { isStandaloneExecutable } from './standalone-executable';
 
 /**
  * Determines the appropriate storage path based on the execution environment.
- * If running as a `pkg` executable, it uses the executable's directory.
+ * If running as the single executable, it uses the executable's directory.
  * Otherwise (development mode), it uses the project's root directory.
  *
  * @returns The absolute path to the storage directory.
@@ -10,7 +11,7 @@ import * as path from 'path';
  * @since 1.0.0
  */
 export function getStoragePath() {
-  const isPkg = !!(process as any).pkg;
+  const isStandalone = isStandaloneExecutable();
   // Packaged executables are meant to be launchable from any working
   // directory (e.g. `nohup ./cwm-linux &` from $HOME) — resolving a relative
   // STORAGE_PATH against process.cwd() would then silently pick a different
@@ -18,7 +19,7 @@ export function getStoragePath() {
   // previously-stored users/hosts disappear. Anchor relative paths to the
   // executable's own directory instead, matching the no-override default
   // below; only a genuinely absolute STORAGE_PATH is taken as-is.
-  const baseDir = isPkg ? path.dirname(process.execPath) : path.resolve(__dirname, '..', '..');
+  const baseDir = isStandalone ? path.dirname(process.execPath) : path.resolve(__dirname, '..', '..');
 
   const configuredPath = process.env.STORAGE_PATH?.trim();
   if (configuredPath) {

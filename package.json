@@ -88,7 +88,7 @@
     "jsdom": "~22.1.0",
     "jsonc-eslint-parser": "^2.1.0",
     "marked": "^17.0.1",
-    "pkg": "^5.8.1",
+    "postject": "1.0.0-alpha.6",
     "prettier": "~3.6.2",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
@@ -168,7 +168,7 @@
     "build": "nx run-many -t build --all",
     "start": "node dist/apps/api-server/main.js",
     "package:server": "npm run build:web-manager && nx run api-server:build:exe:all && node scripts/assemble-package.mjs all",
-    "package:server:linux": "npm run build:web-manager && nx run api-server:build:exe:linux && node scripts/assemble-package.mjs linux",
+    "package:server:linux": "npm run build:web-manager && nx run api-server:build:exe:linux && node scripts/assemble-package.mjs linux linux-el7 linux-arm64",
     "package:server:win": "npm run build:web-manager && nx run api-server:build:exe:windows && node scripts/assemble-package.mjs win",
     "package:server:mac": "npm run build:web-manager && nx run api-server:build:exe:macos && node scripts/assemble-package.mjs mac",
     "package:electron": "nx run desktop:package",
@@ -189,27 +189,7 @@
     "param-catalog:generate": "node scripts/generate-param-catalog.mjs",
     "preview:web-manager": "nx preview web-manager",
     "serve:web-manager:dist": "node tools/serve-web-manager.js",
-    "pkg:api-server": "nx run api-server:build:exe",
-    "pkg:api-server:linux": "nx run api-server:build:exe:linux",
-    "pkg:api-server:windows": "nx run api-server:build:exe:windows",
-    "pkg:api-server:macos": "nx run api-server:build:exe:macos",
-    "pkg:api-server:all": "nx run api-server:build:exe:all",
     "serve:web-manager:dist:4200": "node tools/serve-web-manager.js 4200",
     "serve:web-manager:dist:8080": "node tools/serve-web-manager.js 8080"
-  },
-  "pkg": {
-    "scripts": [
-      "main.js"
-    ],
-    "assets": [
-      "assets/**/*",
-      "public/**/*"
-    ],
-    "targets": [
-      "node18-win-x64",
-      "node18-linux-x64",
-      "node18-macos-x64"
-    ],
-    "outputPath": "dist/executables"
   }
 }

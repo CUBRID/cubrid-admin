@@ -235,7 +235,7 @@ E2E 환경과 실제 CMS 테스트 규칙은 [`e2e/README.md`](e2e/README.md)를
 | Frontend | React 19, Vite 7, Ant Design 5, Redux Toolkit, Tailwind CSS 4 |
 | Backend | NestJS 11, TypeScript, Passport JWT |
 | Desktop | Electron 35 |
-| Tooling | Nx 22, Webpack, pkg, Jest, ESLint |
+| Tooling | Nx 22, Webpack, Node.js single executable applications (SEA), Jest, ESLint |
 
 ---
 

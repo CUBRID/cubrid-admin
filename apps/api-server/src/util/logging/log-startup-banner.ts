@@ -5,21 +5,22 @@ import { ConfigService } from '@config/config.service';
 import { getStoragePath } from '../resolve-storage-path';
 import { cmsMaxConcurrentFromEnv } from '@config/cms-concurrency';
 import { topSqlLimitsFromEnv } from '@config/topsql-limits';
+import { isStandaloneExecutable } from '../standalone-executable';
 
 export type StartupListenInfo =
   | { kind: 'unixSocket'; socketPath: string }
   | { kind: 'tcp'; host: string; port: string };
 
 function resolveConfSource(): string {
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+  const isStandalone = isStandaloneExecutable();
+  const baseDir = isStandalone ? path.dirname(process.execPath) : process.cwd();
   const confPath = path.join(baseDir, 'conf', 'cwm.conf');
   return fs.existsSync(confPath) ? confPath : '(none found — using defaults)';
 }
 
 function resolveVaultSource(): string {
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+  const isStandalone = isStandaloneExecutable();
+  const baseDir = isStandalone ? path.dirname(process.execPath) : process.cwd();
   const vaultPath = path.join(baseDir, 'cwm-vault', 'secrets.json');
 
   if (!fs.existsSync(vaultPath)) {

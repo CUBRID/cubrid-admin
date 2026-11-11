@@ -1,10 +1,11 @@
 import * as path from 'path';
+import { isStandaloneExecutable } from './standalone-executable';
 
 /**
  * Determines the appropriate log directory based on the execution environment.
- * If running as a `pkg` executable, it uses the executable's directory.
+ * If running as the single executable, it uses the executable's directory.
  * Otherwise (development mode), it uses the project's root directory.
- * Mirrors `resolve-storage-path.ts`'s pkg/dev fallback logic.
+ * Mirrors `resolve-storage-path.ts`'s executable/dev fallback logic.
  *
  * @returns The absolute path to the log directory.
  * @category Utilities
@@ -16,9 +17,9 @@ export function getLogPath(): string {
     return path.resolve(configuredPath);
   }
 
-  const isPkg = !!(process as any).pkg;
+  const isStandalone = isStandaloneExecutable();
 
-  if (isPkg) {
+  if (isStandalone) {
     const executableDir = path.dirname(process.execPath);
     return path.join(executableDir, 'logs');
   } else {
