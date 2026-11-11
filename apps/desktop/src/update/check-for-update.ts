@@ -1,4 +1,4 @@
-import { app, shell } from 'electron';
+import { shell } from 'electron';
 import {
   checkForUpdate,
   isTrustedDownloadUrl,
@@ -14,6 +14,7 @@ import {
   isCheckForUpdatesOnStartupEnabled,
   recordUpdateCheckTimestamp,
 } from '../config/desktop-settings';
+import { getProductVersion } from '../product-version';
 
 const STARTUP_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -31,7 +32,7 @@ function resolvePackageType(): PackageType {
 
 async function runCheck(): Promise<UpdateStatus> {
   const result = await checkForUpdate({
-    currentVersion: app.getVersion(),
+    currentVersion: getProductVersion(),
     packageType: resolvePackageType(),
     repo: resolveUpdateRepo(process.env.CWM_UPDATE_CHECK_REPO),
   }).catch((): UpdateCheckResult => ({ status: 'error', reason: 'network' }));
@@ -44,7 +45,7 @@ async function runCheck(): Promise<UpdateStatus> {
     console.warn('[desktop] could not persist update-check timestamp:', error);
   }
 
-  return { currentVersion: app.getVersion(), lastCheckedAt: checkedAt, result };
+  return { currentVersion: getProductVersion(), lastCheckedAt: checkedAt, result };
 }
 
 /**

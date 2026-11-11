@@ -1,7 +1,7 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { DefinePlugin } = require('webpack');
 const { join } = require('path');
-const { version } = require('../../package.json');
+const { productVersion } = require('../../scripts/product-version.cjs');
 
 module.exports = {
   output: {
@@ -23,14 +23,13 @@ module.exports = {
       generatePackageJson: true,
       sourceMap: true,
     }),
-    // Bakes the root package.json's version (the single release-version
-    // source of truth, shared with the Electron desktop packaging — see
-    // scripts/sync-version.mjs) into the bundle at build time, so there's
+    // Bakes the product version, major.minor.patch.commit_num (see
+    // scripts/product-version.cjs), into the bundle at build time, so there's
     // no runtime dependency on a package.json file being present next to
     // main.js in every deployment shape (plain node, pkg executable,
     // bundled inside the Electron app).
     new DefinePlugin({
-      'process.env.APP_VERSION': JSON.stringify(version),
+      'process.env.APP_VERSION': JSON.stringify(productVersion().version),
     }),
   ],
 };

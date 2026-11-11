@@ -9,7 +9,7 @@
       "executor": "nx:run-commands",
       "dependsOn": [{ "target": "build", "projects": "update-check" }],
       "options": {
-        "command": "tsc -p apps/desktop/tsconfig.json && npx tsc-alias -p apps/desktop/tsconfig.json",
+        "command": "tsc -p apps/desktop/tsconfig.json && npx tsc-alias -p apps/desktop/tsconfig.json && node scripts/product-version.cjs --write dist/apps/desktop/product-version.json",
         "cwd": "{workspaceRoot}"
       }
     },
@@ -42,7 +42,7 @@
         { "target": "build-electron", "projects": "web-manager" }
       ],
       "options": {
-        "command": "CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config apps/desktop/electron-builder.yml --publish never",
+        "command": "CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --config apps/desktop/electron-builder.config.cjs --publish never",
         "cwd": "{workspaceRoot}"
       }
     }
