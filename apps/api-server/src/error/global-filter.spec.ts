@@ -59,6 +59,22 @@ describe('GlobalExceptionFilter', () => {
     expect(String(warn.mock.calls[0][0])).toMatch(/^Unauthorized \[/);
   });
 
+  it('keeps a CMS-side 401 (lost CMS token) as an ERROR with its details', () => {
+    const filter = new GlobalExceptionFilter();
+    const logger = (filter as any).logger;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const { host, res } = mockHost('/api/host-uid/database/start-info');
+
+    filter.catch(CmsError.InvalidToken({ hostUid: 'host-uid' }), host);
+
+    expect(res.statusCode).toBe(401);
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0][0])).toMatch(/^App Error \[CMS:/);
+    expect(String(error.mock.calls[0][1])).toContain('host-uid');
+  });
+
   it('passes AppError additionalData safe fields (e.g. dbname) through to the client', () => {
     const filter = new GlobalExceptionFilter();
     const { host, res } = mockHost();

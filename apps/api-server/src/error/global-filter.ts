@@ -93,8 +93,10 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         detail: note,
       };
 
-      if (status === HttpStatus.UNAUTHORIZED) {
-        // A request without a valid login: expected traffic, not a server fault.
+      if (status === HttpStatus.UNAUTHORIZED && exception.kind === 'AUTH') {
+        // Our own login (JWT) missing or invalid: expected traffic, not a server fault.
+        // A CMS-side 401 (lost CMS token, changed cm.pass, CMS restart) is an
+        // operational fault and keeps the full ERROR with its details below.
         this.logger.warn(`Unauthorized [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         const logDetails = exception.toLogDetails(req.url);
