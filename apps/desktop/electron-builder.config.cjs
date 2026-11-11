@@ -150,7 +150,14 @@ module.exports = {
       'libXfixes.so.3', 'libXrandr.so.2', 'libgbm.so.1', 'libexpat.so.1', 'libxcb.so.1', 'libxkbcommon.so.0',
       'libudev.so.1', 'libasound.so.2', 'libatspi.so.0',
     ].map((soname) => `${soname}()(64bit)`),
-    fpm: linuxPackageVersion,
+    // Own the folders under /opt/cubrid-admin, so rpm -e leaves none behind;
+    // after an upgrade from a test build, drop the empty "/opt/CUBRID Admin" tree.
+    fpm: [
+      ...linuxPackageVersion,
+      '--rpm-auto-add-directories',
+      '--rpm-posttrans',
+      path.join(__dirname, '..', '..', 'packaging', 'desktop', 'linux', 'rpm-posttrans.sh'),
+    ],
     ...linuxScripts,
   },
   // The deb keeps electron-builder's default package names (the same on Debian

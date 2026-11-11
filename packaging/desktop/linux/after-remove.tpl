@@ -6,7 +6,7 @@
 # update-alternatives --remove <name> <path>: 'path' must be the registered alternative binary,
 # not the generic symlink — see https://man7.org/linux/man-pages/man1/update-alternatives.1.html
 if type update-alternatives >/dev/null 2>&1; then
-    update-alternatives --remove '${executable}' '/opt/cubrid-admin/${executable}'
+    update-alternatives --remove '${executable}' '/opt/cubrid-admin/${executable}' >/dev/null 2>&1 || true
 else
     rm -f '/usr/bin/${executable}'
 fi

@@ -13,7 +13,7 @@ else
 fi
 
 # Check if user namespaces are supported by the kernel and working with a quick test:
-if ! { [[ -L /proc/self/ns/user ]] && unshare --user true; }; then
+if ! { [[ -L /proc/self/ns/user ]] && unshare --user true 2>/dev/null; }; then
     # Use SUID chrome-sandbox only on systems without user namespaces:
     chmod 4755 '/opt/cubrid-admin/chrome-sandbox' || true
 else
