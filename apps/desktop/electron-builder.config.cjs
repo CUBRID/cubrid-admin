@@ -122,10 +122,32 @@ module.exports = {
     maintainer: 'CUBRID Corporation',
     artifactName: fileName('linux'),
   },
-  // No package dependencies in the rpm: electron-builder's default names (gtk3,
-  // libXScrnSaver, ...) are Red Hat names and would stop the install on SUSE.
-  // The deb keeps electron-builder's defaults, which are the same on Debian and Ubuntu.
-  rpm: { depends: [] },
+  // The rpm depends on the shared libraries the app loads, by soname, which dnf
+  // and zypper resolve on the Red Hat family and SUSE alike (electron-builder's
+  // default package names, gtk3, libXScrnSaver, ..., exist only on Red Hat).
+  // The list is the binary's NEEDED entries without glibc's own libraries.
+  rpm: {
+    depends: [
+      'libglib-2.0.so.0', 'libgobject-2.0.so.0', 'libgio-2.0.so.0', 'libnss3.so', 'libnssutil3.so', 'libsmime3.so',
+      'libnspr4.so', 'libdbus-1.so.3', 'libatk-1.0.so.0', 'libatk-bridge-2.0.so.0', 'libcups.so.2', 'libgtk-3.so.0',
+      'libpango-1.0.so.0', 'libcairo.so.2', 'libX11.so.6', 'libXcomposite.so.1', 'libXdamage.so.1', 'libXext.so.6',
+      'libXfixes.so.3', 'libXrandr.so.2', 'libgbm.so.1', 'libexpat.so.1', 'libxcb.so.1', 'libxkbcommon.so.0',
+      'libudev.so.1', 'libasound.so.2', 'libatspi.so.0',
+    ].map((soname) => `${soname}()(64bit)`),
+  },
+  // The deb keeps electron-builder's default package names (the same on Debian
+  // and Ubuntu) and adds the two libraries they miss. Ubuntu 24.04 renamed some
+  // (t64); naming those first keeps apt from picking another package that only
+  // provides the old name (liboss4-salsa-asound2 for libasound2, which fails).
+  deb: {
+    depends: [
+      'libgtk-3-0t64 | libgtk-3-0', 'libnotify4', 'libnss3', 'libxss1', 'libxtst6', 'xdg-utils',
+      'libatspi2.0-0t64 | libatspi2.0-0', 'libuuid1', 'libsecret-1-0', 'libasound2t64 | libasound2', 'libgbm1',
+    ],
+  },
+  // AppImage runtime 20251108: the older one (default) needs libz.so on arm64,
+  // which a desktop system has only with the zlib development package.
+  toolsets: { appimage: '1.0.2' },
   // Without a Developer ID the app keeps Electron's own ad-hoc signature, which
   // no longer matches the packed bundle ("code has no resources but signature
   // indicates they must be present"), so a downloaded copy is reported as
