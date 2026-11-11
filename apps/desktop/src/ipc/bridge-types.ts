@@ -28,7 +28,7 @@ export type DesktopBridge = {
    */
   setWorkspaceRoot: (workspaceRoot: string, options?: { ignoreUnknownJobs?: boolean }) => Promise<{ ok: true; unchanged?: true }>;
   finishWorkspaceSetup: (workspaceRoot: string) => Promise<{ ok: boolean }>;
-  revealSettingsFile: () => Promise<{ settingsPath: string; portableRoot: string }>;
+  revealSettingsFile: () => Promise<{ settingsPath: string; dataRoot: string }>;
   setMenuLanguage: (language: 'en' | 'ko') => Promise<{ ok: true }>;
   setMenuState: (state: Record<string, boolean>) => Promise<{ ok: true }>;
   /** A conf tab has unsaved changes: quitting asks about them. */
