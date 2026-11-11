@@ -104,6 +104,29 @@ Function un.onInit
   SetRegView 64
 FunctionEnd
 
+; Reads the owner SID of $DataDir as a string ("S-1-5-32-544") into $4, with
+; $3 = 0 on success, through Win32 (GetNamedSecurityInfoW, then
+; ConvertSidToStringSidW). Not PowerShell: launched from a PowerShell 7
+; session, setup passes PSModulePath on and Windows PowerShell's Get-Acl then
+; fails to load its module, which stopped every reinstall.
+Function ReadDataFolderOwner
+  StrCpy $4 ""
+  ; SE_FILE_OBJECT = 1, OWNER_SECURITY_INFORMATION = 1; $5 = owner SID, $6 = descriptor to free.
+  System::Call 'advapi32::GetNamedSecurityInfoW(w "$DataDir", i 1, i 1, *p .r5, p 0, p 0, p 0, *p .r6) i .r3'
+  ${If} $3 != 0
+    Return
+  ${EndIf}
+  System::Call 'advapi32::ConvertSidToStringSidW(p r5, *p .r7) i .r8'
+  ${If} $8 == 0
+    StrCpy $3 "SID"
+  ${Else}
+    System::Call '*$7(&w256 .r4)'
+    System::Call 'kernel32::LocalFree(p r7)'
+  ${EndIf}
+  System::Call 'kernel32::LocalFree(p r6)'
+  !insertmacro TrimOutput $4
+FunctionEnd
+
 ; Moves a data folder that setup did not make out of the way, and says where.
 Function MoveDataFolderAside
   ${GetTime} "" "L" $3 $4 $5 $6 $7 $8 $9
@@ -171,14 +194,11 @@ Section "Install"
     ${OrIf} $1 != ""
       DetailPrint "Keeping the data folder of the installed ${PRODUCT}: $DataDir"
     ${ElseIf} $0 == $DataDir
-      nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "[Console]::Write((Get-Acl -LiteralPath '$DataDir').GetOwner([System.Security.Principal.SecurityIdentifier]).Value)"`
-      Pop $3
-      Pop $4
-      !insertmacro TrimOutput $4
+      Call ReadDataFolderOwner
       DetailPrint "Owner of $DataDir: $4 (exit code $3)"
       ${If} $3 != 0
       ${OrIf} $4 == ""
-        MessageBox MB_ICONSTOP "Setup could not check who owns $DataDir (exit code $3). Nothing was changed. Run setup again as an administrator." /SD IDOK
+        MessageBox MB_ICONSTOP "Setup could not check who owns $DataDir (error $3). Nothing was changed. Run setup again as an administrator." /SD IDOK
         Abort
       ${EndIf}
       ${If} $4 != "S-1-5-32-544"
