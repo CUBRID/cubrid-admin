@@ -23,8 +23,10 @@ concurrency:
 jobs:
   build:
     name: Build packages
-    # macOS builds every package: desktop for macOS, Windows and Linux
-    # (arm64 and x64) and the server for Linux, macOS and Windows (x64).
+    # macOS builds every package, 26 files: the desktop app for macOS, Windows
+    # and Linux (x64 and arm64; installer and portable), and the server for
+    # Linux x64 and arm64, Linux x64 el7 (RHEL/CentOS 7), macOS x64 and arm64,
+    # and Windows x64.
     runs-on: macos-15
     timeout-minutes: 90
     outputs:
