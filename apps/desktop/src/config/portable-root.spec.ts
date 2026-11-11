@@ -1,7 +1,10 @@
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const mockApp = { isPackaged: true, getPath: jest.fn((name: string) => `/user-data/${name}`) };
+// Electron names userData after the packed productName (electron-builder.config.cjs).
+const USER_DATA = '/Users/me/Library/Application Support/CUBRID Admin';
+const mockApp = { isPackaged: true, getPath: jest.fn((name: string) => (name === 'userData' ? USER_DATA : `/other/${name}`)) };
 jest.mock('electron', () => ({ app: mockApp }));
 
 import { getDesktopDataRoot, getPortableFolder } from './portable-root';
@@ -65,7 +68,7 @@ describe('desktop data root', () => {
     it('installed (NSIS): the user data folder, not the install folder', () => {
       runAs('win32', 'C:\\Users\\me\\AppData\\Local\\Programs\\CUBRID Admin\\CUBRID Admin.exe');
       expect(getPortableFolder()).toBeNull();
-      expect(getDesktopDataRoot()).toBe('/user-data/userData');
+      expect(getDesktopDataRoot()).toBe(USER_DATA);
     });
   });
 
@@ -79,7 +82,7 @@ describe('desktop data root', () => {
     it('installed (rpm): the user data folder, not the install folder', () => {
       runAs('linux', '/opt/CUBRID Admin/cubrid-admin-desktop');
       expect(getPortableFolder()).toBeNull();
-      expect(getDesktopDataRoot()).toBe('/user-data/userData');
+      expect(getDesktopDataRoot()).toBe(USER_DATA);
     });
   });
 
@@ -91,17 +94,56 @@ describe('desktop data root', () => {
     ])('installed in %s: the user data folder', (_where, bundle) => {
       runAs('darwin', `${bundle}/Contents/MacOS/CUBRID Admin`);
       expect(getPortableFolder()).toBeNull();
-      expect(getDesktopDataRoot()).toBe('/user-data/userData');
+      expect(getDesktopDataRoot()).toBe(USER_DATA);
     });
 
-    it.each([
-      ['Downloads', path.join(os.homedir(), 'Downloads', 'CUBRID Admin.app')],
-      ['a folder whose name only starts with Applications', '/ApplicationsOld/CUBRID Admin.app'],
-    ])('portable in %s: the folder that contains the .app', (_where, bundle) => {
-      runAs('darwin', `${bundle}/Contents/MacOS/CUBRID Admin`);
-      expect(getPortableFolder()).toBe(path.dirname(bundle));
-      expect(getDesktopDataRoot()).toBe(path.dirname(bundle));
-      expect(mockApp.getPath).not.toHaveBeenCalled();
+    describe('outside Applications', () => {
+      let parent: string;
+
+      beforeEach(() => {
+        parent = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-portable-'));
+      });
+
+      afterEach(() => {
+        fs.chmodSync(parent, 0o755);
+        fs.rmSync(parent, { recursive: true, force: true });
+      });
+
+      it('portable in a writable folder: the folder that contains the .app', () => {
+        const bundle = path.join(parent, 'CUBRID Admin.app');
+        runAs('darwin', `${bundle}/Contents/MacOS/CUBRID Admin`);
+        expect(getPortableFolder()).toBe(parent);
+        expect(getDesktopDataRoot()).toBe(parent);
+        expect(mockApp.getPath).not.toHaveBeenCalled();
+      });
+
+      it('a folder whose name only starts with Applications is not Applications', () => {
+        const home = process.env.HOME;
+        process.env.HOME = parent; // ~/Applications is then <parent>/Applications
+        try {
+          const folder = path.join(parent, 'ApplicationsOld');
+          fs.mkdirSync(folder);
+          runAs('darwin', `${folder}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+          expect(getPortableFolder()).toBe(folder);
+        } finally {
+          process.env.HOME = home;
+        }
+      });
+
+      it('translocated by macOS (a downloaded .app run in place): the user data folder', () => {
+        const translocated = path.join(parent, 'AppTranslocation', '5F3A9C2E', 'd');
+        fs.mkdirSync(translocated, { recursive: true });
+        runAs('darwin', `${translocated}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+        expect(getPortableFolder()).toBeNull();
+        expect(getDesktopDataRoot()).toBe(USER_DATA);
+      });
+
+      it('in a read-only folder (e.g. the mounted dmg): the user data folder', () => {
+        fs.chmodSync(parent, 0o555);
+        runAs('darwin', `${parent}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+        expect(getPortableFolder()).toBeNull();
+        expect(getDesktopDataRoot()).toBe(USER_DATA);
+      });
     });
   });
 });

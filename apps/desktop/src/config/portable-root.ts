@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { app } from 'electron';
@@ -31,12 +32,30 @@ function isInApplicationsFolder(bundlePath: string): boolean {
   );
 }
 
+function isWritableFolder(folder: string): boolean {
+  try {
+    fs.accessSync(folder, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A downloaded .app that macOS runs from a random read-only copy (App
+ * Translocation), or one started from a read-only place such as a mounted dmg:
+ * nothing can be kept beside it.
+ */
+function cannotKeepFilesBeside(bundlePath: string): boolean {
+  return bundlePath.includes(`${path.sep}AppTranslocation${path.sep}`) || !isWritableFolder(path.dirname(bundlePath));
+}
+
 /**
  * The folder a portable build keeps its files in, or `null` for an installed build:
  * - Windows portable exe: the folder of the original exe (it runs from a temp folder);
  * - Linux AppImage: the folder of the AppImage file;
  * - macOS: the folder that contains the .app, unless the .app is under
- *   /Applications or ~/Applications (installed).
+ *   /Applications or ~/Applications (installed), or runs translocated or read-only.
  * The Windows installer (NSIS) and the Linux rpm are installed.
  */
 export function getPortableFolder(): string | null {
@@ -51,7 +70,10 @@ export function getPortableFolder(): string | null {
 
   if (process.platform === 'darwin') {
     const bundlePath = getAppBundlePath();
-    return bundlePath && !isInApplicationsFolder(bundlePath) ? path.dirname(bundlePath) : null;
+    if (!bundlePath || isInApplicationsFolder(bundlePath) || cannotKeepFilesBeside(bundlePath)) {
+      return null;
+    }
+    return path.dirname(bundlePath);
   }
 
   return null;
@@ -60,8 +82,9 @@ export function getPortableFolder(): string | null {
 /**
  * Where `desktop-settings.json` and the default `cwm-workspace/` live:
  * CWM_PORTABLE_APP_ROOT if set; the repository in dev mode; beside a portable
- * build (getPortableFolder); for an installed build, the user's app data folder
- * (app.getPath('userData')), never the install folder.
+ * build (getPortableFolder); otherwise (installed, or a macOS .app that cannot
+ * keep files beside it) the user's app data folder (app.getPath('userData'),
+ * named after the product: .../CUBRID Admin), never the install folder.
  */
 export function getDesktopDataRoot(): string {
   const override = process.env.CWM_PORTABLE_APP_ROOT?.trim();

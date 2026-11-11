@@ -45,6 +45,12 @@ module.exports = {
   files: ['dist/apps/desktop/**/*', 'dist/libs/update-check/**/*', 'package.json'],
   extraMetadata: {
     name: 'cubrid-admin-desktop',
+    // Electron names the app (and its userData folder) after productName:
+    // ~/Library/Application Support/CUBRID Admin, %APPDATA%\CUBRID Admin, ~/.config/CUBRID Admin.
+    productName: 'CUBRID Admin',
+    // Windows CompanyName and FileDescription of the app and the installer / portable exe.
+    author: { name: 'CUBRID Corporation' },
+    description: 'CUBRID Admin',
     version: base,
     main: 'dist/apps/desktop/main.js',
   },
