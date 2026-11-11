@@ -13,6 +13,7 @@ import {
   setWorkspaceRoot,
 } from '../config/desktop-settings';
 import { getPortableAppRoot } from '../config/portable-root';
+import { getProductVersion } from '../product-version';
 import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
@@ -306,7 +307,7 @@ export function registerDesktopIpcHandlers(): void {
     return { ok: true };
   });
 
-  ipcMain.handle('desktop:get-app-version', () => app.getVersion());
+  ipcMain.handle('desktop:get-app-version', () => getProductVersion());
 
   ipcMain.handle('desktop:get-update-status', () => getUpdateStatus());
 

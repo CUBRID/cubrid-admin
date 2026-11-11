@@ -59,9 +59,9 @@ it('shows the product version from the root package.json in the footer', async (
     );
   });
 
-  // vite.config.mjs injects the root package.json's version.
+  // vite.config.mjs injects major.minor.patch.commit_num (scripts/product-version.cjs).
   const rootVersion = import.meta.env.VITE_APP_VERSION;
-  expect(rootVersion).toMatch(/^\d+\.\d+\.\d+/);
+  expect(rootVersion).toMatch(/^\d+\.\d+\.\d+\.\d{4,}$/);
   expect(container.querySelector('[data-testid="login-app-version"]').textContent).toBe(`v${rootVersion}`);
   expect(container.textContent).not.toContain('12.4.0');
 });

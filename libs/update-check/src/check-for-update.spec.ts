@@ -150,6 +150,36 @@ describe('checkForUpdate', () => {
     expect(result).toEqual({ status: 'up-to-date' });
   });
 
+  describe('major.minor.patch.commit_num', () => {
+    it('offers a newer commit_num tag over the old alpha release', async () => {
+      const result = await checkForUpdate({
+        currentVersion: '0.1.0.0001',
+        packageType: 'server',
+        fetchImpl: respondWith([release('v0.1.0-alpha.1', { prerelease: true }), release('v0.2.0.0002')]),
+      });
+
+      expect(result).toMatchObject({ status: 'update-available', latestVersion: '0.2.0.0002' });
+    });
+
+    it('reports up-to-date when the running commit_num is the newest', async () => {
+      const result = await checkForUpdate({
+        currentVersion: '0.2.0.0007',
+        packageType: 'server',
+        fetchImpl: respondWith([release('v0.2.0.0005'), release('v0.1.0.0001'), release('v0.1.0-alpha.1')]),
+      });
+
+      expect(result).toEqual({ status: 'up-to-date' });
+    });
+
+    it('reports parse-error when the running version is not numeric', async () => {
+      const fetchImpl = respondWith([release('v0.2.0.0005')]);
+      const result = await checkForUpdate({ currentVersion: '0.2.0.unknown', packageType: 'server', fetchImpl });
+
+      expect(result).toEqual({ status: 'error', reason: 'parse-error' });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
   it('reports no-release for an empty release list', async () => {
     const result = await checkForUpdate({ currentVersion: '1.0.0', packageType: 'server', fetchImpl: respondWith([]) });
 

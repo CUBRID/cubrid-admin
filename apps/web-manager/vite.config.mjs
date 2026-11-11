@@ -3,16 +3,14 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'node:url'
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 
-// The root package.json is the single source of the product version; it's
-// baked in at build time so it shows even before login (no API call).
-const { version: appVersion } = JSON.parse(
-  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
-)
-if (!appVersion) {
-  throw new Error('Root package.json has no "version" field.')
-}
+// major.minor.patch.commit_num (scripts/product-version.cjs), baked in at
+// build time so it shows even before login (no API call). Loaded with
+// require: Vite bundles this config, and a bundled import of the CommonJS
+// script cannot load child_process.
+const { productVersion } = createRequire(import.meta.url)('../../scripts/product-version.cjs')
+const appVersion = productVersion().version
 
 const devServiceWorkerCleanup = {
   name: 'dev-service-worker-cleanup',
