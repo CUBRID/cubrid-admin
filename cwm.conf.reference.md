@@ -21,7 +21,7 @@ and `LOG_DIR`. Upgrading or removing the installed server keeps `cwm.conf`,
 {
   "PORT": "8080",
   "ENVIRONMENT": "production",
-  "STORAGE_PATH": "./data",
+  "STORAGE_PATH": "./storage",
   "ALLOWED_ORIGINS": "https://your-domain.example",
   "LISTEN_HOST": "127.0.0.1",
   "SSL_CERT_PATH": "/etc/ssl/certs/your-cert.pem",
@@ -39,7 +39,7 @@ unreadable.
 |---|---|---|
 | `PORT` | Server port | `8080` |
 | `ENVIRONMENT` | `production` or `development` | `production` |
-| `STORAGE_PATH` | Where application data is stored; a relative path is taken from the server folder (`CWM_HOME`, or next to the executable) | `./data` |
+| `STORAGE_PATH` | Where application data is stored; a relative path is taken from the server folder (`CWM_HOME`, or next to the executable) | `./storage` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist. Leave unset for same-origin only. | — |
 | `LISTEN_HOST` | Network interface to bind to, e.g. `127.0.0.1` to refuse connections from other machines | all interfaces |
 | `SSL_CERT_PATH` / `SSL_KEY_PATH` | Path to a real TLS cert/key pair. Both must be set together, or neither. | self-signed cert, auto-generated |
