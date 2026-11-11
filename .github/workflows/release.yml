@@ -12,6 +12,11 @@ on:
         description: 'Build the packages only, without a release'
         type: boolean
         default: true
+      runs_on:
+        description: 'macOS runner for the build (all 26 files are built on it, for every OS and arch)'
+        type: choice
+        default: macos-15
+        options: [macos-15, macos-15-intel, macos-14]
 
 permissions:
   contents: read
@@ -27,7 +32,10 @@ jobs:
     # and Linux (x64 and arm64; installer and portable), and the server for
     # Linux x64 and arm64, Linux x64 el7 (RHEL/CentOS 7), macOS x64 and arm64,
     # and Windows x64.
-    runs-on: macos-15
+    # By hand: the runs_on input. On a tag push: the repository variable
+    # RELEASE_RUNNER when set (e.g. macos-15-intel while macOS arm64 runners
+    # are short), otherwise macos-15.
+    runs-on: ${{ inputs.runs_on || vars.RELEASE_RUNNER || 'macos-15' }}
     timeout-minutes: 90
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -70,7 +78,7 @@ jobs:
         run: |
           sea=$(sed -n "s/^export const NODE_VERSION = 'v\([0-9]*\)\..*/\1/p" scripts/build-server-sea.mjs)
           runner=$(node -p 'process.versions.node.split(".")[0]')
-          echo "runner Node.js $runner, server executables Node.js $sea"
+          echo "runner $(uname -m), runner Node.js $runner, server executables Node.js $sea"
           [ -n "$sea" ] && [ "$runner" = "$sea" ]
 
       # electron-builder's tool downloads (fpm, appimage, nsis, ...), reused between runs.
