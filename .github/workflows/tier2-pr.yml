@@ -101,6 +101,7 @@ jobs:
           repository: ${{ needs.prepare.outputs.repository }}
           ref: ${{ needs.prepare.outputs.sha }}
           path: app
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Verify PR commit
