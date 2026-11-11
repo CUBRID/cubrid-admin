@@ -16,9 +16,19 @@ export function isStandaloneExecutable(): boolean {
 /** Asset key prefix of the web screens embedded in the executable. */
 const PUBLIC_ASSET_PREFIX = 'public/';
 
+// Each embedded file is copied out of the executable once (sea.getAsset copies
+// on every call). Only files that exist are kept, so unknown paths cannot grow it.
+const publicAssets = new Map<string, Buffer>();
+
 function readPublicAsset(file: string): Buffer | null {
+  const cached = publicAssets.get(file);
+  if (cached) {
+    return cached;
+  }
   try {
-    return Buffer.from(sea.getAsset(`${PUBLIC_ASSET_PREFIX}${file}`));
+    const body = Buffer.from(sea.getAsset(`${PUBLIC_ASSET_PREFIX}${file}`));
+    publicAssets.set(file, body);
+    return body;
   } catch {
     return null;
   }
