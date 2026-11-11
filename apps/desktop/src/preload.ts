@@ -11,6 +11,15 @@ function resolveApiBaseUrl(): string {
 const desktopBridge: DesktopBridge = {
   isWorkspaceSetupRequired: () => ipcRenderer.invoke('desktop:is-workspace-setup-required'),
   getWorkspaceStartupError: () => ipcRenderer.invoke('desktop:get-workspace-startup-error'),
+  getApiStartStatus: () => ipcRenderer.invoke('desktop:get-api-start-status'),
+  onApiStartStatus: (callback) => {
+    const subscription = (_event: IpcRendererEvent, status: Parameters<typeof callback>[0]) => callback(status);
+    ipcRenderer.on('desktop:api-start-status', subscription);
+    return () => {
+      ipcRenderer.removeListener('desktop:api-start-status', subscription);
+    };
+  },
+  decideApiStart: (decision) => ipcRenderer.invoke('desktop:api-start-decision', decision),
   getWorkspaceInfo: () => ipcRenderer.invoke('desktop:get-workspace-info'),
   pickWorkspaceDirectory: () => ipcRenderer.invoke('desktop:pick-workspace-directory'),
   pickOpenFile: (accept) => ipcRenderer.invoke('desktop:pick-open-file', accept),

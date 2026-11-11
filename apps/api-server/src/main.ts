@@ -1,4 +1,5 @@
 import { loadRuntimeEnv } from './config/load-runtime-env';
+import { failedSignal, sendDesktopSignal } from './util/desktop-signal';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as path from 'path';
@@ -142,6 +143,7 @@ async function bootstrap() {
       if (previousUmask !== null) process.umask(previousUmask);
     }
     logStartupBanner(configService, { kind: 'unixSocket', socketPath: unixSocket }, appLogger);
+    sendDesktopSignal({ state: 'ready' });
     // bootConfig (not configService) — winston-logger.ts tracks the
     // instance it was actually built from, so reloads must go through that
     // same object.
@@ -163,7 +165,12 @@ async function bootstrap() {
   logStartupBanner(configService, { kind: 'tcp', host: boundHost, port }, appLogger);
   startLogConfigWatcher(bootConfig, appLogger);
 }
-bootstrap();
+bootstrap().catch((error) => {
+  // The desktop app shows why at once instead of waiting; then the same
+  // unhandled rejection as before ends the process.
+  sendDesktopSignal(failedSignal(error));
+  throw error;
+});
 
 /**
  * Removes a socket file a server that is gone left behind. A socket that

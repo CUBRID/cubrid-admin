@@ -2,7 +2,11 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import { DEFAULT_TIMEOUT_MS, waitForApiReady } from './wait-for-api';
+import type { ApiSignal } from './api-process';
+import { ApiStartStoppedError, SOFT_LIMIT_MS, waitForApiReady } from './wait-for-api';
+
+const never = <T>() => new Promise<T>(() => undefined);
+const after = <T>(ms: number, value: T) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
 
 describe('waitForApiReady', () => {
   let dir: string;
@@ -20,31 +24,56 @@ describe('waitForApiReady', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  const listenAfter = (ms: number) =>
+  it('asks only after two minutes, and has no hard timeout of its own', () => {
+    expect(SOFT_LIMIT_MS).toBe(120_000);
+  });
+
+  it('waits for a slow but running server until it says "ready", reporting progress', async () => {
+    const progress: number[] = [];
+    const started = Date.now();
+    await waitForApiReady(socketPath, never(), after<ApiSignal>(1_300, { state: 'ready' }), {
+      onProgress: (ms) => progress.push(ms),
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(1_200);
+    expect(progress.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('also takes an answer on the socket as ready (a server that sends no signal)', async () => {
     setTimeout(() => {
       server = net.createServer((socket) => socket.end());
       server.listen(socketPath);
-    }, ms);
-
-  it('waits well beyond 30 s by default while the server runs (a first start under Rosetta took about 36 s)', () => {
-    expect(DEFAULT_TIMEOUT_MS).toBeGreaterThanOrEqual(120_000);
+    }, 400);
+    await expect(waitForApiReady(socketPath, never(), never())).resolves.toBeUndefined();
   });
 
-  it('keeps waiting while the server is alive, until it answers', async () => {
-    listenAfter(600);
+  it('fails at once with the reason when the server says "failed"', async () => {
     const started = Date.now();
-    await expect(waitForApiReady(socketPath, new Promise(() => undefined), 5_000)).resolves.toBeUndefined();
-    expect(Date.now() - started).toBeGreaterThanOrEqual(500);
-  });
-
-  it('fails at once when the server exits, not at the timeout', async () => {
-    const exited = new Promise((resolve) => setTimeout(() => resolve(1), 300));
-    const started = Date.now();
-    await expect(waitForApiReady(socketPath, exited, 10_000)).rejects.toThrow(/exited before it was ready .*\(after \d+ s\)/);
+    await expect(
+      waitForApiReady(socketPath, never(), after<ApiSignal>(200, { state: 'failed', code: 'EADDRINUSE', message: 'address already in use' }))
+    ).rejects.toThrow(/could not start: EADDRINUSE address already in use/);
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
-  it('gives up after the timeout while the server never answers, saying how long it waited', async () => {
-    await expect(waitForApiReady(socketPath, new Promise(() => undefined), 700)).rejects.toThrow(/did not become ready .*\(waited \d+ s\)/);
+  it('fails at once when the server exits', async () => {
+    await expect(waitForApiReady(socketPath, after(200, 1), never())).rejects.toThrow(/exited before it was ready/);
+  });
+
+  it('after the soft limit asks, keeps waiting on "wait", and finishes when the server is ready', async () => {
+    const asked: number[] = [];
+    await waitForApiReady(socketPath, never(), after<ApiSignal>(1_200, { state: 'ready' }), {
+      softLimitMs: 300,
+      onSoftLimit: async (ms) => {
+        asked.push(ms);
+        return 'wait';
+      },
+    });
+    expect(asked.length).toBeGreaterThanOrEqual(2);
+    expect(asked[0]).toBeGreaterThanOrEqual(300);
+  });
+
+  it('after the soft limit, "stop" ends the wait', async () => {
+    await expect(
+      waitForApiReady(socketPath, never(), never(), { softLimitMs: 300, onSoftLimit: async () => 'stop' })
+    ).rejects.toBeInstanceOf(ApiStartStoppedError);
   });
 });
