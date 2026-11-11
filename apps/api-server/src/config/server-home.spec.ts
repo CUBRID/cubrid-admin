@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { serverHome } from './server-home';
+import { refuseInstalledCopyWithoutHome, serverHome } from './server-home';
 import { getStoragePath } from '../util/resolve-storage-path';
 import { getLogPath } from '../util/resolve-log-path';
 
@@ -49,6 +49,18 @@ describe('serverHome', () => {
     expect(getLogPath()).toBe(path.join('/var/lib/cubrid-admin', 'logs'));
     process.env.STORAGE_PATH = './data';
     expect(getStoragePath()).toBe(path.join('/var/lib/cubrid-admin', 'data'));
+  });
+
+  it('refuses the installed executable run by hand without CWM_HOME', () => {
+    runAsPackaged('/opt/cubrid-admin/cubrid-admin');
+    expect(() => refuseInstalledCopyWithoutHome()).toThrow(/systemctl start cubrid-admin/);
+    process.env.CWM_HOME = '/var/lib/cubrid-admin';
+    expect(() => refuseInstalledCopyWithoutHome()).not.toThrow();
+  });
+
+  it('lets a portable executable elsewhere run without CWM_HOME', () => {
+    runAsPackaged('/home/me/cubrid-admin/cubrid-admin-linux');
+    expect(() => refuseInstalledCopyWithoutHome()).not.toThrow();
   });
 
   it('keeps LOG_DIR and an absolute STORAGE_PATH as they are', () => {

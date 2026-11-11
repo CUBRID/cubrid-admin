@@ -115,7 +115,7 @@ function buildDeb({ exe, debArch: arch, platform }, version, release) {
   put(CONF_SAMPLE, path.join(program, 'cwm.conf.sample'), 0o644);
   put(CONF_REFERENCE, path.join(program, 'cwm.conf.reference.md'), 0o644);
   put(path.join(LINUX_FILES, 'cubrid-admin.service'), path.join(units, 'cubrid-admin.service'), 0o644);
-  for (const script of ['postinst', 'prerm', 'postrm']) {
+  for (const script of ['preinst', 'postinst', 'prerm', 'postrm']) {
     put(path.join(LINUX_FILES, 'deb', script), path.join(control, script), 0o755);
   }
   const sizeKb = folderSizeKb(path.join(root, 'opt')) + folderSizeKb(path.join(root, 'usr'));

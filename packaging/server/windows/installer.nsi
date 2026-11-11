@@ -12,6 +12,7 @@ SetCompressor /SOLID lzma
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
 
 !define PRODUCT "CUBRID Admin Server"
 !define COMPANY "CUBRID Corporation"
@@ -20,6 +21,8 @@ SetCompressor /SOLID lzma
 ; setting for virtual accounts, so sc.exe sets it after WinSW registers the service).
 !define SERVICE_ACCOUNT "NT SERVICE\cubrid-admin"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\CUBRID Admin Server"
+; Kept on uninstall: records that setup made the data folder (only administrators can write HKLM).
+!define DATA_KEY "Software\CUBRID\CUBRID Admin Server"
 
 Name "${PRODUCT}"
 OutFile "${OUTFILE}"
@@ -37,6 +40,8 @@ VIAddVersionKey "LegalCopyright" "Copyright © ${YEAR} ${COMPANY}"
 
 !define MUI_FINISHPAGE_TITLE "${PRODUCT} is installed"
 !define MUI_FINISHPAGE_TEXT "Settings: %ProgramData%\${PRODUCT}\conf\cwm.conf$\r$\n$\r$\nOn a new install the service is registered but not started, because PORT (8080 by default) may be in use. Set PORT, then start the $\"${PRODUCT}$\" service (services.msc, or: sc start cubrid-admin).$\r$\n$\r$\nOn an upgrade the service is started again if it was running."
+; An upgrade keeps the installed folder: the running service points there.
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipDirectoryOnUpgrade
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -47,6 +52,7 @@ VIAddVersionKey "LegalCopyright" "Copyright © ${YEAR} ${COMPANY}"
 Var DataDir
 Var WasRunning
 Var Registered
+Var InstalledDir
 
 Function .onInit
   ${IfNot} ${RunningX64}
@@ -54,7 +60,26 @@ Function .onInit
     Abort
   ${EndIf}
   SetRegView 64
+  ReadRegStr $InstalledDir HKLM "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $InstalledDir != ""
+    StrCpy $INSTDIR $InstalledDir
+  ${EndIf}
 FunctionEnd
+
+Function SkipDirectoryOnUpgrade
+  ${If} $InstalledDir != ""
+    Abort
+  ${EndIf}
+FunctionEnd
+
+; Stops setup when a step that protects the data folder fails.
+!macro StopOnFailure what
+  Pop $0
+  ${If} $0 != 0
+    MessageBox MB_ICONSTOP "${PRODUCT} setup could not ${what} (exit code $0). Setup stopped; the data folder may not be protected yet. Run setup again as an administrator." /SD IDOK
+    Abort
+  ${EndIf}
+!macroend
 
 Function un.onInit
   SetRegView 64
@@ -94,6 +119,25 @@ Section "Install"
   File "${SRCDIR}\cwm.conf.sample"
   File "${SRCDIR}\cwm.conf.reference.md"
 
+  ; A data folder that no setup of ours made (no record, no registered service,
+  ; no install entry) may hold settings or cwm-vault\secrets.json planted by
+  ; another local user: set it aside and start with an empty one.
+  ReadRegStr $0 HKLM "${DATA_KEY}" "DataFolder"
+  ReadRegStr $1 HKLM "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 != $DataDir
+  ${AndIf} $Registered == 0
+  ${AndIf} $1 == ""
+  ${AndIf} ${FileExists} "$DataDir\*.*"
+    ${GetTime} "" "L" $2 $3 $4 $5 $6 $7 $8
+    StrCpy $9 "$DataDir.preexisting-$4$3$2-$6$7$8"
+    Rename "$DataDir" "$9"
+    ${If} ${FileExists} "$DataDir\*.*"
+      MessageBox MB_ICONSTOP "$DataDir already exists and was not made by ${PRODUCT} setup. Move it away, then run setup again." /SD IDOK
+      Abort
+    ${EndIf}
+    DetailPrint "$DataDir was not made by ${PRODUCT} setup: moved it to $9."
+  ${EndIf}
+
   ; Settings are created once and never replaced.
   CreateDirectory "$DataDir\conf"
   CreateDirectory "$DataDir\logs"
@@ -105,8 +149,10 @@ Section "Install"
   ; then make it run as the virtual account (also on upgrade, for older installs).
   ${If} $Registered == 0
     nsExec::ExecToLog '"${SERVICE}" install'
+    !insertmacro StopOnFailure "register the Windows service"
   ${EndIf}
   nsExec::ExecToLog '"$SYSDIR\sc.exe" config cubrid-admin obj= "${SERVICE_ACCOUNT}"'
+  !insertmacro StopOnFailure "set the service account ${SERVICE_ACCOUNT}"
 
   ; The data folder holds cwm-vault\secrets.json, which decrypts every saved
   ; password: only SYSTEM, Administrators and the service account may use it.
@@ -115,12 +161,15 @@ Section "Install"
   ; install and upgrade. (*S-1-5-18 = SYSTEM, *S-1-5-32-544 = Administrators,
   ; by SID so a localized Windows works too.)
   nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$DataDir" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F "${SERVICE_ACCOUNT}:(OI)(CI)F" /Q'
+  !insertmacro StopOnFailure "restrict access to the data folder"
   nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$DataDir\*" /reset /T /C /Q'
+  !insertmacro StopOnFailure "reset access below the data folder"
 
   ${If} $WasRunning == 1
     nsExec::ExecToLog '"${SERVICE}" start'
   ${EndIf}
 
+  WriteRegStr HKLM "${DATA_KEY}" "DataFolder" "$DataDir"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
@@ -145,5 +194,6 @@ Section "Uninstall"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKLM "${UNINSTALL_KEY}"
-  ; Settings and data in %ProgramData%\${PRODUCT} are kept.
+  ; Settings and data in %ProgramData%\${PRODUCT} are kept, and so is
+  ; ${DATA_KEY}, so a later install uses them again.
 SectionEnd
