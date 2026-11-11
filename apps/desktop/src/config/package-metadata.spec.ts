@@ -14,6 +14,10 @@ describe('packed app metadata', () => {
     expect(config.extraMetadata.description).toBe('CUBRID Admin');
   });
 
+  it('names a maintainer for the Linux rpm', () => {
+    expect(config.linux.maintainer).toBe('CUBRID Corporation');
+  });
+
   it('keeps file names without spaces for Linux packages', () => {
     expect(config.extraMetadata.name).toBe('cubrid-admin-desktop');
     expect(config.linux.artifactName).not.toMatch(/\s/);
