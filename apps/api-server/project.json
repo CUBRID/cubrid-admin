@@ -77,7 +77,7 @@
           "parallel": false
         },
         "macos": {
-          "commands": ["node scripts/copy-web-to-api.mjs", "node scripts/build-server-sea.mjs --target macos-x64"],
+          "commands": ["node scripts/copy-web-to-api.mjs", "node scripts/build-server-sea.mjs --target macos-x64 --target macos-arm64"],
           "parallel": false
         },
         "all": {
