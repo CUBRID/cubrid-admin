@@ -12,9 +12,10 @@ Release:        @RELEASE@
 Summary:        CUBRID Admin Server
 License:        BSD-3-Clause
 URL:            https://github.com/CUBRID/cubrid-admin
-# No package dependencies, so the same rpm installs on the Red Hat family and
-# on SUSE; the install script only needs useradd, groupadd and systemctl.
+# No package names, so the same rpm installs on the Red Hat family and on SUSE
+# (shadow-utils there is called shadow): only the files the setup script runs.
 AutoReqProv:    no
+Requires(post): /usr/sbin/useradd, /usr/sbin/groupadd
 
 %description
 CUBRID Admin Server, the web-based administration tool for CUBRID,

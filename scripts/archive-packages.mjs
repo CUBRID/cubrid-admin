@@ -72,7 +72,8 @@ function pack(name, kind) {
   if (kind === 'zip') {
     execFileSync('zip', ['-qry', '-X', file, name], { cwd: STAGE, stdio: 'inherit' });
   } else {
-    execFileSync('tar', ['-czf', file, name], { cwd: STAGE, stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' } });
+    // No extended attributes: macOS adds com.apple.* ones that GNU tar warns about.
+    execFileSync('tar', ['--no-xattrs', '-czf', file, name], { cwd: STAGE, stdio: 'inherit', env: { ...process.env, COPYFILE_DISABLE: '1' } });
   }
   return path.basename(file);
 }
