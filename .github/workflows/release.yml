@@ -36,7 +36,7 @@ jobs:
     # RELEASE_RUNNER when set (e.g. macos-15-intel while macOS arm64 runners
     # are short), otherwise macos-15.
     runs-on: ${{ inputs.runs_on || vars.RELEASE_RUNNER || 'macos-15' }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -95,14 +95,15 @@ jobs:
 
       # After the server: the desktop app needs the web-manager build made for Electron.
       # Installer and portable for each OS and arch (no signing, no Wine needed),
-      # in two runs. A packaging command that prints nothing for 3 min (5 for the
-      # Linux one, whose rpm compression is quiet for a while) is stopped with the
-      # list of processes still running, instead of hanging until the timeout.
+      # in two runs. A packaging command that prints nothing and uses no CPU for
+      # 3 min (5 for the Linux one) is stopped with the list of processes still
+      # running, instead of hanging until the timeout; quiet work that keeps the
+      # CPU busy (rpm compression, minutes on an Intel runner) is waited for.
       # A disk image still attached, or an hdiutil / dmgbuild process left over,
       # has kept this step from ending after its dmg files were written: clean up
       # before and after, and end the step once every file is complete.
       - name: Build desktop packages (macOS, Windows)
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: |
           scripts/ci/clean-disk-images.sh
           v='${{ steps.version.outputs.version }}'
@@ -114,7 +115,7 @@ jobs:
         run: scripts/ci/clean-disk-images.sh
 
       - name: Build desktop packages (Linux)
-        timeout-minutes: 20
+        timeout-minutes: 40
         run: scripts/ci/run-with-idle-timeout.sh 300 npx nx run desktop:package -- --linux --x64 --arm64
 
       - name: Collect release files
