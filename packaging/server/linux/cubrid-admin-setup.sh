@@ -21,16 +21,37 @@ systemd_running() {
   [ -d /run/systemd/system ]
 }
 
+refuse() {
+  echo "CUBRID Admin Server: $1" >&2
+  echo "Move it away (or check its contents and fix its owner), then install again." >&2
+  exit 1
+}
+
 # A folder made before this install by someone else could hold planted
-# settings or cwm-vault/secrets.json: use only folders owned by root or $NAME.
+# settings or cwm-vault/secrets.json: use only real folders (not symlinks)
+# owned by root or $NAME.
 check_owner() {
+  [ -L "$1" ] && refuse "$1 is a symbolic link."
   [ -e "$1" ] || return 0
+  [ -d "$1" ] || refuse "$1 is not a folder."
   owner=$(stat -c %U "$1")
   if [ "$owner" != root ] && [ "$owner" != "$NAME" ]; then
-    echo "CUBRID Admin Server: $1 already exists and belongs to $owner, not root or $NAME." >&2
-    echo "Move it away (or check its contents and chown it to $NAME), then install again." >&2
-    exit 1
+    refuse "$1 already exists and belongs to $owner, not root or $NAME."
   fi
+}
+
+# Makes (mkdir fails if the name appeared meanwhile) or takes over a folder,
+# never following a symbolic link, and checks again afterwards.
+# usage: own_dir <path> <owner> <group>
+own_dir() {
+  check_owner "$1"
+  if [ ! -e "$1" ]; then
+    mkdir -m 0750 "$1"
+  fi
+  chown -h "$2:$3" "$1"
+  [ -L "$1" ] && refuse "$1 was replaced by a symbolic link."
+  chmod 0750 "$1"
+  check_owner "$1"
 }
 
 configure() {
@@ -44,8 +65,9 @@ configure() {
     nologin=$(command -v nologin || echo /bin/false)
     useradd -r -M -g "$NAME" -d "$DATA_DIR" -s "$nologin" -c "CUBRID Admin Server" "$NAME"
   fi
-  install -d -m 0750 -o root -g "$NAME" "$CONF_DIR"
-  install -d -m 0750 -o "$NAME" -g "$NAME" "$DATA_DIR" "$LOG_DIR"
+  own_dir "$CONF_DIR" root "$NAME"
+  own_dir "$DATA_DIR" "$NAME" "$NAME"
+  own_dir "$LOG_DIR" "$NAME" "$NAME"
   if [ ! -e "$CONF_DIR/cwm.conf" ]; then
     install -m 0640 -o root -g "$NAME" "$PROGRAM_DIR/cwm.conf.sample" "$CONF_DIR/cwm.conf"
   fi

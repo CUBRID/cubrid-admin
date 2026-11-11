@@ -76,7 +76,7 @@ FunctionEnd
 !macro StopOnFailure what
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "${PRODUCT} setup could not ${what} (exit code $0). Setup stopped; the data folder may not be protected yet. Run setup again as an administrator." /SD IDOK
+    MessageBox MB_ICONSTOP "${PRODUCT} setup could not ${what} (exit code $0). Setup stopped; the data folder may not be protected yet, and the ${PRODUCT} service is stopped. Run setup again as an administrator; to start the service anyway: sc start cubrid-admin" /SD IDOK
     Abort
   ${EndIf}
 !macroend
@@ -119,23 +119,63 @@ Section "Install"
   File "${SRCDIR}\cwm.conf.sample"
   File "${SRCDIR}\cwm.conf.reference.md"
 
-  ; A data folder that no setup of ours made (no record, no registered service,
-  ; no install entry) may hold settings or cwm-vault\secrets.json planted by
-  ; another local user: set it aside and start with an empty one.
+  ; ---- The data folder ----
+  ; It holds cwm-vault\secrets.json, which decrypts every saved password. Only
+  ; SYSTEM, Administrators and the service account may use it, and it must be
+  ; owned by Administrators or SYSTEM: an owner can always change its access.
+  ; An existing folder is kept only when setup made it (our record, a
+  ; registered service or an install entry) AND Administrators or SYSTEM own
+  ; it; otherwise it may hold settings or keys planted by another local user,
+  ; so it is moved aside and a new one is made.
   ReadRegStr $0 HKLM "${DATA_KEY}" "DataFolder"
   ReadRegStr $1 HKLM "${UNINSTALL_KEY}" "InstallLocation"
-  ${If} $0 != $DataDir
-  ${AndIf} $Registered == 0
-  ${AndIf} $1 == ""
-  ${AndIf} ${FileExists} "$DataDir\*.*"
-    ${GetTime} "" "L" $2 $3 $4 $5 $6 $7 $8
-    StrCpy $9 "$DataDir.preexisting-$4$3$2-$6$7$8"
-    Rename "$DataDir" "$9"
-    ${If} ${FileExists} "$DataDir\*.*"
-      MessageBox MB_ICONSTOP "$DataDir already exists and was not made by ${PRODUCT} setup. Move it away, then run setup again." /SD IDOK
+  ${If} ${FileExists} "$DataDir\*.*"
+    StrCpy $2 0
+    ${If} $0 == $DataDir
+    ${OrIf} $Registered == 1
+    ${OrIf} $1 != ""
+      nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "[Console]::Write((Get-Acl -LiteralPath '$DataDir').GetOwner([System.Security.Principal.SecurityIdentifier]).Value)"`
+      Pop $3
+      Pop $4
+      ${If} $3 == 0
+      ${AndIf} $4 == "S-1-5-32-544"
+        StrCpy $2 1
+      ${ElseIf} $3 == 0
+      ${AndIf} $4 == "S-1-5-18"
+        StrCpy $2 1
+      ${EndIf}
+    ${EndIf}
+    ${If} $2 == 0
+      ${GetTime} "" "L" $3 $4 $5 $6 $7 $8 $9
+      StrCpy $9 "$DataDir.preexisting-$5$4$3-$7$8$9"
+      Rename "$DataDir" "$9"
+      ${If} ${FileExists} "$DataDir\*.*"
+        MessageBox MB_ICONSTOP "$DataDir already exists and was not made by ${PRODUCT} setup. Move it away, then run setup again." /SD IDOK
+        Abort
+      ${EndIf}
+      DetailPrint "$DataDir was not made by ${PRODUCT} setup: moved it to $9."
+      MessageBox MB_ICONINFORMATION "$DataDir was not made by ${PRODUCT} setup, so it was moved to:$\r$\n$9$\r$\n$\r$\nSetup creates a new, empty data folder." /SD IDOK
+    ${EndIf}
+  ${EndIf}
+
+  ; A new data folder is made under a random name, locked and given to
+  ; Administrators first, and only then renamed into place: the rename fails
+  ; if someone created the name in the meantime, so nothing else can slip in.
+  ${IfNot} ${FileExists} "$DataDir\*.*"
+    System::Call 'kernel32::GetTickCount() i .r3'
+    StrCpy $4 "$DataDir.new-$3"
+    CreateDirectory "$4"
+    nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$4" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /Q'
+    !insertmacro StopOnFailure "restrict access to the new data folder"
+    nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$4" /setowner *S-1-5-32-544 /T /C /Q'
+    !insertmacro StopOnFailure "give the new data folder to Administrators"
+    ClearErrors
+    Rename "$4" "$DataDir"
+    ${If} ${Errors}
+      RMDir /r "$4"
+      MessageBox MB_ICONSTOP "$DataDir appeared while setup was creating it. Check who made it, move it away, then run setup again." /SD IDOK
       Abort
     ${EndIf}
-    DetailPrint "$DataDir was not made by ${PRODUCT} setup: moved it to $9."
   ${EndIf}
 
   ; Settings are created once and never replaced.
@@ -164,6 +204,8 @@ Section "Install"
   !insertmacro StopOnFailure "restrict access to the data folder"
   nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$DataDir\*" /reset /T /C /Q'
   !insertmacro StopOnFailure "reset access below the data folder"
+  nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$DataDir" /setowner *S-1-5-32-544 /T /C /Q'
+  !insertmacro StopOnFailure "give the data folder to Administrators"
 
   ${If} $WasRunning == 1
     nsExec::ExecToLog '"${SERVICE}" start'

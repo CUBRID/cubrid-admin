@@ -32,13 +32,24 @@ function isInApplicationsFolder(bundlePath: string): boolean {
   );
 }
 
-function isWritableFolder(folder: string): boolean {
+/**
+ * Whether a file can really be created in `folder`: creates and deletes a probe
+ * file. fs.access(W_OK) is not enough, because on Windows it ignores ACLs and
+ * the read-only attribute of folders (Program Files, a read-only share).
+ */
+export function isWritableFolder(folder: string): boolean {
+  const probe = path.join(folder, `.cubrid-admin-write-test-${process.pid}-${Date.now()}`);
   try {
-    fs.accessSync(folder, fs.constants.W_OK);
-    return true;
+    fs.closeSync(fs.openSync(probe, 'wx'));
   } catch {
     return false;
   }
+  try {
+    fs.unlinkSync(probe);
+  } catch {
+    // Created but not removable: the folder is still writable.
+  }
+  return true;
 }
 
 /**

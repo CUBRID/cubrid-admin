@@ -7,7 +7,7 @@ const USER_DATA = '/Users/me/Library/Application Support/CUBRID Admin';
 const mockApp = { isPackaged: true, getPath: jest.fn((name: string) => (name === 'userData' ? USER_DATA : `/other/${name}`)) };
 jest.mock('electron', () => ({ app: mockApp }));
 
-import { getDesktopDataRoot, getPortableFolder } from './portable-root';
+import { getDesktopDataRoot, getPortableFolder, isWritableFolder } from './portable-root';
 
 const ENV_KEYS = ['CWM_PORTABLE_APP_ROOT', 'PORTABLE_EXECUTABLE_DIR', 'APPIMAGE'] as const;
 const realPlatform = process.platform;
@@ -94,6 +94,33 @@ describe('desktop data root', () => {
       runAs('linux', '/tmp/.mount_CUBRIDxyz/cubrid-admin-desktop', { APPIMAGE: path.join(folder, 'CUBRID-Admin.AppImage') });
       expect(getPortableFolder()).toBeNull();
       expect(getDesktopDataRoot()).toBe(USER_DATA);
+    });
+  });
+
+  describe('write probe', () => {
+    let folder: string;
+
+    beforeEach(() => {
+      folder = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-probe-'));
+    });
+
+    afterEach(() => {
+      fs.chmodSync(folder, 0o755);
+      fs.rmSync(folder, { recursive: true, force: true });
+    });
+
+    it('creates a file to decide, and leaves nothing behind', () => {
+      expect(isWritableFolder(folder)).toBe(true);
+      expect(fs.readdirSync(folder)).toEqual([]);
+    });
+
+    it('is false for a folder where no file can be created', () => {
+      fs.chmodSync(folder, 0o555);
+      expect(isWritableFolder(folder)).toBe(false);
+    });
+
+    it('is false for a missing folder', () => {
+      expect(isWritableFolder(path.join(folder, 'missing'))).toBe(false);
     });
   });
 
