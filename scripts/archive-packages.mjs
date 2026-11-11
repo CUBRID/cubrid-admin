@@ -20,7 +20,9 @@
  *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.AppImage         portable
  *   SHA256SUMS.txt over all of them.
  *
- * Run after `npm run package:server` and/or `npm run package:electron*`.
+ * Run after `npm run package:server` and/or `npm run package:electron*`
+ * (the desktop last), then checks that every file carries the same code
+ * (scripts/check-release-contents.mjs).
  * Run from the same commit. Only what was built is collected.
  *
  * Needs `tar` and `zip` on PATH (server packages).
@@ -194,4 +196,11 @@ const sums = written
   .map((file) => `${createHash('sha256').update(fs.readFileSync(path.join(OUT, file))).digest('hex')}  ${file}`)
   .join('\n');
 fs.writeFileSync(path.join(OUT, 'SHA256SUMS.txt'), sums + '\n');
+
+// The same code in every release file (scripts/check-release-contents.mjs).
+try {
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'check-release-contents.mjs')], { stdio: 'inherit' });
+} catch {
+  process.exit(1);
+}
 console.log(`Version ${version}\n${written.map((file) => `dist/release/${file}`).join('\n')}`);
