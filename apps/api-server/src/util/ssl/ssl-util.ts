@@ -55,6 +55,35 @@ function resolveSslDir(): string {
   return path.join(serverHome(path.resolve(__dirname, '..', '..')), 'ssl');
 }
 
+type SslPaths = { sslDir: string; keyPath: string; certPath: string };
+
+/**
+ * The key owner-only (0600), the certificate readable (0644), and the folder
+ * owner-only (0700) when it is the server's own (`ownDir`): made by it, or
+ * the default ssl/ next to the program. CWM_SSL_DIR may name a folder others
+ * use, so an existing one keeps its mode. A symbolic link is left as it is
+ * (a key linked from elsewhere, e.g. letsencrypt's root:ssl-cert 0640, is
+ * shared on purpose). A change that cannot be made is logged and the server
+ * starts anyway. Windows has no such modes: nothing is done there.
+ */
+export function restrictSslFiles(
+  { sslDir, keyPath, certPath }: SslPaths,
+  { ownDir, platform = process.platform, warn = console.warn }: { ownDir: boolean; platform?: NodeJS.Platform; warn?: (message: string) => void }
+): void {
+  if (platform === 'win32') return;
+  const targets: Array<[string, number]> = [[keyPath, 0o600], [certPath, 0o644]];
+  if (ownDir) targets.push([sslDir, 0o700]);
+  for (const [target, mode] of targets) {
+    try {
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) continue;
+      if ((stat.mode & 0o777) !== mode) fs.chmodSync(target, mode);
+    } catch (error) {
+      warn(`[ssl] could not set ${target} to ${mode.toString(8)}: ${(error as Error).message}`);
+    }
+  }
+}
+
 export function getOrCreateSSLCert(): HttpsKeyCert {
   const sslDir = resolveSslDir();
   const certPath = path.join(sslDir, 'cert.pem');
@@ -107,16 +136,23 @@ export function getOrCreateSSLCert(): HttpsKeyCert {
     },
   ];
 
+  const configuredDir = Boolean(process.env.CWM_SSL_DIR?.trim());
+  let madeDir = false;
   if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
-    if (!fs.existsSync(sslDir)) fs.mkdirSync(sslDir);
+    if (!fs.existsSync(sslDir)) {
+      // Missing parents with the usual mode; only ssl/ itself owner-only.
+      fs.mkdirSync(path.dirname(sslDir), { recursive: true });
+      fs.mkdirSync(sslDir, { mode: 0o700 });
+      madeDir = true;
+    }
     const pems = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
       days: 365,
       algorithm: 'sha256',
       keySize: 2048,
       extensions: certExtensions,
     });
-    fs.writeFileSync(certPath, pems.cert);
-    fs.writeFileSync(keyPath, pems.private);
+    fs.writeFileSync(certPath, pems.cert, { mode: 0o644 });
+    fs.writeFileSync(keyPath, pems.private, { mode: 0o600 });
     console.log('SSL created with IPs:', serverIPs);
   } else {
     // Check if certificate needs to be regenerated with new IPs
@@ -124,8 +160,20 @@ export function getOrCreateSSLCert(): HttpsKeyCert {
     console.log('Using existing SSL certificate');
   }
 
-  return {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
-  };
+  // Also files made before, with the default modes (a world-readable key).
+  restrictSslFiles({ sslDir, keyPath, certPath }, { ownDir: madeDir || !configuredDir });
+
+  return { key: readSslFile(keyPath), cert: readSslFile(certPath) };
+}
+
+/** Reads a PEM; one this account may not read (made by another, e.g. root) says what to check. */
+function readSslFile(filePath: string): Buffer {
+  try {
+    return fs.readFileSync(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EACCES') {
+      console.error(`[ssl] cannot read ${filePath}: check the owner and permissions of ${path.dirname(filePath)} (it may have been made by another account, e.g. root).`);
+    }
+    throw error;
+  }
 }
