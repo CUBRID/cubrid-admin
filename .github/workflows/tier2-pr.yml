@@ -66,8 +66,6 @@ jobs:
       contents: read
     env:
       CI: 'true'
-      # This suite tests the server/browser build, so Electron is not needed.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       # Docker Compose pulls the nightly image on each run; its version can change.
       CUBRID_IMAGE: ghcr.io/srltas/cubrid-nca-nightly:latest
       # CMS runs in Docker on this runner: host 28001 -> container 8001.
@@ -137,10 +135,10 @@ jobs:
         run: |
           printf '\nTCP suite commit: %s\n' "$(git -C app/tcp rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: |
             app/package-lock.json
