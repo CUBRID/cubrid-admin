@@ -86,7 +86,7 @@ describe('desktop app without an app login', () => {
         </MemoryRouter>
       </Provider>
     ));
-    expect(container.textContent).toContain('WORKSPACE_NOT_WRITABLE: EACCES');
+    expect(container.textContent).toContain('The workspace folder cannot be written to. (EACCES)');
 
     await typeInto(container.querySelector('[data-testid="workspace-root-input"] input, input[data-testid="workspace-root-input"]'), '/ws2');
     await act(async () => container.querySelector('[data-testid="workspace-save-btn"]').click());

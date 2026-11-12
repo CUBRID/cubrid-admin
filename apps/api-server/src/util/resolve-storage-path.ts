@@ -3,7 +3,7 @@ import { serverHome } from '../config/server-home';
 
 /**
  * Determines the appropriate storage path based on the execution environment.
- * CWM_HOME when set (installers); a `pkg` executable uses its own directory;
+ * CWM_HOME when set (installers); the single executable uses its own directory;
  * otherwise (development mode) the project's root directory.
  *
  * @returns The absolute path to the storage directory.

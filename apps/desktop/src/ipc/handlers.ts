@@ -19,6 +19,7 @@ import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
 import { getDefaultWorkspaceRoot, isSameWorkspaceFolder, resolveWorkspacePaths } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
+import { decideApiStart, getApiStartStatus } from '../api/start-status';
 import { dialogDefaultDirectory, rememberDialogPath } from '../window/dialog-paths';
 import { toAppRouteUrl } from '../window/app-window';
 import { getMainWindow } from '../window/window-registry';
@@ -107,6 +108,13 @@ export function registerDesktopIpcHandlers(): void {
   );
 
   ipcMain.handle('desktop:get-workspace-startup-error', () => workspaceStartupError);
+
+  ipcMain.handle('desktop:get-api-start-status', () => getApiStartStatus());
+
+  ipcMain.handle('desktop:api-start-decision', (_event, decision: unknown) => {
+    if (decision === 'wait' || decision === 'stop') decideApiStart(decision);
+    return { ok: true };
+  });
 
   ipcMain.handle('desktop:reveal-settings-file', async () => {
     const settingsPath = getDesktopSettingsPath();

@@ -4,7 +4,7 @@
  * (major.minor.patch.commit_num), into dist/release:
  *
  *   server portable (executable + conf/), packed here:
- *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz           also linux-arm64, macos-x64
+ *     CUBRID-Admin-server-0.1.0.0001-linux-x64.tar.gz           also linux-arm64, linux-x64-el7, macos-x64, macos-arm64
  *     CUBRID-Admin-server-0.1.0.0001-windows-x64.zip
  *   server installers, built by scripts/package-server-installers.mjs:
  *     CUBRID-Admin-server-0.1.0.0001-linux-x64.rpm              also linux-arm64 (only with rpmbuild)
@@ -20,7 +20,9 @@
  *     CUBRID-Admin-desktop-0.1.0.0001-linux-x64.AppImage         portable
  *   SHA256SUMS.txt over all of them.
  *
- * Run after `npm run package:server` and/or `npm run package:electron*`.
+ * Run after `npm run package:server` and/or `npm run package:electron*`
+ * (the desktop last), then checks that every file carries the same code
+ * (scripts/check-release-contents.mjs).
  * Run from the same commit. Only what was built is collected.
  *
  * Needs `tar` and `zip` on PATH (server packages).
@@ -44,9 +46,10 @@ const PRODUCT = 'CUBRID-Admin';
 
 const SERVER = [
   { exe: 'cubrid-admin-linux', platform: 'linux-x64', kind: 'tar.gz' },
-  { exe: 'cubrid-admin-linux-arm64', platform: 'linux-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin-linux-el7', platform: 'linux-x64-el7', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-linux-arm64', platform: 'linux-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin-macos', platform: 'macos-x64', kind: 'tar.gz' },
+  { exe: 'cubrid-admin-macos-arm64', platform: 'macos-arm64', kind: 'tar.gz' },
   { exe: 'cubrid-admin.exe', platform: 'windows-x64', kind: 'zip' },
 ];
 
@@ -193,4 +196,11 @@ const sums = written
   .map((file) => `${createHash('sha256').update(fs.readFileSync(path.join(OUT, file))).digest('hex')}  ${file}`)
   .join('\n');
 fs.writeFileSync(path.join(OUT, 'SHA256SUMS.txt'), sums + '\n');
+
+// The same code in every release file (scripts/check-release-contents.mjs).
+try {
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'check-release-contents.mjs')], { stdio: 'inherit' });
+} catch {
+  process.exit(1);
+}
 console.log(`Version ${version}\n${written.map((file) => `dist/release/${file}`).join('\n')}`);

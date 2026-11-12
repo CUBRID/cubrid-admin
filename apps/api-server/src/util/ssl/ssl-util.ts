@@ -40,7 +40,7 @@ export function getHttpsOptions(): HttpsKeyCert {
 
 /**
  * Retrieves existing SSL certificates or generates new self-signed certificates if they don't exist.
- * Certificates are stored in an 'ssl' directory in CWM_HOME, beside the executable (pkg) or in the project root.
+ * Certificates are stored in an 'ssl' directory in CWM_HOME, beside the single executable or in the project root.
  *
  * @returns An object containing the SSL key and certificate.
  * @category Utilities

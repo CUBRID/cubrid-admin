@@ -6,6 +6,7 @@ import { parseCliArgs } from './parse-cli-args';
 import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from './cms-concurrency';
 import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from './topsql-limits';
 import { refuseInstalledCopyWithoutHome, serverHome } from './server-home';
+import { isStandaloneExecutable } from '../util/standalone-executable';
 
 const CWM_CONF_FILENAME = 'cwm.conf';
 const CWM_CONF_SUBDIR = 'conf';
@@ -71,9 +72,26 @@ const SECRETS_KEPT =
   'It holds the keys of the saved hosts and passwords, so it is never replaced. ' +
   'Restore it from a backup or fix its permissions, then start again.';
 
+/**
+ * True when secrets.json exists, false only when it really does not (ENOENT).
+ * Any other error (EPERM/EACCES from an ACL, an I/O error) stops the start:
+ * fs.existsSync would report those as "absent", and new keys would be made.
+ */
+function secretsFileExists(secretsPath: string): boolean {
+  try {
+    fs.statSync(secretsPath);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+    throw new Error(`Cannot check ${secretsPath}: ${(err as Error).message}. ${SECRETS_KEPT}`);
+  }
+}
+
 /** The saved SEED/SALT, or null when there is no secrets.json yet. Never null for a file that exists. */
 function readSecrets(secretsPath: string): CwmSecrets | null {
-  if (!fs.existsSync(secretsPath)) {
+  if (!secretsFileExists(secretsPath)) {
     return null;
   }
   let parsed: Partial<CwmSecrets>;
@@ -86,6 +104,48 @@ function readSecrets(secretsPath: string): CwmSecrets | null {
     throw new Error(`${secretsPath} has no seed or salt. ${SECRETS_KEPT}`);
   }
   return parsed as CwmSecrets;
+}
+
+/** secrets.json that another start created first (EEXIST): it must be there and usable. */
+function readExistingSecrets(target: string): CwmSecrets {
+  const secrets = readSecrets(target);
+  if (!secrets) {
+    throw new Error(`${target} was reported as existing but cannot be found. ${SECRETS_KEPT}`);
+  }
+  return secrets;
+}
+
+/**
+ * For a file system without hard links: copies the synced temporary file to
+ * secrets.json, never replacing one. A copy that fails part-way is removed again
+ * (only when it is our own partial copy), and one another start made first is read.
+ */
+function copySecretsIntoPlace(temp: string, target: string, secrets: CwmSecrets): CwmSecrets {
+  const content = fs.readFileSync(temp);
+  try {
+    fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+    const fd = fs.openSync(target, 'r+');
+    try {
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return secrets;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      return readExistingSecrets(target);
+    }
+    let left: Buffer | null = null;
+    try {
+      left = fs.readFileSync(target);
+    } catch {
+      // nothing was created
+    }
+    if (left && content.subarray(0, left.length).equals(left)) {
+      fs.rmSync(target, { force: true });
+    }
+    throw err;
+  }
 }
 
 /**
@@ -112,13 +172,12 @@ function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'EEXIST') {
-        return readSecrets(target) as CwmSecrets;
+        return readExistingSecrets(target);
       }
       if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
         throw err;
       }
-      // A file system without hard links: a copy that still never replaces a file.
-      fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+      return copySecretsIntoPlace(temp, target, secrets);
     }
     return secrets;
   } finally {
@@ -147,16 +206,20 @@ function loadOrCreateVaultSecrets(baseDir: string): void {
     // Only when there is no secrets.json at all. Keys that cannot be saved
     // would be lost on the next start, together with everything encrypted with
     // them, so a failed write stops the start too.
-    secrets = {
+    const generated: CwmSecrets = {
       seed: crypto.randomBytes(32).toString('hex'),
       salt: crypto.randomBytes(32).toString('hex'),
     };
     try {
-      secrets = writeSecrets(vaultDir, secrets);
+      secrets = writeSecrets(vaultDir, generated);
     } catch (err) {
       throw new Error(`Cannot create ${secretsPath}: ${(err as Error).message}.`);
     }
-    console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
+    console.log(
+      secrets === generated
+        ? `[cwm-vault] secrets generated: ${secretsPath}`
+        : `[cwm-vault] secrets loaded (created by another start): ${secretsPath}`
+    );
   }
 
   if (process.env.SEED === undefined) process.env.SEED = secrets.seed;
@@ -208,7 +271,7 @@ export function readCwmConfSafe(confPath: string): CwmConf | null {
 // ── entry point ──────────────────────────────────────────────────────────────
 
 /**
- * Loads env before Nest bootstrap (pkg-aware base dir).
+ * Loads env before Nest bootstrap (base dir beside the single executable when run as one).
  *
  * Priority (highest to lowest):
  *   1. process.env already set (systemd EnvironmentFile etc.)
@@ -253,7 +316,7 @@ function loadRuntimeEnvFiles(): void {
     'development'
   ).toLowerCase();
   const isProduction = rawMode === 'production';
-  const isPkg = !!(process as any).pkg;
+  const isStandalone = isStandaloneExecutable();
   // CWM_HOME (installers), beside the executable (portable) or the working folder (source).
   const baseDir = serverHome(process.cwd());
   const isInstalled = Boolean(process.env.CWM_HOME?.trim());
@@ -283,8 +346,8 @@ function loadRuntimeEnvFiles(): void {
   loadCwmConf(resolveCwmConfPath());
 
   // 3. cwm-vault — SEED/SALT, only for values not already set above.
-  const vaultExists = fs.existsSync(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
-  if (isPkg || isInstalled || vaultExists) {
+  const vaultExists = secretsFileExists(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
+  if (isStandalone || isInstalled || vaultExists) {
     loadOrCreateVaultSecrets(baseDir);
   }
 }

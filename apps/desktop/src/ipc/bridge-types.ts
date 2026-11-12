@@ -1,3 +1,4 @@
+import type { ApiStartStatus } from '../api/start-status';
 import type { UpdateStatus } from '@update-check';
 
 export type DesktopConfig = {
@@ -17,6 +18,11 @@ export type DesktopBridge = {
   isWorkspaceSetupRequired: () => Promise<boolean>;
   /** Why the server could not start on the configured workspace at launch (a WORKSPACE_* code), or null. */
   getWorkspaceStartupError: () => Promise<string | null>;
+  /** The server start in progress (api/start-status.ts), and its changes. */
+  getApiStartStatus: () => Promise<ApiStartStatus>;
+  onApiStartStatus: (callback: (status: ApiStartStatus) => void) => () => void;
+  /** The answer to the slow-start notice. */
+  decideApiStart: (decision: 'wait' | 'stop') => Promise<{ ok: true }>;
   getWorkspaceInfo: () => Promise<WorkspaceInfo>;
   pickWorkspaceDirectory: () => Promise<string | null>;
   /** A file chosen in the app's open dialog (with its default folder), as base64; null if cancelled. */

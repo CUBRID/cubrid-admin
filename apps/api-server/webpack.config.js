@@ -1,10 +1,12 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { DefinePlugin, IgnorePlugin } = require('webpack');
 const { join } = require('path');
+// A build script of this repository, not a project module: the version is read at build time.
+// eslint-disable-next-line @nx/enforce-module-boundaries
 const { productVersion } = require('../../scripts/product-version.cjs');
 
 // Every dependency is bundled into main.js, so the server runs without a
-// node_modules folder (desktop resources/api-server, pkg executables).
+// node_modules folder (desktop resources/api-server, the server executables).
 //
 // NestJS loads these optional packages only when their feature is used
 // (microservices, websockets, cache); they are not installed, so the bundle
@@ -29,7 +31,7 @@ function isInstalled(request) {
   }
 }
 
-// The minimal package.json next to main.js (pkg reads it; nothing to install).
+// The minimal package.json next to main.js (nothing to install).
 class WritePackageJsonPlugin {
   apply(compiler) {
     compiler.hooks.thisCompilation.tap('WritePackageJsonPlugin', (compilation) => {
@@ -72,7 +74,7 @@ module.exports = {
     // Bakes the product version, major.minor.patch.commit_num (see
     // scripts/product-version.cjs), into the bundle at build time, so there's
     // no runtime dependency on a package.json file being present next to
-    // main.js in every deployment shape (plain node, pkg executable,
+    // main.js in every deployment shape (plain node, the single executable,
     // bundled inside the Electron app).
     new DefinePlugin({
       'process.env.APP_VERSION': JSON.stringify(productVersion().version),
