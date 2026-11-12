@@ -5,6 +5,7 @@ import { config as loadEnv } from 'dotenv';
 import { parseCliArgs } from './parse-cli-args';
 import { CMS_MAX_CONCURRENT_REQUESTS_PER_HOST } from './cms-concurrency';
 import { TOPSQL_MAX_LOG_LINES, TOPSQL_MAX_LOG_MB } from './topsql-limits';
+import { refuseInstalledCopyWithoutHome, serverHome } from './server-home';
 
 const CWM_CONF_FILENAME = 'cwm.conf';
 const CWM_CONF_SUBDIR = 'conf';
@@ -47,8 +48,7 @@ function injectIntoEnv(conf: CwmConf): void {
   }
 }
 
-function loadCwmConf(confDir: string): void {
-  const confPath = path.join(confDir, CWM_CONF_FILENAME);
+function loadCwmConf(confPath: string): void {
   const conf = readCwmConf(confPath);
 
   // SEED/SALT belong in cwm-vault/secrets.json, not here.
@@ -67,23 +67,63 @@ function getVaultDir(baseDir: string): string {
   return path.join(baseDir, CWM_VAULT_DIRNAME);
 }
 
+const SECRETS_KEPT =
+  'It holds the keys of the saved hosts and passwords, so it is never replaced. ' +
+  'Restore it from a backup or fix its permissions, then start again.';
+
+/** The saved SEED/SALT, or null when there is no secrets.json yet. Never null for a file that exists. */
 function readSecrets(secretsPath: string): CwmSecrets | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8')) as CwmSecrets;
-    if (parsed.seed && parsed.salt) return parsed;
-    return null;
-  } catch {
+  if (!fs.existsSync(secretsPath)) {
     return null;
   }
+  let parsed: Partial<CwmSecrets>;
+  try {
+    parsed = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+  } catch (err) {
+    throw new Error(`Cannot read ${secretsPath}: ${(err as Error).message}. ${SECRETS_KEPT}`);
+  }
+  if (!parsed?.seed || !parsed?.salt) {
+    throw new Error(`${secretsPath} has no seed or salt. ${SECRETS_KEPT}`);
+  }
+  return parsed as CwmSecrets;
 }
 
-function writeSecrets(vaultDir: string, secrets: CwmSecrets): void {
+/**
+ * Creates secrets.json with `secrets`, all or nothing: the content is written
+ * and synced to a temporary file in the same folder, which is then linked into
+ * place only if no secrets.json exists. A failed write leaves no secrets.json;
+ * when another start created it first, that file is read and its keys returned.
+ */
+function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
   fs.mkdirSync(vaultDir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(
-    path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME),
-    JSON.stringify(secrets, null, 2),
-    { encoding: 'utf8', mode: 0o600 }
-  );
+  const target = path.join(vaultDir, CWM_VAULT_SECRETS_FILENAME);
+  const temp = path.join(vaultDir, `.${CWM_VAULT_SECRETS_FILENAME}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+  try {
+    const fd = fs.openSync(temp, 'wx', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(secrets, null, 2), 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    try {
+      // A hard link never replaces an existing file.
+      fs.linkSync(temp, target);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST') {
+        return readSecrets(target) as CwmSecrets;
+      }
+      if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
+        throw err;
+      }
+      // A file system without hard links: a copy that still never replaces a file.
+      fs.copyFileSync(temp, target, fs.constants.COPYFILE_EXCL);
+    }
+    return secrets;
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
 }
 
 /**
@@ -104,17 +144,19 @@ function loadOrCreateVaultSecrets(baseDir: string): void {
   let secrets = readSecrets(secretsPath);
 
   if (!secrets) {
-    // Only generate new secrets for values not already set.
+    // Only when there is no secrets.json at all. Keys that cannot be saved
+    // would be lost on the next start, together with everything encrypted with
+    // them, so a failed write stops the start too.
     secrets = {
       seed: crypto.randomBytes(32).toString('hex'),
       salt: crypto.randomBytes(32).toString('hex'),
     };
     try {
-      writeSecrets(vaultDir, secrets);
-      console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
+      secrets = writeSecrets(vaultDir, secrets);
     } catch (err) {
-      console.warn(`[cwm-vault] could not write secrets:`, (err as Error).message);
+      throw new Error(`Cannot create ${secretsPath}: ${(err as Error).message}.`);
     }
+    console.log(`[cwm-vault] secrets generated: ${secretsPath}`);
   }
 
   if (process.env.SEED === undefined) process.env.SEED = secrets.seed;
@@ -140,12 +182,11 @@ function resolveCwmConfDir(baseDir: string): string | null {
  * rather than re-deriving (and potentially drifting from) the logic.
  */
 export function resolveCwmConfPath(): string {
-  // The desktop app keeps cwm.conf in its workspace and passes the path.
+  // The desktop app keeps cwm.conf in its workspace and passes the path; the
+  // Linux installer passes /etc/cubrid-admin/cwm.conf.
   const explicit = process.env.CWM_CONF_PATH?.trim();
   if (explicit) return explicit;
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
-  const confDir = resolveCwmConfDir(baseDir);
+  const confDir = resolveCwmConfDir(serverHome(process.cwd()));
   return path.join(confDir, CWM_CONF_FILENAME);
 }
 
@@ -203,6 +244,7 @@ export function loadRuntimeEnv(): void {
 }
 
 function loadRuntimeEnvFiles(): void {
+  refuseInstalledCopyWithoutHome();
   const args = parseCliArgs(process.argv.slice(2));
   const rawMode = (
     args.ENV ??
@@ -212,11 +254,18 @@ function loadRuntimeEnvFiles(): void {
   ).toLowerCase();
   const isProduction = rawMode === 'production';
   const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : process.cwd();
+  // CWM_HOME (installers), beside the executable (portable) or the working folder (source).
+  const baseDir = serverHome(process.cwd());
+  const isInstalled = Boolean(process.env.CWM_HOME?.trim());
 
   // 1. .env first — so legacy SEED/SALT are in process.env before vault runs.
+  //    Not for the installed server (CWM_HOME set by its service): its settings
+  //    come only from the service definition and cwm.conf, so a file another
+  //    local user drops into the data folder is never read.
   const candidates: string[] = [];
-  if (isProduction) {
+  if (isInstalled) {
+    // no .env
+  } else if (isProduction) {
     candidates.push('/etc/cubrid-webmanager.env');
     candidates.push(path.join(baseDir, 'apps/api-server/.env'));
     candidates.push(path.join(baseDir, '.env'));
@@ -229,16 +278,13 @@ function loadRuntimeEnvFiles(): void {
     loadEnv({ path: envFilePath, override: false });
   }
 
-  // 2. conf/cwm.conf — user-editable settings (throws on parse error).
-  const confDir = resolveCwmConfDir(baseDir);
-  const confPath = confDir ? path.join(confDir, CWM_CONF_FILENAME) : null;
-  if (confPath && (isPkg || fs.existsSync(confPath))) {
-    loadCwmConf(confDir ?? baseDir);
-  }
+  // 2. cwm.conf — user-editable settings (throws on parse error): CWM_CONF_PATH
+  //    when set, otherwise conf/cwm.conf (or cwm.conf) in the base folder.
+  loadCwmConf(resolveCwmConfPath());
 
   // 3. cwm-vault — SEED/SALT, only for values not already set above.
   const vaultExists = fs.existsSync(path.join(getVaultDir(baseDir), CWM_VAULT_SECRETS_FILENAME));
-  if (isPkg || vaultExists) {
+  if (isPkg || isInstalled || vaultExists) {
     loadOrCreateVaultSecrets(baseDir);
   }
 }

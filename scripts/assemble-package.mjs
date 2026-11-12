@@ -4,12 +4,12 @@
  * public/ (frontend static files) is embedded inside the binary via pkg assets.
  *
  * Output: dist/executables/
- *   ├── cubrid-admin-linux | cubrid-admin.exe | cubrid-admin-macos   (public/ embedded)
+ *   ├── cubrid-admin-linux | cubrid-admin-linux-arm64 | cubrid-admin.exe | cubrid-admin-macos   (public/ embedded)
  *   └── conf/
  *       ├── cwm.conf.sample        (rename to cwm.conf before first run)
  *       └── cwm.conf.reference.md  (full list of supported keys)
  *
- * Usage: node scripts/assemble-package.mjs <linux|win|mac|all>
+ * Usage: node scripts/assemble-package.mjs <linux|linux-arm64|win|mac|all>
  */
 
 import fs from 'fs';
@@ -25,6 +25,7 @@ const CONF_REFERENCE = path.join(ROOT, 'cwm.conf.reference.md');
 
 const PLATFORM_MAP = {
   linux: { src: 'cubrid-admin-linux',  dest: 'cubrid-admin-linux'  },
+  'linux-arm64': { src: 'cubrid-admin-linux-arm64', dest: 'cubrid-admin-linux-arm64' },
   win:   { src: 'cubrid-admin.exe',    dest: 'cubrid-admin.exe'    },
   mac:   { src: 'cubrid-admin-macos',  dest: 'cubrid-admin-macos'  },
 };
@@ -32,7 +33,7 @@ const PLATFORM_MAP = {
 function assemble(platform) {
   const info = PLATFORM_MAP[platform];
   if (!info) {
-    console.error(`Unknown platform: ${platform}. Use linux | win | mac | all`);
+    console.error(`Unknown platform: ${platform}. Use linux | linux-arm64 | win | mac | all`);
     process.exit(1);
   }
 
@@ -65,7 +66,7 @@ function assemble(platform) {
 
 const arg = process.argv[2];
 if (!arg) {
-  console.error('Usage: node scripts/assemble-package.mjs <linux|win|mac|all>');
+  console.error('Usage: node scripts/assemble-package.mjs <linux|linux-arm64|win|mac|all>');
   process.exit(1);
 }
 

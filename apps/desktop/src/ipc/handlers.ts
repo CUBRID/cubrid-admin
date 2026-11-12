@@ -12,7 +12,7 @@ import {
   setCheckForUpdatesOnStartup,
   setWorkspaceRoot,
 } from '../config/desktop-settings';
-import { getPortableAppRoot } from '../config/portable-root';
+import { getDesktopDataRoot } from '../config/portable-root';
 import { getProductVersion } from '../product-version';
 import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
@@ -110,13 +110,13 @@ export function registerDesktopIpcHandlers(): void {
 
   ipcMain.handle('desktop:reveal-settings-file', async () => {
     const settingsPath = getDesktopSettingsPath();
-    const portableRoot = getPortableAppRoot();
+    const dataRoot = getDesktopDataRoot();
     if (fs.existsSync(settingsPath)) {
       shell.showItemInFolder(settingsPath);
-    } else if (fs.existsSync(portableRoot)) {
-      shell.openPath(portableRoot);
+    } else if (fs.existsSync(dataRoot)) {
+      shell.openPath(dataRoot);
     }
-    return { settingsPath, portableRoot };
+    return { settingsPath, dataRoot };
   });
 
   ipcMain.handle('desktop:set-menu-language', (_event, language: unknown) => {

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ]; then
+  if [ -d /run/systemd/system ]; then
+    systemctl disable --now cubrid-admin.service >/dev/null 2>&1 || :
+  fi
+  # Tells postinst that an install after this removal is a new install
+  # (the setup script makes the folder when it is missing).
+  /opt/cubrid-admin/cubrid-admin-setup.sh configure >/dev/null
+  touch /var/lib/cubrid-admin/.package-removed
+fi
+exit 0

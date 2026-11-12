@@ -1,0 +1,8 @@
+#!/bin/sh
+# Refuses to install over a copy installed from the tar.gz with install.sh.
+set -e
+if [ "$1" = install ] && [ -e /opt/cubrid-admin/.installed-by-install-sh ]; then
+  echo "CUBRID Admin Server was installed with install.sh: remove it with its uninstall.sh first (settings and data are kept)." >&2
+  exit 1
+fi
+exit 0
