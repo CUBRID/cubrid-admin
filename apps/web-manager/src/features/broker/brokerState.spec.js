@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brokerDotStatus, brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from './brokerState';
+import { brokerAccessModeOf, brokerDotStatus, brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from './brokerState';
 
 describe('brokerStateOf', () => {
   it('reads a broker listed without a state (broker service stopped) as OFF', () => {
@@ -35,5 +35,20 @@ describe('a SUSPENDED broker', () => {
     expect(brokerDotStatus(suspended)).toBe('suspended');
     expect(brokerDotStatus({ state: 'ON' })).toBe('on');
     expect(brokerDotStatus({})).toBe('off');
+  });
+});
+
+describe('brokerAccessModeOf', () => {
+  it('gives RW, RO or SO as CMS sends it for a running broker', () => {
+    expect(brokerAccessModeOf({ state: 'ON', access_mode: 'RW' })).toBe('RW');
+    expect(brokerAccessModeOf({ state: 'ON', access_mode: ' ro ' })).toBe('RO');
+    expect(brokerAccessModeOf({ state: 'SUSPENDED', access_mode: 'SO' })).toBe('SO');
+  });
+
+  it('gives nothing for a stopped broker or a missing value', () => {
+    expect(brokerAccessModeOf({ state: 'OFF', access_mode: 'RW' })).toBe('');
+    expect(brokerAccessModeOf({ access_mode: 'RW' })).toBe('');
+    expect(brokerAccessModeOf({ state: 'ON' })).toBe('');
+    expect(brokerAccessModeOf(undefined)).toBe('');
   });
 });

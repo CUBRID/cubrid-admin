@@ -121,3 +121,30 @@ it('shows a SUSPENDED broker with an orange dot and passes its state to the menu
   await fire('s1', 'contextmenu');
   expect(onContextMenu).toHaveBeenCalledWith(expect.anything(), 's1', 'SUSPENDED');
 });
+
+it('shows the access mode after the port, and only the port when CMS gives none', async () => {
+  store = configureStore({
+    reducer: combineReducers({ broker: brokerReducer, layout: layoutReducer, user: () => ({ preferences: { uiLocale: 'en' } }) }),
+    preloadedState: {
+      ...store.getState(),
+      broker: {
+        ...store.getState().broker,
+        navigatorBrokersByHost: { h1: [
+          { name: 'rw', state: 'ON', port: '30000', access_mode: 'RW' },
+          { name: 'so', state: 'ON', port: '30001', access_mode: 'SO' },
+          { name: 'off', state: 'OFF', port: '30002' },
+        ] },
+      },
+    },
+  });
+  await act(async () => root.render(
+    <Provider store={store}>
+      <BrokerTree hostUid="h1" onContextMenu={() => undefined} selectedBrokerNames={new Set()} onSelectedBrokerNamesChange={() => undefined} />
+    </Provider>,
+  ));
+  const label = (name) => container.querySelector(`[data-testid="tree-node-${name}"] summary`).textContent;
+  expect(label('rw')).toContain('rw (30000, RW)');
+  expect(label('so')).toContain('so (30001, SO)');
+  expect(label('off')).toContain('off (30002)');
+  expect(label('off')).not.toContain(',');
+});

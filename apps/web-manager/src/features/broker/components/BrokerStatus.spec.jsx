@@ -342,3 +342,26 @@ describe('BrokerStatus application server table', () => {
     expect(headers()).toContain(CM.port);
   });
 });
+
+describe('BrokerStatus access mode', () => {
+  const accessModeCell = () => {
+    const label = [...container.querySelectorAll('span')].find((el) => el.textContent === 'ACCESS_MODE');
+    return label?.nextElementSibling?.textContent.trim();
+  };
+
+  it('shows the access mode CMS gives for a running broker', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker({ access_mode: 'RO' })] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+    expect(accessModeCell()).toBe('RO');
+  });
+
+  it('shows "-" for a stopped broker, which CMS gives no access mode', async () => {
+    brokerApi.getBrokerList.mockResolvedValue({ result: [rawBroker({ state: 'OFF', pid: undefined })] });
+    brokerApi.getBrokerStatus.mockResolvedValue(statusResponse());
+    await render();
+    await flush();
+    expect(accessModeCell()).toBe('-');
+  });
+});

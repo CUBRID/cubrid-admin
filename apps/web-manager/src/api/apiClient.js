@@ -10,6 +10,9 @@ export const hostActions = {
   // The host's CMS could not be reached (stopped, its port changed, the host
   // down): the same reconnect window, saying so.
   hostUnreachable: (hostUid) => ({ type: 'host/hostUnreachable', payload: hostUid }),
+  // Its CMS did not answer a request / answered one again (status dot).
+  hostNotResponding: (hostUid) => ({ type: 'host/hostNotResponding', payload: hostUid }),
+  hostResponding: (hostUid) => ({ type: 'host/hostResponding', payload: hostUid }),
   loginToHost: null,
   clearReconnectingHost: null,
 };
@@ -88,6 +91,33 @@ export const CMS_NO_RESPONSE_MAX_TIMEOUTS = 3;
 export const CMS_NO_RESPONSE_SAME_MOMENT_MS = 10000;
 const CMS_NO_RESPONSE_WINDOW_MS = 5 * 60 * 1000;
 const hostNoResponseFailures = new Map(); // hostUid -> { count, firstAt, lastAt }
+
+// Host-scoped paths the server answers without CMS (the host record, a
+// database logout): their success says nothing about the CMS.
+const reachesCms = (requestUrl) => {
+  const path = (requestUrl || '').replace(/^https?:\/\/[^/]+/i, '').replace(/^\/?api\//i, '').replace(/^\//, '');
+  return !path.startsWith('host/') && !path.includes('/logout/');
+};
+
+// The "Not responding" dot (hostSlice.hostNotResponding): set by a request
+// CMS did not answer that did not open the reconnect window, cleared by the
+// next one it answers. Only reads the store and dispatches when the flag
+// changes; never sends a request.
+let storeModule = null;
+const setHostNotResponding = async (hostUid, notResponding) => {
+  try {
+    // One import for all responses (this runs on every host response).
+    storeModule ??= import('../app/store');
+    const { store } = await storeModule;
+    const host = store.getState().host;
+    if (Boolean(host?.hostNotResponding?.[hostUid]) === notResponding) return;
+    if (notResponding && !host?.authorizedHosts?.includes(hostUid)) return;
+    store.dispatch(notResponding ? hostActions.hostNotResponding(hostUid) : hostActions.hostResponding(hostUid));
+  } catch (e) {
+    storeModule = null;
+    console.error('Failed to update the host response state:', e);
+  }
+};
 
 const isHostUnreachableError = (hostUid, requestUrl, apiData) => {
   const type = apiData?.data?.type || apiData?.type || '';
@@ -517,6 +547,8 @@ apiClient.interceptors.response.use(
     if (successHostUid) {
       hostAutoReloginFailures.delete(successHostUid);
       hostNoResponseFailures.delete(successHostUid);
+      // 202: the server took a job without asking CMS yet (CmsJobService).
+      if (response.status !== 202 && reachesCms(response.config?.url)) void setHostNotResponding(successHostUid, false);
     }
 
     const rawData = response.data;
@@ -748,7 +780,16 @@ apiClient.interceptors.response.use(
     // with its last values on screen. A host login reports its own failure.
     if (!requestUrl.includes('/cms-auth/login')) {
       const hostUid = getHostUidFromUrl(requestUrl);
-      if (hostUid && !reconnectingHosts.has(hostUid) && isHostUnreachableError(hostUid, requestUrl, apiData)) {
+      const unreachable = Boolean(hostUid) && !reconnectingHosts.has(hostUid) && isHostUnreachableError(hostUid, requestUrl, apiData);
+      // CMS did not answer, but not (yet) enough to open the reconnect
+      // window: the host is shown as not responding until it answers again.
+      // A long read (log) that timed out is not counted, as above.
+      if (hostUid && !unreachable && !reconnectingHosts.has(hostUid) &&
+          [CMS_NO_RESPONSE_TYPE, CMS_TLS_ERROR_TYPE].includes(apiData?.data?.type || apiData?.type) &&
+          !CMS_LONG_REQUEST_PATHS.some((part) => requestUrl.includes(part))) {
+        await setHostNotResponding(hostUid, true);
+      }
+      if (unreachable) {
         try {
           const { store } = await import('../app/store');
           if (store.getState().host?.authorizedHosts?.includes(hostUid)) {

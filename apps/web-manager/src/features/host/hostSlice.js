@@ -29,6 +29,8 @@ function purgeHostClientState(state, hostUid) {
   delete state.haInfo[hostUid];
   delete state.hostEnvs[hostUid];
   delete state.hostAuthErrors[hostUid];
+  if (state.hostNotResponding?.[hostUid]) delete state.hostNotResponding[hostUid];
+  state.loggingInHosts = (state.loggingInHosts ?? []).filter((uid) => uid !== hostUid);
 }
 
 // A failed login records its message twice: per host (sidebar overlay,
@@ -62,6 +64,9 @@ function applyHostGroupsResponse(state, hostGroups) {
   state.authorizedHosts = state.authorizedHosts.filter((uid) => validUids.has(uid));
   for (const uid of Object.keys(state.haInfo)) {
     if (!validUids.has(uid)) delete state.haInfo[uid];
+  }
+  for (const uid of Object.keys(state.hostNotResponding ?? {})) {
+    if (!validUids.has(uid)) delete state.hostNotResponding[uid];
   }
   for (const uid of Object.keys(state.hostEnvs)) {
     if (!validUids.has(uid)) delete state.hostEnvs[uid];
@@ -527,6 +532,13 @@ const initialState = {
   // Why a host is in reconnectQueue when it is not a lost session:
   // 'unreachable' (its CMS could not be reached, see hostUnreachable).
   reconnectReasons: {}, // { [hostUid]: 'unreachable' }
+  // Connected hosts whose CMS did not answer their last request (cms/no_response
+  // that did not yet open the reconnect window, see apiClient); cleared by the
+  // next request for the host that reaches CMS. Shown as "Not responding".
+  hostNotResponding: {}, // { [hostUid]: true }
+  // Hosts whose own login (loginToHost: double-click, Reconnect, batch,
+  // silent re-login) is running, for the status dot.
+  loggingInHosts: [],
 };
 
 const hostSlice = createSlice({
@@ -570,6 +582,7 @@ const hostSlice = createSlice({
       syncHaInfoStorage(state);
       if (state.hostAuthErrors[hostUid]) delete state.hostAuthErrors[hostUid];
       if (state.reconnectReasons?.[hostUid]) delete state.reconnectReasons[hostUid];
+      if (state.hostNotResponding?.[hostUid]) delete state.hostNotResponding[hostUid];
       // Reset general error if it was likely related to this host
       state.error = null;
     },
@@ -760,6 +773,19 @@ const hostSlice = createSlice({
       if (!hostUid) return;
       if (!state.reconnectQueue.includes(hostUid)) state.reconnectQueue.push(hostUid);
       state.reconnectReasons = { ...(state.reconnectReasons ?? {}), [hostUid]: 'unreachable' };
+      // The reconnect window says it now; a later login starts afresh.
+      if (state.hostNotResponding?.[hostUid]) delete state.hostNotResponding[hostUid];
+    },
+    // Set and cleared by apiClient only, without requests of their own; the
+    // same failure reported by several screens leaves the flag as it is.
+    hostNotResponding: (state, action) => {
+      const hostUid = action.payload;
+      if (!hostUid || state.hostNotResponding?.[hostUid]) return;
+      state.hostNotResponding = { ...(state.hostNotResponding ?? {}), [hostUid]: true };
+    },
+    hostResponding: (state, action) => {
+      const hostUid = action.payload;
+      if (hostUid && state.hostNotResponding?.[hostUid]) delete state.hostNotResponding[hostUid];
     },
   },
   extraReducers: (builder) => {
@@ -829,8 +855,13 @@ const hostSlice = createSlice({
         }
         // Clean up previous error for this host if any
         clearHostLoginError(state, loginHostUid(action.meta.arg));
+        const loggingIn = loginHostUid(action.meta.arg);
+        if (loggingIn && !(state.loggingInHosts ?? []).includes(loggingIn)) {
+          state.loggingInHosts = [...(state.loggingInHosts ?? []), loggingIn];
+        }
       })
       .addCase(loginToHost.fulfilled, (state, action) => {
+        state.loggingInHosts = (state.loggingInHosts ?? []).filter((uid) => uid !== loginHostUid(action.meta.arg));
         if (!state.isBatchHostLogin) {
           state.isLoggingIntoHost = false;
           state.loading = false;
@@ -839,6 +870,7 @@ const hostSlice = createSlice({
         // Again here: a concurrent attempt for this host (e.g. the silent
         // re-login in apiClient) may have failed after this one started.
         clearHostLoginError(state, hostUid);
+        if (state.hostNotResponding?.[hostUid]) delete state.hostNotResponding[hostUid];
         if (!state.authorizedHosts.includes(hostUid)) {
           state.authorizedHosts.push(hostUid);
         }
@@ -860,6 +892,7 @@ const hostSlice = createSlice({
         }
       })
       .addCase(loginToHost.rejected, (state, action) => {
+        state.loggingInHosts = (state.loggingInHosts ?? []).filter((uid) => uid !== loginHostUid(action.meta.arg));
         if (!state.isBatchHostLogin) {
           state.isLoggingIntoHost = false;
           state.loading = false;
@@ -1147,6 +1180,8 @@ export const {
   openReconnectModal,
   closeReconnectModal,
   hostUnreachable,
+  hostNotResponding,
+  hostResponding,
   askHostPassword,
 } = hostSlice.actions;
 

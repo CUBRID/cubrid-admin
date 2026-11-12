@@ -40,3 +40,14 @@ export const brokerDotStatus = (broker) => {
   if (state === 'ON') return 'on';
   return state === BROKER_SUSPENDED ? 'suspended' : 'off';
 };
+
+/**
+ * ACCESS_MODE as CMS getbrokersinfo gives it (RW, RO, SO; the engine also
+ * reports forms such as RO-REPLICA, shown as they are), '' when there is
+ * none: CMS sends it only for a broker that is not OFF.
+ */
+export const brokerAccessModeOf = (broker) => {
+  if (!isBrokerRunning(broker)) return '';
+  const raw = broker?.access_mode;
+  return typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+};
