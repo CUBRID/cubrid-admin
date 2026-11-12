@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 jest.mock('../config/desktop-settings', () => ({ loadDesktopSettings: () => ({}) }));
-jest.mock('../config/portable-root', () => ({ getPortableAppRoot: () => '/tmp' }));
+jest.mock('../config/portable-root', () => ({ getDesktopDataRoot: () => '/tmp' }));
 
 import { isSameWorkspaceFolder } from './workspace-paths';
 import { listActiveJobs } from '../api/active-jobs';

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getPortableAppRoot, isPathInsideAppBundle } from './portable-root';
+import { getDesktopDataRoot, isPathInsideAppBundle } from './portable-root';
 
 export type DesktopSettings = {
   workspaceRoot?: string;
@@ -16,7 +16,7 @@ export type DesktopSettings = {
 const SETTINGS_FILE = 'desktop-settings.json';
 
 function getSettingsFilePath(): string {
-  return path.join(getPortableAppRoot(), SETTINGS_FILE);
+  return path.join(getDesktopDataRoot(), SETTINGS_FILE);
 }
 
 /** Drops only the workspace override; update preferences and history stay. */

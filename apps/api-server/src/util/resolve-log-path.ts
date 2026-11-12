@@ -1,10 +1,11 @@
 import * as path from 'path';
+import { serverHome } from '../config/server-home';
 
 /**
  * Determines the appropriate log directory based on the execution environment.
- * If running as a `pkg` executable, it uses the executable's directory.
- * Otherwise (development mode), it uses the project's root directory.
- * Mirrors `resolve-storage-path.ts`'s pkg/dev fallback logic.
+ * LOG_DIR when set; otherwise logs/ in CWM_HOME (installers), beside the single
+ * executable, or in the project's root directory (development mode).
+ * Mirrors `resolve-storage-path.ts`'s executable/dev fallback logic.
  *
  * @returns The absolute path to the log directory.
  * @category Utilities
@@ -16,12 +17,6 @@ export function getLogPath(): string {
     return path.resolve(configuredPath);
   }
 
-  const isPkg = !!(process as any).pkg;
-
-  if (isPkg) {
-    const executableDir = path.dirname(process.execPath);
-    return path.join(executableDir, 'logs');
-  } else {
-    return path.resolve(__dirname, '..', '..', 'logs');
-  }
+  // CWM_HOME (installers), beside the executable (portable) or the project (source).
+  return path.join(serverHome(path.resolve(__dirname, '..', '..')), 'logs');
 }

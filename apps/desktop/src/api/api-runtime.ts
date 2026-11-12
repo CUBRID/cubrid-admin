@@ -5,7 +5,14 @@ import { setWorkspacePathsInUse } from '../workspace/paths';
 import { WorkspaceError } from '../workspace/workspace-check';
 import { ensureWorkspaceDirectories, type WorkspacePaths } from '../workspace/workspace-paths';
 import { ApiProcessHandle, startApiServer, stopApiServer } from './api-process';
-import { waitForApiReady } from './wait-for-api';
+import {
+  askKeepWaiting,
+  getApiStartStatus,
+  isApiStartStopRequested,
+  resetApiStartStop,
+  setApiStartStatus,
+} from './start-status';
+import { ApiStartStoppedError, waitForApiReady } from './wait-for-api';
 
 let apiProcess: ApiProcessHandle | null = null;
 let apiPaths: WorkspacePaths | null = null;
@@ -27,9 +34,11 @@ export function getRunningWorkspacePaths(): WorkspacePaths | null {
 /**
  * Starts the server on `paths` after creating what the workspace is missing
  * (folders, its SEED/SALT; the server makes its certificate and data file).
- * Throws WORKSPACE_IN_USE when another app runs on it, and
- * WORKSPACE_API_START_FAILED with the server's last stderr lines when it
- * ends or does not answer in time.
+ * Throws WORKSPACE_IN_USE when another app runs on it,
+ * WORKSPACE_API_START_FAILED with the reason (the server's "failed" message
+ * or its last stderr lines) when it fails or ends, and
+ * WORKSPACE_API_START_STOPPED when the user stops a slow start. A slow start
+ * by itself never fails: the page shows the time so far.
  */
 export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiProcessHandle> {
   if (quitting) {
@@ -46,24 +55,38 @@ export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiPr
     handle = startApiServer(paths, loadOrCreateDesktopSecrets(paths.dataDir));
     startingProcess = handle;
     setAppProtocolApiSocket(paths.socketPath);
-    await waitForApiReady(paths.socketPath, handle.exited);
+    resetApiStartStop();
+    setApiStartStatus({ state: 'starting', elapsedMs: 0 });
+    await waitForApiReady(paths.socketPath, handle.exited, handle.signal, {
+      // Keeps the slow notice up while it counts.
+      onProgress: (elapsedMs) =>
+        setApiStartStatus({ state: getApiStartStatus().state === 'slow' ? 'slow' : 'starting', elapsedMs }),
+      onSoftLimit: askKeepWaiting,
+      shouldStop: isApiStartStopRequested,
+    });
     if (startingProcess !== handle) {
       throw new Error('The server was stopped while it started.');
     }
     startingProcess = null;
   } catch (error) {
+    setApiStartStatus({ state: 'idle' });
     const stoppedWhileStarting = handle !== null && startingProcess !== handle;
     if (startingProcess === handle) startingProcess = null;
     // Stopped by a quit: the stop already gave the workspace back.
     if (stoppedWhileStarting) {
       throw new WorkspaceError('WORKSPACE_API_START_FAILED', 'The server was stopped while it started.');
     }
-    const reason = handle?.stderrTail() || (error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    const tail = handle?.stderrTail();
     if (handle) await stopAndWait(handle);
     setAppProtocolApiSocket(undefined);
     releaseWorkspaceLock();
-    throw new WorkspaceError('WORKSPACE_API_START_FAILED', reason);
+    if (error instanceof ApiStartStoppedError) {
+      throw new WorkspaceError('WORKSPACE_API_START_STOPPED');
+    }
+    throw new WorkspaceError('WORKSPACE_API_START_FAILED', tail ? `${message}\n${tail}` : message);
   }
+  setApiStartStatus({ state: 'idle' });
   apiProcess = handle;
   apiPaths = paths;
   setWorkspacePathsInUse(paths);

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as selfsigned from 'selfsigned';
+import { serverHome } from '../../config/server-home';
 
 export type HttpsKeyCert = { key: Buffer; cert: Buffer };
 
@@ -39,7 +40,7 @@ export function getHttpsOptions(): HttpsKeyCert {
 
 /**
  * Retrieves existing SSL certificates or generates new self-signed certificates if they don't exist.
- * Certificates are stored in an 'ssl' directory relative to the executable path (for pkg) or project root.
+ * Certificates are stored in an 'ssl' directory in CWM_HOME, beside the single executable or in the project root.
  *
  * @returns An object containing the SSL key and certificate.
  * @category Utilities
@@ -51,10 +52,7 @@ function resolveSslDir(): string {
     return path.resolve(configured);
   }
 
-
-  const isPkg = !!(process as any).pkg;
-  const baseDir = isPkg ? path.dirname(process.execPath) : path.resolve(__dirname, '..', '..');
-  return path.join(baseDir, 'ssl');
+  return path.join(serverHome(path.resolve(__dirname, '..', '..')), 'ssl');
 }
 
 export function getOrCreateSSLCert(): HttpsKeyCert {

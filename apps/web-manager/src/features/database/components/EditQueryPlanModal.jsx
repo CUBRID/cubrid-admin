@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeEditQueryPlanModal, updateAutoExecQueryPlan, fetchQueryPlan } from '../databaseSlice';
 import { dbKey } from '../dbKey';
-import Editor from '@monaco-editor/react';
+import Editor from '../../../components/domain/database/SqlCodeEditor';
 import { useCM } from '../../../constants/useCM';
 import { hasLineCommentAcrossLines, normalizeQueryForCms } from '../queryPlanUtils';
 
@@ -392,7 +392,7 @@ export default function EditQueryPlanModal() {
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   padding: { top: 16, bottom: 16 },
-                  fontFamily: 'JetBrains Mono, Fira Code, monospace',
+                  fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', monospace",
                   renderLineHighlight: 'all',
                   scrollbar: {
                     vertical: 'visible',

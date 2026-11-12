@@ -2,14 +2,16 @@ import { app, BrowserWindow, dialog, powerMonitor, session, type MessageBoxSyncO
 import { isDesktopApiQuitting, startApiForWorkspace, stopDesktopApiOnQuit } from './api/api-runtime';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
-import { getPortableAppRoot } from './config/portable-root';
+import { getDesktopDataRoot } from './config/portable-root';
 import { registerDesktopIpcHandlers, setWorkspaceStartupError } from './ipc/handlers';
 import { getMenuLanguage, installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
 import { getRendererDistDir, getWorkspacePaths, refreshWorkspacePaths } from './workspace/paths';
 import { getDefaultWorkspaceRoot } from './workspace/workspace-paths';
 import { waitForWorkspaceSetupComplete } from './workspace/workspace-setup';
-import { createAppWindow, toAppRouteUrl } from './window/app-window';
+import { createAppWindow } from './window/app-window';
+import { loadRoute } from './window/load-route';
+import { onApiStartStatus } from './api/start-status';
 import { getMainWindow, setMainWindow } from './window/window-registry';
 import { installDownloadDialogDefaults } from './window/dialog-paths';
 import { confirmUnloadWithUnsavedChanges } from './window/unsaved-changes';
@@ -44,22 +46,29 @@ const quitFlow = createQuitFlow(
   hasPageUnsavedChanges
 );
 
-async function loadRoute(window: BrowserWindow, routePath: string): Promise<void> {
-  await window.loadURL(toAppRouteUrl(routePath));
-}
-
 /**
  * Starts the server on the configured workspace. When it cannot (say the
  * folder is no longer writable), the workspace page shows why and asks for
  * another or the default; nothing falls back on its own.
  */
+const SHOW_START_PROGRESS_AFTER_MS = 3_000;
+
 async function startApiOrAskForWorkspace(window: BrowserWindow): Promise<void> {
   for (;;) {
+    // A start that takes a while shows the workspace page with its progress
+    // (the window is otherwise still hidden at launch).
+    const showProgress = setTimeout(() => {
+      if (!window.isDestroyed() && !window.isVisible()) {
+        void loadRoute(window, 'desktop/workspace').then(() => window.show());
+      }
+    }, SHOW_START_PROGRESS_AFTER_MS);
     try {
       await startApiForWorkspace(getWorkspacePaths());
+      clearTimeout(showProgress);
       setWorkspaceStartupError(null);
       return;
     } catch (error) {
+      clearTimeout(showProgress);
       // Quit while the server started: the window is closing, nothing to ask.
       if (isDesktopApiQuitting()) return;
       console.error('[desktop] could not start on the workspace', error);
@@ -80,7 +89,7 @@ async function bootstrap(): Promise<void> {
   registerDesktopIpcHandlers();
   installDownloadDialogDefaults(session.defaultSession, () => app.getPath('documents'));
 
-  console.log('[desktop] install dir (beside .app / exe):', getPortableAppRoot());
+  console.log('[desktop] settings folder:', getDesktopDataRoot());
   console.log('[desktop] settings file:', getDesktopSettingsPath());
   console.log('[desktop] default workspace:', getDefaultWorkspaceRoot());
 
@@ -90,6 +99,10 @@ async function bootstrap(): Promise<void> {
   const requiresSetup = needsWorkspaceSetup();
   const mainWindow = createAppWindow(DESKTOP_API_BASE_URL);
   setMainWindow(mainWindow);
+  // The workspace page shows the server start's progress.
+  onApiStartStatus((status) => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send('desktop:api-start-status', status);
+  });
   whenSessionEnds(quitFlow, powerMonitor, mainWindow);
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
