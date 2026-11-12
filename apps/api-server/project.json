@@ -61,27 +61,50 @@
       "executor": "nx:run-commands",
       "dependsOn": ["build"],
       "options": {
-        "commands": ["node scripts/copy-web-to-api.mjs", "node scripts/build-server-sea.mjs"],
+        "commands": [
+          "node apps/api-server/scripts/prepare-pkg-manifest.js",
+          "node scripts/copy-web-to-api.mjs",
+          "npx pkg dist/apps/api-server/package.json"
+        ],
         "parallel": false
       },
       "configurations": {
         "windows": {
-          "commands": ["node scripts/copy-web-to-api.mjs", "node scripts/build-server-sea.mjs --target windows-x64"],
+          "commands": [
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-win-x64",
+            "node scripts/copy-web-to-api.mjs",
+            "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-admin.exe"
+          ],
           "parallel": false
         },
         "linux": {
           "commands": [
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-x64",
             "node scripts/copy-web-to-api.mjs",
-            "node scripts/build-server-sea.mjs --target linux-x64 --target linux-x64-el7 --target linux-arm64"
+            "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-admin-linux"
           ],
           "parallel": false
         },
         "macos": {
-          "commands": ["node scripts/copy-web-to-api.mjs", "node scripts/build-server-sea.mjs --target macos-x64 --target macos-arm64"],
+          "commands": [
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-macos-x64",
+            "node scripts/copy-web-to-api.mjs",
+            "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-admin-macos"
+          ],
           "parallel": false
         },
         "all": {
-          "commands": ["node scripts/copy-web-to-api.mjs", "node scripts/build-server-sea.mjs"],
+          "commands": [
+            "node scripts/copy-web-to-api.mjs",
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-win-x64",
+            "npx pkg dist/apps/api-server/package.json --targets node18-win-x64 --output dist/executables/cubrid-admin.exe",
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-x64",
+            "npx pkg dist/apps/api-server/package.json --targets node18-linux-x64 --output dist/executables/cubrid-admin-linux",
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-linux-arm64",
+            "npx pkg dist/apps/api-server/package.json --targets node18-linux-arm64 --output dist/executables/cubrid-admin-linux-arm64",
+            "node apps/api-server/scripts/prepare-pkg-manifest.js --target node18-macos-x64",
+            "npx pkg dist/apps/api-server/package.json --targets node18-macos-x64 --output dist/executables/cubrid-admin-macos"
+          ],
           "parallel": false
         }
       }

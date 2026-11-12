@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 /**
- * Assembles the final distribution package after the server executables are
- * built (scripts/build-server-sea.mjs). public/ (frontend static files) is
- * embedded inside each executable.
+ * Assembles the final distribution package after build:server + pkg.
+ * public/ (frontend static files) is embedded inside the binary via pkg assets.
  *
  * Output: dist/executables/
- *   ├── cubrid-admin-linux | cubrid-admin-linux-el7 | cubrid-admin-linux-arm64 | cubrid-admin.exe | cubrid-admin-macos | cubrid-admin-macos-arm64   (public/ embedded)
+ *   ├── cubrid-admin-linux | cubrid-admin-linux-arm64 | cubrid-admin.exe | cubrid-admin-macos   (public/ embedded)
  *   └── conf/
  *       ├── cwm.conf.sample        (rename to cwm.conf before first run)
  *       └── cwm.conf.reference.md  (full list of supported keys)
  *
- * Usage: node scripts/assemble-package.mjs <linux|linux-el7|linux-arm64|win|mac|mac-arm64|all> [...]
+ * Usage: node scripts/assemble-package.mjs <linux|linux-arm64|win|mac|all>
  */
 
 import fs from 'fs';
@@ -26,28 +25,22 @@ const CONF_REFERENCE = path.join(ROOT, 'cwm.conf.reference.md');
 
 const PLATFORM_MAP = {
   linux: { src: 'cubrid-admin-linux',  dest: 'cubrid-admin-linux'  },
-  'linux-el7': { src: 'cubrid-admin-linux-el7', dest: 'cubrid-admin-linux-el7' },
   'linux-arm64': { src: 'cubrid-admin-linux-arm64', dest: 'cubrid-admin-linux-arm64' },
   win:   { src: 'cubrid-admin.exe',    dest: 'cubrid-admin.exe'    },
   mac:   { src: 'cubrid-admin-macos',  dest: 'cubrid-admin-macos'  },
-  'mac-arm64': { src: 'cubrid-admin-macos-arm64', dest: 'cubrid-admin-macos-arm64' },
 };
 
 function assemble(platform) {
   const info = PLATFORM_MAP[platform];
   if (!info) {
-    console.error(`Unknown platform: ${platform}. Use linux | linux-el7 | linux-arm64 | win | mac | mac-arm64 | all`);
+    console.error(`Unknown platform: ${platform}. Use linux | linux-arm64 | win | mac | all`);
     process.exit(1);
   }
 
   const exeSrc = path.join(EXECUTABLES_DIR, info.src);
-  if (!fs.existsSync(exeSrc) && skipMissingMac && info.src.startsWith('cubrid-admin-macos')) {
-    console.log(`  skipped ${info.src}: it needs a macOS build machine (codesign)`);
-    return;
-  }
   if (!fs.existsSync(exeSrc)) {
     console.error(`Executable not found: ${exeSrc}`);
-    console.error(`Build the server executables first (nx run api-server:build:exe).`);
+    console.error(`Run pkg build first.`);
     process.exit(1);
   }
 
@@ -71,15 +64,18 @@ function assemble(platform) {
   console.log(`\ndist/executables/${info.dest}  (public/ embedded inside binary)`);
 }
 
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error('Usage: node scripts/assemble-package.mjs <linux|linux-el7|linux-arm64|win|mac|mac-arm64|all> [...]');
+const arg = process.argv[2];
+if (!arg) {
+  console.error('Usage: node scripts/assemble-package.mjs <linux|linux-arm64|win|mac|all>');
   process.exit(1);
 }
 
-// 'all' off macOS: the SEA build leaves out the macOS executables there.
-const skipMissingMac = args.includes('all') && process.platform !== 'darwin';
-for (const platform of args.includes('all') ? Object.keys(PLATFORM_MAP) : args) {
-  assemble(platform);
+if (arg === 'all') {
+  for (const platform of Object.keys(PLATFORM_MAP)) {
+    assemble(platform);
+  }
+  console.log('\nconf/cwm.conf.sample  ← rename to cwm.conf before first run');
+} else {
+  assemble(arg);
+  console.log('\nconf/cwm.conf.sample  ← rename to cwm.conf before first run');
 }
-console.log('\nconf/cwm.conf.sample  ← rename to cwm.conf before first run');

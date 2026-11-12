@@ -46,8 +46,6 @@ export default function DesktopWorkspaceSettingsPage() {
   const [message, setMessage] = useState('');
   // The server could not say whether a job runs: switch only if the user says so.
   const [askIgnoreUnknownJobs, setAskIgnoreUnknownJobs] = useState(false);
-  // The server start in progress: { state: 'idle' | 'starting' | 'slow', elapsedMs }.
-  const [startStatus, setStartStatus] = useState({ state: 'idle' });
   const navigate = useNavigate();
 
   const loadInfo = useCallback(async () => {
@@ -68,7 +66,7 @@ export default function DesktopWorkspaceSettingsPage() {
       setWorkspaceRoot(next.workspaceRoot);
       setSetupMode(setupRequired);
       // The configured workspace failed at launch: say why (a WORKSPACE_* code).
-      if (startupError) setError(desktopErrorText({ message: startupError }, CM, CM.workspaceSaveFailedMsg));
+      if (startupError) setError(startupError);
     } catch (err) {
       setError(desktopErrorText(err, CM, CM.workspaceSettingsLoadFailedMsg));
     } finally {
@@ -79,16 +77,6 @@ export default function DesktopWorkspaceSettingsPage() {
   useEffect(() => {
     void loadInfo();
   }, [loadInfo]);
-
-  // A slow start shows its time; nothing fails only because it is slow.
-  useEffect(() => {
-    if (!bridge?.onApiStartStatus) return undefined;
-    void bridge.getApiStartStatus?.().then((status) => status && setStartStatus(status));
-    return bridge.onApiStartStatus((status) => setStartStatus(status));
-  }, [bridge]);
-
-  const starting = startStatus.state === 'starting' || startStatus.state === 'slow';
-  const startSeconds = Math.round((startStatus.elapsedMs ?? 0) / 1000);
 
   const handlePick = async () => {
     if (!bridge) return;
@@ -227,37 +215,9 @@ export default function DesktopWorkspaceSettingsPage() {
               {error}
             </InfoBanner>
           )}
-          {message && !starting && (
+          {message && (
             <InfoBanner variant="success" title={CM.policiesSaved}>
               {message}
-            </InfoBanner>
-          )}
-          {startStatus.state === 'starting' && (
-            <InfoBanner variant="info" title={CM.loadingLabel}>
-              <span data-testid="api-start-progress">{CM.apiStartingMsg(startSeconds)}</span>
-            </InfoBanner>
-          )}
-          {startStatus.state === 'slow' && (
-            <InfoBanner variant="warning" title={CM.loadingLabel}>
-              <span data-testid="api-start-slow">{CM.apiStartSlowMsg(startSeconds)}</span>
-              <div className="flex gap-2 mt-3">
-                <button
-                  type="button"
-                  data-testid="api-start-keep-waiting-btn"
-                  onClick={() => void bridge.decideApiStart('wait')}
-                  className="h-9 px-3 text-14 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40"
-                >
-                  {CM.keepWaitingBtn}
-                </button>
-                <button
-                  type="button"
-                  data-testid="api-start-stop-btn"
-                  onClick={() => void bridge.decideApiStart('stop')}
-                  className="h-9 px-3 text-14 font-semibold rounded-xl border border-rose-300 text-rose-600 dark:border-rose-500/40 dark:text-rose-400"
-                >
-                  {CM.stopServerStartBtn}
-                </button>
-              </div>
             </InfoBanner>
           )}
 
@@ -274,7 +234,7 @@ export default function DesktopWorkspaceSettingsPage() {
               <button
                 type="button"
                 data-testid="workspace-continue-btn"
-                disabled={saving || starting || !workspaceRoot.trim()}
+                disabled={saving || !workspaceRoot.trim()}
                 onClick={() => void handleContinue()}
                 className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
               >
@@ -284,7 +244,7 @@ export default function DesktopWorkspaceSettingsPage() {
               <button
                 type="button"
                 data-testid="workspace-save-btn"
-                disabled={saving || starting || !workspaceRoot.trim() || unchanged}
+                disabled={saving || !workspaceRoot.trim() || unchanged}
                 onClick={() => void handleSave()}
                 className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
               >

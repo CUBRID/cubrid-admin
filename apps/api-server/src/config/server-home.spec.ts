@@ -1,10 +1,7 @@
 import * as path from 'path';
 import { refuseInstalledCopyWithoutHome, serverHome } from './server-home';
-import { isStandaloneExecutable } from '../util/standalone-executable';
 import { getStoragePath } from '../util/resolve-storage-path';
 import { getLogPath } from '../util/resolve-log-path';
-
-jest.mock('../util/standalone-executable', () => ({ isStandaloneExecutable: jest.fn(() => false) }));
 
 describe('serverHome', () => {
   const keys = ['CWM_HOME', 'STORAGE_PATH', 'LOG_DIR'];
@@ -17,7 +14,7 @@ describe('serverHome', () => {
   });
 
   afterEach(() => {
-    jest.mocked(isStandaloneExecutable).mockReturnValue(false);
+    delete (process as any).pkg;
     Object.defineProperty(process, 'execPath', { value: realExecPath });
     for (const key of keys) {
       if (saved[key] === undefined) delete process.env[key];
@@ -26,7 +23,7 @@ describe('serverHome', () => {
   });
 
   function runAsPackaged(execPath: string): void {
-    jest.mocked(isStandaloneExecutable).mockReturnValue(true);
+    (process as any).pkg = {};
     Object.defineProperty(process, 'execPath', { value: execPath });
   }
 

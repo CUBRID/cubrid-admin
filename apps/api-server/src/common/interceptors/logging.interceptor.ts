@@ -42,18 +42,15 @@ export class LoggingInterceptor implements NestInterceptor {
           );
         },
         error: (error) => {
-          const line = formatAuditLog('http_error', {
-            ...requestContext,
-            statusCode: error.status || 'N/A',
-            durationMs: Date.now() - now,
-            message: error.message,
-          });
-          // 401: a request without a valid login, logged without a stack trace.
-          if (error.status === 401) {
-            this.logger.warn(line);
-          } else {
-            this.logger.error(line, error.stack);
-          }
+          this.logger.error(
+            formatAuditLog('http_error', {
+              ...requestContext,
+              statusCode: error.status || 'N/A',
+              durationMs: Date.now() - now,
+              message: error.message,
+            }),
+            error.stack
+          );
         },
       })
     );

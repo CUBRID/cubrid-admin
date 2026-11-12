@@ -8,9 +8,6 @@ import type { WorkspacePaths } from '../workspace/workspace-paths';
 
 const STDERR_TAIL_LINES = 20;
 
-/** What the server says over its IPC channel while it starts (apps/api-server util/desktop-signal.ts). */
-export type ApiSignal = { state: 'ready' } | { state: 'failed'; code: string; message: string };
-
 export type ApiProcessHandle = {
   child: ChildProcess;
   socketPath: string;
@@ -19,8 +16,6 @@ export type ApiProcessHandle = {
   exited: Promise<number | null>;
   /** The last lines the server wrote to stderr, for a start that failed. */
   stderrTail: () => string;
-  /** Resolves with the server's first start-up signal ("ready" or "failed"); never, if it sends none. */
-  signal: Promise<ApiSignal>;
 };
 
 function getNodeExecutable(): string {
@@ -69,17 +64,7 @@ export function startApiServer(paths: WorkspacePaths, secrets: { seed: string; s
   const child = spawn(getNodeExecutable(), [entry], {
     cwd: getApiServerDir(),
     env: apiServerEnv(paths, secrets),
-    // 'ipc': the server says "ready" or "failed" (and why) over it.
-    stdio: ['ignore', 'inherit', 'pipe', 'ipc'],
-  });
-
-  const signal = new Promise<ApiSignal>((resolve) => {
-    child.on('message', (message: unknown) => {
-      const sent = (message as { cwmApi?: ApiSignal } | null)?.cwmApi;
-      if (sent && (sent.state === 'ready' || sent.state === 'failed')) {
-        resolve(sent);
-      }
-    });
+    stdio: ['ignore', 'inherit', 'pipe'],
   });
 
   // stderr still reaches the console; its last lines are kept for an error.
@@ -98,14 +83,7 @@ export function startApiServer(paths: WorkspacePaths, secrets: { seed: string; s
     child.once('error', () => resolve(null));
   });
 
-  return {
-    child,
-    socketPath: paths.socketPath,
-    apiBaseUrl: DESKTOP_API_BASE_URL,
-    exited,
-    stderrTail: () => tail.join('\n'),
-    signal,
-  };
+  return { child, socketPath: paths.socketPath, apiBaseUrl: DESKTOP_API_BASE_URL, exited, stderrTail: () => tail.join('\n') };
 }
 
 export function stopApiServer(child: ChildProcess | null, options?: { force?: boolean }): void {

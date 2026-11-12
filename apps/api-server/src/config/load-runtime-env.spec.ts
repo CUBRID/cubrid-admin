@@ -177,64 +177,6 @@ describe('loadRuntimeEnv', () => {
         expect(fs.readdirSync(path.dirname(secretsPath()))).toEqual(['secrets.json']);
       });
 
-      describe('on a file system without hard links', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const nodeFs: typeof fs = require('fs');
-        const noLinks = () =>
-          jest.spyOn(nodeFs, 'linkSync').mockImplementation((() => {
-            throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' });
-          }) as typeof fs.linkSync);
-        afterEach(() => jest.restoreAllMocks());
-
-        it('copies it into place', () => {
-          noLinks();
-          loadRuntimeEnv();
-          expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: process.env.SEED, salt: process.env.SALT });
-          expect(fs.readdirSync(path.dirname(secretsPath()))).toEqual(['secrets.json']);
-        });
-
-        it('removes its own copy when the copy fails part-way', () => {
-          noLinks();
-          jest.spyOn(nodeFs, 'copyFileSync').mockImplementation(((src: fs.PathLike, dest: fs.PathLike) => {
-            nodeFs.writeFileSync(dest, nodeFs.readFileSync(src).subarray(0, 10));
-            throw Object.assign(new Error('ENOSPC: no space left on device, copyfile'), { code: 'ENOSPC' });
-          }) as typeof fs.copyFileSync);
-          expect(() => loadRuntimeEnv()).toThrow(/Cannot create .*ENOSPC/);
-          expect(fs.readdirSync(path.dirname(secretsPath()))).toEqual([]);
-        });
-
-        it('uses the one another start copied first', () => {
-          const other = { seed: 'copied-first-seed', salt: 'copied-first-salt' };
-          noLinks();
-          jest.spyOn(nodeFs, 'copyFileSync').mockImplementation(((_src: fs.PathLike, dest: fs.PathLike) => {
-            nodeFs.writeFileSync(dest, JSON.stringify(other));
-            throw Object.assign(new Error('EEXIST: file already exists, copyfile'), { code: 'EEXIST' });
-          }) as typeof fs.copyFileSync);
-          loadRuntimeEnv();
-          expect(process.env.SEED).toBe(other.seed);
-          expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual(other);
-        });
-      });
-
-      it('stops, and creates nothing, when checking the file fails with anything but ENOENT (an ACL)', () => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const nodeFs: typeof fs = require('fs');
-        const realStat = nodeFs.statSync;
-        const spy = jest.spyOn(nodeFs, 'statSync').mockImplementation(((p: fs.PathLike, ...rest: unknown[]) => {
-          if (String(p).endsWith('secrets.json')) {
-            throw Object.assign(new Error('EPERM: operation not permitted, stat'), { code: 'EPERM' });
-          }
-          return (realStat as (...args: unknown[]) => unknown)(p, ...rest);
-        }) as typeof fs.statSync);
-        try {
-          expect(() => loadRuntimeEnv()).toThrow(/Cannot check .*secrets\.json.*EPERM/);
-        } finally {
-          spy.mockRestore();
-        }
-        expect(fs.existsSync(path.dirname(secretsPath())) && fs.readdirSync(path.dirname(secretsPath())).length).toBeFalsy();
-        expect(process.env.SEED).toBeUndefined();
-      });
-
       it('creates it only when it does not exist', () => {
         expect(fs.existsSync(secretsPath())).toBe(false);
         loadRuntimeEnv();

@@ -111,11 +111,10 @@ export class LockService {
     const lock = await this.acquire(filename);
 
     try {
+      Logger.log('with lock work');
       return await work();
     } catch (error) {
-      // The caller handles the error (an expected one, such as a user file that
-      // does not exist yet on the first start, included); the lock is released below.
-      Logger.debug(`Work under the lock on ${filename} ended with an error; releasing the lock`);
+      Logger.log('with lock error');
       throw error;
     } finally {
       try {
