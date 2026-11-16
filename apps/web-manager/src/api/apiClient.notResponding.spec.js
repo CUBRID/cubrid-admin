@@ -90,6 +90,13 @@ it('is not cleared by a request the server answers without CMS', async () => {
   expect(types()).toEqual(['hostNotResponding:HOST']);
 });
 
+it('is not cleared by a connection test, which may go to another address', async () => {
+  await get(`/${HOST}/database/start-info`, failWith(500, noResponse('ECONNABORTED')));
+  await get(`/${HOST}/cms-auth/test`, succeed);
+  await get(`/${HOST}/cms-auth/test`, failWith(500, { data: { type: '/errors/cms/request_failed' } }));
+  expect(types()).toEqual(['hostNotResponding:HOST']);
+});
+
 it('is not cleared by a job the server accepted (202) without asking CMS yet', async () => {
   await get(`/${HOST}/database/start-info`, failWith(500, noResponse('ECONNABORTED')));
   apiClient.defaults.adapter = (config) => Promise.resolve({ status: 202, data: { data: { jobId: 'j1' } }, headers: {}, config });

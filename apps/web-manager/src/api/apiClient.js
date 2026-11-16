@@ -93,11 +93,13 @@ export const CMS_NO_RESPONSE_SAME_MOMENT_MS = 10000;
 const CMS_NO_RESPONSE_WINDOW_MS = 5 * 60 * 1000;
 const hostNoResponseFailures = new Map(); // hostUid -> { count, firstAt, lastAt }
 
-// Host-scoped paths the server answers without CMS (the host record, a
-// database logout): their success says nothing about the CMS.
+// Host-scoped paths whose answer says nothing about the host's saved CMS:
+// the server answers them without CMS (the host record, a database logout),
+// or they may go elsewhere (cms-auth: Edit Host's connection test can use
+// another address). Neither clears "Not responding".
 const reachesCms = (requestUrl) => {
   const path = (requestUrl || '').replace(/^https?:\/\/[^/]+/i, '').replace(/^\/?api\//i, '').replace(/^\//, '');
-  return !path.startsWith('host/') && !path.includes('/logout/');
+  return !path.startsWith('host/') && !path.includes('/logout/') && !path.includes('/cms-auth/');
 };
 
 // The "Not responding" dot (hostSlice.hostNotResponding): set by a request
@@ -790,7 +792,7 @@ apiClient.interceptors.response.use(
           [CMS_NO_RESPONSE_TYPE, CMS_TLS_ERROR_TYPE].includes(errorType) &&
           !CMS_LONG_REQUEST_PATHS.some((part) => requestUrl.includes(part))) {
         await setHostNotResponding(hostUid, true);
-      } else if (hostUid && errorType === CMS_REQUEST_FAILED_TYPE) {
+      } else if (hostUid && errorType === CMS_REQUEST_FAILED_TYPE && reachesCms(requestUrl)) {
         // CMS answered with status:fail: it responds again.
         await setHostNotResponding(hostUid, false);
       }
