@@ -123,3 +123,11 @@ it('reloads when the global refresh targets this config tab', async () => {
 
   expect(hostApi.getHostConfig).toHaveBeenCalledTimes(2);
 });
+
+it('shows the line count in the UI language', async () => {
+  store = configureStore({ reducer: () => ({ ...state, user: { preferences: { uiLocale: 'ko' } } }) });
+  hostApi.getHostConfig.mockResolvedValue(config('[common]\ncubrid_port_id=1523\n'));
+  await render();
+  expect(container.textContent).toContain('3 줄');
+  expect(container.textContent).not.toContain('3 lines');
+});

@@ -595,6 +595,7 @@ export const CM_KO = {
     between: (a, b) => `${a} ~ ${b}`,
     atLeast: (a) => `${a} 이상`,
     atMost: (a) => `${a} 이하`,
+    approx: (short, exact) => `약 ${short}(${exact})`,
     orInteger: (range) => `또는 정수${range ? ` ${range}` : ''}`,
     oneOf: (list) => `${list} 중 하나`,
     boolean: 'yes / no',

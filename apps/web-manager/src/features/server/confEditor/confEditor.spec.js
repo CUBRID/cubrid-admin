@@ -72,6 +72,11 @@ describe('confParams', () => {
     expect(paramHintLines(EN, confParams('brokerconf', schemas).get('MASTER_SHM_ID'))).toEqual(['Hexadecimal integer, at least 1', 'Only in the [broker] section']);
     expect(describeGuard(KO, { kind: 'size', min: 16777216 })).toBe('크기(K·M·G·T, 단위가 없으면 바이트), 16M 이상');
     expect(describeGuard(KO, { kind: 'brokerTime', minSec: 0 })).toBe('시간(ms·s·min·h, 단위가 없으면 초), 0s 이상');
+    // A limit that no unit divides: rounded in the largest unit, exact bytes after it.
+    expect(describeGuard(KO, { kind: 'size', min: 2080769, max: 35184372072448 }))
+      .toBe('크기(K·M·G·T, 단위가 없으면 바이트), 약 1.98M(2,080,769) ~ 약 32T(34,359,738,352K)');
+    expect(describeGuard(EN, { kind: 'size', min: 2080769 })).toBe('Size (K/M/G/T; bytes without a unit), at least about 1.98M (2,080,769)');
+    expect(describeGuard(KO, { kind: 'brokerSize', defaultUnit: 'K', minKb: 0, maxKb: 2097152 })).toBe('크기(B·K·KB·M·MB·G·GB, 단위가 없으면 KB), 0 ~ 2G');
   });
 
   it('builds the hint as a DOM node, which CodeMirror needs for the hover and the completion panel', () => {

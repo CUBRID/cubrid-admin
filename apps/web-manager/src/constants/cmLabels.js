@@ -572,6 +572,7 @@ export const CM = {
     between: (a, b) => `${a} to ${b}`,
     atLeast: (a) => `at least ${a}`,
     atMost: (a) => `at most ${a}`,
+    approx: (short, exact) => `about ${short} (${exact})`,
     orInteger: (range) => `or an integer${range ? `, ${range}` : ''}`,
     oneOf: (list) => `one of ${list}`,
     boolean: 'yes / no',

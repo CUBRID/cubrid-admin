@@ -226,7 +226,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
               <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 font-mono">{confname}</span>
             </div>
             <span className="text-12 font-medium text-slate-400 dark:text-slate-500 font-mono uppercase tracking-widest">
-              {lineCount} lines
+              {CM.linesLabel(lineCount)}
             </span>
           </div>
 

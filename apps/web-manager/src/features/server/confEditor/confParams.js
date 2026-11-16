@@ -78,13 +78,20 @@ export function confSectionNames(kind) {
   return [];
 }
 
-const fmtBytes = (value) => {
+// A byte count in the unit that reads best: the largest unit it reaches
+// ("512M"). When that unit does not divide it, the rounded value comes
+// first and the exact one after it, in the largest unit that divides it
+// (bytes if none), e.g. "about 1.98M (2,080,769)", "about 32T (34,359,738,352K)".
+const fmtBytes = (L, value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
-  for (const [unit, size] of [['T', 1024 ** 4], ['G', 1024 ** 3], ['M', 1024 ** 2], ['K', 1024]]) {
-    if (n >= size && n % size === 0) return `${n / size}${unit}`;
-  }
-  return String(n);
+  const units = [['T', 1024 ** 4], ['G', 1024 ** 3], ['M', 1024 ** 2], ['K', 1024]];
+  const near = units.find(([, size]) => n >= size);
+  if (!near) return String(n);
+  if (n % near[1] === 0) return `${n / near[1]}${near[0]}`;
+  const exact = units.find(([, size]) => n % size === 0);
+  const exactText = exact ? `${(n / exact[1]).toLocaleString('en-US')}${exact[0]}` : n.toLocaleString('en-US');
+  return L.approx(`${Number((n / near[1]).toFixed(2))}${near[0]}`, exactText);
 };
 
 /**
@@ -111,10 +118,10 @@ export function describeGuard(CM, guard) {
     case 'float': return withRange(L.decimal, range(guard.min, guard.max));
     case 'bigint': return withRange(L.integer, range(guard.min, guard.max));
     case 'intList': return L.intList;
-    case 'size': return withRange(L.size, range(guard.min, guard.max, fmtBytes));
+    case 'size': return withRange(L.size, range(guard.min, guard.max, (v) => fmtBytes(L, v)));
     case 'brokerSize': {
       if (guard.exactKb) return withRange(L.brokerSize(guard.defaultUnit), L.oneOf(guard.exactKb.map((kb) => `${kb}K`).join(', ')));
-      return withRange(L.brokerSize(guard.defaultUnit), range(guard.minKb, guard.maxKb, (kb) => `${kb}K`));
+      return withRange(L.brokerSize(guard.defaultUnit), range(guard.minKb, guard.maxKb, (kb) => fmtBytes(L, Number(kb) * 1024)));
     }
     case 'brokerTime': return withRange(L.brokerTime, range(guard.minSec, guard.maxSec, (s) => `${s}s`));
     case 'time': return withRange(L.time, range(guard.min, guard.max, (ms) => `${ms}ms`));
