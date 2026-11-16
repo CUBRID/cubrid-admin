@@ -52,7 +52,7 @@ describe('selectAppGuard', () => {
   const config = (desktop: boolean) => ({ isDesktopMode: () => desktop }) as ConfigService;
 
   it('uses the login-free guard only in desktop mode', () => {
-    expect(selectAppGuard(config(true), new Reflector())).toBeInstanceOf(DesktopUserGuard);
-    expect(selectAppGuard(config(false), new Reflector())).toBeInstanceOf(JwtAuthGuard);
+    expect(selectAppGuard(config(true), new Reflector(), {} as never, {} as never)).toBeInstanceOf(DesktopUserGuard);
+    expect(selectAppGuard(config(false), new Reflector(), {} as never, {} as never)).toBeInstanceOf(JwtAuthGuard);
   });
 });

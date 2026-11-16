@@ -11,6 +11,8 @@ import { UserRepositoryModule } from '@repository';
 import { EncryptionService, SecurityModule } from '@security';
 import { StorageModule, StorageService } from '@storage';
 import { TokenModule } from '@token';
+import { TokenBlacklistService } from '@token/token-blacklist.service';
+import { JwtService } from '@nestjs/jwt';
 import { UserModule } from '@user';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -68,7 +70,11 @@ import { VersionModule } from './version/version.module';
     EncryptionService,
     StorageService,
     DesktopUserService,
-    { provide: APP_GUARD, useFactory: selectAppGuard, inject: [ConfigService, Reflector] },
+    {
+      provide: APP_GUARD,
+      useFactory: selectAppGuard,
+      inject: [ConfigService, Reflector, JwtService, TokenBlacklistService],
+    },
   ],
 })
 export class AppModule {}
