@@ -131,7 +131,7 @@ const Component = function ServiceDashboard() {
   };
 
   // Group tree rows: group header row + host rows (keeps group ordering stable).
-  const { tableRows, hostMetaByUid } = React.useMemo(() => {
+  const { tableRows } = React.useMemo(() => {
     const metaByUid = {};
     const rows = [];
 
