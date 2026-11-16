@@ -54,7 +54,7 @@ export function useLoggedOutDbCleanup() {
       if (appliedLiveSeqRef.current[hostUid] === undefined) return;
       dispatch(databaseLoginLost({ hostUid, dbname: key.slice(sep + 1) }));
     });
-  }, [dispatch, loggedInDatabases]);
+  }, [dispatch, loggedInDatabases, appliedLiveSeqRef]);
 
   useEffect(() => {
     openTabs.forEach((tabId) => {

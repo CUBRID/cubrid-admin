@@ -18,6 +18,7 @@ import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLo
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
 import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // The engine prints "Timeout_period : <value>" (since 2012; before that,
 // "Timeout_period <seconds>"). A CMS without the CBRD-27825 fix keeps only the
@@ -119,15 +120,19 @@ export default function LockInformationModal() {
       setError(null);
     }
   });
+  // Read when the modal opens or its database changes, with the read as it
+  // is then (its identity follows isActive and the labels, not a reason to
+  // read again).
+  const fetchLockInfoRef = useLatestRef(fetchLockInfo);
   useEffect(() => {
     if (isLockInfoModalOpen) {
-      const read = async () => { await fetchLockInfo(); };
+      const read = async () => { await fetchLockInfoRef.current(); };
       void read();
     } else {
       // A read still in flight for the previous open must not land.
       requestIdRef.current += 1;
     }
-  }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase]);
+  }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase, fetchLockInfoRef]);
 
   const transactions = useMemo(() => {
     const counts = new Map();

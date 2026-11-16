@@ -129,7 +129,7 @@ export default function HostGroupTree({
     for (const hostUid of targets) {
       await dispatch(moveHost({ hostUid, targetGroupId: groupId }));
     }
-  }, [clearDragState, dispatch, selectedHostUids, hostGroups]);
+  }, [clearDragState, dispatch, selectedHostUids, hostGroups, draggedHost]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((prev) => {

@@ -490,7 +490,7 @@ const Component = function ServiceDashboard() {
       }
     },
   ];
-  }, [authorizedHosts, summaries, haInfo, hostMetaByUid, CM]);
+  }, [authorizedHosts, summaries, haInfo, CM, sortConfig]);
 
   return (
     <div data-testid="service-dashboard" className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-hidden font-sans">

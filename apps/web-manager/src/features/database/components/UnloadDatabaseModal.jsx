@@ -43,6 +43,9 @@ const INITIAL_FORM_DATA = {
   estimateInstances: '',
 };
 
+// The same empty list on every render: a new one would remake every callback on it.
+const NO_DATABASES = [];
+
 export default function UnloadDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -50,7 +53,7 @@ export default function UnloadDatabaseModal() {
   const { selectedDatabase, databasesByHost, activeDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const databases = databasesByHost[selectedHostUid] || [];
-  const activeDatabases = activeDatabasesByHost[selectedHostUid] || [];
+  const activeDatabases = activeDatabasesByHost[selectedHostUid] || NO_DATABASES;
 
   const currentDb = databases.find((db) => db.dbname === selectedDatabase);
 

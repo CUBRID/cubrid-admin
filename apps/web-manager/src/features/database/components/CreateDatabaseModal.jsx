@@ -231,8 +231,10 @@ export default function CreateDatabaseModal() {
     }));
   });
 
+  const { dbName: formDbName, baseDir: formBaseDir } = formData;
   useEffect(() => {
-    const { dbName, baseDir } = formData;
+    const dbName = formDbName;
+    const baseDir = formBaseDir;
     if (baseDir && !pathManuallyEditedRef.current) {
       const fullPath = dbName
         ? (baseDir.endsWith('/') ? `${baseDir}${dbName}` : `${baseDir}/${dbName}`)
@@ -248,7 +250,7 @@ export default function CreateDatabaseModal() {
         };
       });
     }
-  }, [formData.dbName]);
+  }, [formDbName, formBaseDir]);
 
   if (!isCreateDatabaseModalOpen) return null;
 

@@ -81,5 +81,5 @@ export function useDesktopMenuActions() {
       if (!ctx.enabled[actionId]) return;
       runMenuAction(actionId, { ...ctx, anyModalOpen: isAnyModalOpen() });
     });
-  }, []);
+  }, [latest]);
 }

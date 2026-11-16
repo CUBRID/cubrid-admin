@@ -265,7 +265,7 @@ export default function SetAutomationVolumeModal() {
     } catch (err) {
       endError(typeof err === 'string' ? err : (err?.message || CM.saveConfigFailedRetryMsg));
     }
-  }, [saveBlockedReason, pageSize, loadedExt, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError]);
+  }, [saveBlockedReason, pageSize, loadedExt, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError, CM]);
 
   const handleClose = () => dispatch(closeSetAutomationVolumeModal());
 

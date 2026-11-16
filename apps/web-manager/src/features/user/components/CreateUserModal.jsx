@@ -73,7 +73,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
       resetAction();
       dispatch(fetchDatabaseUsers({ hostUid: selectedHostUid, dbname }));
     }
-  }, [isOpen, dbname, selectedHostUid, resetAction]);
+  }, [isOpen, dbname, selectedHostUid, resetAction, dispatch]);
 
   // Reacts to the user list arriving (it may still be loading when the modal
   // opens) — in edit mode, prefills the form. Remembers which user it was

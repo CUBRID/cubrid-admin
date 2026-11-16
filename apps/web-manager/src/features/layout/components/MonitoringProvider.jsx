@@ -12,6 +12,8 @@ const EMPTY_LIST = [];
 // follow the server (see syncLoggedInFromStartInfo). Nothing else is polled
 // here: a screen reads what it shows itself (usePollingRefresh), and reading
 // volumes or the broker list for every database here fed no screen.
+const MAX_IDLE_TIME = 10 * 60 * 1000; // 10 minutes
+
 export default function MonitoringProvider({ children }) {
   const dispatch = useDispatch();
   const { preferences } = useSelector((state) => state.user, shallowEqual);
@@ -37,7 +39,6 @@ export default function MonitoringProvider({ children }) {
     return () => activityEvents.forEach(event => document.removeEventListener(event, handleActivity));
   }, []);
 
-  const MAX_IDLE_TIME = 10 * 60 * 1000; // 10 minutes
   // A host in reconnectQueue is waiting on ReconnectHostModal to resolve a
   // CMS session takeover; authorizedHosts still lists it (preserved so the
   // reconnect is seamless, see apiClient.js), so that check alone doesn't

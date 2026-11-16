@@ -26,5 +26,5 @@ export function useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed,
     if (!isTabActive || isCollapsed) return;
     const dashboardRefreshes = refreshInterval > 0;
     if (!was.expanded || (!was.active && !dashboardRefreshes)) refresh();
-  }, [isTabActive, isCollapsed, refreshInterval, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, refreshInterval, hostUid, dbname, refresh]);
 }

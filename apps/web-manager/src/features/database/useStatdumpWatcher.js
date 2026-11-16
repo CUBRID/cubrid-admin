@@ -32,7 +32,7 @@ export function useStatdumpWatcher(hostUid, dbname, perfSample) {
   useEffect(() => {
     if (!canWatch) return undefined;
     return acquireStatdumpWatcher(hostUid, dbname, undefined, { paused: pausedRef.current });
-  }, [canWatch, hostUid, dbname]);
+  }, [canWatch, hostUid, dbname, pausedRef]);
 
   useEffect(() => {
     if (!canWatch) return;

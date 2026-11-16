@@ -361,7 +361,7 @@ export default function RestoreDatabaseModal() {
     }
 
     return null;
-  }, [formData, allBackups]);
+  }, [formData, allBackups, CM]);
 
   const isExecuteDisabled = !!validationError;
 

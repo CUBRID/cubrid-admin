@@ -130,7 +130,7 @@ export default function AddBackupPlanModal() {
           .catch(() => undefined);
       }
     }
-  }, [isAddBackupPlanModalOpen, selectedDatabase, selectedHostUid, dispatch, resetAction]);
+  }, [isAddBackupPlanModalOpen, selectedDatabase, selectedHostUid, dispatch, resetAction, atOpen]);
 
   // The database stopped while the dialog is open: online is no longer a
   // choice. An HA database stays online (saving is refused while stopped).

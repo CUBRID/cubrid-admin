@@ -73,7 +73,7 @@ export default function RenameDatabaseModal() {
     // databaseCoreSlice's parseDbResponse). That change used to re-trigger
     // this effect mid-flow, call resetAction(), and bounce the modal off its
     // success screen back onto a blank form.
-  }, [isRenameDatabaseModalOpen]);
+  }, [isRenameDatabaseModalOpen, resetAction]);
 
   if (!isRenameDatabaseModalOpen) return null;
 

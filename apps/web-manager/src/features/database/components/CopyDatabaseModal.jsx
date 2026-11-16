@@ -120,13 +120,14 @@ export default function CopyDatabaseModal() {
       if (selectedHostUid && selectedDatabase) setVolInfoLoading(true);
     }
   });
+  const hasCurrentDb = Boolean(currentDb);
   useEffect(() => {
     let cancelled = false;
     const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
     wasOpenRef.current = isCopyDatabaseModalOpen;
     if (isCopyDatabaseModalOpen && (justOpened || !busyRef.current)) {
       resetAction();
-      if (selectedHostUid && !currentDb) {
+      if (selectedHostUid && !hasCurrentDb) {
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
       }
 
@@ -163,7 +164,7 @@ export default function CopyDatabaseModal() {
     // object itself re-ran this effect on that refresh alone and called
     // resetAction() right after endSuccess(), silently bouncing the modal
     // from its success view back to the form.
-  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir, resetAction, dispatch]);
+  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir, hasCurrentDb, resetAction, dispatch]);
 
   // Desktop EditListener alignment: Auto-update target paths and volume mapping when destName changes
   useResetWhen([formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths], () => {
