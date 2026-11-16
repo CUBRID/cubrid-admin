@@ -96,9 +96,9 @@ describe('AuthService', () => {
     await expect(service.refresh('bad')).rejects.toBeInstanceOf(AuthError);
   });
 
-  it('keeps the family and refuses with a server error while the same token is still rotating', async () => {
+  it('keeps the family and refuses with 503 (retry) while the same token is still rotating', async () => {
     refreshTokenService.consumeForRotation.mockResolvedValue({ kind: 'busy' });
-    await expect(service.refresh('in-flight')).rejects.toMatchObject({ kind: 'INTERNAL' });
+    await expect(service.refresh('in-flight')).rejects.toMatchObject({ kind: 'AUTH', code: 'REFRESH_IN_PROGRESS' });
     expect(refreshTokenService.revokeFamily).not.toHaveBeenCalled();
   });
 

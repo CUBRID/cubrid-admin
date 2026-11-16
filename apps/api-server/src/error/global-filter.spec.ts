@@ -62,6 +62,7 @@ describe('GlobalExceptionFilter', () => {
   it.each([
     ['a wrong password (401)', () => AuthError.InvalidCredentials({ userId: 'u' }), 401, /^Unauthorized \[AUTH:INVALID_CREDENTIALS\]/],
     ['a request without the CSRF header (403)', () => AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' }), 403, /^Forbidden \[AUTH:PERMISSION_DENIED\]/],
+    ['a refresh racing another for the same token (503)', () => AuthError.RefreshInProgress(), 503, /^Service Unavailable \[AUTH:REFRESH_IN_PROGRESS\]/],
   ])('logs %s as one warning line, with no stack trace and no ERROR', (_name, make, status, line) => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;

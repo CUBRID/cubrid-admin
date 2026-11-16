@@ -18,6 +18,8 @@ export const REFRESH_TOKEN_REUSE_GRACE_MS = 10 * 1000;
 /** How long a refresh waits for the same token's rotation already running. */
 export const REFRESH_IN_FLIGHT_WAIT_MS = 3000;
 export const REFRESH_IN_FLIGHT_POLL_MS = 50;
+/** Retry-After (seconds) on a refresh that met another rotating the same token. */
+export const REFRESH_RETRY_AFTER_SEC = 1;
 /** A rotation lock older than this was left by a crash. */
 export const REFRESH_LOCK_STALE_MS = 30 * 1000;
 

@@ -97,6 +97,14 @@ describe('AuthController', () => {
     expect(res.clearCookie).not.toHaveBeenCalled();
   });
 
+  it('keeps the cookies and asks to retry when the same token is still rotating', async () => {
+    authService.refresh.mockRejectedValue(AuthError.RefreshInProgress());
+    const res = { ...fakeResponse(), setHeader: jest.fn() };
+    await expect(controller.refresh({ cookies: { [REFRESH_COOKIE]: 'old' } } as never, res as never)).rejects.toBeInstanceOf(AuthError);
+    expect(res.clearCookie).not.toHaveBeenCalled();
+    expect(res.setHeader).toHaveBeenCalledWith('Retry-After', '1');
+  });
+
   it('logs out with the cookies and clears them', async () => {
     const res = fakeResponse();
     const req = { cookies: { [ACCESS_COOKIE]: 'a', [REFRESH_COOKIE]: 'r' } };

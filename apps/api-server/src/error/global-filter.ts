@@ -26,6 +26,12 @@ const HTTP_EXCEPTION_FIELDS = ['reason', 'jobId', 'maxLines', 'maxBytes'];
  * @category Errors
  * @since 1.0.0
  */
+const EXPECTED_REJECTION_LABELS: Record<number, string> = {
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  503: 'Service Unavailable',
+};
+
 @Catch()
 export class GlobalExceptionFilter extends BaseExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -99,7 +105,7 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         // CSRF header: expected traffic, not a server fault. A CMS-side 401
         // (lost CMS token, changed cm.pass, CMS restart) is an operational
         // fault and keeps the full ERROR with its details below.
-        const label = status === HttpStatus.UNAUTHORIZED ? 'Unauthorized' : 'Forbidden';
+        const label = EXPECTED_REJECTION_LABELS[status] ?? `HTTP ${status}`;
         this.logger.warn(`${label} [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         const logDetails = exception.toLogDetails(req.url);

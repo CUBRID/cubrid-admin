@@ -62,8 +62,11 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     return path.join(this.root(), `${tokenHash}.json`);
   }
 
+  // The lock's name carries when the rotation began (ms): a lock older than
+  // REFRESH_LOCK_STALE_MS was left by a crash. The name, not the file's
+  // mtime: a rename keeps the token file's old mtime.
   private consumingPath(tokenHash: string, nonce: string): string {
-    return path.join(this.root(), `${tokenHash}.consuming.${nonce}.json`);
+    return path.join(this.root(), `${tokenHash}.consuming.${Date.now()}.${nonce}.json`);
   }
 
   private consumedRoot(): string {
@@ -133,10 +136,6 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     for (;;) {
       try {
         await fs.rename(activePath, lockPath);
-        // Stamp the start: a lock older than REFRESH_LOCK_STALE_MS is left
-        // from a crash, not a rotation in flight.
-        const now = new Date();
-        await fs.utimes(lockPath, now, now).catch(() => undefined);
         return this.claimLocked(token, tokenHash, lockPath);
       } catch (err: any) {
         if (err?.code !== 'ENOENT') {
@@ -171,11 +170,12 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
       if (err?.code === 'ENOENT') return false;
       throw err;
     }
-    for (const file of files.filter((name) => name.startsWith(`${tokenHash}.consuming.`))) {
-      const stat = await fs.stat(path.join(this.root(), file)).catch(() => null);
-      if (stat && Date.now() - stat.mtimeMs < REFRESH_LOCK_STALE_MS) return true;
-    }
-    return false;
+    const prefix = `${tokenHash}.consuming.`;
+    return files.some((name) => {
+      if (!name.startsWith(prefix)) return false;
+      const startedAt = Number(name.slice(prefix.length).split('.')[0]);
+      return Number.isFinite(startedAt) && Date.now() - startedAt < REFRESH_LOCK_STALE_MS;
+    });
   }
 
   /**
@@ -199,8 +199,6 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     const successorLock = this.consumingPath(consumed.replacedBy, crypto.randomUUID());
     try {
       await fs.rename(this.tokenPathByHash(consumed.replacedBy), successorLock);
-      const now = new Date();
-      await fs.utimes(successorLock, now, now).catch(() => undefined);
     } catch (err: any) {
       if (err?.code === 'ENOENT') return null;
       throw err;

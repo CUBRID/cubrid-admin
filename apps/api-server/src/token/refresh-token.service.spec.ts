@@ -151,12 +151,32 @@ describe('RefreshTokenService', () => {
       const { token: t0 } = await service.create('user1');
       const first = await service.consumeForRotation(t0);
       if (first.kind !== 'ok') throw new Error('rotation refused');
-      const old = new Date(Date.now() - 60_000);
-      await fs.utimes(first.session.lockPath, old, old);
+      // A lock begun a minute ago (its name says so).
+      const staleLock = first.session.lockPath.replace(/\.consuming\.\d+\./, `.consuming.${Date.now() - 60_000}.`);
+      await fs.rename(first.session.lockPath, staleLock);
 
       const started = Date.now();
       expect((await service.consumeForRotation(t0)).kind).toBe('invalid');
       expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    it('takes a lock just begun as in flight, whatever its file time (a rename keeps the old mtime)', async () => {
+      const { token: t0 } = await service.create('user1');
+      // The token file is days old; the rename into the lock keeps that mtime.
+      const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      const activePath = path.join(tempDir, 'refresh-tokens', (await fs.readdir(path.join(tempDir, 'refresh-tokens')))[0]);
+      await fs.utimes(activePath, old, old);
+      const first = await service.consumeForRotation(t0);
+      if (first.kind !== 'ok') throw new Error('rotation refused');
+      expect((await fs.stat(first.session.lockPath)).mtimeMs).toBeLessThan(Date.now() - 60_000);
+
+      // The same token arrives before the commit: it waits, it is not refused.
+      const second = service.consumeForRotation(t0);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const { token: t1 } = await service.create('user1', first.session.record.familyId);
+      await service.commitConsume(first.session, t1);
+      const answer = await second;
+      expect(answer.kind === 'ok' && answer.grace).toBe(true);
     });
 
     it('answers busy (cookies kept) when it does not finish in time', async () => {

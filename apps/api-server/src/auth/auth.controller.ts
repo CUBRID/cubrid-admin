@@ -11,6 +11,7 @@ import {
   readRefreshCookie,
   setAuthCookies,
 } from '@token/auth-cookies';
+import { REFRESH_RETRY_AFTER_SEC } from '@token/token.constants';
 
 // The desktop app has no app login (DesktopUserGuard).
 // The tokens travel only in httpOnly cookies (auth-cookies.ts); the body
@@ -49,6 +50,9 @@ export class AuthController {
       // A refresh token that is missing, spent or revoked ends the session;
       // a server fault leaves the cookies for the next try.
       if (err instanceof AuthError && err.code === AuthErrorCode.INVALID_TOKEN) clearAuthCookies(res);
+      if (err instanceof AuthError && err.code === AuthErrorCode.REFRESH_IN_PROGRESS) {
+        res.setHeader('Retry-After', String(REFRESH_RETRY_AFTER_SEC));
+      }
       throw err;
     }
   }

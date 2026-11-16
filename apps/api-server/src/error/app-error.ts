@@ -173,6 +173,8 @@ export class AppError extends Error {
             return 401;
           case AuthErrorCode.PERMISSION_DENIED:
             return 403;
+          case AuthErrorCode.REFRESH_IN_PROGRESS:
+            return 503;
           case AuthErrorCode.INTERNAL_ERROR:
             return 500;
           case AuthErrorCode.UNKNOWN:
