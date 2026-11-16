@@ -1,12 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { setAuthToken } from '../../api/apiClient';
+import { hasStoredSession, sessionFromResponse, setAppSession } from '../../api/apiClient';
 import { authApi } from './authApi';
 import { isDesktopApp } from '../desktop/isDesktopApp';
 import { requestErrorText } from '../../infrastructure/errors/serverErrorText';
 import { getCM, getStoredLocale } from '../../constants/useCM';
-
-const token = localStorage.getItem('token');
-const refreshToken = localStorage.getItem('refreshToken');
 
 export const fetchUser = createAsyncThunk(
   'auth/fetchUser',
@@ -34,13 +31,12 @@ export const updateAccount = createAsyncThunk(
 
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
-  async (_, { getState, dispatch }) => {
-    // Storage has the latest one, also when another tab refreshed.
-    const storedRefresh = localStorage.getItem('refreshToken') || getState().auth.refreshToken;
+  async (_, { dispatch }) => {
     try {
-      await authApi.logout(storedRefresh);
+      // The server ends the session and clears its cookies.
+      await authApi.logout();
     } catch {
-      // Clear client session even when server logout fails (e.g. expired access token).
+      // Clear client session even when server logout fails.
     } finally {
       // Must trigger root reducer reset path (`auth/logout`) to clear all slices.
       dispatch(logout());
@@ -48,11 +44,11 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+// The tokens are httpOnly cookies the page cannot see; a session kept from
+// the last visit counts as signed in until the server says otherwise.
 const initialState = {
   // The desktop app has no app login (isDesktopApp).
-  isAuthenticated: isDesktopApp() || !!token,
-  token: token || null,
-  refreshToken: refreshToken || null,
+  isAuthenticated: isDesktopApp() || hasStoredSession(),
   user: null,
   loading: false,
   error: null,
@@ -66,42 +62,27 @@ const authSlice = createSlice({
       state.loading = true;
       state.error = null;
     },
+    // payload: the login answer ({ expiresIn }) and the user.
     loginSuccess: (state, action) => {
-      if (!action.payload?.token || !action.payload?.refreshToken) {
+      const session = sessionFromResponse(action.payload);
+      if (!session) {
         state.loading = false;
         state.isAuthenticated = false;
-        state.token = null;
-        state.refreshToken = null;
         state.user = null;
         state.error = getCM(getStoredLocale()).loginTokenMissingMsg;
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        setAuthToken(null);
+        setAppSession(null);
         return;
       }
       state.loading = false;
       state.isAuthenticated = true;
-      state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken ?? null;
       state.user = action.payload.user;
       state.error = null;
-      localStorage.setItem('token', action.payload.token);
-      if (action.payload.refreshToken) {
-        localStorage.setItem('refreshToken', action.payload.refreshToken);
-      } else {
-        localStorage.removeItem('refreshToken');
-      }
-      setAuthToken(action.payload.token);
+      setAppSession(session);
     },
-    // The tokens are already in storage (this tab's refresh stored them, or
-    // another tab's did); the state only follows. Writing them back here put
-    // an older refresh token, read before another tab's new one reached this
-    // tab, over the new one, and the next refresh then reused a spent token.
-    sessionRefreshed: (state, action) => {
-      state.token = action.payload.token;
-      if (action.payload.refreshToken) state.refreshToken = action.payload.refreshToken;
+    // The session is already kept (this tab's refresh, or another tab's);
+    // the state only follows.
+    sessionRefreshed: (state) => {
       state.isAuthenticated = true;
-      setAuthToken(action.payload.token);
     },
     loginFailure: (state, action) => {
       state.loading = false;
@@ -109,13 +90,9 @@ const authSlice = createSlice({
     },
     logout: (state) => {
       state.isAuthenticated = false;
-      state.token = null;
-      state.refreshToken = null;
       state.user = null;
       state.error = null;
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      setAuthToken(null);
+      setAppSession(null);
     },
     clearError: (state) => {
       state.error = null;

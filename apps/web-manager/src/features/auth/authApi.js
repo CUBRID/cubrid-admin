@@ -9,12 +9,9 @@ export const authApi = {
     return apiClient.post('/auth/login', { id, password });
   },
 
-  refresh: (refreshToken) => {
-    return apiClient.post('/auth/refresh', { refreshToken });
-  },
-
-  logout: (refreshToken) => {
-    return apiClient.post('/auth/logout', { refreshToken: refreshToken || undefined });
+  // The session's cookies go with it; the server clears them.
+  logout: () => {
+    return apiClient.post('/auth/logout');
   },
 
   getUserInfo: () => {

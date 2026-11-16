@@ -6,6 +6,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as express from 'express';
+import cookieParser from 'cookie-parser';
+import { API_PREFIX, CSRF_HEADER } from '@token/auth-cookies';
 import { getHttpsOptions, logStartupBanner, createWinstonLogger, startLogConfigWatcher } from '@util';
 import { embeddedPublicFiles } from './util/standalone-executable';
 import { GlobalExceptionFilter } from '@error/global-filter';
@@ -44,7 +46,7 @@ async function bootstrap() {
     app.enableCors({
       origin: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      allowedHeaders: ['Content-Type', 'Accept', CSRF_HEADER],
       credentials: true,
     });
   } else if (allowedOrigins.length > 0) {
@@ -64,7 +66,7 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS'));
       },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      allowedHeaders: ['Content-Type', 'Accept', CSRF_HEADER],
       credentials: true,
     });
   }
@@ -75,7 +77,9 @@ async function bootstrap() {
 
   // Desktop mode uses UDS + Electron proxy that strips /api — no prefix needed.
   if (!desktopMode) {
-    app.setGlobalPrefix('api');
+    app.setGlobalPrefix(API_PREFIX);
+    // The app session's tokens arrive as cookies (auth-cookies.ts).
+    app.use(cookieParser());
   }
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new SuccessResponseInterceptor());

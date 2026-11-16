@@ -105,12 +105,31 @@ describe('AuthService', () => {
   });
 
   it('blacklists access token and revokes refresh on logout', async () => {
-    await service.logout('jti-1', 1_700_000_000, 'refresh-1');
+    jwt.verifyAsync = jest
+      .fn()
+      .mockResolvedValue({ jti: 'jti-1', exp: 1_700_000_000, type: 'access' });
 
+    await service.logout('access-cookie', 'refresh-1');
+
+    expect(jwt.verifyAsync).toHaveBeenCalledWith('access-cookie');
     expect(tokenBlacklistService.add).toHaveBeenCalledWith(
       'jti-1',
       new Date(1_700_000_000 * 1000)
     );
     expect(refreshTokenService.revoke).toHaveBeenCalledWith('refresh-1');
+  });
+
+  it('still revokes the refresh token when the access token has expired', async () => {
+    jwt.verifyAsync = jest.fn().mockRejectedValue(new Error('jwt expired'));
+
+    await service.logout('expired-access', 'refresh-1');
+
+    expect(tokenBlacklistService.add).not.toHaveBeenCalled();
+    expect(refreshTokenService.revoke).toHaveBeenCalledWith('refresh-1');
+  });
+
+  it('logs out with no cookies at all', async () => {
+    await expect(service.logout(undefined, undefined)).resolves.toBeUndefined();
+    expect(refreshTokenService.revoke).not.toHaveBeenCalled();
   });
 });
