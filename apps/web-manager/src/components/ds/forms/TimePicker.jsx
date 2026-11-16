@@ -39,7 +39,7 @@ export const TimePicker = ({
       zIndex: 9999,
     });
     setIsOpen(true);
-  }, []);
+  }, [setIsOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

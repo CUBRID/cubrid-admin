@@ -484,19 +484,22 @@ const Component = function DatabaseSpaceMonitor({ hostUid, dbname }) {
     }
   });
 
+  const dbinfo = data?.dbinfo;
+  const pagesize = data?.pagesize;
+  const logpagesize = data?.logpagesize;
   const totals = useMemo(() => {
-    if (!data?.dbinfo) return null;
+    if (!dbinfo) return null;
     // dbinfo's sizes are page counts, not bytes (see VolumeCategorization's
     // comment) — convert each row with its own page size before summing,
     // since a data row and a log row can have different page sizes.
     let total = 0, free = 0;
-    data.dbinfo.forEach(i => {
-      const bytesPerPage = cleanInt(isLogVolume(i) ? data.logpagesize : data.pagesize) || cleanInt(data.pagesize);
+    dbinfo.forEach(i => {
+      const bytesPerPage = cleanInt(isLogVolume(i) ? logpagesize : pagesize) || cleanInt(pagesize);
       total += cleanInt(i.total_size) * bytesPerPage;
       free += cleanInt(i.free_size) * bytesPerPage;
     });
     return { total, free, used: total - free, pct: total > 0 ? ((total - free) / total) * 100 : 0 };
-  }, [data?.dbinfo, data?.pagesize, data?.logpagesize]);
+  }, [dbinfo, pagesize, logpagesize]);
 
   if (!isDbLoggedIn) return <DbLoginRequiredState />;
 
