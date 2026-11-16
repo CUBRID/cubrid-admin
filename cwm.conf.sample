@@ -1,6 +1,6 @@
 {
   "PORT": "8080",
   "ENVIRONMENT": "production",
-  "STORAGE_PATH": "./data",
+  "STORAGE_PATH": "./storage",
   "AUTH_REGISTRATION_ENABLED": "true"
 }

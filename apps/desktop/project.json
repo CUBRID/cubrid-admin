@@ -13,14 +13,6 @@
         "cwd": "{workspaceRoot}"
       }
     },
-    "prepare-api-runtime": {
-      "executor": "nx:run-commands",
-      "dependsOn": [{ "target": "build", "projects": "api-server" }],
-      "options": {
-        "command": "npm install --omit=dev --no-audit --no-fund",
-        "cwd": "dist/apps/api-server"
-      }
-    },
     "serve": {
       "executor": "nx:run-commands",
       "dependsOn": [
@@ -33,12 +25,19 @@
         "cwd": "{workspaceRoot}"
       }
     },
+    "prepare-app": {
+      "executor": "nx:run-commands",
+      "dependsOn": [{ "target": "build", "projects": "self" }],
+      "options": {
+        "command": "node scripts/stage-desktop-app.mjs",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "package": {
       "executor": "nx:run-commands",
       "dependsOn": [
-        { "target": "build", "projects": "self" },
+        { "target": "prepare-app", "projects": "self" },
         { "target": "build", "projects": "api-server" },
-        { "target": "prepare-api-runtime", "projects": "self" },
         { "target": "build-electron", "projects": "web-manager" }
       ],
       "options": {

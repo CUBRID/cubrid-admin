@@ -9,7 +9,7 @@ cubrid-webmanager/
 ├── apps/
 │   ├── web-manager/     # React 19 + Vite + Ant Design (프론트엔드)
 │   ├── api-server/      # NestJS 11 + TypeScript (백엔드 API)
-│   └── desktop/         # Electron 35 (데스크톱 래퍼)
+│   └── desktop/         # Electron 45 (데스크톱 래퍼)
 ├── libs/
 │   └── api-interfaces/  # 공유 TypeScript 타입 (Request/Response)
 ├── scripts/             # 빌드 보조 스크립트
@@ -97,6 +97,7 @@ npm run package:server:mac       # macOS용
 ```
 dist/executables/
   ├── cubrid-admin-linux          # Linux 실행파일 (Node.js + 프론트엔드 내장)
+  ├── cubrid-admin-linux-arm64    # Linux arm64 실행파일
   ├── cubrid-admin-macos          # macOS 실행파일
   ├── cubrid-admin.exe            # Windows 실행파일
   └── conf/
@@ -104,6 +105,11 @@ dist/executables/
 ```
 
 업데이트 시 실행파일만 교체하면 된다. `conf/`는 건드리지 않는다.
+
+설치형(`dist/server-installers/`, `package:server`가 함께 만듦):
+- Linux rpm (x64, arm64, rpmbuild가 있을 때만): `/opt/cubrid-admin`에 설치, 설정 `/etc/cubrid-admin/cwm.conf`, 데이터 `/var/lib/cubrid-admin`, 로그 `/var/log/cubrid-admin`. `cubrid-admin` 사용자로 도는 `cubrid-admin` systemd 서비스로 등록된다(처음 설치 때는 시작하지 않음: `PORT`를 정한 뒤 `systemctl start cubrid-admin`).
+- Windows setup.exe (x64): `Program Files\CUBRID Admin Server`에 설치, 설정과 데이터 `%ProgramData%\CUBRID Admin Server`. `CUBRID Admin Server` Windows 서비스(WinSW)로 등록된다(처음 설치 때는 시작하지 않음).
+- 업그레이드와 제거는 설정, `cwm-vault/`, 데이터, 로그를 지우지 않는다. 경로 표는 [`cwm.conf.reference.md`](cwm.conf.reference.md) 참고.
 
 #### cwm.conf 설정
 
@@ -113,7 +119,7 @@ dist/executables/
 {
   "PORT": "8080",
   "ENVIRONMENT": "production",
-  "STORAGE_PATH": "./data"
+  "STORAGE_PATH": "./storage"
 }
 ```
 
@@ -121,7 +127,7 @@ dist/executables/
 |----|------|--------|
 | `PORT` | 서버 포트 | `8080` |
 | `ENVIRONMENT` | `production` / `development` | `production` |
-| `STORAGE_PATH` | 데이터 저장 경로 | `./data` |
+| `STORAGE_PATH` | 데이터 저장 경로 | `./storage` |
 | `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분, 없으면 전체 허용) | — |
 | `LISTEN_HOST` | 바인드할 네트워크 인터페이스 (예: `127.0.0.1`로 로컬 전용 제한) | 전체 인터페이스 |
 | `SSL_CERT_PATH` | 공인 인증서 경로 (없으면 자체 서명 인증서 자동 생성) | — |
@@ -234,8 +240,8 @@ E2E 환경과 실제 CMS 테스트 규칙은 [`e2e/README.md`](e2e/README.md)를
 |------|------|
 | Frontend | React 19, Vite 7, Ant Design 5, Redux Toolkit, Tailwind CSS 4 |
 | Backend | NestJS 11, TypeScript, Passport JWT |
-| Desktop | Electron 35 |
-| Tooling | Nx 22, Webpack, pkg, Jest, ESLint |
+| Desktop | Electron 45 |
+| Tooling | Nx 22, Webpack, Node.js single executable applications (SEA), Jest, ESLint |
 
 ---
 

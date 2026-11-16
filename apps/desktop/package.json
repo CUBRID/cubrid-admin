@@ -1,5 +1,8 @@
 {
   "name": "@cubrid-webmanager/desktop",
   "private": true,
-  "main": "../../dist/apps/desktop/main.js"
+  "main": "../../dist/apps/desktop/main.js",
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
 }

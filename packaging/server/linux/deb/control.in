@@ -1,0 +1,12 @@
+Package: cubrid-admin
+Version: @VERSION@-@RELEASE@
+Architecture: @ARCH@
+Maintainer: CUBRID Corporation
+Installed-Size: @SIZE_KB@
+Section: database
+Priority: optional
+Homepage: https://github.com/CUBRID/cubrid-admin
+Description: CUBRID Admin Server
+ The web-based administration tool for CUBRID, run as the cubrid-admin
+ systemd service. Settings: /etc/cubrid-admin/cwm.conf. Data:
+ /var/lib/cubrid-admin. Logs: /var/log/cubrid-admin.

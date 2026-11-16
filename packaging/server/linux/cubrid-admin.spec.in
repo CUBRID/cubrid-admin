@@ -1,0 +1,71 @@
+# Built by scripts/package-server-installers.mjs (rpmbuild --target <arch>-linux).
+# The executable is a pkg binary with its files appended: do not strip it or
+# add debug info.
+%global debug_package %{nil}
+%global __os_install_post %{nil}
+%global _build_id_links none
+%define _binary_payload w6.xzdio
+
+Name:           cubrid-admin
+Version:        @VERSION@
+Release:        @RELEASE@
+Summary:        CUBRID Admin Server
+License:        BSD-3-Clause
+URL:            https://github.com/CUBRID/cubrid-admin
+# No package names, so the same rpm installs on the Red Hat family and on SUSE
+# (shadow-utils there is called shadow): only the files the setup script runs.
+AutoReqProv:    no
+Requires(post): /usr/sbin/useradd, /usr/sbin/groupadd
+
+%description
+CUBRID Admin Server, the web-based administration tool for CUBRID,
+run as the cubrid-admin systemd service.
+
+%install
+# Plain mkdir + install: the same on Linux and on a macOS build host.
+mkdir -p %{buildroot}/opt/cubrid-admin %{buildroot}/usr/lib/systemd/system
+install -m 0755 %{_sourcedir}/cubrid-admin %{buildroot}/opt/cubrid-admin/cubrid-admin
+install -m 0755 %{_sourcedir}/cubrid-admin-setup.sh %{buildroot}/opt/cubrid-admin/cubrid-admin-setup.sh
+install -m 0644 %{_sourcedir}/cwm.conf.sample %{buildroot}/opt/cubrid-admin/cwm.conf.sample
+install -m 0644 %{_sourcedir}/cwm.conf.reference.md %{buildroot}/opt/cubrid-admin/cwm.conf.reference.md
+install -m 0644 %{_sourcedir}/cubrid-admin.service %{buildroot}/usr/lib/systemd/system/cubrid-admin.service
+
+%pre
+if [ -e /opt/cubrid-admin/.installed-by-install-sh ]; then
+  echo "CUBRID Admin Server was installed with install.sh: remove it with its uninstall.sh first (settings and data are kept)." >&2
+  exit 1
+fi
+exit 0
+
+%post
+# The user, /etc/cubrid-admin/cwm.conf, /var/lib/cubrid-admin and /var/log/cubrid-admin
+# are not package files: an upgrade or removal never changes or deletes them.
+/opt/cubrid-admin/cubrid-admin-setup.sh configure
+if [ "$1" -eq 1 ]; then
+  /opt/cubrid-admin/cubrid-admin-setup.sh first-start
+fi
+exit 0
+
+%preun
+if [ "$1" -eq 0 ]; then
+  systemctl disable --now cubrid-admin.service >/dev/null 2>&1 || :
+fi
+exit 0
+
+%postun
+systemctl daemon-reload >/dev/null 2>&1 || :
+if [ "$1" -ge 1 ]; then
+  # Upgrade: restart only if it was running.
+  systemctl try-restart cubrid-admin.service >/dev/null 2>&1 || :
+fi
+exit 0
+
+%files
+# root:root, not the build host's user and group.
+%defattr(-,root,root,-)
+%dir /opt/cubrid-admin
+/opt/cubrid-admin/cubrid-admin
+/opt/cubrid-admin/cubrid-admin-setup.sh
+/opt/cubrid-admin/cwm.conf.sample
+/opt/cubrid-admin/cwm.conf.reference.md
+/usr/lib/systemd/system/cubrid-admin.service

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { loadDesktopSettings } from '../config/desktop-settings';
-import { getPortableAppRoot } from '../config/portable-root';
+import { getDesktopDataRoot } from '../config/portable-root';
 
 export type WorkspacePaths = {
   workspaceRoot: string;
@@ -16,7 +16,7 @@ export type WorkspacePaths = {
 };
 
 export function getDefaultWorkspaceRoot(): string {
-  return path.join(getPortableAppRoot(), 'cwm-workspace');
+  return path.join(getDesktopDataRoot(), 'cwm-workspace');
 }
 
 export function resolveWorkspaceRoot(): string {

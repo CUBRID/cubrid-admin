@@ -1485,6 +1485,11 @@ export const CM = {
   // DesktopWorkspaceSettingsPage
   workspaceSettingsLoadFailedMsg: 'Failed to load workspace settings',
   applyingWorkspaceMsg: 'Applying workspace…',
+  apiStartingMsg: (seconds) => `Starting the server… ${seconds} s`,
+  apiStartSlowMsg: (seconds) =>
+    `The server is taking longer than usual to start (${seconds} s). On a slow or busy computer it may still be starting.`,
+  keepWaitingBtn: 'Keep waiting',
+  stopServerStartBtn: 'Stop',
   workspaceSaveFailedMsg: 'Failed to save workspace',
   workspaceDesktopOnlyDesc: 'Workspace settings are available in the CUBRID Admin desktop app.',
   backToSignIn: 'Back to sign in',
@@ -2195,7 +2200,8 @@ export const CM = {
     WORKSPACE_ARCHIVE_PASSWORD_TOO_SHORT: 'The password must be at least 8 characters.',
     WORKSPACE_ARCHIVE_NOT_OPEN: 'Open the file again.',
     WORKSPACE_NOT_RUNNING: 'No workspace is running.',
-    WORKSPACE_API_START_FAILED: 'The server did not start.',
+    WORKSPACE_API_START_FAILED: 'The server could not start.',
+    WORKSPACE_API_START_STOPPED: 'The server start was stopped. Choose this workspace again or another one.',
   },
   desktopFailedWithDetail: (fallback, detail) => detail,
 };
