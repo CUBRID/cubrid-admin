@@ -118,7 +118,7 @@ test.describe('Feature: Global Navigation, Tabs & Breadcrumbs', () => {
       configTab = page.getByTestId(`tab-broker_config:${hostUid}`);
       await action('Verify Broker Config tab is visible', () => expect(configTab).toBeVisible({ timeout: 10000 }), 'Broker Config tab did not appear.');
       const textarea = page.getByTestId('broker-config-textarea');
-      await action('Verify Broker Config textarea has content', () => expect(textarea).not.toHaveValue('', { timeout: 15000 }), 'Broker Config textarea remained empty.');
+      await action('Verify Broker Config textarea has content', () => expect(textarea).not.toHaveText('', { timeout: 15000 }), 'Broker Config textarea remained empty.');
       await action('Focus and navigate to end of textarea', async () => {
         await textarea.click();
         await textarea.press('End');
