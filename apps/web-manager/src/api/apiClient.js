@@ -84,6 +84,7 @@ export const clearReconnectingHost = (hostUid) => {
 // host in the reconnect queue, so nothing keeps asking.
 const CMS_NO_RESPONSE_TYPE = '/errors/cms/no_response';
 const CMS_TLS_ERROR_TYPE = '/errors/cms/tls_error';
+const CMS_REQUEST_FAILED_TYPE = '/errors/cms/request_failed';
 const CMS_UNREACHABLE_REASONS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN']);
 const CMS_SLOW_REASONS = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET']);
 const CMS_LONG_REQUEST_PATHS = ['/log/', '/cms-auth/'];
@@ -784,10 +785,14 @@ apiClient.interceptors.response.use(
       // CMS did not answer, but not (yet) enough to open the reconnect
       // window: the host is shown as not responding until it answers again.
       // A long read (log) that timed out is not counted, as above.
+      const errorType = apiData?.data?.type || apiData?.type;
       if (hostUid && !unreachable && !reconnectingHosts.has(hostUid) &&
-          [CMS_NO_RESPONSE_TYPE, CMS_TLS_ERROR_TYPE].includes(apiData?.data?.type || apiData?.type) &&
+          [CMS_NO_RESPONSE_TYPE, CMS_TLS_ERROR_TYPE].includes(errorType) &&
           !CMS_LONG_REQUEST_PATHS.some((part) => requestUrl.includes(part))) {
         await setHostNotResponding(hostUid, true);
+      } else if (hostUid && errorType === CMS_REQUEST_FAILED_TYPE) {
+        // CMS answered with status:fail: it responds again.
+        await setHostNotResponding(hostUid, false);
       }
       if (unreachable) {
         try {

@@ -64,6 +64,12 @@ it('does not move when several screens report the same failure, or succeed while
   expect(types()).toEqual(['hostNotResponding:HOST', 'hostResponding:HOST']);
 });
 
+it('is cleared when CMS answers with a failure (request_failed)', async () => {
+  await get(`/${HOST}/database/start-info`, failWith(500, noResponse('ECONNRESET')));
+  await get(`/${HOST}/database/start-info`, failWith(500, { data: { type: '/errors/cms/request_failed' } }));
+  expect(types()).toEqual(['hostNotResponding:HOST', 'hostResponding:HOST']);
+});
+
 it('leaves a refused connection to the reconnect window instead', async () => {
   await get(`/${HOST}/database/start-info`, failWith(500, noResponse('ECONNREFUSED')));
   expect(types()).toEqual(['hostUnreachable:HOST']);
