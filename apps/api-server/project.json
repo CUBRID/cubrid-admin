@@ -54,7 +54,10 @@
     },
     "test": {
       "options": {
-        "passWithNoTests": true
+        "passWithNoTests": true,
+        "env": {
+          "NODE_OPTIONS": "--experimental-vm-modules --disable-warning=ExperimentalWarning"
+        }
       }
     },
     "build:exe": {

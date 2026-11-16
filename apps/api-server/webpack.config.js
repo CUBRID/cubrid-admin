@@ -15,8 +15,10 @@ const { productVersion } = require('../../scripts/product-version.cjs');
 const OPTIONAL_PACKAGES = [
   '@nestjs/microservices',
   '@nestjs/microservices/microservices-module',
+  '@nestjs/microservices/microservices-module.js',
   '@nestjs/websockets',
   '@nestjs/websockets/socket-module',
+  '@nestjs/websockets/socket-module.js',
   'cache-manager',
   'class-transformer/storage',
 ];
@@ -47,6 +49,14 @@ class WritePackageJsonPlugin {
 }
 
 module.exports = {
+  // NestJS 12 loads its packages with import(): keep them in main.js instead
+  // of separate chunk files, since the single executable and the desktop app
+  // ship main.js alone.
+  module: {
+    parser: {
+      javascript: { dynamicImportMode: 'eager' },
+    },
+  },
   output: {
     path: join(__dirname, '../../dist/apps/api-server'),
     clean: true,
