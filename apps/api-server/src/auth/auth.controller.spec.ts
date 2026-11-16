@@ -1,4 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ConfigService } from '@config/config.service';
+import { AUTH_THROTTLE_OPTIONS } from './auth-throttle';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthError } from '@error/auth/auth-error';
@@ -33,8 +36,13 @@ describe('AuthController', () => {
       logout: jest.fn().mockResolvedValue(undefined),
     };
     const module: TestingModule = await Test.createTestingModule({
+      // The login rate limit guard on its routes needs these.
+      imports: [ThrottlerModule.forRoot(AUTH_THROTTLE_OPTIONS)],
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: authService }],
+      providers: [
+        { provide: AuthService, useValue: authService },
+        { provide: ConfigService, useValue: { isDesktopMode: () => false } },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);

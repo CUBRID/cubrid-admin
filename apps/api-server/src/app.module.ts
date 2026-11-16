@@ -26,6 +26,8 @@ import { LogModule } from './log/log.module';
 import { HaModule } from '@ha';
 import { CmsJobModule } from '@cms-job/cms-job.module';
 import { selectAppGuard } from './desktop/select-app-guard';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AUTH_THROTTLE_OPTIONS } from './auth/auth-throttle';
 import { DesktopUserService } from './desktop/desktop-user.service';
 import { VersionModule } from './version/version.module';
 
@@ -41,6 +43,8 @@ import { VersionModule } from './version/version.module';
  */
 @Module({
   imports: [
+    // In memory; its guard is used on the login routes only (auth-throttle.ts).
+    ThrottlerModule.forRoot(AUTH_THROTTLE_OPTIONS),
     ConfigModule,
     SecurityModule,
     StorageModule,

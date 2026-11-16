@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { UserDTO } from '@type/index';
@@ -12,6 +12,7 @@ import {
   setAuthCookies,
 } from '@token/auth-cookies';
 import { REFRESH_RETRY_AFTER_SEC } from '@token/token.constants';
+import { AuthThrottlerGuard } from './auth-throttle';
 
 // The desktop app has no app login (DesktopUserGuard).
 // The tokens travel only in httpOnly cookies (auth-cookies.ts); the body
@@ -22,6 +23,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @UseGuards(AuthThrottlerGuard)
   @Post('login')
   async login(
     @Body() userDTO: UserDTO,
@@ -33,6 +35,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(AuthThrottlerGuard)
   @Post('refresh')
   async refresh(
     @Req() req: Request,
@@ -73,6 +76,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(AuthThrottlerGuard)
   @Post('register')
   async register(@Body() userDTO: UserDTO): Promise<void> {
     await this.authService.register(userDTO);

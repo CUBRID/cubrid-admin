@@ -21,6 +21,8 @@ export class ConfigService {
   public cmsRejectUnauthorized!: boolean;
   public cmsForwardEnabled!: boolean;
   public authRegistrationEnabled!: boolean;
+  private hstsEnabled!: boolean;
+  private trustProxy!: boolean;
   public listenHost?: string;
   private readonly listenUnixSocket?: string;
   private readonly desktopMode: boolean;
@@ -62,6 +64,9 @@ export class ConfigService {
     this.desktopMode = (process.env.CWM_DESKTOP ?? '').trim() === '1';
     // The desktop app has one built-in user and no accounts to sign up for.
     this.authRegistrationEnabled = this.desktopMode ? false : this.resolveAuthRegistrationEnabled(args);
+    // Both only for a server that browsers reach over the network (not the desktop app's socket).
+    this.hstsEnabled = this.desktopMode ? false : this.resolveFlag(args, 'HSTS_ENABLED', false);
+    this.trustProxy = this.desktopMode ? false : this.resolveFlag(args, 'TRUST_PROXY', false);
 
     this.resolveLogSettings(args);
 
@@ -120,6 +125,24 @@ export class ConfigService {
 
   isProduction(): boolean {
     return this.environment === 'production';
+  }
+
+  /**
+   * HSTS_ENABLED: send Strict-Transport-Security. Only for a server with its
+   * own certificate: once a browser has seen it, it no longer lets the user
+   * past the warning of the default self-signed certificate.
+   */
+  isHstsEnabled(): boolean {
+    return this.hstsEnabled;
+  }
+
+  /**
+   * TRUST_PROXY: take the client's address from X-Forwarded-For (behind a
+   * reverse proxy). Off by default: a browser that connects directly could
+   * otherwise pick its own address for the login rate limit.
+   */
+  isTrustProxy(): boolean {
+    return this.trustProxy;
   }
 
   getAllowedOrigins(): string[] {
@@ -257,6 +280,11 @@ export class ConfigService {
     }
 
     return fs.readFileSync(certPath, 'utf8');
+  }
+
+  private resolveFlag(args: Record<string, string>, key: string, fallback: boolean): boolean {
+    const raw = args[key] ?? process.env[key];
+    return raw != null && raw !== '' ? parseBooleanEnv(raw) : fallback;
   }
 
   private resolveLogToFile(args: Record<string, string>): boolean {

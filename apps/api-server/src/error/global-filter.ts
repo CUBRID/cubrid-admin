@@ -75,6 +75,9 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
       if (status === HttpStatus.UNAUTHORIZED) {
         // A request without a valid login: expected traffic, not a server fault.
         this.logger.warn(`Unauthorized: ${exception.message}`, `${req.method} ${req.url}`);
+      } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        // The login rate limit (auth-throttle.ts) turned a client away.
+        this.logger.warn(`Too Many Requests: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         this.logger.error(
           `HTTP Exception [${status}]: ${exception.message}`,

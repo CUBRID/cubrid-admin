@@ -14,6 +14,7 @@ import { GlobalExceptionFilter } from '@error/global-filter';
 import { createValidationPipe } from '@error/validation/create-validation-pipe';
 import { ConfigService } from '@config/config.service';
 import { SuccessResponseInterceptor, LoggingInterceptor } from '@common'; // Updated import
+import { httpSecurityHeaders } from './security/http-security';
 
 async function bootstrap() {
   loadRuntimeEnv();
@@ -33,7 +34,9 @@ async function bootstrap() {
     // would be recorded, silently dropping ordinary traffic.
     logger: appLogger,
   });
-  app.getHttpAdapter().getInstance().set('trust proxy', true);
+  // Behind a reverse proxy only (TRUST_PROXY): otherwise X-Forwarded-For is
+  // the client's own claim, and req.ip (the login rate limit) must not take it.
+  app.getHttpAdapter().getInstance().set('trust proxy', bootConfig.isTrustProxy());
   const configService = app.get(ConfigService);
   const port: string = configService.getPort();
   const listenHost = configService.getListenHost();
@@ -85,6 +88,8 @@ async function bootstrap() {
     // cannot hold it stops the start instead of the first login.
     app.use(cookieParser());
     authCookieNames();
+    // Security headers on everything the server sends, the web screens included.
+    app.use(httpSecurityHeaders({ hsts: configService.isHstsEnabled() }));
   }
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new SuccessResponseInterceptor());
