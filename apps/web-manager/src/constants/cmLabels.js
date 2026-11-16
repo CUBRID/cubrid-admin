@@ -2156,6 +2156,7 @@ export const CM = {
   updateStatusMalformedMsg: 'The update status could not be read.',
   unknownActionMsg: (action) => `Unknown action: ${action}`,
   reloadApplication: 'Reload Application',
+  editorLoadFailed: 'Could not load the editor. Reload to try again.',
   errYear: 'The year value of date is not valid.',
   errMonth: 'The month value of date is not valid.',
   errDay: 'The day value of date is not valid.',

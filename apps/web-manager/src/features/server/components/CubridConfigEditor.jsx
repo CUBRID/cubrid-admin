@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import React, { lazy, useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
 import { fetchHostEnv } from '../../host/hostSlice';
@@ -11,6 +11,7 @@ import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
 import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
+import EditorLoadBoundary from '../../../components/domain/EditorLoadBoundary';
 
 // The editor (CodeMirror) is loaded only when a conf file is opened.
 const ConfEditor = lazy(() => import('../confEditor/ConfEditor'));
@@ -232,7 +233,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
 
           {/* Editor Container */}
           <div className="config-source-editor flex-1 relative overflow-hidden bg-white dark:bg-editor-bg">
-            <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><Spinner size="md" /></div>}>
+            <EditorLoadBoundary className="absolute inset-0" fallback={<div className="absolute inset-0 flex items-center justify-center"><Spinner size="md" /></div>}>
               <ConfEditor
                 testId="cubrid-config-textarea"
                 kind={confname}
@@ -242,7 +243,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
                 paramSchemas={hostEnv?.paramSchemas}
                 placeholder={CM.configPlaceholder}
               />
-            </Suspense>
+            </EditorLoadBoundary>
           </div>
 
           {/* Source Footer */}

@@ -1,8 +1,9 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy } from 'react';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
 import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../../constants/useCM';
+import EditorLoadBoundary from '../../../../components/domain/EditorLoadBoundary';
 
 // The editor (CodeMirror) is loaded only when the broker conf is opened.
 const ConfEditor = lazy(() => import('../../confEditor/ConfEditor'));
@@ -27,7 +28,7 @@ export default function ConfigSourceEditor({ rawContent, handleSourceChange, par
 
       {/* Editor area */}
       <div className="config-source-editor flex-1 relative overflow-hidden bg-white dark:bg-editor-bg">
-        <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><Spinner size="md" /></div>}>
+        <EditorLoadBoundary className="absolute inset-0" fallback={<div className="absolute inset-0 flex items-center justify-center"><Spinner size="md" /></div>}>
           <ConfEditor
             testId="broker-config-textarea"
             kind="brokerconf"
@@ -36,7 +37,7 @@ export default function ConfigSourceEditor({ rawContent, handleSourceChange, par
             paramSchemas={paramSchemas}
             placeholder={CM.brokerConfigPlaceholder}
           />
-        </Suspense>
+        </EditorLoadBoundary>
       </div>
 
       {/* Footer hint */}

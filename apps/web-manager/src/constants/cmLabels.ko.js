@@ -2434,6 +2434,7 @@ export const CM_KO = {
   updateStatusMalformedMsg: '업데이트 상태를 읽지 못했습니다.',
   unknownActionMsg: (action) => `알 수 없는 작업: ${action}`,
   reloadApplication: '새로 고침',
+  editorLoadFailed: '편집기를 불러오지 못했습니다. 새로 고친 뒤 다시 하세요.',
   errYear: '일자의 년도 값이 유효하지 않습니다.',
   errMonth: '일자의 월 값이 유효하지 않습니다.',
   errDay: '일자의 일 값이 유효하지 않습니다.',

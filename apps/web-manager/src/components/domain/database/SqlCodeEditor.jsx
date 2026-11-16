@@ -1,4 +1,5 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy } from 'react';
+import EditorLoadBoundary from '../EditorLoadBoundary';
 
 const CodeMirrorSqlEditor = lazy(() => import('./CodeMirrorSqlEditor'));
 
@@ -10,8 +11,8 @@ const CodeMirrorSqlEditor = lazy(() => import('./CodeMirrorSqlEditor'));
  */
 export default function SqlCodeEditor(props) {
   return (
-    <Suspense fallback={<div style={{ height: props.height }} />}>
+    <EditorLoadBoundary fallback={<div style={{ height: props.height }} />}>
       <CodeMirrorSqlEditor {...props} />
-    </Suspense>
+    </EditorLoadBoundary>
   );
 }
