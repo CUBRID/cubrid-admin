@@ -1,7 +1,7 @@
 import { Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import * as fs from 'fs';
 import { getDesktopSettingsPath } from '../config/desktop-settings';
-import { getPortableAppRoot } from '../config/portable-root';
+import { getDesktopDataRoot } from '../config/portable-root';
 import { getMainWindow } from '../window/window-registry';
 import { applyZoom, type ZoomAction } from '../window/zoom';
 
@@ -191,11 +191,11 @@ function zoomWindow(action: ZoomAction): void {
 
 function revealSettingsFile(): void {
   const settingsPath = getDesktopSettingsPath();
-  const portableRoot = getPortableAppRoot();
+  const dataRoot = getDesktopDataRoot();
   if (fs.existsSync(settingsPath)) {
     shell.showItemInFolder(settingsPath);
-  } else if (fs.existsSync(portableRoot)) {
-    shell.openPath(portableRoot);
+  } else if (fs.existsSync(dataRoot)) {
+    shell.openPath(dataRoot);
   }
 }
 

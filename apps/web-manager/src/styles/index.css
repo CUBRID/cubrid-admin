@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 @import './fonts.css';
+/* Inter, JetBrains Mono and the Material Symbols icon font are bundled from npm,
+   not loaded from Google Fonts, so text and icons render on a closed network. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'material-symbols/outlined.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -32,9 +37,9 @@
   --color-editor-value: #a3acb8;
   --color-editor-line: #626c79;
 
-  --font-display: "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-display: "Inter Variable", "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", "Inter", "Pretendard", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /*
    * Single source of truth for every font size in the app. Previously ~140

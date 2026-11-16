@@ -1,13 +1,27 @@
 # cwm.conf reference
 
-`conf/cwm.conf` is a plain JSON object. Any key below can be added to it —
+`cwm.conf` is a plain JSON object. Any key below can be added to it —
 values are read as strings. After editing, restart the server.
+
+Where the server keeps its files:
+
+| | Portable (tar.gz / zip) | Linux rpm | Windows setup |
+|---|---|---|---|
+| Program | the extracted folder | `/opt/cubrid-admin` | `C:\Program Files\CUBRID Admin Server` |
+| `cwm.conf` | `conf/cwm.conf` next to the executable | `/etc/cubrid-admin/cwm.conf` | `%ProgramData%\CUBRID Admin Server\conf\cwm.conf` |
+| `cwm-vault/`, data, `ssl/` | next to the executable | `/var/lib/cubrid-admin` | `%ProgramData%\CUBRID Admin Server` |
+| Logs | `logs/` next to the executable | `/var/log/cubrid-admin` | `%ProgramData%\CUBRID Admin Server\logs` |
+
+The installers set these with the environment variables `CWM_HOME` (the folder
+used instead of the executable's folder), `CWM_CONF_PATH` (the `cwm.conf` file)
+and `LOG_DIR`. Upgrading or removing the installed server keeps `cwm.conf`,
+`cwm-vault/`, the data and the logs.
 
 ```json
 {
   "PORT": "8080",
   "ENVIRONMENT": "production",
-  "STORAGE_PATH": "./data",
+  "STORAGE_PATH": "./storage",
   "ALLOWED_ORIGINS": "https://your-domain.example",
   "LISTEN_HOST": "127.0.0.1",
   "SSL_CERT_PATH": "/etc/ssl/certs/your-cert.pem",
@@ -25,7 +39,7 @@ unreadable.
 |---|---|---|
 | `PORT` | Server port | `8080` |
 | `ENVIRONMENT` | `production` or `development` | `production` |
-| `STORAGE_PATH` | Where application data is stored | `./data` |
+| `STORAGE_PATH` | Where application data is stored; a relative path is taken from the server folder (`CWM_HOME`, or next to the executable) | `./storage` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist. Leave unset for same-origin only. | — |
 | `LISTEN_HOST` | Network interface to bind to, e.g. `127.0.0.1` to refuse connections from other machines | all interfaces |
 | `SSL_CERT_PATH` / `SSL_KEY_PATH` | Path to a real TLS cert/key pair. Both must be set together, or neither. | self-signed cert, auto-generated |
@@ -40,9 +54,9 @@ unreadable.
 | `TOPSQL_MAX_LOG_MB` | Largest log, in MiB, that Top SQL analyzes. CMS reads the whole log at once and needs about 30 times its size in memory, which it keeps afterwards (a 63 MB log took CMS to 1.9 GiB), and CMS runs on the database machine, so raise this with care. The read may take 30 s for every 16 MiB of this limit. 1–64; another value uses the default. Applies without a restart. | `16` |
 | `CMS_JOB_RECOVER_ON_STARTUP` | Resume tracking jobs that were still running when the server restarted | `true` |
 | `SERVER_IP` | IP to include in the auto-generated self-signed certificate (avoids browser warnings when accessed by IP) | detected from network interfaces |
-| `CWM_SSL_DIR` | Directory to read/write the self-signed cert from | `ssl/` next to the executable |
+| `CWM_SSL_DIR` | Directory to read/write the self-signed cert from | `ssl/` in the server folder |
 | `LOG_TO_FILE` | Write logs to a file in addition to the console | `true` |
-| `LOG_DIR` | Directory for log files | `logs/` next to the executable |
+| `LOG_DIR` | Directory for log files | `logs/` in the server folder |
 | `LOG_LEVEL` | Minimum level written (`error`, `warn`, `log`, `debug`, `verbose`) — same vocabulary as NestJS | `log` in production, `debug` otherwise |
 | `LOG_MAX_SIZE` | Rotate to a new file once the current one reaches this size, e.g. `20m`, `500k` | `20m` |
 | `LOG_MAX_FILES` | How long to keep rotated files — a duration like `14d`, or a plain count like `20` | `14d` |
