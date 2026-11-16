@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { fetchHostEnv } from '../../host/hostSlice';
 import { brokerApi } from '../../broker/brokerApi';
 import { showStatusModal, setTabDirty } from '../../layout/layoutSlice';
 import { isAmbiguousFailure } from '../../../api/isAmbiguousFailure';
@@ -17,7 +18,14 @@ export default function BrokerConfigEditor({ hostUid }) {
   const tabId = `broker_config:${hostUid}`;
   const dispatch = useDispatch();
   const confirm = useConfirm();
-  const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  // Parameter names, rules and defaults for completion, hints and underlines.
+  const hostEnv = useSelector((state) => state.host.hostEnvs?.[hostUid]);
+  const isAuthorized = Boolean(hostUid && authorizedHosts?.includes(hostUid));
+  useEffect(() => {
+    // undefined = not read yet; a failed read leaves null and is not retried here.
+    if (isAuthorized && hostEnv === undefined) dispatch(fetchHostEnv(hostUid));
+  }, [isAuthorized, hostEnv, hostUid, dispatch]);
   const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
@@ -66,9 +74,9 @@ export default function BrokerConfigEditor({ hostUid }) {
     if (refreshTabId === tabId) fetchConfig();
   }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
-  const handleSourceChange = (e) => {
-    setRawContent(e.target.value);
-    const changed = e.target.value !== originalRawContentRef.current;
+  const handleSourceChange = (text) => {
+    setRawContent(text);
+    const changed = text !== originalRawContentRef.current;
     setHasChanges(changed);
     dispatch(setTabDirty({ tabId, isDirty: changed }));
   };
@@ -157,6 +165,7 @@ export default function BrokerConfigEditor({ hostUid }) {
         <ConfigSourceEditor 
           rawContent={rawContent}
           handleSourceChange={handleSourceChange}
+          paramSchemas={hostEnv?.paramSchemas}
         />
         {loading && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-white/80 dark:bg-bk-side/80 backdrop-blur-xs">
