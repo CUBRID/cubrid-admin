@@ -15,7 +15,7 @@ import { SuccessResponseInterceptor, LoggingInterceptor } from '@common'; // Upd
 
 async function bootstrap() {
   loadRuntimeEnv();
-  const httpsOptions = getHttpsOptions();
+  const httpsOptions = await getHttpsOptions();
   // A standalone instance (not DI-managed) since this runs before Nest's DI
   // container exists — app.get(ConfigService) below constructs its own,
   // functionally identical instance from the same env for everything else.
