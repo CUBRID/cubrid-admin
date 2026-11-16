@@ -125,6 +125,16 @@ module.exports = {
     // One installer per arch, not one with both.
     buildUniversalInstaller: false,
     artifactName: fileName('windows', '-setup'),
+    installerIcon: 'icon.ico',
+    uninstallerIcon: 'icon.ico',
+    installerHeaderIcon: 'icon.ico',
+    // 164x314, 24-bit: the left image of the welcome / finish pages.
+    installerSidebar: 'installerSidebar.bmp',
+    uninstallerSidebar: 'installerSidebar.bmp',
+    // Installed apps list: the full version (0.1.0.0001), not the semver
+    // "version" (0.1.0). installer.nsh writes DisplayVersion the same way.
+    uninstallDisplayName: `CUBRID Admin ${version}`,
+    include: 'installer.nsh',
   },
   portable: { buildUniversalInstaller: false, artifactName: fileName('windows', '-portable') },
   // Installer: rpm. Portable: AppImage.
