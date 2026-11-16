@@ -1,6 +1,7 @@
 const { test, expect } = require('../fixture');
 const { AuthPage } = require('../pages/AuthPage');
 const { HostTreePage } = require('../pages/HostTreePage');
+const { loadedEditorText, editorText } = require('../pages/codeEditor');
 const { DatabaseTreePage } = require('../pages/DatabaseTreePage');
 const { Given, When, Then, And, bddMeta, action } = require('../bdd');
 
@@ -31,6 +32,7 @@ test.describe('Feature: Broker Configuration Editor', () => {
     });
 
     let textarea;
+    let originalContent;
     let saveBtn;
     let undoBtn;
 
@@ -47,7 +49,7 @@ test.describe('Feature: Broker Configuration Editor', () => {
       await action('Wait for Broker Config to finish loading', () => expect(page.getByTestId('broker-config-refresh-btn')).toBeEnabled({ timeout: 25000 }), 'Broker Config did not finish loading.');
       textarea = page.getByTestId('broker-config-textarea');
       await action('Verify Broker Config textarea is visible', () => expect(textarea).toBeVisible({ timeout: 15000 }), 'Broker Config textarea is not visible.');
-      await action('Verify Broker Config textarea is populated with content', () => expect(textarea).not.toHaveText('', { timeout: 25000 }), 'Broker Config textarea remained empty.');
+      await action('Verify Broker Config textarea is populated with content', () => loadedEditorText(textarea, 25000).then((text) => { originalContent = text; }), 'Broker Config textarea remained empty.');
     });
 
     await When('the user edits the configuration textarea content', async () => {
@@ -67,7 +69,7 @@ test.describe('Feature: Broker Configuration Editor', () => {
       await action('Verify Undo button is enabled after edit', () => expect(undoBtn).toBeEnabled({ timeout: 10000 }), 'Undo button remained disabled after modifying config.');
 
       await action('Click Undo button to revert changes', () => undoBtn.click(), 'Could not click Undo button.');
-      await action('Verify the typed comment is gone after undo', () => expect(textarea).not.toContainText('e2e test comment', { timeout: 10000 }), 'The typed comment was still there after undo.');
+      await action('Verify configuration reverted to original content', () => expect.poll(() => editorText(textarea), { timeout: 10000 }).toBe(originalContent), 'Editor content did not match original content after undo.');
       await action('Verify Save button is disabled after undo', () => expect(saveBtn).toBeDisabled({ timeout: 10000 }), 'Save button remained enabled after undo.');
       await action('Verify Undo button is disabled after undo', () => expect(undoBtn).toBeDisabled({ timeout: 10000 }), 'Undo button remained enabled after undo.');
     });
