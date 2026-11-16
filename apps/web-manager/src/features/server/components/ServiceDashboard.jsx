@@ -54,6 +54,9 @@ const Component = function ServiceDashboard() {
   // this dashboard is on screen, otherwise with its next read.
   const volumesChangedSeq = useSelector((state) => state.databaseMonitoring?.volumesChangedSeq, shallowEqual);
   const isOnScreen = useSelector((state) => state.layout?.activeMainTab === 'service_dashboard');
+  // The hosts the table shows (not in a collapsed group, not filtered out):
+  // only these are read, each with its databases' volume-info.
+  const visibleHostsRef = React.useRef([]);
   const seenVolumesChangedSeq = React.useRef(volumesChangedSeq);
   React.useEffect(() => {
     const before = seenVolumesChangedSeq.current ?? {};
@@ -77,9 +80,6 @@ const Component = function ServiceDashboard() {
       return { key: accessor, direction: 'asc' };
     });
   };
-  // The hosts the table shows (not in a collapsed group, not filtered out):
-  // only these are read, each with its databases' volume-info.
-  const visibleHostsRef = React.useRef([]);
   const volumeIntervalSeconds = preferences.serviceVolumeInterval ?? DEFAULT_SERVICE_VOLUME_INTERVAL;
   // Hosts whose volumes changed here (a volume added): their next read
   // includes the volumes whatever the interval.
@@ -195,7 +195,10 @@ const Component = function ServiceDashboard() {
   }, [hostGroups, collapsedGroups, haInfo, roleFilter, CM]);
 
   const visibleHostUids = React.useMemo(() => tableRows.filter((row) => row._type === 'host').map((row) => row.uid), [tableRows]);
-  visibleHostsRef.current = visibleHostUids;
+  // Before the effects of this commit read it (a layout effect runs first).
+  React.useLayoutEffect(() => {
+    visibleHostsRef.current = visibleHostUids;
+  }, [visibleHostUids]);
   // A host that comes into view (a group expanded, a filter cleared) is read
   // once then, not left empty until the next refresh.
   const shownBefore = React.useRef(null);

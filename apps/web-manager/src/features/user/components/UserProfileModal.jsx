@@ -21,6 +21,9 @@ export default function UserProfileModal({ isOpen, onClose }) {
     confirmPassword: '',
   });
 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     if (isOpen) {
       setProfile({ id: user?.id || '' });
@@ -29,9 +32,6 @@ export default function UserProfileModal({ isOpen, onClose }) {
       setError(null);
     }
   }, [isOpen, user]);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   const globalLoading = useSelector((state) => state.auth.loading);
   const globalError = useSelector((state) => state.auth.error);

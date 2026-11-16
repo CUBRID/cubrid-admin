@@ -13,34 +13,36 @@ export default function CASLogModal({ isOpen, onClose, hostUid, brokerName, casI
   const [logPath, setLogPath] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Bumped by Retry: the effect reads again.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (isOpen && hostUid && brokerName && casId) {
-      fetchLogPath();
-    }
-  }, [isOpen, hostUid, brokerName, casId, type]);
+    if (!(isOpen && hostUid && brokerName && casId)) return;
+    const fetchLogPath = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await brokerApi.getBrokerLogs(hostUid, brokerName);
+        const logs = response.logfileinfo?.[0]?.logfile || [];
 
-  const fetchLogPath = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await brokerApi.getBrokerLogs(hostUid, brokerName);
-      const logs = response.logfileinfo?.[0]?.logfile || [];
-      
-      const suffix = type === 'sql' ? `_${casId}.sql.log` : `_${casId}.err`;
-      const found = logs.find(log => log.path.endsWith(suffix));
-      
-      if (found) {
-        setLogPath(found.path);
-      } else {
-        setError(CM.logResolveError(suffix));
+        const suffix = type === 'sql' ? `_${casId}.sql.log` : `_${casId}.err`;
+        const found = logs.find(log => log.path.endsWith(suffix));
+
+        if (found) {
+          setLogPath(found.path);
+        } else {
+          // What went wrong; worded with the labels when shown.
+          setError({ kind: 'resolve', suffix });
+        }
+      } catch {
+        setError({ kind: 'refused' });
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      setError(CM.logRetrievalRefused);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchLogPath();
+  }, [isOpen, hostUid, brokerName, casId, type, attempt]);
+  const errorText = error?.kind === 'resolve' ? CM.logResolveError(error.suffix) : error ? CM.logRetrievalRefused : null;
 
   const title = type === 'sql' ? CM.casSqlLog : CM.casSlowQueryLog;
 
@@ -52,8 +54,8 @@ export default function CASLogModal({ isOpen, onClose, hostUid, brokerName, casI
       icon={type === 'sql' ? 'terminal' : 'timer_off'}
       maxWidth="1100px"
       loading={loading}
-      error={error}
-      onErrorRetry={fetchLogPath}
+      error={errorText}
+      onErrorRetry={() => setAttempt((n) => n + 1)}
       onErrorClose={onClose}
     >
       <div className="flex flex-col h-[70vh] min-h-[500px] border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden bg-slate-900 shadow-2xl relative">
