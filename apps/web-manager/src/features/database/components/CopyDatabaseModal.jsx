@@ -25,6 +25,7 @@ import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { useFreshDbList } from '../useFreshDbList';
 import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
 
@@ -90,20 +91,14 @@ export default function CopyDatabaseModal() {
   useEffect(() => { busyRef.current = isLoading || isSuccess; }, [isLoading, isSuccess]);
   const wasOpenRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    // Set up when the modal opens, and again if the source changes on the
-    // form. A copy that deletes its source drops it from the list while the
-    // job runs and after it succeeds, which changes currentDb; that re-run
-    // must not throw the job's progress or result back to an empty form.
-    const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
-    wasOpenRef.current = isCopyDatabaseModalOpen;
-    if (isCopyDatabaseModalOpen && (justOpened || !busyRef.current)) {
-      resetAction();
+  // The form, set up when the modal opens, and again if the source changes on
+  // the form. A copy that deletes its source drops it from the list while the
+  // job runs and after it succeeds, which changes currentDb; that re-run must
+  // not throw the job's progress or result back to an empty form.
+  useResetWhen([isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir], (previous) => {
+    const justOpened = isCopyDatabaseModalOpen && !previous?.[0];
+    if (isCopyDatabaseModalOpen && (justOpened || !(isLoading || isSuccess))) {
       setWarnings([]);
-      if (selectedHostUid && !currentDb) {
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
-      }
       const defaultPath = currentDb?.dbdir || '';
       setFormData({
         destName: '',
@@ -122,9 +117,20 @@ export default function CopyDatabaseModal() {
       setSrcLogDir('');
       setDiskInfo({ freeSpace: '-', dbSize: '-' });
       setVolumes([]);
+      if (selectedHostUid && selectedDatabase) setVolInfoLoading(true);
+    }
+  });
+  useEffect(() => {
+    let cancelled = false;
+    const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
+    wasOpenRef.current = isCopyDatabaseModalOpen;
+    if (isCopyDatabaseModalOpen && (justOpened || !busyRef.current)) {
+      resetAction();
+      if (selectedHostUid && !currentDb) {
+        dispatch(fetchDatabaseStartInfo(selectedHostUid));
+      }
 
       if (selectedHostUid && selectedDatabase) {
-        setVolInfoLoading(true);
         databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
           .then((res) => {
             if (cancelled) return;
@@ -160,7 +166,7 @@ export default function CopyDatabaseModal() {
   }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir, resetAction, dispatch]);
 
   // Desktop EditListener alignment: Auto-update target paths and volume mapping when destName changes
-  useEffect(() => {
+  useResetWhen([formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths], () => {
     if (!formData.destName) return;
 
     const parentDir = getParentDirectory(currentDb?.dbdir || '');
@@ -184,7 +190,7 @@ export default function CopyDatabaseModal() {
       }
       return changed ? next : prev;
     });
-  }, [formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths]);
+  });
 
   // Derive defaults from the latest name and metadata, including when the
   // user types a name before getVolumeInfo finishes. Keep explicit edits.

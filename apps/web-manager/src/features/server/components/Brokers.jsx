@@ -1,5 +1,5 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { useShownBrokers } from '../../broker/brokerRestartState';
@@ -12,6 +12,7 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 const Component = function Brokers({ hostUid, isSection = false }) {
   const CM = useCM();
@@ -33,22 +34,22 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   const sharedLoading = useSelector((state) => !!state.broker.loadingByHost[hostUid]);
   const sharedFailed = useSelector((state) => !!state.broker.brokerListFailedByHost[hostUid]);
 
-  useEffect(() => {
+  useResetWhen([hostUid], () => {
     setBrokers([]);
     setLoading(false);
     setHasLoadedOnce(false);
     setLoadFailed(false);
-  }, [hostUid]);
+  });
 
   // brokersByHost[hostUid] is deleted when focus leaves this host
   // (resetBrokerState) and blanked when a fetch fails; keep showing the last
   // list until the next successful fetch.
-  useEffect(() => {
+  useResetWhen([isSection, sharedBrokers, sharedFailed], () => {
     if (isSection && Array.isArray(sharedBrokers) && !sharedFailed) {
       setBrokers(sharedBrokers);
       setHasLoadedOnce(true);
     }
-  }, [isSection, sharedBrokers, sharedFailed]);
+  });
 
   const { isManualRefreshing, lastRefreshed, handleRefresh } = usePollingRefresh({
     hostUid,

@@ -8,6 +8,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { ModalStatusError } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // Read failures with no text of their own, worded at render time.
 const NOT_CONNECTED = Symbol('not connected');
@@ -24,17 +25,16 @@ export default function ServerVersionModal() {
 
   // Each open starts empty, so a failed read never shows the host viewed
   // before. A host that is not connected is not asked at all.
-  useEffect(() => {
+  useResetWhen([isServerVersionModalOpen, serverVersionHostUid, isConnected], () => {
     setEnvData(null);
     setError(null);
-    setLoading(false);
-    if (!isServerVersionModalOpen || !serverVersionHostUid) return undefined;
-    if (!isConnected) {
-      setError(NOT_CONNECTED);
-      return undefined;
-    }
+    const reading = isServerVersionModalOpen && Boolean(serverVersionHostUid) && isConnected;
+    setLoading(reading);
+    if (isServerVersionModalOpen && serverVersionHostUid && !isConnected) setError(NOT_CONNECTED);
+  });
+  useEffect(() => {
+    if (!isServerVersionModalOpen || !serverVersionHostUid || !isConnected) return undefined;
     let cancelled = false;
-    setLoading(true);
     hostApi.getHostEnv(serverVersionHostUid)
       .then((res) => {
         if (!cancelled) setEnvData(res);

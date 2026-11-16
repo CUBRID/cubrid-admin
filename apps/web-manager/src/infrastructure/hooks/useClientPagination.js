@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useResetWhen } from './useResetWhen';
 
 /**
  * Splits rows already in the browser into fixed-size pages.
@@ -9,14 +10,14 @@ import { useEffect, useState } from 'react';
  */
 export const useClientPagination = (rows, pageSize, resetKey) => {
   const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [resetKey]);
+  useResetWhen([resetKey], () => setPage(1));
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const current = Math.min(page, totalPages);
   // Keep the clamp: otherwise rows growing back would jump to the old page.
-  useEffect(() => {
+  useResetWhen([page, totalPages], () => {
     if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  });
   const start = (current - 1) * pageSize;
   return {
     page: current,

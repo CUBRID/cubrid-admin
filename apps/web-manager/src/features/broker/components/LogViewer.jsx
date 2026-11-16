@@ -11,6 +11,7 @@ import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { menuOffReason } from '../../layout/menuOffReason';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MODE_KEYS = [
@@ -154,8 +155,9 @@ function LogViewer({ hostUid, path }) {
   useEffect(() => {
     if (!isTop) return undefined;
     const controller = new AbortController();
+    // Until the result lands, currentAnalysis is null and that already reads
+    // as loading.
     const identity = { hostUid, path, revision: topRevision };
-    setTopAnalysis({ ...identity, loading: true });
     analyzeTopSQL(() => brokerApi.captureLogSnapshot(hostUid, path), { signal: controller.signal })
       .then(result => {
         if (!controller.signal.aborted) setTopAnalysis({ ...identity, ...result, loading: false });
@@ -168,11 +170,11 @@ function LogViewer({ hostUid, path }) {
     return () => controller.abort();
   }, [hostUid, path, topRevision, isTop]);
 
-  useEffect(() => {
+  useResetWhen([isRawOnlyLog, viewMode], () => {
     if (isRawOnlyLog && viewMode !== 'raw') {
       setViewMode('raw');
     }
-  }, [isRawOnlyLog, viewMode]);
+  });
 
   useEffect(() => {
     if (!toolbarMenu) return undefined;

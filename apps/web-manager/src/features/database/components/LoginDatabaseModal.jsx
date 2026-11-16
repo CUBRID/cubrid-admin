@@ -16,6 +16,7 @@ import {
   ModalStatusLoading,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 export default function LoginDatabaseModal() {
   const CM = useCM();
@@ -36,13 +37,15 @@ export default function LoginDatabaseModal() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
+  useResetWhen([isLoginDatabaseModalOpen], () => {
     if (isLoginDatabaseModalOpen) {
-      resetAction();
       setFormData({ dbuser: 'dba', dbpasswd: '' });
       setRememberMe(true);
       setShowPassword(false);
     }
+  });
+  useEffect(() => {
+    if (isLoginDatabaseModalOpen) resetAction();
   }, [isLoginDatabaseModalOpen, resetAction]);
 
   if (!isLoginDatabaseModalOpen) return null;

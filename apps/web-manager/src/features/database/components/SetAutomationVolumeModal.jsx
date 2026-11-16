@@ -18,6 +18,7 @@ import {
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 const BYTES_TO_MB = 1024 * 1024;
 
@@ -197,18 +198,22 @@ export default function SetAutomationVolumeModal() {
       .finally(() => setReadingSpace(false));
   }, [isSetAutomationVolumeModalOpen, pageSize, canReadSpace, entryKey, selectedHostUid, selectedDatabase, dispatch]);
 
-  useEffect(() => {
+  // Reset local state before fetching new config to avoid stale view
+  useResetWhen([isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase], () => {
     if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
-      resetAction();
-      // Reset local state before fetching new config to avoid stale view
       setCombinedEnabled(false);
       setLoadedExtPages(null);
       setLoadedExt(null);
+    }
+  });
+  useEffect(() => {
+    if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
+      resetAction();
       dispatch(fetchAutoVolumeConfig({ hostUid: selectedHostUid, dbname: selectedDatabase }));
     }
   }, [isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase, dispatch, resetAction]);
 
-  useEffect(() => {
+  useResetWhen([autoVolumeConfigs, selectedHostUid, selectedDatabase], () => {
     if (!selectedDatabase || !autoVolumeConfigs) return;
     const config = autoVolumeConfigs[dbKey(selectedHostUid, selectedDatabase)];
     if (config) {
@@ -225,11 +230,11 @@ export default function SetAutomationVolumeModal() {
         index: String(config.index_ext_page || extensionPages),
       } : null);
     }
-  }, [autoVolumeConfigs, selectedHostUid, selectedDatabase]);
+  });
 
-  useEffect(() => {
+  useResetWhen([pageSize, loadedExtPages], () => {
     if (pageSize && loadedExtPages) setCombinedAddSize(pagesToMib(loadedExtPages, pageSize));
-  }, [pageSize, loadedExtPages]);
+  });
 
   // Below AUTO_ADD_PAGES_MIN pages CMS adds nothing (0 or less) or rounds up
   // to that many, so the size starts there.

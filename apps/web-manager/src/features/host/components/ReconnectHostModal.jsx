@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { loginToHost, closeReconnectModal, clearHostError, revokeHostLogin, forgetHostSession, setSelectedHost } from '../hostSlice';
 import { clearReconnectingHost } from '../../../api/apiClient';
@@ -8,6 +8,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 export default function ReconnectHostModal() {
   const CM = useCM();
@@ -25,16 +26,16 @@ export default function ReconnectHostModal() {
   const isUnreachable = useSelector((state) => state.host.reconnectReasons?.[reconnectHostUid] === 'unreachable');
   const [password, setPassword] = useState('');
 
-  useEffect(() => {
+  useResetWhen([reconnectHostUid], () => {
     setPassword('');
-  }, [reconnectHostUid]);
+  });
 
-  useEffect(() => {
+  useResetWhen([isReconnectModalOpen], () => {
     if (isReconnectModalOpen) {
       setLocalError(null);
       setIsReconnecting(false);
     }
-  }, [isReconnectModalOpen]);
+  });
 
   if (!isReconnectModalOpen) return null;
 

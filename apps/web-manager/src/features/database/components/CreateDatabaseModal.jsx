@@ -44,6 +44,7 @@ import {
   isValidGeneralVolumeSize,
   volumeSizeMbToPages,
 } from '../databaseVolumeValidation';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // The engine takes 4K-16K and turns any other size into one of them.
 const PAGE_SIZES = DB_PAGE_SIZES;
@@ -217,7 +218,7 @@ export default function CreateDatabaseModal() {
   // reset above, so a late-resolving fetch still populates the path fields
   // — merging via prev.x || dir rather than replacing, so it never clobbers
   // a value the user (or the fetch above) has already set.
-  useEffect(() => {
+  useResetWhen([isCreateDatabaseModalOpen, hostEnv?.CUBRID_DATABASES], () => {
     if (!isCreateDatabaseModalOpen) return;
     const cachedDir = hostEnv?.CUBRID_DATABASES;
     if (!cachedDir) return;
@@ -228,7 +229,7 @@ export default function CreateDatabaseModal() {
       logVolPath: prev.logVolPath || cachedDir,
       volumes: prev.volumes.map(vol => ({ ...vol, path: vol.path || cachedDir }))
     }));
-  }, [isCreateDatabaseModalOpen, hostEnv?.CUBRID_DATABASES]);
+  });
 
   useEffect(() => {
     const { dbName, baseDir } = formData;

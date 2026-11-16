@@ -25,6 +25,7 @@ import { ModalStatusLoading,
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -66,7 +67,9 @@ export default function DeleteDatabaseModal() {
   const [dbId, setDbId] = useState('dba');
   const [password, setPassword] = useState('');
 
-  useEffect(() => {
+  // Only when the modal opens: a successful delete clears selectedDatabase,
+  // and re-running this then would reset the success view to the form.
+  useResetWhen([isDeleteDBModalOpen], () => {
     if (isDeleteDBModalOpen && selectedDatabase && selectedHostUid) {
       setStep(1);
       setDbId('dba');
@@ -75,8 +78,12 @@ export default function DeleteDatabaseModal() {
       setJobStatus(null);
       setDeletingDb('');
       setWarnings([]);
-      resetAction();
       setFetchingVolumes(true);
+    }
+  });
+  useEffect(() => {
+    if (isDeleteDBModalOpen && selectedDatabase && selectedHostUid) {
+      resetAction();
       databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
         .then(res => {
           if (res?.spaceinfo) {

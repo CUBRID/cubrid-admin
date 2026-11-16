@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isDesktopApp } from '../isDesktopApp';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -8,6 +8,7 @@ import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // For comparing workspace folders as typed: no surrounding spaces or
 // trailing separator ("/ws/" is "/ws").
@@ -50,35 +51,34 @@ export default function DesktopWorkspaceSettingsPage() {
   const [startStatus, setStartStatus] = useState({ state: 'idle' });
   const navigate = useNavigate();
 
-  const loadInfo = useCallback(async () => {
-    if (!bridge) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const [next, setupRequired, startupError] = await Promise.all([
-        bridge.getWorkspaceInfo(),
-        bridge.isWorkspaceSetupRequired(),
-        bridge.getWorkspaceStartupError?.() ?? null,
-      ]);
-      setInfo(next);
-      setWorkspaceRoot(next.workspaceRoot);
-      setSetupMode(setupRequired);
-      // The configured workspace failed at launch: say why (a WORKSPACE_* code).
-      if (startupError) setError(desktopErrorText({ message: startupError }, CM, CM.workspaceSaveFailedMsg));
-    } catch (err) {
-      setError(desktopErrorText(err, CM, CM.workspaceSettingsLoadFailedMsg));
-    } finally {
-      setLoading(false);
-    }
-  }, [bridge]);
-
+  // Without a bridge (not the desktop app) there is nothing to read.
+  useResetWhen([bridge], () => {
+    if (!bridge) setLoading(false);
+  });
   useEffect(() => {
+    if (!bridge) return;
+    const loadInfo = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [next, setupRequired, startupError] = await Promise.all([
+          bridge.getWorkspaceInfo(),
+          bridge.isWorkspaceSetupRequired(),
+          bridge.getWorkspaceStartupError?.() ?? null,
+        ]);
+        setInfo(next);
+        setWorkspaceRoot(next.workspaceRoot);
+        setSetupMode(setupRequired);
+        // The configured workspace failed at launch: say why (a WORKSPACE_* code).
+        if (startupError) setError(desktopErrorText({ message: startupError }, CM, CM.workspaceSaveFailedMsg));
+      } catch (err) {
+        setError(desktopErrorText(err, CM, CM.workspaceSettingsLoadFailedMsg));
+      } finally {
+        setLoading(false);
+      }
+    };
     void loadInfo();
-  }, [loadInfo]);
+  }, [bridge, CM]);
 
   // A slow start shows its time; nothing fails only because it is slow.
   useEffect(() => {

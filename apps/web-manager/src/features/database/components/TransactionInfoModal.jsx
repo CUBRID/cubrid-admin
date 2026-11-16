@@ -12,6 +12,7 @@ import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLo
 import { TablePagination } from '../../../components/ds/feedback/Pagination';
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 const PAGE_SIZE = 20;
 
@@ -45,9 +46,9 @@ export default function TransactionInfoModal() {
   }, [transactions, sortDirection]);
   const pager = useClientPagination(sortedTransactions, PAGE_SIZE, `${isTransactionInfoModalOpen}:${selectedHostUid}:${selectedDatabase}`);
   // A selection on another page can't be seen, so Kill must not act on it.
-  useEffect(() => {
+  useResetWhen([pager.page], () => {
     setSelectedTranIndex(null);
-  }, [pager.page]);
+  });
 
   // killtransaction/gettransactioninfo (CUBRID 11+) don't take dbuser/dbpasswd —
   // they run under the already-authenticated CMS session, so there's nothing
@@ -81,18 +82,25 @@ export default function TransactionInfoModal() {
     }
   };
 
-  useEffect(() => {
+  useResetWhen([isTransactionInfoModalOpen, selectedHostUid, selectedDatabase], () => {
     if (isTransactionInfoModalOpen) {
       setSelectedTranIndex(null);
-      fetchTransactionInfo();
     } else {
       // Reset while hidden so the next open starts on the loading state
       // rather than the previous database's list.
-      requestIdRef.current += 1;
       setTransactions([]);
       setHasLoaded(false);
       setLoading(false);
       setErrorMsg('');
+    }
+  });
+  useEffect(() => {
+    if (isTransactionInfoModalOpen) {
+      const read = async () => { await fetchTransactionInfo(); };
+      void read();
+    } else {
+      // A read still in flight for the previous open must not land.
+      requestIdRef.current += 1;
     }
   }, [isTransactionInfoModalOpen, selectedHostUid, selectedDatabase]);
 

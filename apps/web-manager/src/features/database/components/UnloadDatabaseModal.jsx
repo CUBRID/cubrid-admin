@@ -21,6 +21,7 @@ import {
   ModalStatusLoading,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 const INITIAL_FORM_DATA = {
   targetDbName: '',
@@ -87,6 +88,19 @@ export default function UnloadDatabaseModal() {
     }
   }, [selectedHostUid, selectedDatabase, activeDatabases]);
 
+  useResetWhen([isUnloadDBModalOpen, selectedDatabase, currentDb, selectedHostUid], () => {
+    if (isUnloadDBModalOpen && selectedDatabase) {
+      setFormData({
+        ...INITIAL_FORM_DATA,
+        targetDbName: selectedDatabase,
+        targetDirectory: currentDb?.dbdir || '',
+        dbUsername: 'dba',
+        dbPassword: '',
+        fileForHash: currentDb?.dbdir ? `${currentDb.dbdir}/hashfile` : '',
+        prefixOutputFile: selectedDatabase || '',
+      });
+    }
+  });
   useEffect(() => {
     if (isUnloadDBModalOpen && selectedDatabase) {
       resetAction();
@@ -97,16 +111,8 @@ export default function UnloadDatabaseModal() {
       if (selectedHostUid && !currentDb) {
         dispatch(fetchDatabaseStartInfo(selectedHostUid));
       }
-      setFormData({
-        ...INITIAL_FORM_DATA,
-        targetDbName: selectedDatabase,
-        targetDirectory: currentDb?.dbdir || '',
-        dbUsername: 'dba',
-        dbPassword: '',
-        fileForHash: currentDb?.dbdir ? `${currentDb.dbdir}/hashfile` : '',
-        prefixOutputFile: selectedDatabase || '',
-      });
-      fetchTables();
+      const read = async () => { await fetchTables(); };
+      void read();
     }
   }, [isUnloadDBModalOpen, selectedDatabase, currentDb, selectedHostUid, dispatch, fetchTables, resetAction]);
 

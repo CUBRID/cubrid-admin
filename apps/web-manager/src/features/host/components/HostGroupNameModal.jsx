@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeCreateGroupModal,
   closeRenameGroupModal,
@@ -12,6 +12,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 export default function HostGroupNameModal() {
   const CM = useCM();
@@ -31,11 +32,11 @@ export default function HostGroupNameModal() {
   const [name, setName] = useState('');
   const [localError, setLocalError] = useState('');
 
-  useEffect(() => {
+  useResetWhen([isOpen, isRename, groupToEditName], () => {
     if (!isOpen) return;
     setName(isRename ? (groupToEditName || '') : '');
     setLocalError('');
-  }, [isOpen, isRename, groupToEditName]);
+  });
 
   if (!isOpen) return null;
 

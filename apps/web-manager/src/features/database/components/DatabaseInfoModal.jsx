@@ -14,6 +14,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { Table } from '../../../components/ds/layout/Table';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -47,13 +48,13 @@ export default function DatabaseInfoModal() {
   }, [isDatabaseInfoModalOpen, selectedHostUid, isAuthorized, hostEnv, dispatch]);
 
   // Reset state when modal opens
-  useEffect(() => {
+  useResetWhen([isDatabaseInfoModalOpen], () => {
     if (isDatabaseInfoModalOpen) {
       setView(VIEW_FORM);
       setDumpBoth(false);
       setErrorMsg('');
     }
-  }, [isDatabaseInfoModalOpen]);
+  });
 
   if (!isDatabaseInfoModalOpen) return null;
 

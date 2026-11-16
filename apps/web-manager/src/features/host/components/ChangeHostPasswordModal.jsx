@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { checkCmsPassword, CMS_PASSWORD_MAX_BYTES } from '@api-interfaces';
 import { setHostPassword, editHost, loginToHostWithSideEffects, closeChangePasswordModal, clearHostError } from '../hostSlice';
@@ -8,6 +8,7 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 export default function ChangeHostPasswordModal() {
   const CM = useCM();
@@ -21,7 +22,7 @@ export default function ChangeHostPasswordModal() {
   });
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
+  useResetWhen([isChangePasswordModalOpen], () => {
     if (isChangePasswordModalOpen) {
       setFormData({
         password: '',
@@ -30,7 +31,7 @@ export default function ChangeHostPasswordModal() {
       setErrors({});
       setIsSuccess(false);
     }
-  }, [isChangePasswordModalOpen]);
+  });
 
   if (!isChangePasswordModalOpen) return null;
 

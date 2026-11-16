@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { addHost,
   clearHostError,
@@ -22,6 +22,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 export default function AddHostModal({ isOpen, onClose }) {
   const CM = useCM();
@@ -49,7 +50,7 @@ export default function AddHostModal({ isOpen, onClose }) {
       .map(([groupId, group]) => ({ value: groupId, label: group.name })),
   ], [hostGroups, CM]);
 
-  useEffect(() => {
+  useResetWhen([isOpen, initialHostData], () => {
     if (isOpen) {
       if (initialHostData) {
         setFormData({
@@ -66,7 +67,7 @@ export default function AddHostModal({ isOpen, onClose }) {
       setErrors({});
       setConnectionTest(null);
     }
-  }, [isOpen, initialHostData]);
+  });
 
   if (!isOpen) return null;
 

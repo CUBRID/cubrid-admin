@@ -114,6 +114,7 @@ import { useHostActivation } from '../../host/useHostActivation';
 import { useRefillNavigatorLists } from '../sidebar/useRefillNavigatorLists';
 import { menuOffReason } from '../menuOffReason';
 import { isCmsAdminHost } from '../../host/cmsAdmin';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 // A selection updater keeping only the names in `namesText` (newline-joined).
 const keepOnly = (namesText) => (prev) => {
@@ -255,20 +256,20 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const databases = databasesByHost[selectedHostUid] || [];
   // A deleted (or renamed) database or broker leaves the selection, so it
   // can't be acted on unseen, or come back selected under a reused name.
-  useEffect(() => {
+  useResetWhen([navigatorDbNames], () => {
     setSelectedDbNames(keepOnly(navigatorDbNames));
-  }, [navigatorDbNames]);
-  useEffect(() => {
+  });
+  useResetWhen([navigatorBrokerNames], () => {
     setSelectedBrokerNames(keepOnly(navigatorBrokerNames));
-  }, [navigatorBrokerNames]);
+  });
 
   // The database tree remounts per host; its multi-selection starts empty too.
-  useEffect(() => {
+  useResetWhen([selectedHostUid], () => {
     setSelectedDbNames(new Set());
     setDbMultiContextMenu(null);
     setSelectedBrokerNames(new Set());
     setBrokerMultiContextMenu(null);
-  }, [selectedHostUid]);
+  });
 
   // One action on several selected brokers, one broker at a time.
   const handleMultiBrokerAction = (action, brokers) => {

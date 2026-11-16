@@ -18,6 +18,7 @@ import {
   ModalStatusLoading,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
 
 export default function CheckDatabaseModal() {
   const CM = useCM();
@@ -33,13 +34,15 @@ export default function CheckDatabaseModal() {
   const [resultJob, setResultJob] = useState(null);
   const [repair, setRepair] = useState(false);
 
-  useEffect(() => {
+  useResetWhen([isCheckDatabaseModalOpen], () => {
     if (isCheckDatabaseModalOpen) {
       setRepair(false);
       setResultJob(null);
       setJobStatus(null);
-      resetAction();
     }
+  });
+  useEffect(() => {
+    if (isCheckDatabaseModalOpen) resetAction();
   }, [isCheckDatabaseModalOpen, resetAction]);
 
   if (!isCheckDatabaseModalOpen) return null;
