@@ -59,6 +59,39 @@ describe('GlobalExceptionFilter', () => {
     expect(String(warn.mock.calls[0][0])).toMatch(/^Unauthorized \[/);
   });
 
+  it.each([
+    ['a wrong password (401)', () => AuthError.InvalidCredentials({ userId: 'u' }), 401, /^Unauthorized \[AUTH:INVALID_CREDENTIALS\]/],
+    ['a request without the CSRF header (403)', () => AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' }), 403, /^Forbidden \[AUTH:PERMISSION_DENIED\]/],
+    ['a refresh racing another for the same token (503)', () => AuthError.RefreshInProgress(), 503, /^Service Unavailable \[AUTH:REFRESH_IN_PROGRESS\]/],
+  ])('logs %s as one warning line, with no stack trace and no ERROR', (_name, make, status, line) => {
+    const filter = new GlobalExceptionFilter();
+    const logger = (filter as any).logger;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const { host, res } = mockHost('/api/auth/login');
+
+    filter.catch(make(), host);
+
+    expect(res.statusCode).toBe(status);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]).toHaveLength(2);
+    expect(String(warn.mock.calls[0][0])).toMatch(line);
+  });
+
+  it('keeps another permission refusal (not the CSRF header) as an ERROR', () => {
+    const filter = new GlobalExceptionFilter();
+    const logger = (filter as any).logger;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const { host } = mockHost('/api/auth/login');
+
+    filter.catch(AuthError.PermissionDenied({ reason: 'NOT_ON_DESKTOP' }), host);
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a CMS-side 401 (lost CMS token) as an ERROR with its details', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;

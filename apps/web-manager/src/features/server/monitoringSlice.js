@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import monitoringApi from './monitoringApi';
 import { computeBrokerRates, cpuUsagePercent, mapDiskInfo } from './hostMetrics';
-import apiClient from '../../api/apiClient';
+import { appSessionKey } from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 import { readSharedBrokerList } from '../broker/brokerSlice';
 import { extractHaHeartbeatNodes } from '../host/haPeerUtils';
@@ -17,7 +17,7 @@ const DISK_REFRESH_MS = 30 * 1000;
 const monitoringReads = createSharedReads();
 const heartbeatReads = createSharedReads();
 // Do not share a read across login sessions.
-const readKey = (hostUid) => JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid]);
+const readKey = (hostUid) => JSON.stringify([appSessionKey(), hostUid]);
 const readHeartbeat = (hostUid) => heartbeatReads(readKey(hostUid), () => monitoringApi.getHaHeartbeatList(hostUid));
 const readHeartbeatNodes = (hostUid) => heartbeatReads(`${readKey(hostUid)}:nodes`,
   () => monitoringApi.getHaHeartbeatList(hostUid, { nodesOnly: true }));

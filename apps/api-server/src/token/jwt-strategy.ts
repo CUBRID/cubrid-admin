@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ConfigService } from '@config/config.service';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
+import type { Request } from 'express';
 import { AuthError } from '@error/auth/auth-error';
 import { TokenBlacklistService } from './token-blacklist.service';
+import { readAccessCookie } from './auth-cookies';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -12,7 +14,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly tokenBlacklistService: TokenBlacklistService
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Only the httpOnly cookie: page scripts never hold the token.
+      jwtFromRequest: (req: Request) => readAccessCookie(req) ?? null,
       ignoreExpiration: false,
       secretOrKey: config.getSecretKey(),
     });

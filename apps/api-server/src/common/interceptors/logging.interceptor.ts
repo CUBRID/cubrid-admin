@@ -2,6 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor, Logger } fr
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { formatAuditLog, resolveClientIp } from '@util';
+import { isExpectedAuthRejection } from '@error/auth/auth-error';
 
 /**
  * Interceptor for logging incoming requests and outgoing responses.
@@ -48,8 +49,9 @@ export class LoggingInterceptor implements NestInterceptor {
             durationMs: Date.now() - now,
             message: error.message,
           });
-          // 401: a request without a valid login, logged without a stack trace.
-          if (error.status === 401) {
+          // A request without a valid login (401, or our own AuthError such
+          // as a spent refresh token): logged without a stack trace.
+          if (error.status === 401 || isExpectedAuthRejection(error)) {
             this.logger.warn(line);
           } else {
             this.logger.error(line, error.stack);

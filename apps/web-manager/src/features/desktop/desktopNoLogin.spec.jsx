@@ -46,7 +46,7 @@ const store = () => configureStore({
 });
 
 describe('desktop app without an app login', () => {
-  it('starts signed in on the desktop, and signed out in a browser without a token', async () => {
+  it('starts signed in on the desktop, and signed out in a browser without a session', async () => {
     // authSlice reads it once, as it loads.
     vi.resetModules();
     window.desktopConfig = { isDesktop: true };
@@ -54,8 +54,17 @@ describe('desktop app without an app login', () => {
 
     delete window.desktopConfig;
     vi.resetModules();
-    localStorage.removeItem('token');
+    localStorage.removeItem('cwm-session-expires-at');
     expect((await import('../auth/authSlice')).default(undefined, { type: 'init' }).isAuthenticated).toBe(false);
+
+    // A session kept from an earlier login counts as signed in (the cookies decide the rest).
+    vi.resetModules();
+    localStorage.setItem('cwm-session-expires-at', JSON.stringify({ expiresAt: Date.now() + 60_000, expiresIn: 86400 }));
+    try {
+      expect((await import('../auth/authSlice')).default(undefined, { type: 'init' }).isAuthenticated).toBe(true);
+    } finally {
+      localStorage.removeItem('cwm-session-expires-at');
+    }
   });
 
   it('shows no account or logout in the header on the desktop, but does in a browser', async () => {

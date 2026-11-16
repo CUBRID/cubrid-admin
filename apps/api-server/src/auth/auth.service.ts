@@ -9,11 +9,11 @@ import { AuthError } from '@error/auth/auth-error';
 import { UserError } from '@error/user/user-error';
 import { HandleAuthErrors } from '@common';
 import { passwordValidityChecker } from '@util';
-import { AuthTokens, CreateLoginResponse } from '@api-interfaces';
 import {
   ACCESS_TOKEN_EXPIRES,
   ACCESS_TOKEN_EXPIRES_SEC,
 } from '@token/token.constants';
+import { AuthTokens } from '@token/auth-cookies';
 import { RefreshTokenService } from '@token/refresh-token.service';
 import { TokenBlacklistService } from '@token/token-blacklist.service';
 
@@ -54,6 +54,10 @@ export class AuthService {
       await this.refreshTokenService.revokeFamily(consumeResult.familyId);
       throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_REUSED' });
     }
+    if (consumeResult.kind === 'busy') {
+      // Not the token's fault: the cookies stay for the next try (503).
+      throw AuthError.RefreshInProgress();
+    }
     if (consumeResult.kind === 'invalid') {
       throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_INVALID' });
     }
@@ -61,7 +65,7 @@ export class AuthService {
     const { session } = consumeResult;
     try {
       const tokens = await this.issueTokenPair(session.record.userId, session.record.familyId);
-      await this.refreshTokenService.commitConsume(session);
+      await this.refreshTokenService.commitConsume(session, tokens.refreshToken);
       return tokens;
     } catch (err) {
       await this.refreshTokenService.rollbackConsume(session);
@@ -69,14 +73,20 @@ export class AuthService {
     }
   }
 
+  /**
+   * Ends the session the browser's cookies hold. Works with an expired or
+   * missing access token too, so a logout always revokes the refresh token.
+   */
   @HandleAuthErrors()
-  async logout(
-    accessJti: string | undefined,
-    accessExp: number | undefined,
-    refreshToken?: string
-  ): Promise<void> {
-    if (accessJti && accessExp) {
-      await this.tokenBlacklistService.add(accessJti, new Date(accessExp * 1000));
+  async logout(accessToken?: string, refreshToken?: string): Promise<void> {
+    if (accessToken) {
+      const payload = await this.jwt
+        .verifyAsync<{ jti?: string; exp?: number; type?: string }>(accessToken)
+        .catch(() => null);
+      // An expired or forged token needs no blacklist entry.
+      if (payload?.type === 'access' && payload.jti && payload.exp) {
+        await this.tokenBlacklistService.add(payload.jti, new Date(payload.exp * 1000));
+      }
     }
     if (refreshToken) {
       await this.refreshTokenService.revoke(refreshToken);
@@ -103,6 +113,6 @@ export class AuthService {
       { expiresIn: ACCESS_TOKEN_EXPIRES }
     );
     const { token: refreshToken } = await this.refreshTokenService.create(userId, familyId);
-    return CreateLoginResponse(token, refreshToken, ACCESS_TOKEN_EXPIRES_SEC);
+    return { token, refreshToken, expiresIn: ACCESS_TOKEN_EXPIRES_SEC };
   }
 }
