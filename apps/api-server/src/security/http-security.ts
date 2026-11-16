@@ -5,10 +5,9 @@ import type { RequestHandler } from 'express';
  * Content-Security-Policy for the web screens the server sends (server mode
  * only; the desktop app loads its screens from its own bundle).
  *
- * Everything is loaded from this server: the bundle, its fonts, the Monaco
- * editor and its worker (a file under /assets), the PWA manifest and service
- * worker, and the API. The exceptions:
- * - style-src 'unsafe-inline': the UI libraries and the Monaco editor add
+ * Everything is loaded from this server: the bundle and its fonts, the SQL
+ * editor, the PWA manifest and service worker, and the API. The exceptions:
+ * - style-src 'unsafe-inline': the UI libraries and the SQL editor add
  *   <style> elements and style attributes at run time.
  * - img-src/font-src data: and img-src blob:: images and fonts the CSS and
  *   the editor embed as data: URLs, and images the screens build in memory.
