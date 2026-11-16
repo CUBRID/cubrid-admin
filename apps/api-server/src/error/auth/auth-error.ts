@@ -55,3 +55,14 @@ export class AuthError extends AppError {
     return new AuthError('AUTH', AuthErrorCode.UNKNOWN, additionalData, originalError);
   }
 }
+
+/**
+ * A request turned away for its login or request header (a wrong password,
+ * an invalid or missing JWT, a spent refresh token, no CSRF header): expected traffic,
+ * logged as a warning without a stack, not as a server fault.
+ */
+export function isExpectedAuthRejection(error: unknown): boolean {
+  if (!(error instanceof AuthError) || error.kind !== 'AUTH') return false;
+  if (error.code === AuthErrorCode.INVALID_TOKEN || error.code === AuthErrorCode.INVALID_CREDENTIALS) return true;
+  return error.code === AuthErrorCode.PERMISSION_DENIED && error.additionalData?.reason === 'CSRF_HEADER_MISSING';
+}
