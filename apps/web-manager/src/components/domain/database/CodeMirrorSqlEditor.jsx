@@ -6,6 +6,7 @@ import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/sea
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { sqlHighlighting, sqlLanguage } from './sqlLanguage';
 import { useCM } from '../../../constants/useCM';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -81,8 +82,7 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
   const CM = useCM();
   const hostRef = useRef(null);
   const viewRef = useRef(null);
-  const latest = useRef({});
-  latest.current = { CM, onChange, readOnly, placeholder };
+  const latest = useLatestRef({ CM, onChange, readOnly, placeholder });
   const compartments = useRef({
     readOnly: new Compartment(), theme: new Compartment(), phrases: new Compartment(), placeholder: new Compartment(),
   });

@@ -13,6 +13,7 @@ import { confHighlighting, confLanguage } from './confLanguage';
 import { confContextAt, confKeyAt } from './confContext';
 import { confParams, confSectionNames, describeGuard, paramHintDom } from './confParams';
 import { confDiagnostics } from './confLint';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -112,8 +113,8 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
   const CM = useCM();
   const hostRef = useRef(null);
   const viewRef = useRef(null);
-  const latest = useRef({});
-  latest.current = { CM, kind, paramSchemas, onChange, readOnly, placeholder };
+  // What the view reads later, and the value and test id it is made with.
+  const latest = useLatestRef({ CM, kind, paramSchemas, onChange, readOnly, placeholder, value, testId });
   const compartments = useRef({
     readOnly: new Compartment(), theme: new Compartment(), phrases: new Compartment(), placeholder: new Compartment(),
   });
@@ -129,7 +130,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
       if (where.place === 'comment') return null;
       if (!context.explicit && !where.text && where.place !== 'heading') return null;
       const params = paramsFor(k, schemas);
-      let options = [];
+      let options;
       if (where.place === 'heading') {
         options = confSectionNames(k).map((label) => ({ label, type: 'namespace' }));
       } else if (where.place === 'key') {
@@ -186,14 +187,14 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),
         phrases.of(EditorState.phrases.of(ctx().CM.codeMirrorPhrases ?? {})),
-        EditorView.contentAttributes.of({ 'data-testid': testId, spellcheck: 'false' }),
+        EditorView.contentAttributes.of({ 'data-testid': latest.current.testId, spellcheck: 'false' }),
         // Only edits in the editor: a new state from outside (setState) does not come here.
         EditorView.updateListener.of((update) => {
           if (update.docChanged) ctx().onChange?.(update.state.doc.toString());
         }),
       ],
     });
-    const view = new EditorView({ parent: hostRef.current, state: stateFor.current(value ?? '') });
+    const view = new EditorView({ parent: hostRef.current, state: stateFor.current(latest.current.value ?? '') });
     viewRef.current = view;
     // Follow the app's light/dark switch.
     const observer = new MutationObserver(() => {
@@ -205,8 +206,8 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
       view.destroy();
       viewRef.current = null;
     };
-    // The view is made once; later props reach it through `latest` and the effects below.
-  }, []);
+    // The view is made once (the ref is stable); later props reach it through `latest` and the effects below.
+  }, [latest]);
 
   // A new value from outside (load, reload, undo all changes) replaces the
   // text with a new state: not in the undo history, and not sent to onChange.
