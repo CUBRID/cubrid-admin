@@ -113,8 +113,13 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
   const hostRef = useRef(null);
   const viewRef = useRef(null);
   const latest = useRef({});
-  latest.current = { CM, kind, paramSchemas, onChange };
-  const compartments = useRef({ readOnly: new Compartment(), theme: new Compartment(), phrases: new Compartment() });
+  latest.current = { CM, kind, paramSchemas, onChange, readOnly, placeholder };
+  const compartments = useRef({
+    readOnly: new Compartment(), theme: new Compartment(), phrases: new Compartment(), placeholder: new Compartment(),
+  });
+  // Makes the editor state for a text: a text from outside starts a new state,
+  // so undo never goes back past it (to the empty editor before the load).
+  const stateFor = useRef(null);
 
   useEffect(() => {
     const ctx = () => latest.current;
@@ -158,38 +163,37 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
       };
     });
 
-    const { readOnly: ro, theme, phrases } = compartments.current;
-    const view = new EditorView({
-      parent: hostRef.current,
-      state: EditorState.create({
-        doc: value ?? '',
-        extensions: [
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          highlightActiveLine(),
-          drawSelection(),
-          history(),
-          search({ top: true }),
-          highlightSelectionMatches(),
-          confLanguage,
-          confHighlighting,
-          autocompletion({ override: [complete], icons: false }),
-          hint,
-          // Debounced, so a large file is not re-checked on every key.
-          linter((v) => confDiagnostics(ctx().CM, v.state.doc, ctx().kind, ctx().paramSchemas), { delay: 500 }),
-          lintGutter(),
-          keymap.of([...completionKeymap, ...searchKeymap, ...historyKeymap, ...lintKeymap, indentWithTab, ...defaultKeymap]),
-          placeholderText(placeholder ?? ''),
-          ro.of(EditorState.readOnly.of(readOnly)),
-          theme.of(isDark() ? darkTheme : lightTheme),
-          phrases.of(EditorState.phrases.of(latest.current.CM.codeMirrorPhrases ?? {})),
-          EditorView.contentAttributes.of({ 'data-testid': testId, spellcheck: 'false' }),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) ctx().onChange?.(update.state.doc.toString());
-          }),
-        ],
-      }),
+    const { readOnly: ro, theme, phrases, placeholder: hintText } = compartments.current;
+    stateFor.current = (doc) => EditorState.create({
+      doc,
+      extensions: [
+        lineNumbers(),
+        highlightActiveLineGutter(),
+        highlightActiveLine(),
+        drawSelection(),
+        history(),
+        search({ top: true }),
+        highlightSelectionMatches(),
+        confLanguage,
+        confHighlighting,
+        autocompletion({ override: [complete], icons: false }),
+        hint,
+        // Debounced, so a large file is not re-checked on every key.
+        linter((v) => confDiagnostics(ctx().CM, v.state.doc, ctx().kind, ctx().paramSchemas), { delay: 500 }),
+        lintGutter(),
+        keymap.of([...completionKeymap, ...searchKeymap, ...historyKeymap, ...lintKeymap, indentWithTab, ...defaultKeymap]),
+        hintText.of(placeholderText(ctx().placeholder ?? '')),
+        ro.of(EditorState.readOnly.of(ctx().readOnly)),
+        theme.of(isDark() ? darkTheme : lightTheme),
+        phrases.of(EditorState.phrases.of(ctx().CM.codeMirrorPhrases ?? {})),
+        EditorView.contentAttributes.of({ 'data-testid': testId, spellcheck: 'false' }),
+        // Only edits in the editor: a new state from outside (setState) does not come here.
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) ctx().onChange?.(update.state.doc.toString());
+        }),
+      ],
     });
+    const view = new EditorView({ parent: hostRef.current, state: stateFor.current(value ?? '') });
     viewRef.current = view;
     // Follow the app's light/dark switch.
     const observer = new MutationObserver(() => {
@@ -204,15 +208,18 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
     // The view is made once; later props reach it through `latest` and the effects below.
   }, []);
 
-  // A new value from outside (load, reload, undo all changes) replaces the text.
+  // A new value from outside (load, reload, undo all changes) replaces the
+  // text with a new state: not in the undo history, and not sent to onChange.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const text = value ?? '';
-    if (view.state.doc.toString() !== text) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
-    }
+    if (view.state.doc.toString() !== text) view.setState(stateFor.current(text));
   }, [value]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: compartments.current.placeholder.reconfigure(placeholderText(placeholder ?? '')) });
+  }, [placeholder]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: compartments.current.readOnly.reconfigure(EditorState.readOnly.of(readOnly)) });

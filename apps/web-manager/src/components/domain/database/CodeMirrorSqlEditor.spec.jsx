@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { CompletionContext } from '@codemirror/autocomplete';
+import { undo } from '@codemirror/commands';
 import { syntaxTree } from '@codemirror/language';
 import CodeMirrorSqlEditor from './CodeMirrorSqlEditor';
 import { sqlLanguage } from './sqlLanguage';
@@ -65,6 +66,27 @@ describe('CodeMirrorSqlEditor', () => {
     render({ value: 'UPDATE t SET a = 1', onChange });
     expect(viewOf().state.doc.toString()).toBe('UPDATE t SET a = 1');
     expect(onChange).not.toHaveBeenCalledWith('UPDATE t SET a = 1');
+  });
+
+  it('keeps a loaded text when undo goes all the way back', () => {
+    const onChange = vi.fn();
+    // The chunk is already loaded: the editor shows '' first, then the plan.
+    render({ value: '', onChange });
+    render({ value: 'SELECT 1 FROM db_root;', onChange });
+    const view = viewOf();
+    act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: ' -- x' } }));
+    expect(onChange).toHaveBeenLastCalledWith('SELECT 1 FROM db_root; -- x');
+    act(() => { while (undo(view)); });
+    expect(view.state.doc.toString()).toBe('SELECT 1 FROM db_root;');
+    expect(onChange).toHaveBeenLastCalledWith('SELECT 1 FROM db_root;');
+    expect(onChange).not.toHaveBeenCalledWith('');
+  });
+
+  it('shows the placeholder in the UI language', () => {
+    render({ value: '', placeholder: 'Enter SQL' });
+    expect(container.querySelector('.cm-placeholder')?.textContent).toBe('Enter SQL');
+    render({ value: '', placeholder: 'SQL 입력' });
+    expect(container.querySelector('.cm-placeholder')?.textContent).toBe('SQL 입력');
   });
 
   it('follows the app dark mode and the UI language of the find panel', async () => {

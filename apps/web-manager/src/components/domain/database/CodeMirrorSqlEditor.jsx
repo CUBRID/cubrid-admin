@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Annotation, Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, drawSelection, highlightActiveLine, keymap, placeholder as placeholderText } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
@@ -70,9 +70,6 @@ const darkTheme = EditorView.theme(withBase({
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(115, 175, 194, 0.25)' },
 }), { dark: true });
 
-// Marks a text set from the value prop, so it is not reported back through onChange.
-const fromProp = Annotation.define();
-
 const isDark = () => document.documentElement.classList.contains('dark');
 
 /**
@@ -85,40 +82,43 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
   const hostRef = useRef(null);
   const viewRef = useRef(null);
   const latest = useRef({});
-  latest.current = { onChange };
-  const compartments = useRef({ readOnly: new Compartment(), theme: new Compartment(), phrases: new Compartment() });
+  latest.current = { CM, onChange, readOnly, placeholder };
+  const compartments = useRef({
+    readOnly: new Compartment(), theme: new Compartment(), phrases: new Compartment(), placeholder: new Compartment(),
+  });
+  // Makes the editor state for a text: a text from outside starts a new state,
+  // so undo never goes back past it (to the empty editor before the plan loaded).
+  const stateFor = useRef(null);
 
   useEffect(() => {
-    const { readOnly: ro, theme, phrases } = compartments.current;
-    const view = new EditorView({
-      parent: hostRef.current,
-      state: EditorState.create({
-        doc: value ?? '',
-        extensions: [
-          highlightActiveLine(),
-          drawSelection(),
-          history(),
-          search({ top: true }),
-          highlightSelectionMatches(),
-          closeBrackets(),
-          sqlLanguage,
-          sqlHighlighting,
-          autocompletion({ icons: false }),
-          EditorView.lineWrapping,
-          keymap.of([...closeBracketsKeymap, ...completionKeymap, ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap]),
-          placeholderText(placeholder ?? ''),
-          ro.of(EditorState.readOnly.of(readOnly)),
-          theme.of(isDark() ? darkTheme : lightTheme),
-          phrases.of(EditorState.phrases.of(CM.codeMirrorPhrases ?? {})),
-          EditorView.contentAttributes.of({ 'data-testid': testId, spellcheck: 'false', 'aria-multiline': 'true' }),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged && !update.transactions.some((tr) => tr.annotation(fromProp))) {
-              latest.current.onChange?.(update.state.doc.toString());
-            }
-          }),
-        ],
-      }),
+    const ctx = () => latest.current;
+    const { readOnly: ro, theme, phrases, placeholder: hintText } = compartments.current;
+    stateFor.current = (doc) => EditorState.create({
+      doc,
+      extensions: [
+        highlightActiveLine(),
+        drawSelection(),
+        history(),
+        search({ top: true }),
+        highlightSelectionMatches(),
+        closeBrackets(),
+        sqlLanguage,
+        sqlHighlighting,
+        autocompletion({ icons: false }),
+        EditorView.lineWrapping,
+        keymap.of([...closeBracketsKeymap, ...completionKeymap, ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap]),
+        hintText.of(placeholderText(ctx().placeholder ?? '')),
+        ro.of(EditorState.readOnly.of(ctx().readOnly)),
+        theme.of(isDark() ? darkTheme : lightTheme),
+        phrases.of(EditorState.phrases.of(ctx().CM.codeMirrorPhrases ?? {})),
+        EditorView.contentAttributes.of({ 'data-testid': testId, spellcheck: 'false', 'aria-multiline': 'true' }),
+        // Only edits in the editor: a new state from outside (setState) does not come here.
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) ctx().onChange?.(update.state.doc.toString());
+        }),
+      ],
     });
+    const view = new EditorView({ parent: hostRef.current, state: stateFor.current(value ?? '') });
     viewRef.current = view;
     // Follow the app's light/dark switch.
     const observer = new MutationObserver(() => {
@@ -134,15 +134,18 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A new value from outside (the plan loaded into the edit dialog) replaces the text.
+  // A new value from outside (the plan loaded into the edit dialog) replaces the
+  // text with a new state: not in the undo history, and not sent to onChange.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const text = value ?? '';
-    if (view.state.doc.toString() !== text) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, annotations: fromProp.of(true) });
-    }
+    if (view.state.doc.toString() !== text) view.setState(stateFor.current(text));
   }, [value]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: compartments.current.placeholder.reconfigure(placeholderText(placeholder ?? '')) });
+  }, [placeholder]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: compartments.current.readOnly.reconfigure(EditorState.readOnly.of(readOnly)) });
