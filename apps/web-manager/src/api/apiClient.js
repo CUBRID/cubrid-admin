@@ -164,6 +164,13 @@ apiClient.interceptors.request.use((config) => {
 
 // This tab's app session: { expiresAt, expiresIn } or null (see setAppSession).
 let knownSession = null;
+let appSessionGeneration = 0;
+
+/**
+ * Changes with every login and logout in this tab (not with a refresh), so
+ * a shared read is never handed to another login session.
+ */
+export const appSessionKey = () => appSessionGeneration;
 
 // The app session's tokens live in httpOnly cookies the server sets; page
 // scripts never see them. A state-changing request must carry this header,
@@ -238,9 +245,9 @@ export const ACCESS_TOKEN_REFRESH_TIMEOUT_MS = 15000;
 // is used again, revokes the whole session. So one refresh path serves the
 // 401 handler, the timer before expiry, the window becoming visible again
 // (a laptop waking up) and the first request of an expired session; within
-// a tab one refresh runs at a time, and across tabs the Web Locks API (or,
-// without it, a lease in localStorage) lets one tab refresh while the others
-// use the cookies it got (the browser shares them between tabs).
+// a tab one refresh runs at a time, and across tabs the Web Locks API lets
+// one tab refresh while the others use the cookies it got (the browser
+// shares them between tabs).
 //
 // The page cannot read the httpOnly cookies, so it keeps when the access
 // token ends (from the server's expiresIn) in localStorage: not a secret,
@@ -313,65 +320,19 @@ const sessionRefreshEnabled = () => !isDesktopRuntime();
  * for the other tabs and schedules the refresh before it.
  */
 export const setAppSession = (session) => {
+  appSessionGeneration += 1;
   knownSession = session;
   writeStoredSession(session);
   scheduleSessionRefresh(session);
 };
 
-// Web Locks exist only in a secure context (https, or localhost). A page
-// opened over plain http on another address has none, so there tabs take
-// turns through a lease in localStorage instead: a tab writes its own lease,
-// waits a moment and reads it back; only the tab whose lease is still there
-// refreshes, and the others wait for it to finish and then use its cookies.
-// A lease left by a closed tab ends on its own.
-const STORAGE_LOCK_KEY = 'cwm-session-refresh-lock';
-const STORAGE_LOCK_LEASE_MS = ACCESS_TOKEN_REFRESH_TIMEOUT_MS + 5000;
-export const STORAGE_LOCK_SETTLE_MS = 100;
-const STORAGE_LOCK_POLL_MS = 100;
-const tabLockId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-const readStorageLease = () => {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY));
-  } catch {
-    return null;
-  }
-};
-
-async function withStorageLock(run) {
-  let lease = null;
-  try {
-    for (;;) {
-      const held = readStorageLease();
-      if (!held || !(held.until > Date.now())) {
-        lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
-        localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
-        await sleep(STORAGE_LOCK_SETTLE_MS);
-        // Two tabs that wrote at once: the later write is the one both read back.
-        if (readStorageLease()?.owner === tabLockId) break;
-        lease = null;
-      } else {
-        await sleep(STORAGE_LOCK_POLL_MS);
-      }
-    }
-  } catch {
-    // Storage unusable: refresh as this tab alone.
-    lease = null;
-  }
-  try {
-    return await run();
-  } finally {
-    try {
-      if (lease && readStorageLease()?.owner === tabLockId) localStorage.removeItem(STORAGE_LOCK_KEY);
-    } catch { /* storage unusable */ }
-  }
-}
-
-// One tab at a time across the browser.
+// One tab at a time across the browser. Web Locks exist in every secure
+// context (https, or localhost), which the Secure cookies need anyway; a
+// browser without them refreshes in this tab alone.
 const withSessionRefreshLock = (run) => (
   typeof navigator !== 'undefined' && navigator.locks?.request
     ? navigator.locks.request('cwm-session-refresh', run)
-    : withStorageLock(run)
+    : run()
 );
 
 // Another tab's refresh (or login) got new cookies: this tab already sends

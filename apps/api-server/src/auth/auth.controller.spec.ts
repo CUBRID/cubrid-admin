@@ -2,7 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthError } from '@error/auth/auth-error';
-import { ACCESS_COOKIE, REFRESH_COOKIE } from '@token/auth-cookies';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { authCookieNames, resetAuthCookieNamesForTest } from '@token/auth-cookies';
+
+// The cookie names come from an id kept in the storage; a temporary one here.
+const mockStorage = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-auth-cookies-'));
+jest.mock('../util/resolve-storage-path', () => ({ getStoragePath: () => mockStorage }));
+let ACCESS_COOKIE = '';
+let REFRESH_COOKIE = '';
+beforeAll(() => {
+  resetAuthCookieNamesForTest();
+  ({ access: ACCESS_COOKIE, refresh: REFRESH_COOKIE } = authCookieNames());
+});
+afterAll(() => fs.rmSync(mockStorage, { recursive: true, force: true }));
 
 const tokens = { token: 'access-jwt', refreshToken: 'refresh-opaque', expiresIn: 86400 };
 
@@ -41,6 +55,15 @@ describe('AuthController', () => {
       'refresh-opaque',
       expect.objectContaining({ httpOnly: true, secure: true, sameSite: 'strict', path: '/api/auth' })
     );
+  });
+
+  it('names the cookies with a tag of this installation, the same on every start', () => {
+    expect(ACCESS_COOKIE).toMatch(/^cwm_access_[0-9a-f]{12}$/);
+    expect(REFRESH_COOKIE).toBe(ACCESS_COOKIE.replace('cwm_access_', 'cwm_refresh_'));
+    const id = fs.readFileSync(path.join(mockStorage, 'instance-id'), 'utf8');
+    expect(ACCESS_COOKIE).not.toContain(id.slice(0, 12));
+    resetAuthCookieNamesForTest();
+    expect(authCookieNames().access).toBe(ACCESS_COOKIE);
   });
 
   it('refreshes from the refresh cookie', async () => {

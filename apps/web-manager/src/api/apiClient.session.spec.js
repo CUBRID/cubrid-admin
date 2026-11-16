@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 // One /auth/refresh stand-in shared by every copy of the module, as the one
 // server is shared by every tab, and one cookie jar, as the browser's is.
@@ -224,55 +224,12 @@ it('refreshes a short-lived token at half its life, not again and again', async 
   expect(server.calls.length).toBeLessThanOrEqual(12);
 });
 
-// Web Locks exist only in a secure context; a page opened over plain http
-// on another address has none, and tabs take turns through localStorage.
-describe('without Web Locks (http on an address other than localhost)', () => {
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
-    // The server takes a moment to answer, so the two refreshes overlap.
-    const answer = server.post;
-    server.post = vi.fn(async (...args) => {
-      await new Promise((resolve) => { setTimeout(resolve, 300); });
-      return answer(...args);
-    });
-  });
-
-  it('two tabs whose timers fire at the same moment call the server once and both stay signed in', async () => {
-    signedIn(10 * 60 * 1000);
-    const tabA = await openTab();
-    const tabB = await openTab();
-
-    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
-    expect(server.calls).toEqual(['r1']);
-    expect(server.revoked).toBe(false);
-    expect(server.jar.refresh).toBe('r2');
-    expect(await tabA.default.get('/a')).toEqual({ ok: true });
-    expect(await tabB.default.get('/b')).toEqual({ ok: true });
-    expect(localStorage.getItem('cwm-session-refresh-lock')).toBeNull();
-  });
-
-  it('two tabs sending requests with an expired cookie at once call the server once', async () => {
-    signedIn(-HOUR);
-    const tabA = await openTab();
-    const tabB = await openTab();
-
-    const both = Promise.all([tabA.default.get('/a'), tabB.default.get('/b')]);
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(await both).toEqual([{ ok: true }, { ok: true }]);
-    expect(server.calls).toEqual(['r1']);
-    expect(server.revoked).toBe(false);
-  });
-
-  it('does not wait for good on a lease left by a tab that was closed', async () => {
-    signedIn(-HOUR);
-    localStorage.setItem('cwm-session-refresh-lock', JSON.stringify({ owner: 'closed-tab', until: Date.now() + 20_000 }));
-    const tab = await openTab();
-
-    const answer = tab.default.get('/a');
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(server.calls).toEqual([]);
-    await vi.advanceTimersByTimeAsync(12_000);
-    expect(await answer).toEqual({ ok: true });
-    expect(server.calls).toEqual(['r1']);
-  });
+it('changes the session key on login and logout, not on a refresh', async () => {
+  signedIn(-HOUR);
+  const tab = await openTab();
+  const first = tab.appSessionKey();
+  await tab.refreshSession();
+  expect(tab.appSessionKey()).toBe(first);
+  tab.setAppSession(null);
+  expect(tab.appSessionKey()).not.toBe(first);
 });

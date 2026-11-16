@@ -54,6 +54,10 @@ export class AuthService {
       await this.refreshTokenService.revokeFamily(consumeResult.familyId);
       throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_REUSED' });
     }
+    if (consumeResult.kind === 'busy') {
+      // Not the token's fault: the cookies stay for the next try.
+      throw AuthError.InternalError({ reason: 'REFRESH_IN_PROGRESS' });
+    }
     if (consumeResult.kind === 'invalid') {
       throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_INVALID' });
     }

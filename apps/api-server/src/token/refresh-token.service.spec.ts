@@ -129,4 +129,42 @@ describe('RefreshTokenService', () => {
       expect((await service.consumeForRotation(t0)).kind).toBe('reused');
     });
   });
+
+  describe('a refresh of the same token already running', () => {
+    it('waits for it and then answers as for a token just rotated', async () => {
+      const { token: t0 } = await service.create('user1');
+      const first = await service.consumeForRotation(t0);
+      if (first.kind !== 'ok') throw new Error('rotation refused');
+
+      // The second request arrives between the rename and the commit.
+      const second = service.consumeForRotation(t0);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const { token: t1 } = await service.create('user1', first.session.record.familyId);
+      await service.commitConsume(first.session, t1);
+
+      const answer = await second;
+      expect(answer.kind).toBe('ok');
+      expect(answer.kind === 'ok' && answer.grace).toBe(true);
+    });
+
+    it('does not wait for a lock left by a crash', async () => {
+      const { token: t0 } = await service.create('user1');
+      const first = await service.consumeForRotation(t0);
+      if (first.kind !== 'ok') throw new Error('rotation refused');
+      const old = new Date(Date.now() - 60_000);
+      await fs.utimes(first.session.lockPath, old, old);
+
+      const started = Date.now();
+      expect((await service.consumeForRotation(t0)).kind).toBe('invalid');
+      expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    it('answers busy (cookies kept) when it does not finish in time', async () => {
+      const { token: t0 } = await service.create('user1');
+      const first = await service.consumeForRotation(t0);
+      if (first.kind !== 'ok') throw new Error('rotation refused');
+
+      expect((await service.consumeForRotation(t0)).kind).toBe('busy');
+    }, 10_000);
+  });
 });

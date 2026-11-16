@@ -15,4 +15,10 @@ export const REFRESH_TOKEN_EXPIRES_MS = 14 * 24 * 60 * 60 * 1000;
  */
 export const REFRESH_TOKEN_REUSE_GRACE_MS = 10 * 1000;
 
+/** How long a refresh waits for the same token's rotation already running. */
+export const REFRESH_IN_FLIGHT_WAIT_MS = 3000;
+export const REFRESH_IN_FLIGHT_POLL_MS = 50;
+/** A rotation lock older than this was left by a crash. */
+export const REFRESH_LOCK_STALE_MS = 30 * 1000;
+
 export const TOKEN_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;

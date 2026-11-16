@@ -6,10 +6,9 @@ import { LoginResponse } from '@api-interfaces';
 import { NotOnDesktop, Public } from '@common';
 import { AuthError, AuthErrorCode } from '@error/auth/auth-error';
 import {
-  ACCESS_COOKIE,
-  REFRESH_COOKIE,
   clearAuthCookies,
-  readCookie,
+  readAccessCookie,
+  readRefreshCookie,
   setAuthCookies,
 } from '@token/auth-cookies';
 
@@ -38,7 +37,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<LoginResponse> {
-    const refreshToken = readCookie(req, REFRESH_COOKIE);
+    const refreshToken = readRefreshCookie(req);
     try {
       if (!refreshToken) {
         throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_MISSING' });
@@ -62,7 +61,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response
   ): Promise<{ success: true }> {
     try {
-      await this.authService.logout(readCookie(req, ACCESS_COOKIE), readCookie(req, REFRESH_COOKIE));
+      await this.authService.logout(readAccessCookie(req), readRefreshCookie(req));
     } finally {
       clearAuthCookies(res);
     }

@@ -5,7 +5,7 @@ import { Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import { AuthError } from '@error/auth/auth-error';
 import { TokenBlacklistService } from './token-blacklist.service';
-import { ACCESS_COOKIE, readCookie } from './auth-cookies';
+import { readAccessCookie } from './auth-cookies';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   ) {
     super({
       // Only the httpOnly cookie: page scripts never hold the token.
-      jwtFromRequest: (req: Request) => readCookie(req, ACCESS_COOKIE) ?? null,
+      jwtFromRequest: (req: Request) => readAccessCookie(req) ?? null,
       ignoreExpiration: false,
       secretOrKey: config.getSecretKey(),
     });

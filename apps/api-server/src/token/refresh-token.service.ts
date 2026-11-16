@@ -4,6 +4,9 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getStoragePath } from '@util';
 import {
+  REFRESH_IN_FLIGHT_POLL_MS,
+  REFRESH_LOCK_STALE_MS,
+  REFRESH_IN_FLIGHT_WAIT_MS,
   REFRESH_TOKEN_EXPIRES_MS,
   REFRESH_TOKEN_REUSE_GRACE_MS,
   TOKEN_CLEANUP_INTERVAL_MS,
@@ -34,6 +37,8 @@ export type RefreshConsumeResult =
   /** grace: the token was the one just rotated; its successor is rotated in its place. */
   | { kind: 'ok'; session: RefreshConsumeSession; grace?: boolean }
   | { kind: 'reused'; familyId: string }
+  /** The same token is still being rotated by another request. */
+  | { kind: 'busy' }
   | { kind: 'invalid' };
 
 @Injectable()
@@ -121,29 +126,56 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     await fs.mkdir(this.root(), { recursive: true });
     await fs.mkdir(this.consumedRoot(), { recursive: true });
 
-    try {
-      await fs.rename(activePath, lockPath);
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') {
-        throw err;
-      }
-
-      const consumed = await this.readConsumed(consumedPath);
-      if (consumed && Date.now() < Date.parse(consumed.expiresAt)) {
-        const grace = await this.consumeSuccessorInGrace(consumed);
-        if (grace) {
-          this.logger.warn(
-            `Refresh token used again ${Date.now() - Date.parse(consumed.consumedAt)} ms after its rotation; ` +
-              `issuing a new pair (family ${consumed.familyId}) instead of revoking it.`
-          );
-          return grace;
+    // The same token may be mid-rotation in another request (renamed, not
+    // yet recorded as consumed): wait for that one to finish, then answer
+    // as for a token just rotated, instead of calling it invalid.
+    const waitUntil = Date.now() + REFRESH_IN_FLIGHT_WAIT_MS;
+    for (;;) {
+      try {
+        await fs.rename(activePath, lockPath);
+        // Stamp the start: a lock older than REFRESH_LOCK_STALE_MS is left
+        // from a crash, not a rotation in flight.
+        const now = new Date();
+        await fs.utimes(lockPath, now, now).catch(() => undefined);
+        return this.claimLocked(token, tokenHash, lockPath);
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') {
+          throw err;
         }
-        return { kind: 'reused', familyId: consumed.familyId };
       }
-      return { kind: 'invalid' };
+      if ((await this.readConsumed(consumedPath)) || !(await this.isBeingConsumed(tokenHash))) break;
+      if (Date.now() >= waitUntil) return { kind: 'busy' };
+      await new Promise((resolve) => setTimeout(resolve, REFRESH_IN_FLIGHT_POLL_MS));
     }
 
-    return this.claimLocked(token, tokenHash, lockPath);
+    const consumed = await this.readConsumed(consumedPath);
+    if (consumed && Date.now() < Date.parse(consumed.expiresAt)) {
+      const grace = await this.consumeSuccessorInGrace(consumed);
+      if (grace) {
+        this.logger.warn(
+          `Refresh token used again ${Date.now() - Date.parse(consumed.consumedAt)} ms after its rotation; ` +
+            `issuing a new pair (family ${consumed.familyId}) instead of revoking it.`
+        );
+        return grace;
+      }
+      return { kind: 'reused', familyId: consumed.familyId };
+    }
+    return { kind: 'invalid' };
+  }
+
+  private async isBeingConsumed(tokenHash: string): Promise<boolean> {
+    let files: string[];
+    try {
+      files = await fs.readdir(this.root());
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') return false;
+      throw err;
+    }
+    for (const file of files.filter((name) => name.startsWith(`${tokenHash}.consuming.`))) {
+      const stat = await fs.stat(path.join(this.root(), file)).catch(() => null);
+      if (stat && Date.now() - stat.mtimeMs < REFRESH_LOCK_STALE_MS) return true;
+    }
+    return false;
   }
 
   /**
@@ -167,6 +199,8 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     const successorLock = this.consumingPath(consumed.replacedBy, crypto.randomUUID());
     try {
       await fs.rename(this.tokenPathByHash(consumed.replacedBy), successorLock);
+      const now = new Date();
+      await fs.utimes(successorLock, now, now).catch(() => undefined);
     } catch (err: any) {
       if (err?.code === 'ENOENT') return null;
       throw err;
