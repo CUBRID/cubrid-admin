@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeAddBackupPlanModal, addBackupSchedule, fetchBackupSchedule, fetchBackupDbInfo } from '../databaseSlice';
 import { dbKey } from '../dbKey';
 import { deriveBackupDir } from '../backupPathUtils';
 import { useCM } from '../../../constants/useCM';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Modal } from '../../../components/ds/layout/Modal';
@@ -89,8 +90,7 @@ export default function AddBackupPlanModal() {
   const knownDbdir = currentDb?.dbdir || databaseBackupInfo?.[dbKey(selectedHostUid, selectedDatabase)]?.dbdir;
   // Read when the dialog opens; later changes (a list refresh, the database
   // starting or stopping) must not reset what the user typed.
-  const atOpen = useRef({});
-  atOpen.current = { knownDbdir, isDbRunning, isHaDb };
+  const atOpen = useLatestRef({ knownDbdir, isDbRunning, isHaDb });
 
   useEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {

@@ -129,7 +129,8 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const hitRatio = Number.isFinite(rawHitRatio) ? rawHitRatio : null;
   // psize is in KiB.
   const casMemBytes = casStats.memKB * 1024;
-  const hostMem = recentHostMemory([hostData.currentStatus, hostSummary], Date.now(), hostMemoryMaxAgeMs(preferences.dashboardInterval));
+  // As of the last refresh (the reads carry their own time), not the clock at render.
+  const hostMem = recentHostMemory([hostData.currentStatus, hostSummary], lastRefreshed.getTime(), hostMemoryMaxAgeMs(preferences.dashboardInterval));
   const memSegments = dbMemorySegments(casMemBytes, hostMem?.memTotal, hostMem?.memUsed);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.

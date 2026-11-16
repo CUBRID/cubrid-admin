@@ -23,11 +23,12 @@ export default function MonitoringProvider({ children }) {
   // shares it (see createSharedReads) instead of queueing another behind it,
   // so a slow request can't make polls pile up.
   const dashboardTimer = useRef(null);
-  const lastActivityRef = useRef(Date.now());
+  const lastActivityRef = useRef(0);
 
   // Activity listeners to reset idle timer
   useEffect(() => {
     const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+    lastActivityRef.current = Date.now();
     const handleActivity = () => {
       lastActivityRef.current = Date.now();
     };
