@@ -5,6 +5,13 @@ import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+// CodeMirror needs layout jsdom lacks; these tests are about loading and
+// saving, so the editor is a plain textarea with the same test id.
+vi.mock('../confEditor/ConfEditor', () => ({
+  default: ({ value, onChange, readOnly, testId }) => (
+    <textarea data-testid={testId} value={value} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
 vi.mock('../../../infrastructure/hooks/useConfirm', () => ({ useConfirm: () => confirmMock }));
 vi.mock('../../host/hostApi', () => ({ hostApi: { getHostConfig: vi.fn(), setHostConfig: vi.fn() } }));
 vi.mock('../../layout/layoutSlice', () => ({
@@ -53,9 +60,13 @@ afterEach(async () => {
   container.remove();
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
-const render = async (hostUid = 'host') => act(async () => {
-  root.render(<StrictMode><Provider store={store}><CubridConfigEditor hostUid={hostUid} confname="cubridconf" /></Provider></StrictMode>);
-});
+const render = async (hostUid = 'host') => {
+  await act(async () => {
+    root.render(<StrictMode><Provider store={store}><CubridConfigEditor hostUid={hostUid} confname="cubridconf" /></Provider></StrictMode>);
+  });
+  // The editor is a lazy chunk: let it load.
+  await act(async () => { await vi.dynamicImportSettled(); });
+};
 const element = id => container.querySelector(`[data-testid="cubrid-config-${id}"]`);
 
 it('coalesces StrictMode loads, waits for content, and undo restores the loaded configuration', async () => {

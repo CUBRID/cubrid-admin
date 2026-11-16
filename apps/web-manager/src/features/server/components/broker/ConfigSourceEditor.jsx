@@ -1,43 +1,14 @@
-import React, { useRef } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../../components/ds/foundation/StatusBadge';
+import { Spinner } from '../../../../components/ds/foundation/Spinner';
 import { useCM } from '../../../../constants/useCM';
 
-export default function ConfigSourceEditor({ rawContent, handleSourceChange }) {
+// The editor (CodeMirror) is loaded only when the broker conf is opened.
+const ConfEditor = lazy(() => import('../../confEditor/ConfEditor'));
+
+export default function ConfigSourceEditor({ rawContent, handleSourceChange, paramSchemas }) {
   const CM = useCM();
-  const textareaRef = useRef(null);
-  const preRef      = useRef(null);
-
-  const syncScroll = (e) => {
-    if (preRef.current) {
-      preRef.current.scrollTop = e.target.scrollTop;
-      preRef.current.scrollLeft = e.target.scrollLeft;
-    }
-  };
-
-  const renderHighlighted = () =>
-    rawContent.split('\n').map((line, i) => {
-      const t = line.trim();
-      if (t.startsWith('#'))
-        return <span key={i} className="text-slate-400 dark:text-editor-comment">{line}{'\n'}</span>;
-      if (t.startsWith('[') && t.endsWith(']'))
-        return <span key={i} className="text-amber-600 dark:text-editor-section font-semibold">{line}{'\n'}</span>;
-      // key = value — color the key
-      const eq = line.indexOf('=');
-      if (eq > 0) {
-        const k = line.substring(0, eq);
-        const v = line.substring(eq);
-        return (
-          <span key={i}>
-            <span className="text-sky-600 dark:text-editor-key">{k}</span>
-            <span className="text-slate-500 dark:text-editor-value">{v}</span>
-            {'\n'}
-          </span>
-        );
-      }
-      return <span key={i}>{line}{'\n'}</span>;
-    });
-
   const lineCount = rawContent.split('\n').length;
 
   return (
@@ -56,37 +27,16 @@ export default function ConfigSourceEditor({ rawContent, handleSourceChange }) {
 
       {/* Editor area */}
       <div className="config-source-editor flex-1 relative overflow-hidden bg-white dark:bg-editor-bg">
-        {/* Line numbers */}
-        <div className="absolute left-0 top-0 bottom-0 w-12 bg-slate-50 dark:bg-editor-gutter border-r border-slate-100 dark:border-editor-border overflow-hidden pointer-events-none z-10">
-          <div className="p-4 pt-6 flex flex-col items-end gap-0">
-            {rawContent.split('\n').map((_, i) => (
-              <span key={i} className="text-14 font-mono text-slate-300 dark:text-editor-line leading-relaxed select-none">
-                {i + 1}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Highlighted overlay */}
-        <pre
-          ref={preRef}
-          className="absolute inset-0 left-12 p-6 font-mono text-14 leading-relaxed text-slate-800 dark:text-editor-text pointer-events-none whitespace-pre-wrap break-all overflow-hidden"
-          aria-hidden="true"
-        >
-          {renderHighlighted()}
-        </pre>
-
-        {/* Transparent textarea */}
-        <textarea
-          data-testid="broker-config-textarea"
-          ref={textareaRef}
-          value={rawContent}
-          onChange={handleSourceChange}
-          onScroll={syncScroll}
-          spellCheck="false"
-          className="config-source-input absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-14 leading-relaxed text-transparent caret-slate-800 dark:caret-editor-section focus-visible:outline-2 focus-visible:outline-amber-500/70 dark:focus-visible:outline-editor-key/60 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
-          placeholder={CM.brokerConfigPlaceholder}
-        />
+        <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><Spinner size="md" /></div>}>
+          <ConfEditor
+            testId="broker-config-textarea"
+            kind="brokerconf"
+            value={rawContent}
+            onChange={handleSourceChange}
+            paramSchemas={paramSchemas}
+            placeholder={CM.brokerConfigPlaceholder}
+          />
+        </Suspense>
       </div>
 
       {/* Footer hint */}
