@@ -378,7 +378,7 @@ export default function RestoreDatabaseModal() {
   };
 
   const handleRestore = async () => {
-    let levelVal = '';
+    let levelVal;
     let pathnameVal = '';
     let backupDate = null;
 

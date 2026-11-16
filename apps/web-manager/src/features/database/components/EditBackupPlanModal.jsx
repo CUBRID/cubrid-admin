@@ -162,7 +162,7 @@ export default function EditBackupPlanModal() {
   };
 
   const setBulkDays = (type) => {
-    let days = [];
+    let days;
     switch(type) {
       case 'all': days = Array.from({length: 31}, (_, i) => i + 1); break;
       case 'clear': days = []; break;

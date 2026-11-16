@@ -103,7 +103,7 @@ const SQLHighlight = ({ sql }) => {
     parts.push(<span key={key++} className={COLORS[type] || ''}>{m[0]}</span>);
     pos = m.index + m[0].length;
   }
-  if (pos < sql.length) parts.push(<span key={key++}>{sql.substring(pos)}</span>);
+  if (pos < sql.length) parts.push(<span key={key}>{sql.substring(pos)}</span>);
   return <>{parts}</>;
 };
 
