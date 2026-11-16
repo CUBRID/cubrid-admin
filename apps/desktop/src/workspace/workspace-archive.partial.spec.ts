@@ -30,7 +30,7 @@ it('removes a file it made before the write failed, and what it wrote before', (
     expect(() => unpackWorkspaceArchive([
       { path: user, data: Buffer.from('x') },
       { path: 'data/secrets.json', data: Buffer.from('{}') },
-    ], path.join(base, 'ws'))).toThrow(/ENOSPC/);
+    ], path.join(base, 'ws'))).toThrow(/^WORKSPACE_NOT_WRITABLE: ENOSPC/);
     expect(fs.existsSync(path.join(base, 'ws'))).toBe(false);
   } finally {
     failOn.suffix = '';
@@ -46,7 +46,7 @@ it('leaves a file that was there already (EEXIST) alone', () => {
     fs.writeFileSync(path.join(root, 'data', 'secrets.json'), 'theirs');
     expect(() => unpackWorkspaceArchive([
       { path: 'data/secrets.json', data: Buffer.from('{}') },
-    ], root)).toThrow();
+    ], root)).toThrow(/^WORKSPACE_IMPORT_FOLDER_NOT_EMPTY: EEXIST/);
     expect(fs.readFileSync(path.join(root, 'data', 'secrets.json'), 'utf8')).toBe('theirs');
   } finally {
     fs.rmSync(base, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
 import WorkspacePasswordDialog from './WorkspacePasswordDialog';
@@ -20,6 +20,11 @@ export default function WorkspaceExportDialog({ isOpen, onClose, onExported }) {
     setError('');
     onClose();
   };
+
+  // A dialog opened again starts without the last one's error.
+  useEffect(() => {
+    if (isOpen) setError('');
+  }, [isOpen]);
 
   const exportWith = async (password) => {
     setBusy(true);
@@ -45,7 +50,8 @@ export default function WorkspaceExportDialog({ isOpen, onClose, onExported }) {
       busy={busy}
       error={error}
       onSubmit={(password) => void exportWith(password)}
-      onCancel={close}
+      // As the import: Esc, the close button and Cancel wait while the export runs.
+      onCancel={() => { if (!busy) close(); }}
       testId="workspace-export"
     />
   );

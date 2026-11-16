@@ -232,13 +232,27 @@ export function opensWithStorageKey(data: string, key: Buffer): boolean {
 export function unpackWorkspaceArchive(entries: ArchiveEntry[], root: string): void {
   const written: string[] = [];
   const madeDirs: string[] = [];
+  // A folder that cannot be written (a full disk, no permission) is the
+  // folder's error, so the page keeps the opened file and asks for another
+  // folder; a file that appeared after the empty check (EEXIST) means the
+  // folder is not empty any more. Only the export's own content is UNREADABLE.
+  const folderError = (error: unknown) => {
+    const reason = (error as Error).message;
+    return (error as NodeJS.ErrnoException).code === 'EEXIST'
+      ? new WorkspaceError('WORKSPACE_IMPORT_FOLDER_NOT_EMPTY', reason)
+      : new WorkspaceError('WORKSPACE_NOT_WRITABLE', reason);
+  };
   // The chosen folder keeps its own mode; data/ and below are owner-only.
   const makeDir = (dir: string, mode?: number) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, mode === undefined ? undefined : { mode });
-      madeDirs.push(dir);
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, mode === undefined ? undefined : { mode });
+        madeDirs.push(dir);
+      }
+      if (mode !== undefined) fs.chmodSync(dir, mode);
+    } catch (error) {
+      throw new WorkspaceError('WORKSPACE_NOT_WRITABLE', (error as Error).message);
     }
-    if (mode !== undefined) fs.chmodSync(dir, mode);
   };
   try {
     makeDir(root);
@@ -254,12 +268,17 @@ export function unpackWorkspaceArchive(entries: ArchiveEntry[], root: string): v
         // Made but not finished (a full disk): removed with the rest. One
         // that was there already (EEXIST) is not ours to remove.
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') written.push(target);
-        throw error;
+        throw folderError(error);
       }
       written.push(target);
     }
 
-    const secrets = JSON.parse(fs.readFileSync(path.join(root, 'data', 'secrets.json'), 'utf8')) as { seed?: unknown; salt?: unknown };
+    let secrets: { seed?: unknown; salt?: unknown };
+    try {
+      secrets = JSON.parse(fs.readFileSync(path.join(root, 'data', 'secrets.json'), 'utf8'));
+    } catch (error) {
+      throw new WorkspaceError('WORKSPACE_ARCHIVE_UNREADABLE', (error as Error).message);
+    }
     if (typeof secrets?.seed !== 'string' || typeof secrets.salt !== 'string') {
       throw new WorkspaceError('WORKSPACE_ARCHIVE_UNREADABLE');
     }

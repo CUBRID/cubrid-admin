@@ -190,6 +190,23 @@ describe('export and import', () => {
     expect(q('workspace-import-folder-modal')).toBeNull();
   });
 
+  it('keeps the opened export and asks only for another folder when the folder cannot be written', async () => {
+    await render();
+    window.desktopBridge.pickImportFolder.mockResolvedValueOnce('/full').mockResolvedValueOnce('/new-ws');
+    window.desktopBridge.importWorkspaceArchive.mockRejectedValueOnce(remoteError('WORKSPACE_NOT_WRITABLE: ENOSPC: no space left on device'));
+    await click(q('workspace-import-btn'));
+    await type(q('workspace-import-password-input'), 'pw');
+    await click(q('workspace-import-submit-btn'));
+    expect(q('workspace-import-folder-modal')).not.toBeNull();
+    expect(document.body.textContent).toContain('The workspace folder cannot be written to.');
+    expect(window.desktopBridge.forgetWorkspaceArchive).not.toHaveBeenCalled();
+
+    await click(q('workspace-import-folder-btn'));
+    expect(window.desktopBridge.openWorkspaceArchive).toHaveBeenCalledTimes(1);
+    expect(window.desktopBridge.importWorkspaceArchive).toHaveBeenLastCalledWith('t1', '/new-ws');
+    expect(q('workspace-import-folder-modal')).toBeNull();
+  });
+
   it('drops the opened export when the folder step is cancelled', async () => {
     await render();
     window.desktopBridge.pickImportFolder.mockResolvedValueOnce(null);
@@ -241,6 +258,27 @@ describe('export and import', () => {
     await type(q('workspace-export-confirm-input'), 'long enough');
     await click(q('workspace-export-submit-btn'));
     expect(document.body.textContent).toContain('No workspace is running.');
+  });
+
+  it('stays open on Esc while the export runs, and opens again without the last error', async () => {
+    await render();
+    let fail;
+    window.desktopBridge.exportWorkspace.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    await click(q('workspace-export-btn'));
+    await type(q('workspace-export-password-input'), 'long enough');
+    await type(q('workspace-export-confirm-input'), 'long enough');
+    await click(q('workspace-export-submit-btn'));
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(q('workspace-export-modal')).not.toBeNull();
+
+    await act(async () => fail(remoteError('WORKSPACE_ARCHIVE_WRITE_FAILED')));
+    expect(document.body.textContent).toContain('The file cannot be saved.');
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(q('workspace-export-modal')).toBeNull();
+
+    await click(q('workspace-export-btn'));
+    expect(q('workspace-export-modal')).not.toBeNull();
+    expect(document.body.textContent).not.toContain('The file cannot be saved.');
   });
 
   it('exports only with the password typed the same twice', async () => {
