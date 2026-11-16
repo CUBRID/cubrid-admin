@@ -1523,6 +1523,11 @@ export const CM_KO = {
   // DesktopWorkspaceSettingsPage
   workspaceSettingsLoadFailedMsg: '워크스페이스 설정을 불러오지 못했습니다.',
   applyingWorkspaceMsg: '워크스페이스를 적용하는 중…',
+  apiStartingMsg: (seconds) => `서버를 시작하는 중… ${seconds}초`,
+  apiStartSlowMsg: (seconds) =>
+    `서버 시작이 평소보다 오래 걸립니다(${seconds}초). 느리거나 바쁜 컴퓨터에서는 아직 시작하는 중일 수 있습니다.`,
+  keepWaitingBtn: '계속 기다리기',
+  stopServerStartBtn: '중지',
   workspaceSaveFailedMsg: '워크스페이스를 저장하지 못했습니다.',
   workspaceDesktopOnlyDesc: '워크스페이스 설정은 CUBRID Admin 데스크톱 앱에서 사용할 수 있습니다.',
   desktopConnectFailedMsg: '데스크톱 앱에 연결할 수 없습니다. 종료 후 다음 명령으로 다시 실행하세요:',
@@ -2419,6 +2424,8 @@ export const CM_KO = {
     WORKSPACE_PATH_REQUIRED: '워크스페이스 경로를 입력하세요.',
     WORKSPACE_IN_APP_BUNDLE: '워크스페이스는 앱 번들 안에 둘 수 없습니다.',
     WORKSPACE_NOT_WRITABLE: '워크스페이스 폴더에 쓸 수 없습니다.',
+    WORKSPACE_API_START_FAILED: '서버를 시작하지 못했습니다.',
+    WORKSPACE_API_START_STOPPED: '서버 시작을 중지했습니다. 이 워크스페이스나 다른 워크스페이스를 다시 고르세요.',
   },
   desktopFailedWithDetail: (fallback, detail) => `${fallback} (${detail})`,
   // Parameter value checks by code (paramIssueText). Bounds in words, not ≥/≤.

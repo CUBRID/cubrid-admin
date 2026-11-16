@@ -1,12 +1,13 @@
 import { loadRuntimeEnv } from './config/load-runtime-env';
+import { failedSignal, sendDesktopSignal } from './util/desktop-signal';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import 'module-alias/register';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as express from 'express';
 import { getHttpsOptions, logStartupBanner, createWinstonLogger, startLogConfigWatcher } from '@util';
+import { embeddedPublicFiles } from './util/standalone-executable';
 import { GlobalExceptionFilter } from '@error/global-filter';
 import { createValidationPipe } from '@error/validation/create-validation-pipe';
 import { ConfigService } from '@config/config.service';
@@ -85,15 +86,15 @@ async function bootstrap() {
   // globally before the rest of the API surface is migrated.
   app.useGlobalPipes(createValidationPipe());
 
-  // Serve web-manager static files.
-  // Both pkg (snapshot filesystem) and node use __dirname/public.
-  // pkg embeds public/ as assets so __dirname resolves inside the snapshot.
+  // Serve web-manager static files: from __dirname/public on disk, or, in the
+  // single executable, from the copy embedded in it (sea.getAsset).
   const publicDir = path.join(__dirname, 'public');
+  const embeddedPublic = embeddedPublicFiles();
   // Not in the desktop app: its screens come from the Electron bundle, and
   // with no /api prefix there the SPA fallback below would answer every GET
   // (host list, conf files, ...) with index.html, so a public/ folder left
   // next to the server by a web build made the desktop screens come up empty.
-  if (!desktopMode && fs.existsSync(publicDir)) {
+  if (!desktopMode && (embeddedPublic || fs.existsSync(publicDir))) {
     const expressApp = app.getHttpAdapter().getInstance();
 
     // PWA Service Worker registration requires a trusted SSL cert.
@@ -115,14 +116,18 @@ async function bootstrap() {
       });
     }
 
-    expressApp.use(express.static(publicDir));
+    expressApp.use(embeddedPublic ? embeddedPublic.serveFile : express.static(publicDir));
     // Exclude both /api and /api/* from SPA fallback.
     // Without (?:/|$) the lookahead /api\/ misses the bare /api path,
     // causing probes and readiness checks to receive index.html 200.
     expressApp.get(/^\/(?!api(?:\/|$)).*/, (_req: express.Request, res: express.Response) => {
-      res.sendFile(path.join(publicDir, 'index.html'));
+      if (embeddedPublic) {
+        embeddedPublic.sendIndex(res);
+      } else {
+        res.sendFile(path.join(publicDir, 'index.html'));
+      }
     });
-    console.log('\t@ serving web-manager from:', publicDir);
+    console.log('\t@ serving web-manager from:', embeddedPublic ? 'the executable' : publicDir);
   }
 
   const unixSocket = configService.getListenUnixSocket();
@@ -138,6 +143,7 @@ async function bootstrap() {
       if (previousUmask !== null) process.umask(previousUmask);
     }
     logStartupBanner(configService, { kind: 'unixSocket', socketPath: unixSocket }, appLogger);
+    sendDesktopSignal({ state: 'ready' });
     // bootConfig (not configService) — winston-logger.ts tracks the
     // instance it was actually built from, so reloads must go through that
     // same object.
@@ -159,7 +165,12 @@ async function bootstrap() {
   logStartupBanner(configService, { kind: 'tcp', host: boundHost, port }, appLogger);
   startLogConfigWatcher(bootConfig, appLogger);
 }
-bootstrap();
+bootstrap().catch((error) => {
+  // The desktop app shows why at once instead of waiting; then the same
+  // unhandled rejection as before ends the process.
+  sendDesktopSignal(failedSignal(error));
+  throw error;
+});
 
 /**
  * Removes a socket file a server that is gone left behind. A socket that

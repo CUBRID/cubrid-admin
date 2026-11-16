@@ -1,0 +1,18 @@
+#!/bin/sh
+# The user, /etc/cubrid-admin/cwm.conf, /var/lib/cubrid-admin and /var/log/cubrid-admin
+# are not package files: upgrade, remove and purge never change or delete them.
+set -e
+REMOVED=/var/lib/cubrid-admin/.package-removed
+if [ "$1" = configure ]; then
+  /opt/cubrid-admin/cubrid-admin-setup.sh configure
+  # A first install, or an install after "remove" (not purge): dpkg then passes
+  # the removed version as $2, but prerm left a mark and disabled the service.
+  if [ -z "$2" ] || [ -e "$REMOVED" ]; then
+    rm -f "$REMOVED"
+    /opt/cubrid-admin/cubrid-admin-setup.sh first-start
+  elif [ -d /run/systemd/system ]; then
+    # Upgrade: restart only if it was running.
+    systemctl try-restart cubrid-admin.service >/dev/null 2>&1 || :
+  fi
+fi
+exit 0

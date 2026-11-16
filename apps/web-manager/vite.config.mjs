@@ -77,6 +77,8 @@ export default defineConfig(({ mode, command }) => {
             registerType: 'autoUpdate',
             injectRegister: 'auto',
             includeAssets: ['cubrid-logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+            // The bundled Monaco editor chunk (about 2.7 MB) is over the 2 MiB default.
+            workbox: { maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 },
             manifest: {
               name: 'CUBRID Admin',
               short_name: 'CUBRID Admin',

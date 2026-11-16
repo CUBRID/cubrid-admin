@@ -1,0 +1,22 @@
+<!-- WinSW v2.12.0 service settings for CUBRID Admin Server (cubrid-admin-service.exe is WinSW). -->
+<service>
+  <id>cubrid-admin</id>
+  <name>CUBRID Admin Server</name>
+  <description>CUBRID Admin Server, the web-based administration tool for CUBRID.</description>
+  <executable>%BASE%\cubrid-admin.exe</executable>
+  <!-- Settings (conf\cwm.conf), cwm-vault, storage, ssl and logs live here, not in Program Files. -->
+  <env name="CWM_HOME" value="%ProgramData%\CUBRID Admin Server" />
+  <workingdirectory>%ProgramData%\CUBRID Admin Server</workingdirectory>
+  <startmode>Automatic</startmode>
+  <!-- Runs as NT SERVICE\cubrid-admin, set by the installer with sc.exe (WinSW 2.12 has no setting for it). -->
+  <!-- Restart twice, then stay stopped (a port in use or a broken cwm.conf does not loop); the count resets after an hour. -->
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="none" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%ProgramData%\CUBRID Admin Server\logs\service</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

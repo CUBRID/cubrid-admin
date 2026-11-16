@@ -1,0 +1,30 @@
+[Unit]
+Description=CUBRID Admin Server
+After=network-online.target
+Wants=network-online.target
+# Restart at most 5 times in 10 minutes, then stay failed (a port in use or a
+# broken cwm.conf does not loop forever). systemctl reset-failed clears it.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cubrid-admin
+Group=cubrid-admin
+# Settings in /etc, data (cwm-vault, storage, ssl) in /var/lib, logs in /var/log.
+Environment=CWM_HOME=/var/lib/cubrid-admin
+Environment=CWM_CONF_PATH=/etc/cubrid-admin/cwm.conf
+Environment=LOG_DIR=/var/log/cubrid-admin
+WorkingDirectory=/var/lib/cubrid-admin
+ExecStart=/opt/cubrid-admin/cubrid-admin
+Restart=on-failure
+RestartSec=5
+# The same limit for systemd 219 (RHEL/CentOS 7), which reads it only here.
+StartLimitInterval=600
+StartLimitBurst=5
+# Lets a PORT below 1024 (e.g. 443) work without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

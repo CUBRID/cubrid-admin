@@ -206,20 +206,11 @@ EOF
 }
 
 install_runtime_deps_if_needed() {
-  echo "=== Check api-server runtime dependencies ==="
+  echo "=== Check api-server build ==="
   local app_dir="${CWM_INSTALL_ROOT}/dist/apps/api-server"
-  if [[ ! -f "${app_dir}/package.json" ]]; then
-    echo "Warning: ${app_dir}/package.json not found. Missing modules (e.g. tslib) can crash the app."
-    echo "      (Recommended) Run 'npx nx run api-server:prune' locally before deployment and re-upload dist."
-    return
-  fi
-
-  if [[ ! -d "${app_dir}/node_modules" ]]; then
-    echo "node_modules not found -> running npm ci --omit=dev"
-    (cd "$app_dir" && npm ci --omit=dev)
-  else
-    echo "node_modules already present"
-  fi
+  # main.js bundles every dependency: there is nothing to install.
+  [[ -f "${app_dir}/main.js" ]] || die "${app_dir}/main.js not found. Upload the built dist first."
+  echo "api-server main.js present (dependencies are bundled in it)"
 }
 
 setup_systemd() {
