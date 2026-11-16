@@ -22,7 +22,13 @@ jest.mock('../window/dialog-paths');
 jest.mock('../window/app-window');
 jest.mock('../window/window-registry');
 jest.mock('../window/quit-flow');
-jest.mock('../update/check-for-update');
+// A factory, so the real module (and the built @update-check lib it imports) is never loaded.
+jest.mock('../update/check-for-update', () => ({
+  dismissUpdate: jest.fn(),
+  getStartupUpdateNotice: jest.fn(),
+  getUpdateStatus: jest.fn(),
+  openUpdateDownload: jest.fn(),
+}));
 jest.mock('../workspace/workspace-check', () => ({
   ...jest.requireActual('../workspace/workspace-check'),
   checkWorkspaceRoot: jest.fn(async (root: string) => ({ workspaceRoot: root, dataDir: `${root}/data`, socketPath: `${root}/s.sock` })),
