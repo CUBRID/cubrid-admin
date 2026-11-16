@@ -240,6 +240,52 @@ describe('export and import', () => {
     expect(window.desktopBridge.forgetWorkspaceArchive).toHaveBeenCalledWith('t1');
   });
 
+  describe('while the server starts', () => {
+    let emit;
+    const withStart = (state) => {
+      window.desktopBridge.getApiStartStatus = vi.fn().mockResolvedValue(state);
+      window.desktopBridge.onApiStartStatus = vi.fn((callback) => { emit = callback; return () => undefined; });
+    };
+
+    it('turns Import and Export off', async () => {
+      withStart({ state: 'starting', elapsedMs: 5_000 });
+      await render();
+      expect(q('workspace-import-btn').disabled).toBe(true);
+      expect(q('workspace-export-btn').disabled).toBe(true);
+      await act(async () => emit({ state: 'idle' }));
+      expect(q('workspace-import-btn').disabled).toBe(false);
+      expect(q('workspace-export-btn').disabled).toBe(false);
+    });
+
+    it('opens File > Import Workspace only once the start is over', async () => {
+      withStart({ state: 'slow', elapsedMs: 130_000 });
+      await render({ path: '/desktop/workspace?do=import' });
+      expect(window.desktopBridge.pickWorkspaceArchive).not.toHaveBeenCalled();
+      await act(async () => emit({ state: 'idle' }));
+      expect(window.desktopBridge.pickWorkspaceArchive).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the opened export and does not import into a folder until the start is over', async () => {
+      withStart({ state: 'idle' });
+      await render();
+      window.desktopBridge.pickImportFolder.mockResolvedValueOnce(null);
+      await click(q('workspace-import-btn'));
+      await type(q('workspace-import-password-input'), 'pw');
+      await click(q('workspace-import-submit-btn'));
+      expect(q('workspace-import-folder-modal')).not.toBeNull();
+
+      await act(async () => emit({ state: 'starting', elapsedMs: 1_000 }));
+      await click(q('workspace-import-folder-btn'));
+      expect(document.body.textContent).toContain('The server is starting. Try again when it has started.');
+      expect(window.desktopBridge.importWorkspaceArchive).not.toHaveBeenCalled();
+      expect(window.desktopBridge.forgetWorkspaceArchive).not.toHaveBeenCalled();
+
+      await act(async () => emit({ state: 'idle' }));
+      await click(q('workspace-import-folder-btn'));
+      expect(window.desktopBridge.importWorkspaceArchive).toHaveBeenCalledWith('t1', '/new-ws');
+    });
+  });
+
   it('exports only with a password of 8 characters or more', async () => {
     await render();
     await click(q('workspace-export-btn'));

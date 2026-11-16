@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { listActiveJobs } from '../api/active-jobs';
-import { getRunningWorkspacePaths, startApiForWorkspace, stopDesktopApi } from '../api/api-runtime';
+import { getRunningWorkspacePaths, isDesktopApiStarting, startApiForWorkspace, stopDesktopApi } from '../api/api-runtime';
 import {
   getDesktopSettingsPath,
   isCheckForUpdatesOnStartupEnabled,
@@ -86,8 +86,18 @@ export function setWorkspaceStartupError(error: string | null): void {
 }
 
 /**
+ * Refused while a server start is in progress (at launch, or another switch):
+ * a switch would stop that start, which then fails and reloads the page,
+ * losing what the page was doing (an import's result).
+ */
+function refuseWhileApiStarting(): void {
+  if (isDesktopApiStarting()) throw new WorkspaceError('WORKSPACE_API_STARTING');
+}
+
+/**
  * Moves the app to the workspace at `root`. It is
- * checked first (checkWorkspaceRoot) and refused while a CMS job runs; then
+ * checked first (checkWorkspaceRoot) and refused while a CMS job runs or a
+ * server start is in progress; then
  * the server stops and starts there. Only once it runs is the choice saved
  * and the window reloaded on it. If it does not start, the server goes back
  * to the workspace it was on and the reason is thrown, never a silent
@@ -97,6 +107,7 @@ async function changeWorkspace(
   root: string,
   { ignoreUnknownJobs = false }: { ignoreUnknownJobs?: boolean } = {}
 ): Promise<{ ok: true; unchanged?: true }> {
+  refuseWhileApiStarting();
   const running = getRunningWorkspacePaths();
   // The folder the server already runs on, however it was typed: nothing to do.
   if (running && root && isSameWorkspaceFolder(root, running.workspaceRoot)) {
@@ -302,6 +313,7 @@ export function registerDesktopIpcHandlers(): void {
   // First run, or the configured workspace failed at launch: no server runs
   // yet, so this only checks and saves; main.ts then starts the server.
   ipcMain.handle('desktop:finish-workspace-setup', async (_event, workspaceRoot: string) => {
+    refuseWhileApiStarting();
     const trimmed = workspaceRoot?.trim();
     const paths = await checkWorkspaceRoot(trimmed || getWorkspacePaths().workspaceRoot);
     if (trimmed) {

@@ -123,6 +123,9 @@ export default function DesktopWorkspaceSettingsPage() {
   }, [bridge]);
 
   const starting = startStatus.state === 'starting' || startStatus.state === 'slow';
+  // Read after awaits (the import's steps), where `starting` would be stale.
+  const startingRef = useRef(starting);
+  startingRef.current = starting;
   const startSeconds = Math.round((startStatus.elapsedMs ?? 0) / 1000);
 
   const handlePick = async () => {
@@ -184,7 +187,8 @@ export default function DesktopWorkspaceSettingsPage() {
   // (or Continue on first run), with its checks. The opened export stays in
   // the main process between the steps (the token).
   const startImport = async () => {
-    if (!bridge) return;
+    // A switch now would stop the server start (main refuses it too).
+    if (!bridge || startingRef.current) return;
     setError('');
     setMessage('');
     setImportedAt('');
@@ -204,6 +208,11 @@ export default function DesktopWorkspaceSettingsPage() {
 
   const chooseImportFolder = async (token) => {
     setFolderError('');
+    if (startingRef.current) {
+      // Kept open with the opened export: choose the folder once it has started.
+      setFolderError(CM.desktopErrors.WORKSPACE_API_STARTING);
+      return;
+    }
     const folder = await bridge.pickImportFolder();
     if (!folder) return; // the folder step stays open: choose again or cancel
     setImportBusy(true);
@@ -256,12 +265,13 @@ export default function DesktopWorkspaceSettingsPage() {
   // File > Import Workspace opens this page with ?do=import: start once.
   const startedFromMenu = useRef(false);
   useEffect(() => {
-    if (loading || startedFromMenu.current) return;
+    // Opened once the server start in progress is over.
+    if (loading || starting || startedFromMenu.current) return;
     if (new URLSearchParams(location.search).get('do') !== 'import') return;
     startedFromMenu.current = true;
     navigate(location.pathname, { replace: true });
     void startImport();
-  }, [loading, location.search]);
+  }, [loading, starting, location.search]);
 
   // Saving the folder the app already runs on would restart it for nothing.
   const unchanged = Boolean(info)
@@ -396,7 +406,7 @@ export default function DesktopWorkspaceSettingsPage() {
             <button
               type="button"
               data-testid="workspace-import-btn"
-              disabled={saving}
+              disabled={saving || starting}
               onClick={() => void startImport()}
               className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40 disabled:opacity-50"
             >
@@ -406,7 +416,7 @@ export default function DesktopWorkspaceSettingsPage() {
               <button
                 type="button"
                 data-testid="workspace-export-btn"
-                disabled={saving}
+                disabled={saving || starting}
                 onClick={() => { setError(''); setMessage(''); setExportOpen(true); }}
                 className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40 disabled:opacity-50"
               >

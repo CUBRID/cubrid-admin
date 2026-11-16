@@ -2188,6 +2188,7 @@ export const CM = {
     WORKSPACE_PATH_TOO_LONG: 'The workspace path is too long.',
     WORKSPACE_SOCKET_FAILED: 'The server cannot run in this folder.',
     WORKSPACE_JOBS_RUNNING: 'A CMS job is running. Try again when it ends.',
+    WORKSPACE_API_STARTING: 'The server is starting. Try again when it has started.',
     WORKSPACE_ARCHIVE_NOTHING_TO_EXPORT: 'This workspace has nothing to export.',
     WORKSPACE_ARCHIVE_PASSWORD_REQUIRED: 'Enter a password.',
     WORKSPACE_ARCHIVE_WRONG_PASSWORD: 'The password is wrong.',

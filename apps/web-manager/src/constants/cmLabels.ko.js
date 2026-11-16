@@ -2443,6 +2443,7 @@ export const CM_KO = {
     WORKSPACE_PATH_TOO_LONG: '워크스페이스 경로가 너무 깁니다.',
     WORKSPACE_SOCKET_FAILED: '이 폴더에서는 서버를 실행할 수 없습니다.',
     WORKSPACE_JOBS_RUNNING: 'CMS 작업이 진행 중입니다. 끝난 뒤 다시 하세요.',
+    WORKSPACE_API_STARTING: '서버가 시작되는 중입니다. 시작된 뒤 다시 하세요.',
     WORKSPACE_ARCHIVE_NOTHING_TO_EXPORT: '이 워크스페이스에는 내보낼 데이터가 없습니다.',
     WORKSPACE_ARCHIVE_PASSWORD_REQUIRED: '암호를 입력하세요.',
     WORKSPACE_ARCHIVE_WRONG_PASSWORD: '암호가 틀렸습니다.',
