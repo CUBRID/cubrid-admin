@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 
@@ -68,6 +69,8 @@ export default defineConfig(({ mode, command }) => {
   plugins: [
     react(),
     tailwindcss(),
+    // Tells an Nx task waiting on the dev or preview server that it listens; does nothing otherwise.
+    nxReadySignal(),
     ...(isDevServer ? [devServiceWorkerCleanup] : []),
   ].concat(
     disablePwa
