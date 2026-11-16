@@ -11,10 +11,13 @@ import { forceLinting, linter, lintGutter, lintKeymap } from '@codemirror/lint';
 import { useCM } from '../../../constants/useCM';
 import { confHighlighting, confLanguage } from './confLanguage';
 import { confContextAt, confKeyAt } from './confContext';
-import { confParams, confSectionNames, describeGuard, paramHintLines } from './confParams';
+import { confParams, confSectionNames, describeGuard, paramHintDom } from './confParams';
 import { confDiagnostics } from './confLint';
 
 const MONO = 'var(--font-mono)';
+const SANS = 'var(--font-sans)';
+// Popups (completion, its side panel, the hover hint) and the find panel in
+// the app's look instead of CodeMirror's defaults; colors per theme below.
 const base = {
   '&': { height: '100%', fontSize: '14px' },
   '&.cm-focused': { outline: 'none' },
@@ -22,29 +25,68 @@ const base = {
   '.cm-content': { padding: '16px 0' },
   '.cm-line': { padding: '0 24px 0 16px' },
   '.cm-gutters': { fontFamily: MONO },
-  '.cm-tooltip.cm-conf-hint': { padding: '8px 10px', maxWidth: '420px', fontSize: '13px', lineHeight: '1.5' },
-  '.cm-conf-hint b': { fontFamily: MONO },
+  '.cm-tooltip': { borderRadius: '8px', fontFamily: SANS, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.14)' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: MONO, fontSize: '13px', maxHeight: '15em', padding: '4px' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li': { padding: '3px 8px', borderRadius: '4px', lineHeight: '1.5' },
+  '.cm-completionMatchedText': { textDecoration: 'none', fontWeight: '700' },
+  '.cm-tooltip-autocomplete .cm-completionDetail': { fontFamily: SANS, fontStyle: 'normal', fontSize: '12px', marginLeft: '12px' },
+  '.cm-tooltip.cm-completionInfo': { padding: '0', maxWidth: '360px' },
+  '.cm-conf-hint': { padding: '8px 10px', maxWidth: '420px', fontSize: '13px', lineHeight: '1.6' },
+  '.cm-conf-hint b': { display: 'block', marginBottom: '2px', fontFamily: MONO, fontWeight: '700' },
+  '.cm-panels': { fontFamily: SANS, fontSize: '13px' },
+  '.cm-panel.cm-search': { padding: '8px 36px 8px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' },
+  '.cm-panel.cm-search br': { flexBasis: '100%', height: '0', content: '""' },
+  '.cm-panel.cm-search label': { display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', margin: '0 4px' },
+  '.cm-panel.cm-search [name=close]': { top: '8px', right: '10px', fontSize: '18px', cursor: 'pointer' },
+  // CodeMirror's own panel rules are scoped by light/dark, so these name the panel too.
+  '.cm-panel .cm-textfield': { margin: '0', padding: '4px 8px', borderRadius: '6px', fontFamily: MONO, fontSize: '13px', outline: 'none' },
+  '.cm-panel .cm-button': { margin: '0', padding: '4px 10px', borderRadius: '6px', backgroundImage: 'none', fontSize: '12px', fontWeight: '600', cursor: 'pointer' },
 };
 // Colors of the textarea editor this replaces (Tailwind slate/sky/amber in
 // light, the --color-editor-* tokens in dark).
-const lightTheme = EditorView.theme({
-  ...base,
-  '&': { ...base['&'], backgroundColor: '#ffffff', color: '#1e293b',
+// Each theme adds its colors to the shared rules, selector by selector.
+const withBase = (colors) => Object.fromEntries(
+  [...new Set([...Object.keys(base), ...Object.keys(colors)])].map((sel) => [sel, { ...base[sel], ...colors[sel] }]),
+);
+const lightTheme = EditorView.theme(withBase({
+  '&': { backgroundColor: '#ffffff', color: '#1e293b',
     '--conf-comment': '#94a3b8', '--conf-section': '#d97706', '--conf-key': '#0284c7', '--conf-value': '#64748b' },
-  '.cm-gutters': { ...base['.cm-gutters'], backgroundColor: '#f8fafc', color: '#cbd5e1', borderRight: '1px solid #f1f5f9' },
+  '.cm-gutters': { backgroundColor: '#f8fafc', color: '#cbd5e1', borderRight: '1px solid #f1f5f9' },
   '.cm-activeLine': { backgroundColor: '#f8fafc' },
   '.cm-activeLineGutter': { backgroundColor: '#f1f5f9', color: '#64748b' },
-}, { dark: false });
-const darkTheme = EditorView.theme({
-  ...base,
-  '&': { ...base['&'], backgroundColor: 'var(--color-editor-bg)', color: 'var(--color-editor-text)',
+  '.cm-tooltip': { backgroundColor: '#ffffff', border: '1px solid #e2e8f0', color: '#334155' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: '#fef3c7', color: '#0f172a' },
+  '.cm-tooltip-autocomplete .cm-completionDetail': { color: '#94a3b8' },
+  '.cm-panels': { backgroundColor: '#f8fafc', color: '#475569' },
+  '.cm-panels.cm-panels-top': { borderBottom: '1px solid #e2e8f0' },
+  '.cm-panel .cm-textfield': { backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#1e293b' },
+  '.cm-panel .cm-textfield:focus': { borderColor: '#f59e0b' },
+  '.cm-panel .cm-button': { backgroundColor: '#ffffff', border: '1px solid #e2e8f0', color: '#475569' },
+  '.cm-panel .cm-button:hover': { borderColor: '#f59e0b', color: '#b45309' },
+  '.cm-searchMatch': { backgroundColor: 'rgba(245, 158, 11, 0.25)' },
+  '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'rgba(245, 158, 11, 0.5)' },
+}), { dark: false });
+const darkTheme = EditorView.theme(withBase({
+  '&': { backgroundColor: 'var(--color-editor-bg)', color: 'var(--color-editor-text)',
     '--conf-comment': 'var(--color-editor-comment)', '--conf-section': 'var(--color-editor-section)',
     '--conf-key': 'var(--color-editor-key)', '--conf-value': 'var(--color-editor-value)' },
-  '.cm-gutters': { ...base['.cm-gutters'], backgroundColor: 'var(--color-editor-gutter)', color: 'var(--color-editor-line)', borderRight: '1px solid var(--color-editor-border)' },
+  '.cm-gutters': { backgroundColor: 'var(--color-editor-gutter)', color: 'var(--color-editor-line)', borderRight: '1px solid var(--color-editor-border)' },
   '.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.03)' },
   '.cm-activeLineGutter': { backgroundColor: 'rgba(255,255,255,0.04)' },
   '.cm-cursor': { borderLeftColor: 'var(--color-editor-section)' },
-}, { dark: true });
+  '.cm-tooltip': { backgroundColor: 'var(--color-editor-gutter)', border: '1px solid var(--color-editor-border)', color: 'var(--color-editor-text)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'rgba(213, 164, 71, 0.2)', color: '#f1f5f9' },
+  '.cm-tooltip-autocomplete .cm-completionDetail': { color: 'var(--color-editor-comment)' },
+  '.cm-panels': { backgroundColor: 'var(--color-editor-gutter)', color: 'var(--color-editor-text)' },
+  '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--color-editor-border)' },
+  '.cm-panel .cm-textfield': { backgroundColor: 'var(--color-editor-bg)', border: '1px solid var(--color-editor-border)', color: 'var(--color-editor-text)' },
+  '.cm-panel .cm-textfield:focus': { borderColor: 'var(--color-editor-section)' },
+  '.cm-panel .cm-button': { backgroundColor: 'var(--color-editor-bg)', border: '1px solid var(--color-editor-border)', color: 'var(--color-editor-text)' },
+  '.cm-panel .cm-button:hover': { borderColor: 'var(--color-editor-section)', color: 'var(--color-editor-section)' },
+  '.cm-searchMatch': { backgroundColor: 'rgba(213, 164, 71, 0.22)' },
+  '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'rgba(213, 164, 71, 0.45)' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(115, 175, 194, 0.25)' },
+}), { dark: true });
 
 const isDark = () => document.documentElement.classList.contains('dark');
 
@@ -90,7 +132,8 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
           label: param.name,
           type: 'property',
           detail: describeGuard(L, param.guard),
-          info: () => paramHintLines(L, param).join('\n') || null,
+          // A function here must return a DOM node, not a string.
+          info: () => paramHintDom(L, param, false),
           apply: `${param.name}=`,
         }));
       } else {
@@ -111,19 +154,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         pos: hit.from,
         end: hit.to,
         above: true,
-        create() {
-          const dom = document.createElement('div');
-          dom.className = 'cm-conf-hint';
-          const name = document.createElement('b');
-          name.textContent = param.name;
-          dom.append(name);
-          for (const line of paramHintLines(L, param)) {
-            const row = document.createElement('div');
-            row.textContent = line;
-            dom.append(row);
-          }
-          return { dom };
-        },
+        create: () => ({ dom: paramHintDom(L, param, true) }),
       };
     });
 

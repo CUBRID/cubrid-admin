@@ -137,3 +137,26 @@ export function paramHintLines(CM, param) {
     param.deprecated ? L.deprecated : null,
   ].filter(Boolean);
 }
+
+/**
+ * The hint as DOM, for the hover tooltip (with the name) and the completion
+ * side panel (without it; null when there is nothing to say). CodeMirror
+ * takes a DOM node from these, not a string.
+ */
+export function paramHintDom(CM, param, withName) {
+  const lines = paramHintLines(CM, param);
+  if (!withName && lines.length === 0) return null;
+  const dom = document.createElement('div');
+  dom.className = 'cm-conf-hint';
+  if (withName) {
+    const name = document.createElement('b');
+    name.textContent = param.name;
+    dom.append(name);
+  }
+  for (const line of lines) {
+    const row = document.createElement('div');
+    row.textContent = line;
+    dom.append(row);
+  }
+  return dom;
+}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Text } from '@codemirror/state';
 import { getCM } from '../../../constants/useCM';
 import { confContextAt, confKeyAt } from './confContext';
-import { confParams, describeGuard, paramHintLines } from './confParams';
+import { confParams, describeGuard, paramHintDom, paramHintLines } from './confParams';
 import { confDiagnostics } from './confLint';
 
 const KO = getCM('ko');
@@ -72,6 +72,16 @@ describe('confParams', () => {
     expect(paramHintLines(EN, confParams('brokerconf', schemas).get('MASTER_SHM_ID'))).toEqual(['Hexadecimal integer, at least 1', 'Only in the [broker] section']);
     expect(describeGuard(KO, { kind: 'size', min: 16777216 })).toBe('크기(K·M·G·T, 단위가 없으면 바이트), 16M 이상');
     expect(describeGuard(KO, { kind: 'brokerTime', minSec: 0 })).toBe('시간(ms·s·min·h, 단위가 없으면 초), 0s 이상');
+  });
+
+  it('builds the hint as a DOM node, which CodeMirror needs for the hover and the completion panel', () => {
+    const port = confParams('cubridconf', schemas).get('cubrid_port_id');
+    const hover = paramHintDom(KO, port, true);
+    expect(hover).toBeInstanceOf(HTMLElement);
+    expect(hover.querySelector('b').textContent).toBe('cubrid_port_id');
+    expect([...hover.querySelectorAll('div')].map((d) => d.textContent)).toEqual(['정수, 1 ~ 65535', '기본값: 1523', '적용 대상: BOTH']);
+    expect(paramHintDom(KO, port, false).querySelector('b')).toBeNull();
+    expect(paramHintDom(KO, { name: 'x' }, false)).toBeNull();
   });
 });
 
