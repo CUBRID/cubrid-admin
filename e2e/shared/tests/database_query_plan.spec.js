@@ -135,7 +135,7 @@ test.describe('Feature: Database Query Plan Automation', () => {
       await action('Verify Add Query Plan modal is visible', () => expect(addModal).toBeVisible(), 'Add Query Plan modal did not appear.');
       await action(`Fill query plan ID with: ${queryId}`, () => addModal.locator('input').first().fill(queryId), 'Could not fill query plan ID.');
       await action('Fill database password with: ••••••••', () => addModal.locator('input[type="password"]').fill('public'), 'Could not fill database password.');
-      await action('Click Monaco SQL query editor', () => addModal.locator('.monaco-editor').click(), 'Could not click Monaco SQL query editor.');
+      await action('Click SQL query editor', () => addModal.getByTestId('add-query-plan-sql').click(), 'Could not click SQL query editor.');
       await action('Type SQL query statement', () => page.keyboard.type('SELECT 1 FROM db_root;'), 'Failed to type SQL query statement.');
       await action('Save query plan and verify API success', () => submitPlan(page, 'append', () => page.getByTestId('add-query-plan-save-btn').click()));
 
@@ -157,7 +157,7 @@ test.describe('Feature: Database Query Plan Automation', () => {
       await action('Verify Edit Query Plan modal is visible', () => expect(editModal).toBeVisible(), 'Edit Query Plan modal did not appear.');
       await action('Fill database password with: ••••••••', () => editModal.locator('input[type="password"]').fill('public'), 'Could not fill database password in Edit modal.');
       await action('Change the SQL statement before saving the edit', async () => {
-        await editModal.locator('.monaco-editor').click();
+        await editModal.getByTestId('edit-query-plan-sql').click();
         await page.keyboard.press('ControlOrMeta+A');
         await page.keyboard.insertText('SELECT 2 FROM db_root;');
       });
@@ -197,7 +197,7 @@ test.describe('Feature: Database Query Plan Automation', () => {
     const fillAndSubmit = async (addModal, expectedCode) => {
       await action(`Fill query plan ID with: ${queryId}`, () => addModal.locator('input').first().fill(queryId), 'Could not fill query plan ID.');
       await action('Fill database password with: ••••••••', () => addModal.locator('input[type="password"]').fill('public'), 'Could not fill database password.');
-      await action('Click Monaco SQL query editor', () => addModal.locator('.monaco-editor').click(), 'Could not click Monaco SQL query editor.');
+      await action('Click SQL query editor', () => addModal.getByTestId('add-query-plan-sql').click(), 'Could not click SQL query editor.');
       await action('Type SQL query statement', () => page.keyboard.type('SELECT 1 FROM db_root;'), 'Failed to type SQL query statement.');
       await action('Submit query plan and verify API result', () => submitPlan(page, 'append', () => page.getByTestId('add-query-plan-save-btn').click(), expectedCode));
     };
