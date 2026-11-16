@@ -3,7 +3,11 @@ import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getStoragePath } from '@util';
-import { REFRESH_TOKEN_EXPIRES_MS, TOKEN_CLEANUP_INTERVAL_MS } from './token.constants';
+import {
+  REFRESH_TOKEN_EXPIRES_MS,
+  REFRESH_TOKEN_REUSE_GRACE_MS,
+  TOKEN_CLEANUP_INTERVAL_MS,
+} from './token.constants';
 
 export type RefreshTokenRecord = {
   userId: string;
@@ -14,17 +18,21 @@ export type RefreshTokenRecord = {
 
 type ConsumedRefreshTokenRecord = RefreshTokenRecord & {
   consumedAt: string;
+  /** Hash of the token issued in its place, for the reuse grace. */
+  replacedBy?: string;
 };
 
 export type RefreshConsumeSession = {
-  token: string;
+  /** Unset when the session rotates a successor under the reuse grace. */
+  token?: string;
   tokenHash: string;
   lockPath: string;
   record: RefreshTokenRecord;
 };
 
 export type RefreshConsumeResult =
-  | { kind: 'ok'; session: RefreshConsumeSession }
+  /** grace: the token was the one just rotated; its successor is rotated in its place. */
+  | { kind: 'ok'; session: RefreshConsumeSession; grace?: boolean }
   | { kind: 'reused'; familyId: string }
   | { kind: 'invalid' };
 
@@ -122,11 +130,61 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
 
       const consumed = await this.readConsumed(consumedPath);
       if (consumed && Date.now() < Date.parse(consumed.expiresAt)) {
+        const grace = await this.consumeSuccessorInGrace(consumed);
+        if (grace) {
+          this.logger.warn(
+            `Refresh token used again ${Date.now() - Date.parse(consumed.consumedAt)} ms after its rotation; ` +
+              `issuing a new pair (family ${consumed.familyId}) instead of revoking it.`
+          );
+          return grace;
+        }
         return { kind: 'reused', familyId: consumed.familyId };
       }
       return { kind: 'invalid' };
     }
 
+    return this.claimLocked(token, tokenHash, lockPath);
+  }
+
+  /**
+   * The reuse grace (REFRESH_TOKEN_REUSE_GRACE_MS): a token rotated moments
+   * ago whose successor is still unused stands for that successor, so the
+   * successor is rotated instead. Only the token just before the active one
+   * qualifies: once the successor is used, revoked (logout, a revoked
+   * family) or expired, there is nothing to take over and the reuse stands.
+   */
+  private async consumeSuccessorInGrace(
+    consumed: ConsumedRefreshTokenRecord
+  ): Promise<RefreshConsumeResult | null> {
+    const consumedAt = Date.parse(consumed.consumedAt);
+    if (
+      !consumed.replacedBy ||
+      !/^[0-9a-f]{64}$/.test(consumed.replacedBy) ||
+      !(Date.now() - consumedAt < REFRESH_TOKEN_REUSE_GRACE_MS)
+    ) {
+      return null;
+    }
+    const successorLock = this.consumingPath(consumed.replacedBy, crypto.randomUUID());
+    try {
+      await fs.rename(this.tokenPathByHash(consumed.replacedBy), successorLock);
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') return null;
+      throw err;
+    }
+    const result = await this.claimLocked(undefined, consumed.replacedBy, successorLock);
+    if (result.kind !== 'ok') return null;
+    if (result.session.record.familyId !== consumed.familyId) {
+      await this.rollbackConsume(result.session);
+      return null;
+    }
+    return { ...result, grace: true };
+  }
+
+  private async claimLocked(
+    token: string | undefined,
+    tokenHash: string,
+    lockPath: string
+  ): Promise<RefreshConsumeResult> {
     try {
       const raw = await fs.readFile(lockPath, 'utf8');
       const record = JSON.parse(raw) as RefreshTokenRecord;
@@ -151,11 +209,13 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async commitConsume(session: RefreshConsumeSession): Promise<void> {
+  /** replacedBy: the token issued in its place, which the reuse grace looks for. */
+  async commitConsume(session: RefreshConsumeSession, replacedBy?: string): Promise<void> {
     const consumedPath = this.consumedPathByHash(session.tokenHash);
     const consumedRecord: ConsumedRefreshTokenRecord = {
       ...session.record,
       consumedAt: new Date().toISOString(),
+      ...(replacedBy ? { replacedBy: this.hashToken(replacedBy) } : {}),
     };
 
     await fs.writeFile(consumedPath, JSON.stringify(consumedRecord), 'utf8');

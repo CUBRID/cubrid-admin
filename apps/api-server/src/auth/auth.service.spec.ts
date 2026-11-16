@@ -86,7 +86,8 @@ describe('AuthService', () => {
     const result = await service.refresh('old-refresh');
 
     expect(refreshTokenService.create).toHaveBeenCalledWith('user1', 'family-1');
-    expect(refreshTokenService.commitConsume).toHaveBeenCalled();
+    // The new token is recorded as its successor, for the reuse grace.
+    expect(refreshTokenService.commitConsume).toHaveBeenCalledWith(expect.objectContaining({ tokenHash: 'hash' }), 'new-refresh');
     expect(result.refreshToken).toBe('new-refresh');
   });
 

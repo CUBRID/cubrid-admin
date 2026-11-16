@@ -61,7 +61,7 @@ export class AuthService {
     const { session } = consumeResult;
     try {
       const tokens = await this.issueTokenPair(session.record.userId, session.record.familyId);
-      await this.refreshTokenService.commitConsume(session);
+      await this.refreshTokenService.commitConsume(session, tokens.refreshToken);
       return tokens;
     } catch (err) {
       await this.refreshTokenService.rollbackConsume(session);
