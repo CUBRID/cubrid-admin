@@ -10,8 +10,11 @@ const { productVersion } = require('../../scripts/product-version.cjs');
 
 const { base, commitNum, version } = productVersion();
 
-const BOTH_ARCHS = ['x64', 'arm64'];
-const targets = (...names) => names.map((target) => ({ target, arch: BOTH_ARCHS }));
+// x64 and arm64 for every target. The command line's --x64 / --arm64 do not
+// change this list; CWM_DESKTOP_ARCHS ("x64" or "arm64") does, so the release
+// workflow builds one arch at a time where two at once need too much memory.
+const ARCHS = process.env.CWM_DESKTOP_ARCHS ? process.env.CWM_DESKTOP_ARCHS.split(',').map((arch) => arch.trim()) : ['x64', 'arm64'];
+const targets = (...names) => names.map((target) => ({ target, arch: ARCHS }));
 // Release file names (scripts/archive-packages.mjs collects them into dist/release):
 // The Linux packages carry the full version with release 1, as the server
 // packages do (0.1.0.0001-1), not electron-builder's 0.1.0-0001; fpm takes the

@@ -96,7 +96,8 @@ jobs:
       # After the server: the desktop app needs the web-manager build made for Electron.
       # Installer and portable for each OS and arch (no signing, no Wine needed).
       # The macOS step builds and stages the app; the Windows steps package that
-      # staged app, one arch at a time: two portable exe compressed at once
+      # staged app, one arch at a time (CWM_DESKTOP_ARCHS; --x64 / --arm64 do not
+      # narrow the config's arch list): two portable exe compressed at once
       # (7-Zip -mx=9, about 2.8 GB of memory each) did not fit in the 7 GB of a
       # macos-15 arm64 runner and stalled. Level 5 needs about 0.4 GB for a
       # portable exe, 2% bigger.
@@ -127,14 +128,16 @@ jobs:
         env:
           ELECTRON_BUILDER_COMPRESSION_LEVEL: '5'
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: scripts/ci/run-with-idle-timeout.sh 180 npx electron-builder --config apps/desktop/electron-builder.config.cjs --publish never --win --x64
+          CWM_DESKTOP_ARCHS: x64
+        run: scripts/ci/run-with-idle-timeout.sh 180 npx electron-builder --config apps/desktop/electron-builder.config.cjs --publish never --win
 
       - name: Build desktop packages (Windows arm64)
         timeout-minutes: 20
         env:
           ELECTRON_BUILDER_COMPRESSION_LEVEL: '5'
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: scripts/ci/run-with-idle-timeout.sh 180 npx electron-builder --config apps/desktop/electron-builder.config.cjs --publish never --win --arm64
+          CWM_DESKTOP_ARCHS: arm64
+        run: scripts/ci/run-with-idle-timeout.sh 180 npx electron-builder --config apps/desktop/electron-builder.config.cjs --publish never --win
 
       - name: Build desktop packages (Linux)
         timeout-minutes: 40
