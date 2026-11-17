@@ -259,6 +259,24 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     await fs.rename(session.lockPath, targetPath).catch(() => undefined);
   }
 
+  /**
+   * The family a refresh token belongs to, whether it is still active or
+   * already rotated (a logout may come with an older token), or null for a
+   * token the server never issued or no longer knows.
+   */
+  async familyOf(token: string): Promise<string | null> {
+    const tokenHash = this.hashToken(token);
+    for (const file of [this.tokenPathByHash(tokenHash), this.consumedPathByHash(tokenHash)]) {
+      try {
+        const record = JSON.parse(await fs.readFile(file, 'utf8')) as RefreshTokenRecord;
+        if (record.familyId) return record.familyId;
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') throw err;
+      }
+    }
+    return null;
+  }
+
   async revoke(token: string): Promise<void> {
     await fs.unlink(this.tokenPath(token)).catch(() => undefined);
   }

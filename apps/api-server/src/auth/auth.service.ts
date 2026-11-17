@@ -51,7 +51,7 @@ export class AuthService {
   async refresh(refreshToken: string): Promise<AuthTokens> {
     const consumeResult = await this.refreshTokenService.consumeForRotation(refreshToken);
     if (consumeResult.kind === 'reused') {
-      await this.refreshTokenService.revokeFamily(consumeResult.familyId);
+      await this.revokeFamily(consumeResult.familyId);
       throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_REUSED' });
     }
     if (consumeResult.kind === 'busy') {
@@ -63,6 +63,12 @@ export class AuthService {
     }
 
     const { session } = consumeResult;
+    // A logout (or a reuse) revoked the family while this token was being
+    // rotated: it gets no new pair.
+    if (await this.tokenBlacklistService.isFamilyRevoked(session.record.familyId)) {
+      await this.refreshTokenService.commitConsume(session);
+      throw AuthError.InvalidToken({ reason: 'REFRESH_FAMILY_REVOKED' });
+    }
     try {
       const tokens = await this.issueTokenPair(session.record.userId, session.record.familyId);
       await this.refreshTokenService.commitConsume(session, tokens.refreshToken);
@@ -74,23 +80,38 @@ export class AuthService {
   }
 
   /**
-   * Ends the session the browser's cookies hold. Works with an expired or
-   * missing access token too, so a logout always revokes the refresh token.
+   * Ends the session the browser's cookies hold: the whole refresh family,
+   * found from the refresh token even when it was already rotated, so no
+   * token of the session (refresh or access, nor one let in by the reuse
+   * grace) works afterwards. Works with an expired or missing access token.
    */
   @HandleAuthErrors()
   async logout(accessToken?: string, refreshToken?: string): Promise<void> {
+    const families = new Set<string>();
     if (accessToken) {
       const payload = await this.jwt
-        .verifyAsync<{ jti?: string; exp?: number; type?: string }>(accessToken)
+        .verifyAsync<{ jti?: string; exp?: number; type?: string; fam?: string }>(accessToken)
         .catch(() => null);
       // An expired or forged token needs no blacklist entry.
       if (payload?.type === 'access' && payload.jti && payload.exp) {
         await this.tokenBlacklistService.add(payload.jti, new Date(payload.exp * 1000));
+        if (payload.fam) families.add(payload.fam);
       }
     }
     if (refreshToken) {
-      await this.refreshTokenService.revoke(refreshToken);
+      const family = await this.refreshTokenService.familyOf(refreshToken);
+      if (family) families.add(family);
+      else await this.refreshTokenService.revoke(refreshToken);
     }
+    for (const family of families) {
+      await this.revokeFamily(family);
+    }
+  }
+
+  /** Every refresh token of the family, and every access token issued with them. */
+  private async revokeFamily(familyId: string): Promise<void> {
+    await this.refreshTokenService.revokeFamily(familyId);
+    await this.tokenBlacklistService.revokeFamily(familyId, ACCESS_TOKEN_EXPIRES_SEC * 1000);
   }
 
   @HandleAuthErrors()
@@ -108,11 +129,13 @@ export class AuthService {
 
   private async issueTokenPair(userId: string, familyId?: string): Promise<AuthTokens> {
     const jti = randomUUID();
+    // The refresh token first: its family goes into the access token (fam),
+    // so a logout or a reuse can revoke both.
+    const { token: refreshToken, familyId: fam } = await this.refreshTokenService.create(userId, familyId);
     const token = await this.jwt.signAsync(
-      { sub: userId, jti, type: 'access' },
+      { sub: userId, jti, type: 'access', fam },
       { expiresIn: ACCESS_TOKEN_EXPIRES }
     );
-    const { token: refreshToken } = await this.refreshTokenService.create(userId, familyId);
     return { token, refreshToken, expiresIn: ACCESS_TOKEN_EXPIRES_SEC };
   }
 }
