@@ -13,12 +13,12 @@ vi.mock('../databaseJobApi', async (importOriginal) => ({
   databaseJobApi: { submitCreate: vi.fn(), listRecent: async () => [] },
 }));
 const startInfo = vi.hoisted(() => ({ fails: false }));
+const createInfo = vi.hoisted(() => ({ fails: false }));
 vi.mock('../databaseSlice', () => {
   const settle = (p) => Object.assign(p, { unwrap: () => p });
-  const done = (data) => () => () => settle(Promise.resolve(data));
   return {
     closeCreateDatabaseModal: () => ({ type: 'test/close' }),
-    fetchCreateDatabaseInfo: done({ default_db_dir: '/db' }),
+    fetchCreateDatabaseInfo: () => () => settle(createInfo.fails ? Promise.reject(new Error('no answer')) : Promise.resolve({ default_db_dir: '/db' })),
     fetchDatabaseStartInfo: () => () => settle(startInfo.fails ? Promise.reject(new Error('no answer')) : Promise.resolve({})),
   };
 });
@@ -31,6 +31,7 @@ let root;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   startInfo.fails = false;
+  createInfo.fails = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -41,12 +42,12 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = (dbs) => {
+const render = (dbs, hostEnvs = {}) => {
   const state = {
     auth: { isAuthenticated: true },
     databaseUI: { isCreateDatabaseModalOpen: true },
     database: { databasesByHost: { h1: dbs } },
-    host: { selectedHostUid: 'h1', hostEnvs: {} },
+    host: { selectedHostUid: 'h1', hostEnvs },
     user: { preferences: { uiLocale: 'en' } },
     layout: { statusModal: { isOpen: false } },
   };
@@ -83,4 +84,14 @@ it('does not refuse a listed name when the database list could not be read again
   await typeName('demodb');
   expect(container.textContent).not.toContain('already exists');
   expect(next().disabled).toBe(false);
+});
+
+it("takes the folder from the host's cached environment when the create info cannot be read, and the paths follow the name typed", async () => {
+  createInfo.fails = true;
+  await render([], { h1: { CUBRID_DATABASES: '/cached' } });
+  const genericPath = () => container.querySelector('[data-testid="create-database-generic-path-input"]').value;
+  expect(genericPath()).toBe('/cached');
+
+  await typeName('newdb');
+  expect(genericPath()).toBe('/cached/newdb');
 });
