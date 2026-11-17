@@ -47,11 +47,12 @@ export class TokenBlacklistService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Revokes every access token of a refresh family (their JWT carries it as
-   * `fam`) until the longest of them would expire anyway.
+   * Revokes every token of a refresh family (an access JWT carries it as
+   * `fam`) for `lifetimeMs`: as long as any of them could still be used,
+   * including a refresh token written by a rotation that ran during logout.
    */
-  async revokeFamily(familyId: string, accessLifetimeMs: number): Promise<void> {
-    await this.add(familyKey(familyId), new Date(Date.now() + accessLifetimeMs));
+  async revokeFamily(familyId: string, lifetimeMs: number): Promise<void> {
+    await this.add(familyKey(familyId), new Date(Date.now() + lifetimeMs));
   }
 
   async isFamilyRevoked(familyId: string | undefined): Promise<boolean> {

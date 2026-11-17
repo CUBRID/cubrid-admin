@@ -48,6 +48,26 @@ describe('logout ends every token of the session (refresh family)', () => {
     await expect(service.refresh(t1.refreshToken)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
   });
 
+  it('a refresh token written during logout stays refused after the access lifetime', async () => {
+    const t1 = await service.login({ id: 'user1', password: 'pw' });
+    const t2 = await service.refresh(t1.refreshToken);
+    // A rotation that passed its family check before logout writes its new
+    // refresh file after logout deleted the family's files: put t2's back.
+    const store = path.join(mockStorage, 'refresh-tokens');
+    const before = path.join(mockStorage, 'refresh-tokens-before-logout');
+    fs.cpSync(store, before, { recursive: true });
+    await service.logout(t2.token, t2.refreshToken);
+    fs.cpSync(before, store, { recursive: true });
+    fs.rmSync(before, { recursive: true, force: true });
+    const twoDaysLater = Date.now() + 2 * 86400 * 1000;
+    const now = jest.spyOn(Date, 'now').mockReturnValue(twoDaysLater);
+    try {
+      await expect(service.refresh(t2.refreshToken)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('leaves another session of the same user signed in', async () => {
     const mine = await service.login({ id: 'user1', password: 'pw' });
     const other = await service.login({ id: 'user1', password: 'pw' });

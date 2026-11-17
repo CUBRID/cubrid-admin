@@ -113,7 +113,7 @@ describe('AuthService', () => {
     await expect(service.refresh('reused-token')).rejects.toBeInstanceOf(AuthError);
     expect(refreshTokenService.revokeFamily).toHaveBeenCalledWith('family-1');
     // Its access tokens too.
-    expect(tokenBlacklistService.revokeFamily).toHaveBeenCalledWith('family-1', 86400 * 1000);
+    expect(tokenBlacklistService.revokeFamily).toHaveBeenCalledWith('family-1', 14 * 86400 * 1000);
   });
 
   it('puts the refresh family into the access token (fam)', async () => {
@@ -129,7 +129,7 @@ describe('AuthService', () => {
 
     expect(refreshTokenService.familyOf).toHaveBeenCalledWith('rotated-refresh-2');
     expect(refreshTokenService.revokeFamily).toHaveBeenCalledWith('family-1');
-    expect(tokenBlacklistService.revokeFamily).toHaveBeenCalledWith('family-1', 86400 * 1000);
+    expect(tokenBlacklistService.revokeFamily).toHaveBeenCalledWith('family-1', 14 * 86400 * 1000);
     expect(tokenBlacklistService.add).toHaveBeenCalledWith('jti-2', new Date(1_700_000_000 * 1000));
   });
 
