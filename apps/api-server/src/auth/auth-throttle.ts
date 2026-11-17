@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ThrottlerGuard, ThrottlerModuleOptions } from '@nestjs/throttler';
 import { ConfigService } from '@config/config.service';
 
@@ -36,9 +36,27 @@ export const AUTH_THROTTLE_OPTIONS: ThrottlerModuleOptions = {
 @Injectable()
 export class AuthThrottlerGuard extends ThrottlerGuard {
   @Inject(ConfigService) private readonly config!: ConfigService;
+  private static warnedNoAddress = false;
 
   // The desktop app has no app login, and its socket is its own.
   protected async shouldSkip(): Promise<boolean> {
     return this.config.isDesktopMode();
+  }
+
+  // A request with no client address (a reverse proxy in front of
+  // LISTEN_UNIX_SOCKET, with TRUST_PROXY not set to 1) counts with every
+  // other such request: one limit for all users. Said once in the log.
+  protected async getTracker(req: Record<string, any>): Promise<string> {
+    if (!req.ip) {
+      if (!AuthThrottlerGuard.warnedNoAddress) {
+        AuthThrottlerGuard.warnedNoAddress = true;
+        new Logger(AuthThrottlerGuard.name).warn(
+          'A sign-in request came with no client address, so all such requests share one rate limit. ' +
+            'Behind a reverse proxy on LISTEN_UNIX_SOCKET, set TRUST_PROXY=1 and have the proxy send X-Forwarded-For.'
+        );
+      }
+      return 'no-client-address';
+    }
+    return super.getTracker(req);
   }
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AxiosError } from 'axios';
 import apiClient from '../../api/apiClient';
 import { getCM, LOCALE_STORAGE_KEY } from '../../constants/useCM';
-import { failureText, requestErrorText, serverErrorText, warningText } from './serverErrorText';
+import { failureText, requestErrorText, serverErrorText, tooManyAttemptsText, warningText } from './serverErrorText';
 
 const KO = getCM('ko');
 const EN = getCM('en');
@@ -303,4 +303,23 @@ it('says in Korean that only a host connected as the CMS admin can manage CMS us
   const refused = { status: 403, note: 'Only a host connected as the CMS admin account can manage CMS users.',
     data: { type: '/errors/resource/cms_admin_required', code: 'CMS_ADMIN_REQUIRED' } };
   expect(serverErrorText(refused, KO)).toBe('CMS 사용자 관리는 CMS admin 계정으로 연결한 호스트에서만 할 수 있습니다.');
+});
+
+describe('tooManyAttemptsText (sign-in rate limit, 429)', () => {
+  const tooMany = (headers) => ({ response: { status: 429, headers, data: { message: 'ThrottlerException: Too Many Requests' } } });
+
+  it('says how long to wait from Retry-After, in the UI language', () => {
+    expect(tooManyAttemptsText(tooMany({ 'retry-after': '37' }), EN)).toBe('Too many attempts. Try again in 37 seconds.');
+    expect(tooManyAttemptsText(tooMany({ 'retry-after': '37' }), KO)).toBe('시도가 너무 많습니다. 37초 뒤에 다시 시도하세요.');
+  });
+
+  it('says to try again shortly without Retry-After', () => {
+    expect(tooManyAttemptsText(tooMany({}), EN)).toBe('Too many attempts. Try again shortly.');
+    expect(tooManyAttemptsText(tooMany({ 'retry-after': 'soon' }), KO)).toBe('시도가 너무 많습니다. 잠시 뒤 다시 시도하세요.');
+  });
+
+  it('is null for any other error', () => {
+    expect(tooManyAttemptsText({ response: { status: 401, headers: {} } }, EN)).toBeNull();
+    expect(tooManyAttemptsText(new Error('network'), EN)).toBeNull();
+  });
 });

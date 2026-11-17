@@ -1,4 +1,4 @@
-import { Controller, Get, INestApplication } from '@nestjs/common';
+import { Controller, Get, INestApplication, Logger } from '@nestjs/common';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -107,6 +107,20 @@ describe('login rate limit (AuthThrottlerGuard)', () => {
     expect((await proxied(login(), '198.51.100.99', '203.0.113.7')).status).toBe(429);
     // Another client behind the same proxy has its own count.
     expect((await proxied(login(), '198.51.100.1', '203.0.113.8')).status).toBe(201);
+  });
+
+  it('counts requests with no client address together, and says so once in the log', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const guard = Object.create(AuthThrottlerGuard.prototype) as { getTracker: (req: object) => Promise<string> };
+      await expect(guard.getTracker({ ip: undefined })).resolves.toBe('no-client-address');
+      await expect(guard.getTracker({})).resolves.toBe('no-client-address');
+      const said = warn.mock.calls.filter(([message]) => String(message).includes('no client address'));
+      expect(said).toHaveLength(1);
+      expect(String(said[0][0])).toContain('TRUST_PROXY=1');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('is skipped in desktop mode', async () => {

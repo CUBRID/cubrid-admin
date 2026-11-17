@@ -25,6 +25,14 @@ describe('parseTrustProxy (TRUST_PROXY)', () => {
     expect(warning).toMatch(/would trust any X-Forwarded-For/);
   });
 
+  it('refuses a /0 subnet, which is every address', () => {
+    for (const raw of ['0.0.0.0/0', '::/0', '10.0.0.5, 0.0.0.0/0']) {
+      const { value, warning } = parseTrustProxy(raw);
+      expect(value).toBe('loopback');
+      expect(warning).toMatch(/every address/);
+    }
+  });
+
   it('refuses what it cannot read, keeping the default', () => {
     for (const raw of ['proxy.example.com', '10.0.0.0/33', '1.2.3', '-1']) {
       const { value, warning } = parseTrustProxy(raw);
