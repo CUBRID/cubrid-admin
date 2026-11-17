@@ -26,6 +26,7 @@ import { ModalStatusLoading,
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -81,10 +82,14 @@ export default function DeleteDatabaseModal() {
       setFetchingVolumes(true);
     }
   });
+  // The database and host as they are when the modal opens: a successful
+  // delete clears selectedDatabase, and this must not run again then.
+  const atOpen = useLatestRef({ selectedDatabase, selectedHostUid });
   useEffect(() => {
-    if (isDeleteDBModalOpen && selectedDatabase && selectedHostUid) {
+    const { selectedDatabase: dbname, selectedHostUid: hostUid } = atOpen.current;
+    if (isDeleteDBModalOpen && dbname && hostUid) {
       resetAction();
-      databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
+      databaseApi.getVolumeInfo(hostUid, dbname)
         .then(res => {
           if (res?.spaceinfo) {
             const pageSize = parseInt(res.pagesize || 0);
@@ -104,10 +109,7 @@ export default function DeleteDatabaseModal() {
         .catch(() => {})
         .finally(() => setFetchingVolumes(false));
     }
-    // Only when the modal opens: a successful delete clears selectedDatabase,
-    // and re-running this then would reset the success view to the form.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDeleteDBModalOpen]);
+  }, [isDeleteDBModalOpen, resetAction, atOpen]);
 
   if (!isDeleteDBModalOpen) return null;
 
