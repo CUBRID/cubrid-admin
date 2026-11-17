@@ -12,6 +12,7 @@ import { passwordValidityChecker } from '@util';
 import {
   ACCESS_TOKEN_EXPIRES,
   ACCESS_TOKEN_EXPIRES_SEC,
+  REFRESH_TOKEN_EXPIRES_MS,
 } from '@token/token.constants';
 import { AuthTokens } from '@token/auth-cookies';
 import { RefreshTokenService } from '@token/refresh-token.service';
@@ -111,7 +112,9 @@ export class AuthService {
   /** Every refresh token of the family, and every access token issued with them. */
   private async revokeFamily(familyId: string): Promise<void> {
     await this.refreshTokenService.revokeFamily(familyId);
-    await this.tokenBlacklistService.revokeFamily(familyId, ACCESS_TOKEN_EXPIRES_SEC * 1000);
+    // As long as a refresh token: one written by a rotation that ran during
+    // logout must not bring the session back later.
+    await this.tokenBlacklistService.revokeFamily(familyId, REFRESH_TOKEN_EXPIRES_MS);
   }
 
   @HandleAuthErrors()
