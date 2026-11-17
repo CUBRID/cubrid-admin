@@ -1,6 +1,6 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
 import { useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, shallowEqual } from 'react-redux';
 import { fetchDashboardData } from '../databaseSlice';
 import { volumeDirectory } from '../volumePath';
@@ -16,7 +16,7 @@ import { useStatdumpWatcher } from '../useStatdumpWatcher';
 import { isLinuxHost } from '../hostOs';
 import { totalCasQps } from '../casMetrics';
 import { pagesToSize, volumePageSize } from '../volumePages';
-import { dbMemorySegments, formatBytes1, recentHostMemory, hostMemoryMaxAgeMs } from '../dbMemorySegments';
+import { dbMemorySegments, formatBytes1, newestHostMemory, hostMemoryMaxAgeMs, msUntil } from '../dbMemorySegments';
 
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -129,8 +129,18 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const hitRatio = Number.isFinite(rawHitRatio) ? rawHitRatio : null;
   // psize is in KiB.
   const casMemBytes = casStats.memKB * 1024;
-  // As of the last refresh (the reads carry their own time), not the clock at render.
-  const hostMem = recentHostMemory([hostData.currentStatus, hostSummary], lastRefreshed.getTime(), hostMemoryMaxAgeMs(preferences.dashboardInterval));
+  // The host memory read is shown until it is older than two intervals (at
+  // least a minute): a timer set for that moment, instead of the clock at render.
+  const hostMemRead = newestHostMemory([hostData.currentStatus, hostSummary]);
+  const hostMemReadAt = hostMemRead?.readAt;
+  const hostMemMaxAgeMs = hostMemoryMaxAgeMs(preferences.dashboardInterval);
+  const [staleHostMemReadAt, setStaleHostMemReadAt] = useState(null);
+  useEffect(() => {
+    if (!Number.isFinite(hostMemReadAt)) return undefined;
+    const timer = setTimeout(() => setStaleHostMemReadAt(hostMemReadAt), msUntil(hostMemReadAt + hostMemMaxAgeMs));
+    return () => clearTimeout(timer);
+  }, [hostMemReadAt, hostMemMaxAgeMs]);
+  const hostMem = hostMemRead && staleHostMemReadAt !== hostMemReadAt ? hostMemRead : null;
   const memSegments = dbMemorySegments(casMemBytes, hostMem?.memTotal, hostMem?.memUsed);
   // Per-second rates from consecutive statdump samples (statdumpRates.js);
   // null until two samples exist, or after a counter reset.

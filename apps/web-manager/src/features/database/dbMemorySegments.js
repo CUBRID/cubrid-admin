@@ -50,8 +50,16 @@ export const hostMemoryMaxAgeMs = (intervalSec) => Math.max(60_000, 2 * (Number(
  * ({ memTotal, memUsed, readAt }), or null when none was read within `maxAgeMs`.
  */
 export function recentHostMemory(reads, now, maxAgeMs) {
-  const newest = (reads || [])
-    .filter((read) => read?.memTotal > 0 && Number.isFinite(read.readAt))
-    .sort((a, b) => b.readAt - a.readAt)[0];
+  const newest = newestHostMemory(reads);
   return newest && now - newest.readAt <= maxAgeMs ? newest : null;
 }
+
+/** The newest of the host memory reads ({ memTotal, memUsed, readAt }), or null. */
+export function newestHostMemory(reads) {
+  return (reads || [])
+    .filter((read) => read?.memTotal > 0 && Number.isFinite(read.readAt))
+    .sort((a, b) => b.readAt - a.readAt)[0] || null;
+}
+
+/** Milliseconds from now until `time` (an epoch time), none when it has passed. */
+export const msUntil = (time) => Math.max(0, time - Date.now());
