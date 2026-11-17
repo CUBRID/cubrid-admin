@@ -10,6 +10,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { useCM } from '../../../constants/useCM';
 import { APP_VERSION } from '../../../constants/appVersion';
+import { tooManyAttemptsText } from '../../../infrastructure/errors/serverErrorText';
 
 export default function LoginPage() {
   const CM = useCM();
@@ -76,12 +77,9 @@ export default function LoginPage() {
     } catch (err) {
       // A wrong ID or password says so in plain words in every language.
       const wrongLogin = err.response?.data?.data?.type === '/errors/auth/invalid_credentials';
-      // The login rate limit: how long to wait, from Retry-After when sent.
-      const tooMany = err.response?.status === 429;
-      const retryAfter = Number.parseInt(err.response?.headers?.['retry-after'], 10);
-      const msg = tooMany
-        ? CM.tooManyAttemptsMsg(retryAfter > 0 ? retryAfter : undefined)
-        : wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg);
+      // The login rate limit says how long to wait.
+      const msg = tooManyAttemptsText(err, CM)
+        ?? (wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg));
       dispatch(loginFailure(msg));
       setApiError(msg);
     }

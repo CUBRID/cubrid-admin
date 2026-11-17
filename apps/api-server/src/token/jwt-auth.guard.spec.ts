@@ -21,7 +21,10 @@ afterAll(() => fs.rmSync(mockStorage, { recursive: true, force: true }));
 
 const SECRET = 'guard-spec-secret';
 const jwt = new JwtService({ secret: SECRET });
-const blacklist = { isBlacklisted: jest.fn().mockResolvedValue(false) };
+const blacklist = {
+  isBlacklisted: jest.fn().mockResolvedValue(false),
+  isFamilyRevoked: jest.fn().mockResolvedValue(false),
+};
 const newGuard = () => new JwtAuthGuard(new Reflector(), jwt, blacklist as unknown as TokenBlacklistService);
 
 @Controller('host')
@@ -52,7 +55,10 @@ beforeAll(() => {
   resetAuthCookieNamesForTest();
   ACCESS = authCookieNames().access;
 });
-beforeEach(() => blacklist.isBlacklisted.mockReset().mockResolvedValue(false));
+beforeEach(() => {
+  blacklist.isBlacklisted.mockReset().mockResolvedValue(false);
+  blacklist.isFamilyRevoked.mockReset().mockResolvedValue(false);
+});
 
 describe('JwtAuthGuard CSRF header', () => {
   it.each([
@@ -133,6 +139,13 @@ describe('JwtAuthGuard access token', () => {
     blacklist.isBlacklisted.mockResolvedValue(true);
     const token = await jwt.signAsync({ sub: 'u1', jti: 'j1', type: 'access' });
     await invalid({ cookies: { [ACCESS]: token } });
+  });
+
+  it('refuses a token whose session family was revoked', async () => {
+    blacklist.isFamilyRevoked.mockImplementation(async (family?: string) => family === 'f1');
+    const token = await jwt.signAsync({ sub: 'u1', jti: 'j1', type: 'access', fam: 'f1' });
+    await invalid({ cookies: { [ACCESS]: token } });
+    expect(blacklist.isFamilyRevoked).toHaveBeenCalledWith('f1');
   });
 
   it('refuses the token when the revocation list cannot be read', async () => {

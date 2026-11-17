@@ -16,7 +16,8 @@ function isAddressOrSubnet(token: string): boolean {
   if (extra !== undefined || !isIP(address)) return false;
   if (bits === undefined) return true;
   const max = isIP(address) === 4 ? 32 : 128;
-  return /^\d+$/.test(bits) && Number(bits) <= max;
+  // /0 is every address: the same as trusting everyone.
+  return /^\d+$/.test(bits) && Number(bits) > 0 && Number(bits) <= max;
 }
 
 /**
@@ -29,7 +30,7 @@ function isAddressOrSubnet(token: string): boolean {
  * - a hop count ('1'), or addresses, CIDR subnets and 'loopback',
  *   'linklocal', 'uniquelocal', comma-separated: passed as they are
  * - 'false' / 'off': X-Forwarded-For is ignored
- * - 'true' or anything else: refused with a warning, 'loopback' is used
+ * - 'true', a /0 subnet or anything else: refused with a warning, 'loopback' is used
  */
 export function parseTrustProxy(raw: string | undefined): { value: TrustProxyValue; warning?: string } {
   const text = (raw ?? '').trim();
@@ -44,6 +45,12 @@ export function parseTrustProxy(raw: string | undefined): { value: TrustProxyVal
   }
   if (/^\d+$/.test(lower)) return { value: Number(lower) };
   const tokens = lower.split(',').map((token) => token.trim()).filter(Boolean);
+  if (tokens.some((token) => /\/0+$/.test(token))) {
+    return {
+      value: DEFAULT_TRUST_PROXY,
+      warning: `TRUST_PROXY=${text} names every address (/0), which would trust any X-Forwarded-For a client sends; using '${DEFAULT_TRUST_PROXY}'.`,
+    };
+  }
   if (tokens.length > 0 && tokens.every(isAddressOrSubnet)) return { value: tokens.join(', ') };
   return {
     value: DEFAULT_TRUST_PROXY,
