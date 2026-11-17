@@ -180,12 +180,12 @@ export default function CreateDatabaseModal() {
   // time hostEnv?.CUBRID_DATABASES changes: that used to wipe out whatever
   // the user had already typed). Before the folder fill below, which runs in
   // the same render: a reset after the fill would undo it.
-  useResetEffect(() => {
+  useResetEffect(({ selectedHostUid }) => {
     if (!isCreateDatabaseModalOpen || !selectedHostUid) return;
     setStep(1);
     setFormData(INITIAL_FORM_DATA);
     setCreationWarning(null);
-  }, [isCreateDatabaseModalOpen]);
+  }, [isCreateDatabaseModalOpen], { selectedHostUid });
 
   // Reacts to hostEnv arriving (or changing) independently of the one-time
   // reset above, so a late-resolving fetch still populates the path fields

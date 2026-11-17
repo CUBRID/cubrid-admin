@@ -40,7 +40,7 @@ export default defineConfig([
           'error-boundaries', 'purity', 'set-state-in-render', 'unsupported-syntax', 'config', 'gating',
         ].map((rule) => [`react-hooks/${rule}`, 'error'])
       ),
-      'react-hooks/exhaustive-deps': 'error',
+      'react-hooks/exhaustive-deps': ['error', { additionalHooks: '(useResetEffect)' }],
     },
   },
   {

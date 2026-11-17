@@ -36,7 +36,7 @@ export default function MonitoringSettingsPopover({ showServiceVolumeInterval = 
     { label: '30s', value: 30 },
   ];
 
-  useResetEffect(() => {
+  useResetEffect(({ intervals }) => {
     const clampInterval = (value) => Math.min(Math.max(value, 0), MAX_INTERVAL);
 
     const rawDashVal = preferences.dashboardInterval;
@@ -57,7 +57,7 @@ export default function MonitoringSettingsPopover({ showServiceVolumeInterval = 
 
     setCustomBrokerText(brokerVal === 0 ? '' : brokerVal.toString());
     setBrokerPresetActive(intervals.some(opt => opt.value === brokerVal));
-  }, [preferences]);
+  }, [preferences], { intervals });
 
   useEffect(() => {
     function handleClickOutside(event) {

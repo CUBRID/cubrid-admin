@@ -51,7 +51,7 @@ export default function ImportExportHostModal() {
   const [exportFormat, setExportFormat] = useState('nativeXml');
   const [importGroupName, setImportGroupName] = useState(CM.importedPlaceholder);
 
-  useResetEffect(() => {
+  useResetEffect(({ importedPlaceholder }) => {
     if (isImportExportModalOpen) {
       if (importExportMode === 'export') {
         // Row selection (select-all + per-row checkboxes) is keyed by
@@ -67,10 +67,10 @@ export default function ImportExportHostModal() {
         setPendingPasswordHosts([]);
         setPasswordDrafts({});
         setShowPasswordPrompt(false);
-        setImportGroupName(CM.importedPlaceholder);
+        setImportGroupName(importedPlaceholder);
       }
     }
-  }, [isImportExportModalOpen, importExportMode, hosts]);
+  }, [isImportExportModalOpen, importExportMode, hosts], { importedPlaceholder: CM.importedPlaceholder });
 
   if (!isImportExportModalOpen) return null;
 

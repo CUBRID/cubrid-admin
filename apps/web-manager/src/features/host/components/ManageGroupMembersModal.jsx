@@ -31,7 +31,7 @@ export default function ManageGroupMembersModal() {
   const allHosts = useMemo(() => flattenHostsFromGroups(hostGroups), [hostGroups]);
 
   // The members as they are when the modal opens (or targets another group).
-  useResetEffect(() => {
+  useResetEffect(({ allHosts, hostGroups }) => {
     if (isManageGroupMembersModalOpen && groupToEditId) {
       const currentMembers = new Set(
         allHosts.filter((h) => findGroupIdForHost(hostGroups, h.uid) === groupToEditId).map((h) => h.uid)
@@ -41,7 +41,7 @@ export default function ManageGroupMembersModal() {
       setFilter('');
       setSaveError('');
     }
-  }, [isManageGroupMembersModalOpen, groupToEditId]);
+  }, [isManageGroupMembersModalOpen, groupToEditId], { allHosts, hostGroups });
 
   if (!isManageGroupMembersModalOpen) return null;
 

@@ -98,7 +98,7 @@ export default function CopyDatabaseModal() {
   // the form. A copy that deletes its source drops it from the list while the
   // job runs and after it succeeds, which changes currentDb; that re-run must
   // not throw the job's progress or result back to an empty form.
-  useResetEffect((_values, previous) => {
+  useResetEffect(({ busy }, previous) => {
     const justOpened = isCopyDatabaseModalOpen && !previous?.[0];
     if (isCopyDatabaseModalOpen && (justOpened || !busy)) {
       setWarnings([]);
@@ -122,7 +122,7 @@ export default function CopyDatabaseModal() {
       setVolumes([]);
       if (selectedHostUid && selectedDatabase) setVolInfoLoading(true);
     }
-  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir]);
+  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir], { busy });
   useEffect(() => {
     let cancelled = false;
     const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;

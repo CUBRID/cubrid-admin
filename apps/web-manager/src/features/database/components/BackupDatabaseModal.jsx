@@ -176,12 +176,12 @@ export default function BackupDatabaseModal() {
   // Opened afresh: the info tab, and backupDir from the cached backupInfo so
   // the field is never blank when reopening the same DB (without a cache it
   // stays '' until the read below returns).
-  useResetEffect(() => {
+  useResetEffect(({ backupInfo }) => {
     if (!isBackupDatabaseModalOpen) return;
     setActiveTab(TAB_INFO);
     setBackupInfoFetchError(false);
     setFormData(prev => ({ ...prev, backupDir: deriveBackupDir(backupInfo?.dbdir) }));
-  }, [isBackupDatabaseModalOpen, selectedDatabase, selectedHostUid]);
+  }, [isBackupDatabaseModalOpen, selectedDatabase, selectedHostUid], { backupInfo });
   useEffect(() => {
     // Closed by any means, or opened afresh: no backup is shown here.
     attachedTokenRef.current = null;

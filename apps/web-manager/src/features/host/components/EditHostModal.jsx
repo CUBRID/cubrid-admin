@@ -48,7 +48,7 @@ export default function EditHostModal() {
     label: groupId === UNGROUPED_GROUP_ID ? CM.noGroupOption : group.name,
   })), [hostGroups, CM]);
 
-  useResetEffect(() => {
+  useResetEffect(({ hosts, hostGroups, editHostPasswordRejected }) => {
     // Only re-populate when the modal opens (or targets a different host) —
     // NOT whenever `hosts` changes. A background hosts refresh while this
     // modal is open must not silently overwrite in-progress edits.
@@ -70,7 +70,7 @@ export default function EditHostModal() {
       setChangePassword(hostToEdit?.hasPassword === false || Boolean(editHostPasswordRejected));
       setConnectionTest(null);
     }
-  }, [isEditHostModalOpen, hostToEditUid]);
+  }, [isEditHostModalOpen, hostToEditUid], { hosts, hostGroups, editHostPasswordRejected });
 
   // Opened for a turned-down password: put the cursor in the password field
   // once it is enabled, after Modal's own first-field focus (next frame).

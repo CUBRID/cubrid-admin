@@ -94,7 +94,7 @@ export default function AddBackupPlanModal() {
   const atOpen = useLatestRef({ knownDbdir });
 
   // The form for the database the dialog opens on.
-  useResetEffect(() => {
+  useResetEffect(({ knownDbdir, isDbRunning, isHaDb }) => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
       setErrors({});
       setFormData({
@@ -113,7 +113,7 @@ export default function AddBackupPlanModal() {
         onlineType: isDbRunning || isHaDb ? 'online' : 'offline'
       });
     }
-  }, [isAddBackupPlanModalOpen, selectedDatabase]);
+  }, [isAddBackupPlanModalOpen, selectedDatabase], { knownDbdir, isDbRunning, isHaDb });
   useEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
       const { knownDbdir: dbdirAtOpen } = atOpen.current;

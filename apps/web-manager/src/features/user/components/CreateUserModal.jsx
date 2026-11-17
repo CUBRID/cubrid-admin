@@ -53,13 +53,13 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
   // re-triggering this effect and calling resetAction(), silently reverting
   // the just-shown success screen back to a blank form.
   // The form starts blank when the modal opens, once per opening.
-  useResetEffect(() => {
+  useResetEffect(({ isEditMode }) => {
     if (!isOpen) return;
     setErrors({});
     if (!isEditMode) {
       setFormData({ name: '', password: '', confirmPassword: '' });
     }
-  }, [isOpen]);
+  }, [isOpen], { isEditMode });
   const hasInitializedRef = useRef(false);
   useEffect(() => {
     if (!isOpen) {
@@ -80,7 +80,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
   // prefilled for instead of depending on databaseUsers.length directly, so it
   // doesn't clobber in-progress edits on later refetches.
   const [prefilledEditUser, setPrefilledEditUser] = useState(null);
-  useResetEffect(() => {
+  useResetEffect(({ prefilledEditUser }) => {
     if (!isOpen) {
       if (prefilledEditUser !== null) setPrefilledEditUser(null);
       return;
@@ -96,7 +96,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
       password: '',
       confirmPassword: '',
     });
-  }, [isOpen, databaseUsers, isEditMode, editingUser]);
+  }, [isOpen, databaseUsers, isEditMode, editingUser], { prefilledEditUser });
 
   if (!isOpen) return null;
 
