@@ -28,7 +28,7 @@ import {
   CaDialogFieldGrid,
   CaDialogGroup,
 } from '../../../components/ds/layout/CaDialogLayout';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 /**
  * Custom Dropdown for Class Selection
@@ -88,9 +88,9 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useResetWhen([isOpen], () => {
+  useResetEffect(() => {
     if (!isOpen) setSearch('');
-  });
+  }, [isOpen]);
 
   const hasResults = filteredClasses.length > 0;
 
@@ -250,7 +250,7 @@ export default function OptimizeDatabaseModal() {
     }
   }, [selectedHostUid, selectedDatabase, isActive]);
 
-  useResetWhen([isOptimizeDatabaseModalOpen, selectedDatabase, alreadyLoggedIn], () => {
+  useResetEffect(() => {
     if (isOptimizeDatabaseModalOpen && selectedDatabase) {
       setSelectedClassName('');
       setResultJob(null);
@@ -260,7 +260,7 @@ export default function OptimizeDatabaseModal() {
       setDbuser(alreadyLoggedIn ? '' : 'dba');
       setDbpasswd('');
     }
-  });
+  }, [isOptimizeDatabaseModalOpen, selectedDatabase, alreadyLoggedIn]);
   useEffect(() => {
     if (isOptimizeDatabaseModalOpen && selectedDatabase) {
       resetAction();

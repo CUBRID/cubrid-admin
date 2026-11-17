@@ -8,7 +8,7 @@ import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // For comparing workspace folders as typed: no surrounding spaces or
@@ -53,9 +53,9 @@ export default function DesktopWorkspaceSettingsPage() {
   const navigate = useNavigate();
 
   // Without a bridge (not the desktop app) there is nothing to read.
-  useResetWhen([bridge], () => {
+  useResetEffect(() => {
     if (!bridge) setLoading(false);
-  });
+  }, [bridge]);
   // Read once per bridge: a language switch must not read the settings again
   // (that would drop a folder being typed and any error shown). The labels
   // for an error are the current ones at that time.

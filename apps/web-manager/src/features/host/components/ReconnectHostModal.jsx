@@ -8,7 +8,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function ReconnectHostModal() {
   const CM = useCM();
@@ -26,16 +26,16 @@ export default function ReconnectHostModal() {
   const isUnreachable = useSelector((state) => state.host.reconnectReasons?.[reconnectHostUid] === 'unreachable');
   const [password, setPassword] = useState('');
 
-  useResetWhen([reconnectHostUid], () => {
+  useResetEffect(() => {
     setPassword('');
-  });
+  }, [reconnectHostUid]);
 
-  useResetWhen([isReconnectModalOpen], () => {
+  useResetEffect(() => {
     if (isReconnectModalOpen) {
       setLocalError(null);
       setIsReconnecting(false);
     }
-  });
+  }, [isReconnectModalOpen]);
 
   if (!isReconnectModalOpen) return null;
 

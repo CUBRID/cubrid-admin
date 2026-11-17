@@ -25,7 +25,7 @@ import { ModalStatusLoading,
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // view states
@@ -70,7 +70,7 @@ export default function DeleteDatabaseModal() {
 
   // Only when the modal opens: a successful delete clears selectedDatabase,
   // and re-running this then would reset the success view to the form.
-  useResetWhen([isDeleteDBModalOpen], () => {
+  useResetEffect(() => {
     if (isDeleteDBModalOpen && selectedDatabase && selectedHostUid) {
       setStep(1);
       setDbId('dba');
@@ -81,7 +81,7 @@ export default function DeleteDatabaseModal() {
       setWarnings([]);
       setFetchingVolumes(true);
     }
-  });
+  }, [isDeleteDBModalOpen]);
   // The database and host as they are when the modal opens: a successful
   // delete clears selectedDatabase, and this must not run again then.
   const atOpen = useLatestRef({ selectedDatabase, selectedHostUid });

@@ -10,7 +10,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { SearchInput } from '../../../components/ds/forms/SearchInput';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function AutoQueryLogModal() {
   const CM = useCM();
@@ -32,9 +32,9 @@ export default function AutoQueryLogModal() {
   }, [isAutoQueryLogModalOpen, selectedHostUid, dispatch]);
 
   // Reset pagination when search term or database context changes
-  useResetWhen([searchTerm, selectedDatabase], () => {
+  useResetEffect(() => {
     setCurrentPage(1);
-  });
+  }, [searchTerm, selectedDatabase]);
 
   // Hooks must be at the top level
   const filteredLogs = useMemo(() => {

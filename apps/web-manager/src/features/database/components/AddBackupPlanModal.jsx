@@ -23,7 +23,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const LEVEL_PRESETS_DEF = [
   { value: '0', title: 'Full (L0)', descKey: 'levelFullShortDesc', icon: 'auto_awesome_motion' },
@@ -94,7 +94,7 @@ export default function AddBackupPlanModal() {
   const atOpen = useLatestRef({ knownDbdir });
 
   // The form for the database the dialog opens on.
-  useResetWhen([isAddBackupPlanModalOpen, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
       setErrors({});
       setFormData({
@@ -113,7 +113,7 @@ export default function AddBackupPlanModal() {
         onlineType: isDbRunning || isHaDb ? 'online' : 'offline'
       });
     }
-  });
+  }, [isAddBackupPlanModalOpen, selectedDatabase]);
   useEffect(() => {
     if (isAddBackupPlanModalOpen && selectedDatabase) {
       const { knownDbdir: dbdirAtOpen } = atOpen.current;
@@ -134,25 +134,25 @@ export default function AddBackupPlanModal() {
 
   // The database stopped while the dialog is open: online is no longer a
   // choice. An HA database stays online (saving is refused while stopped).
-  useResetWhen([isAddBackupPlanModalOpen, onlineDisabled, isHaDb], () => {
+  useResetEffect(() => {
     if (isAddBackupPlanModalOpen && onlineDisabled && !isHaDb) {
       setFormData((prev) => (prev.onlineType === 'online' ? { ...prev, onlineType: 'offline' } : prev));
     }
-  });
+  }, [isAddBackupPlanModalOpen, onlineDisabled, isHaDb]);
 
   // Known as an HA database after the dialog opened: offline is no choice.
-  useResetWhen([isAddBackupPlanModalOpen, isHaDb], () => {
+  useResetEffect(() => {
     if (isAddBackupPlanModalOpen && isHaDb) {
       setFormData((prev) => (prev.onlineType === 'offline' ? { ...prev, onlineType: 'online' } : prev));
     }
-  });
+  }, [isAddBackupPlanModalOpen, isHaDb]);
 
   // The folder became known after the dialog opened: fill an empty path only.
-  useResetWhen([isAddBackupPlanModalOpen, knownDbdir], () => {
+  useResetEffect(() => {
     if (isAddBackupPlanModalOpen && knownDbdir) {
       setFormData((prev) => (prev.backupPath ? prev : { ...prev, backupPath: deriveBackupDir(knownDbdir) }));
     }
-  });
+  }, [isAddBackupPlanModalOpen, knownDbdir]);
 
   if (!isAddBackupPlanModalOpen) return null;
 

@@ -4,7 +4,7 @@ import { FormField } from './FormField';
 import { Icon } from '../foundation/Icon';
 import { Typography } from '../foundation/Typography';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export const TimePicker = ({
   label,
@@ -139,7 +139,7 @@ export const TimePicker = ({
   // keystroke would reject "1", "14", "14:" etc. as invalid HH:MM and fight
   // the user, so only validate/commit once they're done (blur or Enter).
   const [draft, setDraft] = useState(value);
-  useResetWhen([value], () => { setDraft(value); });
+  useResetEffect(() => { setDraft(value); }, [value]);
 
   const commitDraft = () => {
     const match = draft.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);

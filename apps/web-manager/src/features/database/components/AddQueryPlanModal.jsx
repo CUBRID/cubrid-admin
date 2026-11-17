@@ -19,7 +19,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function AddQueryPlanModal() {
   const CM = useCM();
@@ -53,7 +53,7 @@ export default function AddQueryPlanModal() {
   useEffect(() => {
     if (isAddQueryPlanModalOpen && selectedDatabase) resetAction();
   }, [isAddQueryPlanModalOpen, selectedDatabase, resetAction]);
-  useResetWhen([isAddQueryPlanModalOpen, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isAddQueryPlanModalOpen && selectedDatabase) {
       setFormData({
         queryId: `q_${selectedDatabase}_${Date.now().toString().slice(-4)}`,
@@ -65,7 +65,7 @@ export default function AddQueryPlanModal() {
         queryString: ''
       });
     }
-  });
+  }, [isAddQueryPlanModalOpen, selectedDatabase]);
 
   if (!isAddQueryPlanModalOpen) return null;
 

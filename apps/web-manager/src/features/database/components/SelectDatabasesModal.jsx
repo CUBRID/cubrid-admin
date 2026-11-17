@@ -10,7 +10,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
 import { MULTI_DB_ACTIONS, MULTI_DB_ACTION_ICONS, databaseSelectionRows, splitByAction } from '../databaseMultiActions';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 
 // What the actions go by, in words: running or not, logged in, saved login, HA.
@@ -48,14 +48,14 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
   // As in the single login dialog: on by default, and off saves nothing.
   const [saveCredentials, setSaveCredentials] = useState(true);
 
-  useResetWhen([isOpen, hostUid], () => {
+  useResetEffect(() => {
     if (!isOpen) return;
     setSelected(new Set(initialSelected || []));
     setFilter('');
     setLoginPending(false);
     setCredentialsByDb({});
     setSaveCredentials(true);
-  });
+  }, [isOpen, hostUid]);
 
   const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.dbname)), [rows, selected]);
   if (!isOpen) return null;

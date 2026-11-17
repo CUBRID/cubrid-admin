@@ -21,7 +21,7 @@ import { inputIssueText } from '../inputIssueText';
 import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { useFreshDbList } from '../useFreshDbList';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 
 export default function RenameDatabaseModal() {
@@ -56,14 +56,14 @@ export default function RenameDatabaseModal() {
   // parseDbResponse), so by the time the success view renders it's gone.
   const [renamedFromDb, setRenamedFromDb] = useState('');
 
-  useResetWhen([isRenameDatabaseModalOpen], () => {
+  useResetEffect(() => {
     if (isRenameDatabaseModalOpen) {
       setNewDbName('');
       setForcedel(false);
       setWarnings([]);
       setRenamedFromDb('');
     }
-  });
+  }, [isRenameDatabaseModalOpen]);
   useEffect(() => {
     if (isRenameDatabaseModalOpen) resetAction();
     // Only (re)initialize when the modal opens — NOT whenever selectedDatabase

@@ -27,7 +27,7 @@ import { ModalStatusLoading,
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const TAB_INFO = 'info';
 const TAB_HISTORY = 'history';
@@ -166,22 +166,22 @@ export default function BackupDatabaseModal() {
     });
   }, [backupInfo, isBackupDatabaseModalOpen]);
 
-  useResetWhen([availableLevels, formData.backupLevel], () => {
+  useResetEffect(() => {
     if (!availableLevels.includes(formData.backupLevel)) {
       const nextLevel = availableLevels[availableLevels.length - 1] || '0';
       setFormData(prev => ({ ...prev, backupLevel: nextLevel }));
     }
-  });
+  }, [availableLevels, formData.backupLevel]);
 
   // Opened afresh: the info tab, and backupDir from the cached backupInfo so
   // the field is never blank when reopening the same DB (without a cache it
   // stays '' until the read below returns).
-  useResetWhen([isBackupDatabaseModalOpen, selectedDatabase, selectedHostUid], () => {
+  useResetEffect(() => {
     if (!isBackupDatabaseModalOpen) return;
     setActiveTab(TAB_INFO);
     setBackupInfoFetchError(false);
     setFormData(prev => ({ ...prev, backupDir: deriveBackupDir(backupInfo?.dbdir) }));
-  });
+  }, [isBackupDatabaseModalOpen, selectedDatabase, selectedHostUid]);
   useEffect(() => {
     // Closed by any means, or opened afresh: no backup is shown here.
     attachedTokenRef.current = null;

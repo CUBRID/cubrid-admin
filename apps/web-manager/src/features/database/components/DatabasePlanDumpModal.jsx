@@ -15,7 +15,7 @@ import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { EmptyState } from '../../../components/ds/feedback/EmptyState';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function DatabasePlanDumpModal() {
   const CM = useCM();
@@ -29,12 +29,12 @@ export default function DatabasePlanDumpModal() {
   const [planDrop, setPlanDrop] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useResetWhen([isPlanDumpModalOpen], () => {
+  useResetEffect(() => {
     if (isPlanDumpModalOpen) {
       setStep('setup');
       setPlanDrop(false);
     }
-  });
+  }, [isPlanDumpModalOpen]);
 
   if (!isPlanDumpModalOpen) return null;
 

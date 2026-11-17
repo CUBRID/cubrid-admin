@@ -20,7 +20,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const LEVEL_PRESETS_DEF = [
   { value: '0', title: 'Full (L0)', descKey: 'levelFullShortDesc', icon: 'auto_awesome_motion' },
@@ -83,12 +83,12 @@ export default function EditBackupPlanModal() {
   const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const offlineDisabled = isHaDb;
 
-  useResetWhen([isEditBackupPlanModalOpen, selectedDatabase, selectedHostUid, selectedBackupId], () => {
+  useResetEffect(() => {
     if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
       setFormLoaded(false);
       setSavedOnline(false);
     }
-  });
+  }, [isEditBackupPlanModalOpen, selectedDatabase, selectedHostUid, selectedBackupId]);
   useEffect(() => {
     if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
       resetAction();

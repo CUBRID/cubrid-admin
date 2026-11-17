@@ -10,7 +10,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function ManageGroupMembersModal() {
   const CM = useCM();
@@ -31,7 +31,7 @@ export default function ManageGroupMembersModal() {
   const allHosts = useMemo(() => flattenHostsFromGroups(hostGroups), [hostGroups]);
 
   // The members as they are when the modal opens (or targets another group).
-  useResetWhen([isManageGroupMembersModalOpen, groupToEditId], () => {
+  useResetEffect(() => {
     if (isManageGroupMembersModalOpen && groupToEditId) {
       const currentMembers = new Set(
         allHosts.filter((h) => findGroupIdForHost(hostGroups, h.uid) === groupToEditId).map((h) => h.uid)
@@ -41,7 +41,7 @@ export default function ManageGroupMembersModal() {
       setFilter('');
       setSaveError('');
     }
-  });
+  }, [isManageGroupMembersModalOpen, groupToEditId]);
 
   if (!isManageGroupMembersModalOpen) return null;
 

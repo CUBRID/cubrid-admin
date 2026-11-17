@@ -9,7 +9,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { useCM } from '../../../constants/useCM';
 import { closeUpdateCheck } from '../appBarSlice';
 import { dismissUpdate, fetchUpdateStatus, openUpdateUrl } from '../../update/updateCheckClient';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const LOADING_VIEW = { phase: 'loading', status: null };
 
@@ -53,10 +53,10 @@ export default function UpdateCheckModal() {
     }
   }, []);
 
-  useResetWhen([isOpen, preloadedStatus], () => {
+  useResetEffect(() => {
     if (!isOpen) setView(LOADING_VIEW);
     else if (preloadedStatus) setView({ phase: 'done', status: preloadedStatus });
-  });
+  }, [isOpen, preloadedStatus]);
   useEffect(() => {
     if (!isOpen || preloadedStatus) {
       // Drop any still-in-flight result so it can't land in a later opening.

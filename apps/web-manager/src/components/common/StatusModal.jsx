@@ -7,7 +7,7 @@ import { Modal } from '../ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
 import { FailureTable } from '../ds/feedback/FailureTable';
 import { haFollowUpAction } from '../../features/host/hostSlice';
-import { useResetWhen } from '../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../infrastructure/hooks/useResetEffect';
 
 const THEME_STYLES = {
   success: {
@@ -52,12 +52,12 @@ export default function StatusModal() {
   const t = THEME_STYLES[type] || THEME_STYLES.info;
   const tLabel = { success: CM.jobStatusSucceeded, error: CM.jobStatusFailed, info: CM.statusNotice }[type] ?? CM.statusNotice;
 
-  useResetWhen([isOpen], () => {
+  useResetEffect(() => {
     if (isOpen) {
       setShowDetail(false);
       setOpenedFollowUps([]);
     }
-  });
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

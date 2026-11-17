@@ -31,7 +31,7 @@ import { CaDialogField,
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
 import { RESTORE_YEAR_MIN } from '@api-interfaces';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -188,7 +188,7 @@ export default function RestoreDatabaseModal() {
 
 
 
-  useResetWhen([isRestoreDatabaseModalOpen, selectedHostUid, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isRestoreDatabaseModalOpen && selectedHostUid && selectedDatabase) {
       const now = new Date();
       const localYear = now.getFullYear();
@@ -219,7 +219,7 @@ export default function RestoreDatabaseModal() {
       });
       setFilter('all');
     }
-  });
+  }, [isRestoreDatabaseModalOpen, selectedHostUid, selectedDatabase]);
   useEffect(() => {
     if (isRestoreDatabaseModalOpen && selectedHostUid && selectedDatabase) {
       resetAction();
@@ -228,7 +228,7 @@ export default function RestoreDatabaseModal() {
   }, [isRestoreDatabaseModalOpen, selectedHostUid, selectedDatabase, dispatch, resetAction]);
   // Auto-populate manual path inputs from the catalog. restoredb's -B takes a
   // directory (not the backup file itself), so store the containing folder.
-  useResetWhen([allBackups], () => {
+  useResetEffect(() => {
     if (allBackups && allBackups.length > 0) {
       const b0 = allBackups.find(b => b.level === 0);
       const b1 = allBackups.find(b => b.level === 1);
@@ -252,7 +252,7 @@ export default function RestoreDatabaseModal() {
         return prev;
       });
     }
-  });
+  }, [allBackups]);
 
   // A restore above level 0 needs every lower level's volumes reachable from the
   // SAME -B directory (restoredb only accepts one). CUBRID's own default backup

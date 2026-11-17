@@ -8,7 +8,7 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function ChangeHostPasswordModal() {
   const CM = useCM();
@@ -22,7 +22,7 @@ export default function ChangeHostPasswordModal() {
   });
   const [errors, setErrors] = useState({});
 
-  useResetWhen([isChangePasswordModalOpen], () => {
+  useResetEffect(() => {
     if (isChangePasswordModalOpen) {
       setFormData({
         password: '',
@@ -31,7 +31,7 @@ export default function ChangeHostPasswordModal() {
       setErrors({});
       setIsSuccess(false);
     }
-  });
+  }, [isChangePasswordModalOpen]);
 
   if (!isChangePasswordModalOpen) return null;
 

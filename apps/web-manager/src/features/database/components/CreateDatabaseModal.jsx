@@ -44,7 +44,7 @@ import {
   isValidGeneralVolumeSize,
   volumeSizeMbToPages,
 } from '../databaseVolumeValidation';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // The engine takes 4K-16K and turns any other size into one of them.
@@ -180,18 +180,18 @@ export default function CreateDatabaseModal() {
   // time hostEnv?.CUBRID_DATABASES changes: that used to wipe out whatever
   // the user had already typed). Before the folder fill below, which runs in
   // the same render: a reset after the fill would undo it.
-  useResetWhen([isCreateDatabaseModalOpen], () => {
+  useResetEffect(() => {
     if (!isCreateDatabaseModalOpen || !selectedHostUid) return;
     setStep(1);
     setFormData(INITIAL_FORM_DATA);
     setCreationWarning(null);
-  });
+  }, [isCreateDatabaseModalOpen]);
 
   // Reacts to hostEnv arriving (or changing) independently of the one-time
   // reset above, so a late-resolving fetch still populates the path fields
   // — merging via prev.x || dir rather than replacing, so it never clobbers
   // a value the user (or the fetch below) has already set.
-  useResetWhen([isCreateDatabaseModalOpen, hostEnv?.CUBRID_DATABASES], () => {
+  useResetEffect(() => {
     if (!isCreateDatabaseModalOpen) return;
     const cachedDir = hostEnv?.CUBRID_DATABASES;
     if (!cachedDir) return;
@@ -202,7 +202,7 @@ export default function CreateDatabaseModal() {
       logVolPath: prev.logVolPath || cachedDir,
       volumes: prev.volumes.map(vol => ({ ...vol, path: vol.path || cachedDir }))
     }));
-  });
+  }, [isCreateDatabaseModalOpen, hostEnv?.CUBRID_DATABASES]);
 
   // Once per opening, as the reset above.
   const hasInitializedRef = useRef(false);

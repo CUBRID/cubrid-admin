@@ -23,7 +23,7 @@ import {
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
 import CompactResultView from './CompactResultView';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function CompactDatabaseModal() {
   const CM = useCM();
@@ -48,12 +48,12 @@ export default function CompactDatabaseModal() {
   // The job's output, shown as tables when Space Monitoring Details was on.
   const [resultLog, setResultLog] = useState(null);
 
-  useResetWhen([isCompactDatabaseModalOpen], () => {
+  useResetEffect(() => {
     if (isCompactDatabaseModalOpen) {
       setVerbose(false);
       setResultLog(null);
     }
-  });
+  }, [isCompactDatabaseModalOpen]);
   useEffect(() => {
     if (isCompactDatabaseModalOpen) resetAction();
   }, [isCompactDatabaseModalOpen, resetAction]);

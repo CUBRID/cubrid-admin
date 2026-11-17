@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useResetWhen } from './useResetWhen';
+import { useResetEffect } from './useResetEffect';
 
 const FLASH_MS = 400;
 
@@ -31,9 +31,9 @@ export function useRefreshFlash(refreshCounter) {
   }, []);
 
   // The flash shows with the refresh itself; the timer below ends it.
-  useResetWhen([refreshCounter, pressed], () => {
+  useResetEffect(() => {
     if (refreshCounter + pressed !== 0) setIsFlashing(true);
-  });
+  }, [refreshCounter, pressed]);
   useEffect(() => {
     if (refreshCounter + pressed === 0) return undefined;
     const timer = setTimeout(() => setIsFlashing(false), FLASH_MS);

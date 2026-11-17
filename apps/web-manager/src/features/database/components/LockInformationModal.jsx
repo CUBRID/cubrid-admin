@@ -17,7 +17,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLoadingOverlay';
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // The engine prints "Timeout_period : <value>" (since 2012; before that,
@@ -105,7 +105,7 @@ export default function LockInformationModal() {
     if (objects == null) fetchLockInfo({ withObjects: true });
   };
 
-  useResetWhen([isLockInfoModalOpen, selectedHostUid, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isLockInfoModalOpen) {
       setActiveTab('sessions');
       setLockView('summary');
@@ -119,7 +119,7 @@ export default function LockInformationModal() {
       setLoading(false);
       setError(null);
     }
-  });
+  }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase]);
   // Read when the modal opens or its database changes, with the read as it
   // is then (its identity follows isActive and the labels, not a reason to
   // read again).

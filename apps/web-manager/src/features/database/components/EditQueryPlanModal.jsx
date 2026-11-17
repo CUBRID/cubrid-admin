@@ -20,7 +20,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function EditQueryPlanModal() {
   const CM = useCM();
@@ -69,7 +69,7 @@ export default function EditQueryPlanModal() {
     }
   }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid, dispatch]);
   // The form follows the plan shown.
-  useResetWhen([isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid], () => {
+  useResetEffect(() => {
     if (isEditQueryPlanModalOpen && selectedDatabase && selectedQueryPlanId && !isLoading && !isSuccess && !isError) {
       const plans = queryPlans[dbKey(selectedHostUid, selectedDatabase)] || [];
       const plan = plans.find(p => p.query_id === selectedQueryPlanId);
@@ -116,7 +116,7 @@ export default function EditQueryPlanModal() {
         });
       }
     }
-  });
+  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid]);
 
 
   if (!isEditQueryPlanModalOpen) return null;

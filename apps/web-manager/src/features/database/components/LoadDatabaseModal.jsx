@@ -24,7 +24,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function LoadDatabaseModal() {
   const CM = useCM();
@@ -110,14 +110,14 @@ export default function LoadDatabaseModal() {
     setDataSource(convertedList);
   };
 
-  useResetWhen([isLoadDBModalOpen, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isLoadDBModalOpen && selectedDatabase) {
       setFormData((prev) => ({
         ...prev,
         targetDbName: selectedDatabase,
       }));
     }
-  });
+  }, [isLoadDBModalOpen, selectedDatabase]);
   useEffect(() => {
     if (isLoadDBModalOpen && selectedDatabase) {
       resetAction();

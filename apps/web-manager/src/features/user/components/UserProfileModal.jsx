@@ -8,7 +8,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function UserProfileModal({ isOpen, onClose }) {
   const CM = useCM();
@@ -25,14 +25,14 @@ export default function UserProfileModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useResetWhen([isOpen, user], () => {
+  useResetEffect(() => {
     if (isOpen) {
       setProfile({ id: user?.id || '' });
       setPasswords({ oldPassword: '', newPassword: '', confirmPassword: '' });
       setEditMode(null);
       setError(null);
     }
-  });
+  }, [isOpen, user]);
 
   const globalLoading = useSelector((state) => state.auth.loading);
   const globalError = useSelector((state) => state.auth.error);

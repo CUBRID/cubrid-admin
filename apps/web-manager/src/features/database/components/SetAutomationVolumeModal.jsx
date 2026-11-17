@@ -18,7 +18,7 @@ import {
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const BYTES_TO_MB = 1024 * 1024;
 
@@ -199,13 +199,13 @@ export default function SetAutomationVolumeModal() {
   }, [isSetAutomationVolumeModalOpen, pageSize, canReadSpace, entryKey, selectedHostUid, selectedDatabase, dispatch]);
 
   // Reset local state before fetching new config to avoid stale view
-  useResetWhen([isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
       setCombinedEnabled(false);
       setLoadedExtPages(null);
       setLoadedExt(null);
     }
-  });
+  }, [isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase]);
   useEffect(() => {
     if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
       resetAction();
@@ -213,7 +213,7 @@ export default function SetAutomationVolumeModal() {
     }
   }, [isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase, dispatch, resetAction]);
 
-  useResetWhen([autoVolumeConfigs, selectedHostUid, selectedDatabase], () => {
+  useResetEffect(() => {
     if (!selectedDatabase || !autoVolumeConfigs) return;
     const config = autoVolumeConfigs[dbKey(selectedHostUid, selectedDatabase)];
     if (config) {
@@ -230,11 +230,11 @@ export default function SetAutomationVolumeModal() {
         index: String(config.index_ext_page || extensionPages),
       } : null);
     }
-  });
+  }, [autoVolumeConfigs, selectedHostUid, selectedDatabase]);
 
-  useResetWhen([pageSize, loadedExtPages], () => {
+  useResetEffect(() => {
     if (pageSize && loadedExtPages) setCombinedAddSize(pagesToMib(loadedExtPages, pageSize));
-  });
+  }, [pageSize, loadedExtPages]);
 
   // Below AUTO_ADD_PAGES_MIN pages CMS adds nothing (0 or less) or rounds up
   // to that many, so the size starts there.

@@ -12,7 +12,7 @@ import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLo
 import { TablePagination } from '../../../components/ds/feedback/Pagination';
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 const PAGE_SIZE = 20;
@@ -47,9 +47,9 @@ export default function TransactionInfoModal() {
   }, [transactions, sortDirection]);
   const pager = useClientPagination(sortedTransactions, PAGE_SIZE, `${isTransactionInfoModalOpen}:${selectedHostUid}:${selectedDatabase}`);
   // A selection on another page can't be seen, so Kill must not act on it.
-  useResetWhen([pager.page], () => {
+  useResetEffect(() => {
     setSelectedTranIndex(null);
-  });
+  }, [pager.page]);
 
   // killtransaction/gettransactioninfo (CUBRID 11+) don't take dbuser/dbpasswd —
   // they run under the already-authenticated CMS session, so there's nothing
@@ -83,7 +83,7 @@ export default function TransactionInfoModal() {
     }
   };
 
-  useResetWhen([isTransactionInfoModalOpen, selectedHostUid, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isTransactionInfoModalOpen) {
       setSelectedTranIndex(null);
     } else {
@@ -94,7 +94,7 @@ export default function TransactionInfoModal() {
       setLoading(false);
       setErrorMsg('');
     }
-  });
+  }, [isTransactionInfoModalOpen, selectedHostUid, selectedDatabase]);
   // The read as it is now: only an open or another database reads again.
   const fetchTransactionInfoRef = useLatestRef(fetchTransactionInfo);
   useEffect(() => {

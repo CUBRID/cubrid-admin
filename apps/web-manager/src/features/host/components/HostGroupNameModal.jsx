@@ -12,7 +12,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function HostGroupNameModal() {
   const CM = useCM();
@@ -32,11 +32,11 @@ export default function HostGroupNameModal() {
   const [name, setName] = useState('');
   const [localError, setLocalError] = useState('');
 
-  useResetWhen([isOpen, isRename, groupToEditName], () => {
+  useResetEffect(() => {
     if (!isOpen) return;
     setName(isRename ? (groupToEditName || '') : '');
     setLocalError('');
-  });
+  }, [isOpen, isRename, groupToEditName]);
 
   if (!isOpen) return null;
 

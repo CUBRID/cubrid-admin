@@ -25,7 +25,7 @@ import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { useFreshDbList } from '../useFreshDbList';
 import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
@@ -98,7 +98,7 @@ export default function CopyDatabaseModal() {
   // the form. A copy that deletes its source drops it from the list while the
   // job runs and after it succeeds, which changes currentDb; that re-run must
   // not throw the job's progress or result back to an empty form.
-  useResetWhen([isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir], (previous) => {
+  useResetEffect((_values, previous) => {
     const justOpened = isCopyDatabaseModalOpen && !previous?.[0];
     if (isCopyDatabaseModalOpen && (justOpened || !busy)) {
       setWarnings([]);
@@ -122,7 +122,7 @@ export default function CopyDatabaseModal() {
       setVolumes([]);
       if (selectedHostUid && selectedDatabase) setVolInfoLoading(true);
     }
-  });
+  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir]);
   useEffect(() => {
     let cancelled = false;
     const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
@@ -169,7 +169,7 @@ export default function CopyDatabaseModal() {
   }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir, resetAction, dispatch, busyRef, hasCurrentDbRef]);
 
   // Desktop EditListener alignment: Auto-update target paths and volume mapping when destName changes
-  useResetWhen([formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths], () => {
+  useResetEffect(() => {
     if (!formData.destName) return;
 
     const parentDir = getParentDirectory(currentDb?.dbdir || '');
@@ -193,7 +193,7 @@ export default function CopyDatabaseModal() {
       }
       return changed ? next : prev;
     });
-  });
+  }, [formData.destName, selectedDatabase, currentDb?.dbdir, manuallyEditedPaths]);
 
   // Derive defaults from the latest name and metadata, including when the
   // user types a name before getVolumeInfo finishes. Keep explicit edits.

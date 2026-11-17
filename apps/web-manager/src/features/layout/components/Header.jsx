@@ -10,7 +10,7 @@ import HeaderMenu from './HeaderMenu';
 import LanguageToggle from './LanguageToggle';
 import { useCM } from '../../../constants/useCM';
 import { isDesktopApp } from '../../desktop/isDesktopApp';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function Header({ theme, toggleTheme }) {
   const CM = useCM();
@@ -36,7 +36,7 @@ export default function Header({ theme, toggleTheme }) {
   }, [dispatch, isAuthenticated, user]);
 
   // Other words (language, user name), other widths: measure from the start.
-  useResetWhen([CM, user], () => { setFold(0); setMeasureTick((n) => n + 1); });
+  useResetEffect(() => { setFold(0); setMeasureTick((n) => n + 1); }, [CM, user]);
 
   // Before paint: one more step while the row is wider than the header.
   useLayoutEffect(() => {

@@ -21,7 +21,7 @@ import {
   ModalStatusLoading,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const INITIAL_FORM_DATA = {
   targetDbName: '',
@@ -91,7 +91,7 @@ export default function UnloadDatabaseModal() {
     }
   }, [selectedHostUid, selectedDatabase, activeDatabases]);
 
-  useResetWhen([isUnloadDBModalOpen, selectedDatabase, currentDb, selectedHostUid], () => {
+  useResetEffect(() => {
     if (isUnloadDBModalOpen && selectedDatabase) {
       setFormData({
         ...INITIAL_FORM_DATA,
@@ -103,7 +103,7 @@ export default function UnloadDatabaseModal() {
         prefixOutputFile: selectedDatabase || '',
       });
     }
-  });
+  }, [isUnloadDBModalOpen, selectedDatabase, currentDb, selectedHostUid]);
   useEffect(() => {
     if (isUnloadDBModalOpen && selectedDatabase) {
       resetAction();

@@ -35,7 +35,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
 
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function ImportExportHostModal() {
   const CM = useCM();
@@ -51,7 +51,7 @@ export default function ImportExportHostModal() {
   const [exportFormat, setExportFormat] = useState('nativeXml');
   const [importGroupName, setImportGroupName] = useState(CM.importedPlaceholder);
 
-  useResetWhen([isImportExportModalOpen, importExportMode, hosts], () => {
+  useResetEffect(() => {
     if (isImportExportModalOpen) {
       if (importExportMode === 'export') {
         // Row selection (select-all + per-row checkboxes) is keyed by
@@ -70,7 +70,7 @@ export default function ImportExportHostModal() {
         setImportGroupName(CM.importedPlaceholder);
       }
     }
-  });
+  }, [isImportExportModalOpen, importExportMode, hosts]);
 
   if (!isImportExportModalOpen) return null;
 

@@ -22,7 +22,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { checkEffectiveParams, parseConfText, parseEngineSizeToBytes } from '@api-interfaces';
 import { paramIssuesText } from '../../../infrastructure/errors/paramIssueText';
 import { ParamScopeBadge } from './ParamScopeBadge';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // The param list itself — which keys exist, their category/type/guard/
 // default — no longer lives here. It comes from the connected host's
@@ -296,7 +296,7 @@ export default function DatabasePropertyModal() {
   // Numbers each config read; only the latest one ends the spinner.
   const fetchSeqRef = useRef(0);
 
-  useResetWhen([isDatabasePropertyModalOpen, selectedDatabase], () => {
+  useResetEffect(() => {
     if (isDatabasePropertyModalOpen) {
       setParams({});
       setSectionParams({});
@@ -306,7 +306,7 @@ export default function DatabasePropertyModal() {
       setParamsKey(null);
       setCharsetRead(null);
     }
-  });
+  }, [isDatabasePropertyModalOpen, selectedDatabase]);
   useEffect(() => {
     if (isDatabasePropertyModalOpen) {
       fetchedConfigKeyRef.current = null;

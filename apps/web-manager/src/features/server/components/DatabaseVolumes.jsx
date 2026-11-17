@@ -10,7 +10,7 @@ import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState
 import { useCM } from '../../../constants/useCM';
 import { formatSize } from '../../../infrastructure/utils/format';
 import { volumeGroup } from '../hostMetrics';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const getSizeFormat = (size) => formatSize(size, 1);
 
@@ -104,12 +104,12 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   const [loadFailed, setLoadFailed] = useState(false);
   const dbListSettled = dbListStatus !== 'loading';
 
-  useResetWhen([hostUid], () => {
+  useResetEffect(() => {
     setVolumes([]);
     setLoading(false);
     setHasLoadedOnce(false);
     setLoadFailed(false);
-  });
+  }, [hostUid]);
 
   // A database can stay active (running) after logout — logout only drops
   // the session, not the engine process — so filtering on "active" alone

@@ -11,7 +11,7 @@ import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { menuOffReason } from '../../layout/menuOffReason';
 import { useCM } from '../../../constants/useCM';
-import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MODE_KEYS = [
@@ -155,9 +155,9 @@ function LogViewer({ hostUid, path }) {
   // Top SQL analyzes the log again each time it is entered or refreshed: until
   // that result lands, the earlier one is not shown as complete (copy and
   // export stay off).
-  useResetWhen([isTop, hostUid, path, topRevision], () => {
+  useResetEffect(() => {
     if (isTop) setTopAnalysis({ hostUid, path, revision: topRevision, loading: true });
-  });
+  }, [isTop, hostUid, path, topRevision]);
   useEffect(() => {
     if (!isTop) return undefined;
     const controller = new AbortController();
@@ -174,11 +174,11 @@ function LogViewer({ hostUid, path }) {
     return () => controller.abort();
   }, [hostUid, path, topRevision, isTop]);
 
-  useResetWhen([isRawOnlyLog, viewMode], () => {
+  useResetEffect(() => {
     if (isRawOnlyLog && viewMode !== 'raw') {
       setViewMode('raw');
     }
-  });
+  }, [isRawOnlyLog, viewMode]);
 
   useEffect(() => {
     if (!toolbarMenu) return undefined;
