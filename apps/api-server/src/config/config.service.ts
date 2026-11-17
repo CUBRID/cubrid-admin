@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { Injectable } from '@nestjs/common';
 import { parseCliArgs } from './parse-cli-args';
 import { parseBooleanEnv } from './parse-boolean-env';
+import { parseTrustProxy, TrustProxyValue } from './trust-proxy';
 import { deriveSecretKeyHexFromSeedSalt } from './master-key';
 import { getLogPath } from '../util/resolve-log-path';
 
@@ -22,7 +23,7 @@ export class ConfigService {
   public cmsForwardEnabled!: boolean;
   public authRegistrationEnabled!: boolean;
   private hstsEnabled!: boolean;
-  private trustProxy!: boolean;
+  private trustProxy!: TrustProxyValue;
   public listenHost?: string;
   private readonly listenUnixSocket?: string;
   private readonly desktopMode: boolean;
@@ -66,7 +67,7 @@ export class ConfigService {
     this.authRegistrationEnabled = this.desktopMode ? false : this.resolveAuthRegistrationEnabled(args);
     // Both only for a server that browsers reach over the network (not the desktop app's socket).
     this.hstsEnabled = this.desktopMode ? false : this.resolveFlag(args, 'HSTS_ENABLED', false);
-    this.trustProxy = this.desktopMode ? false : this.resolveFlag(args, 'TRUST_PROXY', false);
+    this.trustProxy = this.desktopMode ? false : this.resolveTrustProxy(args);
 
     this.resolveLogSettings(args);
 
@@ -136,12 +137,8 @@ export class ConfigService {
     return this.hstsEnabled;
   }
 
-  /**
-   * TRUST_PROXY: take the client's address from X-Forwarded-For (behind a
-   * reverse proxy). Off by default: a browser that connects directly could
-   * otherwise pick its own address for the login rate limit.
-   */
-  isTrustProxy(): boolean {
+  /** TRUST_PROXY, as express's 'trust proxy' takes it (see parseTrustProxy). */
+  getTrustProxy(): TrustProxyValue {
     return this.trustProxy;
   }
 
@@ -280,6 +277,12 @@ export class ConfigService {
     }
 
     return fs.readFileSync(certPath, 'utf8');
+  }
+
+  private resolveTrustProxy(args: Record<string, string>): TrustProxyValue {
+    const { value, warning } = parseTrustProxy(args.TRUST_PROXY ?? process.env.TRUST_PROXY);
+    if (warning) console.warn(`[ConfigService] ${warning}`);
+    return value;
   }
 
   private resolveFlag(args: Record<string, string>, key: string, fallback: boolean): boolean {

@@ -76,7 +76,12 @@ export default function LoginPage() {
     } catch (err) {
       // A wrong ID or password says so in plain words in every language.
       const wrongLogin = err.response?.data?.data?.type === '/errors/auth/invalid_credentials';
-      const msg = wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg);
+      // The login rate limit: how long to wait, from Retry-After when sent.
+      const tooMany = err.response?.status === 429;
+      const retryAfter = Number.parseInt(err.response?.headers?.['retry-after'], 10);
+      const msg = tooMany
+        ? CM.tooManyAttemptsMsg(retryAfter > 0 ? retryAfter : undefined)
+        : wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg);
       dispatch(loginFailure(msg));
       setApiError(msg);
     }

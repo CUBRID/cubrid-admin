@@ -32,14 +32,19 @@ class PollController {
 }
 
 const tokens = { token: 'a', refreshToken: 'r', expiresIn: 86400 };
+const proxied = (req: request.Test, forged: string, client: string) =>
+  // What a reverse proxy on this machine sends on: the client's own header,
+  // with the address it saw appended.
+  req.set('X-Forwarded-For', `${forged}, ${client}`);
 
 describe('login rate limit (AuthThrottlerGuard)', () => {
   let app: INestApplication;
-  const authService = { login: jest.fn().mockResolvedValue(tokens) };
+  const authService = { login: jest.fn().mockResolvedValue(tokens), refresh: jest.fn().mockResolvedValue(tokens) };
   const config = { isDesktopMode: () => false };
 
   beforeEach(async () => {
     authService.login.mockClear();
+    authService.refresh.mockClear();
     const moduleRef = await Test.createTestingModule({
       imports: [ThrottlerModule.forRoot(AUTH_THROTTLE_OPTIONS)],
       controllers: [AuthController, PollController],
@@ -52,6 +57,8 @@ describe('login rate limit (AuthThrottlerGuard)', () => {
       ],
     }).compile();
     app = moduleRef.createNestApplication({ logger: false });
+    // As main.ts sets it by default (TRUST_PROXY unset): a proxy on this machine.
+    app.getHttpAdapter().getInstance().set('trust proxy', 'loopback');
     app.use(cookieParser());
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
@@ -84,6 +91,22 @@ describe('login rate limit (AuthThrottlerGuard)', () => {
     }
     expect(authService.login).not.toHaveBeenCalled();
     expect((await login()).status).toBe(201);
+  });
+
+  it('does not limit the session refresh', async () => {
+    for (let i = 0; i < AUTH_THROTTLE_LIMIT + 5; i += 1) {
+      const res = await request(app.getHttpServer()).post('/auth/refresh').set('X-CWM-Request', '1').set('Cookie', 'x=y');
+      expect(res.status).not.toBe(429);
+    }
+  });
+
+  it('behind a proxy on this machine, counts the address the proxy saw: a forged X-Forwarded-For does not get around it', async () => {
+    for (let i = 0; i < AUTH_THROTTLE_LIMIT; i += 1) {
+      expect((await proxied(login(), `198.51.100.${i}`, '203.0.113.7')).status).toBe(201);
+    }
+    expect((await proxied(login(), '198.51.100.99', '203.0.113.7')).status).toBe(429);
+    // Another client behind the same proxy has its own count.
+    expect((await proxied(login(), '198.51.100.1', '203.0.113.8')).status).toBe(201);
   });
 
   it('is skipped in desktop mode', async () => {

@@ -448,6 +448,9 @@ if (sessionRefreshEnabled()) {
   }
 }
 
+/** An answer that means "try again shortly", not "the session is over". */
+const isRetryLaterStatus = (status) => status === 429 || status === 503;
+
 async function handleSystemSessionExpired() {
   // The desktop app has no app login to go back to.
   if (isHandlingSystemSessionExpiry || isDesktopApp()) {
@@ -711,7 +714,10 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } catch (refreshErr) {
           notifyAccessTokenRefreshFailed(refreshErr);
-          await handleSystemSessionExpired();
+          // "Try again shortly" (429, or 503 while another refresh of the same
+          // token runs) says nothing about the session: it stays, and the
+          // next request refreshes again.
+          if (!isRetryLaterStatus(refreshErr?.response?.status)) await handleSystemSessionExpired();
           return Promise.reject(error);
         } finally {
           isRefreshingAccessToken = false;

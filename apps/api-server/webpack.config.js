@@ -93,12 +93,13 @@ module.exports = {
   ignoreWarnings: [
     // Packages that ship source maps pointing at sources they do not publish.
     /Failed to parse source map/,
-    // Optional loaders that require a name held in a variable: Nest's
-    // load-package/load-adapter/optional-require (every call used here passes
-    // a static loader), Express view engines (no views here) and load-esm
-    // (file-type, left out above).
+    // Loaders that require a name held in a variable, each checked: Nest's
+    // load-package / load-adapter / optional-require (every call this server
+    // makes passes a static loader, so the bundle has what they load) and
+    // Express's view engine lookup (no views here). Only these files: the same
+    // warning from anywhere else still shows.
     {
-      module: /node_modules[\\/](@nestjs[\\/](common|core)|express|load-esm)[\\/]/,
+      module: /node_modules[\\/](@nestjs[\\/]common[\\/]utils[\\/]load-package\.util|@nestjs[\\/]core[\\/]helpers[\\/](load-adapter|optional-require)|(@nestjs[\\/]platform-express[\\/]node_modules[\\/])?express[\\/]lib[\\/]view)\.js$/,
       message: /Critical dependency: the request of a dependency is an expression/,
     },
   ],

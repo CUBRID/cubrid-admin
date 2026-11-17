@@ -34,9 +34,10 @@ async function bootstrap() {
     // would be recorded, silently dropping ordinary traffic.
     logger: appLogger,
   });
-  // Behind a reverse proxy only (TRUST_PROXY): otherwise X-Forwarded-For is
-  // the client's own claim, and req.ip (the login rate limit) must not take it.
-  app.getHttpAdapter().getInstance().set('trust proxy', bootConfig.isTrustProxy());
+  // Only the proxies TRUST_PROXY names (by default one on this machine) are
+  // believed about the client's address: req.ip, which the login rate limit
+  // counts by, is never a value the client wrote into X-Forwarded-For.
+  app.getHttpAdapter().getInstance().set('trust proxy', bootConfig.getTrustProxy());
   const configService = app.get(ConfigService);
   const port: string = configService.getPort();
   const listenHost = configService.getListenHost();
