@@ -125,6 +125,12 @@ module.exports = {
     // One installer per arch, not one with both.
     buildUniversalInstaller: false,
     artifactName: fileName('windows', '-setup'),
+    installerIcon: 'icon.ico',
+    uninstallerIcon: 'icon.ico',
+    installerHeaderIcon: 'icon.ico',
+    // 164x314, 24-bit: the left image of the welcome / finish pages.
+    installerSidebar: 'installerSidebar.bmp',
+    uninstallerSidebar: 'installerSidebar.bmp',
   },
   portable: { buildUniversalInstaller: false, artifactName: fileName('windows', '-portable') },
   // Installer: rpm. Portable: AppImage.
@@ -188,9 +194,17 @@ module.exports = {
   // electron-builder names that folder (and the /usr/bin link, chrome-sandbox
   // and AppArmor paths) after the product name, so only the Linux packager's
   // copy changes; the name users see stays "CUBRID Admin".
+  // Windows: the setups and the uninstaller show the full version
+  // (0.1.0.0001), not the semver "version" (0.1.0), in ProductVersion, the
+  // installed apps list (DisplayVersion and name) and the setup's bottom line.
+  // Only the Windows packager's copy changes. (The app exe's ProductVersion
+  // reads 0.1.0.1: electron-builder writes it in numeric form.)
   beforePack: (context) => {
     if (context.electronPlatformName === 'linux') {
       context.packager.appInfo.sanitizedProductName = 'cubrid-admin-desktop';
+    }
+    if (context.electronPlatformName === 'win32') {
+      context.packager.appInfo.version = version;
     }
   },
   afterPack: (context) => {
