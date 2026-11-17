@@ -99,3 +99,15 @@ it('shows any other login failure as the server says it', async () => {
   await tryLogin({ response: { data: { message: 'Could not reach the server.', data: { type: '/errors/internal/internal_error' } } } });
   expect(container.textContent).toContain('Could not reach the server.');
 });
+
+it('says how long to wait when the login rate limit turns the attempt away', async () => {
+  await tryLogin({ response: { status: 429, headers: { 'retry-after': '42' }, data: { message: 'Too many attempts. Try again shortly.', data: { type: '/errors/http/too_many_requests' } } } });
+  expect(container.textContent).toContain('Too many attempts. Try again in 42 seconds.');
+  expect(container.textContent).not.toContain('Login failed');
+});
+
+it('says to try again shortly when the limit gives no Retry-After', async () => {
+  await tryLogin({ response: { status: 429, headers: {}, data: { message: 'ThrottlerException: Too Many Requests' } } });
+  expect(container.textContent).toContain('Too many attempts. Try again shortly.');
+  expect(container.textContent).not.toContain('ThrottlerException');
+});

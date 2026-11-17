@@ -30,9 +30,10 @@ and `LOG_DIR`. Upgrading or removing the installed server keeps `cwm.conf`,
 }
 ```
 
-Sign-in requests (login, session refresh, sign-up, and changing or confirming
-the account password) are limited to 10 a minute per client address; past
-that the server answers 429 with `Retry-After`. Other requests are not limited.
+Sign-in requests are limited per client address: login, sign-up, changing
+the account password and deleting the account each allow 10 requests a minute,
+counted separately for each. Past that the server answers 429 with
+`Retry-After`. The session refresh and all other requests are not limited.
 
 Do not add `SEED` or `SALT` here — they're ignored on purpose. They're
 generated automatically on first run and stored in `cwm-vault/secrets.json`.
@@ -49,7 +50,7 @@ unreadable.
 | `SSL_CERT_PATH` / `SSL_KEY_PATH` | Path to a real TLS cert/key pair. Both must be set together, or neither. | self-signed cert, auto-generated |
 | `AUTH_REGISTRATION_ENABLED` | Whether new accounts can sign up. Set to `false` once your team is registered. | `true` |
 | `HSTS_ENABLED` | Send `Strict-Transport-Security`, so browsers only use https for this server. Turn it on only with your own certificate (`SSL_CERT_PATH`): with the default self-signed certificate, a browser that has seen it no longer lets you past the certificate warning. | `false` |
-| `TRUST_PROXY` | `true` when the server runs behind a reverse proxy, so the client's address is taken from `X-Forwarded-For`. The login rate limit counts by that address; left `false` behind a proxy, every user counts as the proxy. Keep it `false` when browsers connect directly, or a client could choose its own address. | `false` |
+| `TRUST_PROXY` | Which reverse proxies are believed about the client's address (`X-Forwarded-For`); the login rate limit counts by that address. A hop count (`1`), or addresses and subnets (`10.0.0.5, 192.168.0.0/16`, `loopback`, `linklocal`, `uniquelocal`), comma-separated. The default fits a proxy on the same machine (such as nginx). Set the proxy's address when it runs on another machine, or every user counts as the proxy. `false` ignores the header. `true` is refused (it would let a client choose its own address) and the default is used. | `loopback` |
 | `CMS_REJECT_UNAUTHORIZED` | Verify TLS certificates when connecting to CUBRID CMS hosts | `false` |
 | `CMS_CA_CERT_PATH` | CA certificate to trust for CMS hosts using a private/self-signed cert | — |
 | `CMS_JOB_RETENTION_HOURS` | How long finished background-job records (copy/rename/backup/etc.) are kept | `24` |

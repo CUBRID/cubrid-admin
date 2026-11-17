@@ -35,7 +35,7 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(AuthThrottlerGuard)
+  // Not rate limited: it needs the signed refresh cookie (auth-throttle.ts).
   @Post('refresh')
   async refresh(
     @Req() req: Request,
