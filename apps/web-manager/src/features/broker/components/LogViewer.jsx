@@ -152,11 +152,15 @@ function LogViewer({ hostUid, path }) {
     dispatch(fetchLogContent({ hostUid, path, start: String(startLine), end: String(endLine) }));
   }, [dispatch, hostUid, path, currentPage, isAll, startLine, endLine, isTop]);
 
+  // Top SQL analyzes the log again each time it is entered or refreshed: until
+  // that result lands, the earlier one is not shown as complete (copy and
+  // export stay off).
+  useResetWhen([isTop, hostUid, path, topRevision], () => {
+    if (isTop) setTopAnalysis({ hostUid, path, revision: topRevision, loading: true });
+  });
   useEffect(() => {
     if (!isTop) return undefined;
     const controller = new AbortController();
-    // Until the result lands, currentAnalysis is null and that already reads
-    // as loading.
     const identity = { hostUid, path, revision: topRevision };
     analyzeTopSQL(() => brokerApi.captureLogSnapshot(hostUid, path), { signal: controller.signal })
       .then(result => {
