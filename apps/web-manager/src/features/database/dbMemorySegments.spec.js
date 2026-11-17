@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { dbMemorySegments, formatBytes1, recentHostMemory, hostMemoryMaxAgeMs } from './dbMemorySegments';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { dbMemorySegments, formatBytes1, newestHostMemory, hostMemoryMaxAgeMs, msUntil } from './dbMemorySegments';
 
 const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
@@ -38,21 +38,34 @@ describe('formatBytes1', () => {
   });
 });
 
-describe('recentHostMemory', () => {
+describe('newestHostMemory', () => {
   const now = 1_000_000;
-  it('takes the newest read that is recent enough', () => {
+  it('takes the newest read, skipping missing and empty ones', () => {
     const hostDashboard = { memTotal: 16, memUsed: 6, readAt: now - 5_000 };
     const serviceDashboard = { memTotal: 16, memUsed: 7, readAt: now - 30_000 };
-    expect(recentHostMemory([serviceDashboard, hostDashboard], now, 60_000)).toBe(hostDashboard);
+    expect(newestHostMemory([serviceDashboard, undefined, { memTotal: 0, readAt: now }, hostDashboard])).toBe(hostDashboard);
   });
 
-  it('gives nothing when every read is older than allowed, so the bar is hidden', () => {
-    expect(recentHostMemory([{ memTotal: 16, memUsed: 6, readAt: now - 61_000 }, undefined], now, 60_000)).toBeNull();
+  it('gives nothing without a usable read', () => {
+    expect(newestHostMemory([undefined, { memTotal: 16, memUsed: 6 }])).toBeNull();
+    expect(newestHostMemory(undefined)).toBeNull();
   });
 
   it('allows two dashboard intervals, at least a minute', () => {
     expect(hostMemoryMaxAgeMs(0)).toBe(60_000);
     expect(hostMemoryMaxAgeMs(10)).toBe(60_000);
     expect(hostMemoryMaxAgeMs(60)).toBe(120_000);
+  });
+});
+
+describe('msUntil', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('counts down to a future time and is zero for one that has passed', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    expect(msUntil(1_000_000 + 4_500)).toBe(4_500);
+    expect(msUntil(1_000_000)).toBe(0);
+    expect(msUntil(999_000)).toBe(0);
   });
 });

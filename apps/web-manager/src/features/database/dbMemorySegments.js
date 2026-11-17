@@ -47,14 +47,8 @@ export const hostMemoryMaxAgeMs = (intervalSec) => Math.max(60_000, 2 * (Number(
 
 /**
  * The newest of the host memory reads the other dashboards keep
- * ({ memTotal, memUsed, readAt }), or null when none was read within `maxAgeMs`.
+ * ({ memTotal, memUsed, readAt }), or null without one.
  */
-export function recentHostMemory(reads, now, maxAgeMs) {
-  const newest = newestHostMemory(reads);
-  return newest && now - newest.readAt <= maxAgeMs ? newest : null;
-}
-
-/** The newest of the host memory reads ({ memTotal, memUsed, readAt }), or null. */
 export function newestHostMemory(reads) {
   return (reads || [])
     .filter((read) => read?.memTotal > 0 && Number.isFinite(read.readAt))

@@ -38,8 +38,8 @@ const Component = function DatabaseDashboard({ hostUid: propHostUid, dbname }) {
   const hostData = useSelector((state) => state.monitoring.hostsData[hostUid] || {});
   // The host's memory as the host or service dashboard last read it
   // (gethoststat). The DB dashboard does not read it itself, so the bar uses
-  // only a recent read (dbMemorySegments.js, recentHostMemory) and is hidden
-  // otherwise.
+  // only a recent read (the newest one, dbMemorySegments.js newestHostMemory,
+  // until it is older than hostMemoryMaxAgeMs below) and is hidden otherwise.
   const hostSummary = useSelector((state) => state.globalMonitoring?.summaries?.[hostUid]);
   // CMS getenv osinfo ("LINUX", "NT", ...). On Linux the broker never fills
   // per-CAS CPU (get_psinfo in broker_process_info.c is Solaris/HP-UX only),
