@@ -18,13 +18,13 @@ export function hasCsrfHeader(request: { method?: string; headers?: Record<strin
   return request.headers?.[CSRF_HEADER] === '1';
 }
 
-type AccessTokenPayload = { sub?: string; jti?: string; type?: string; exp?: number };
+type AccessTokenPayload = { sub?: string; jti?: string; type?: string; exp?: number; fam?: string };
 
 /**
  * The global guard in server mode (selectAppGuard). Every route needs the
  * access JWT from the httpOnly cookie, unless it is marked @Public: a valid
- * signature, not expired, an access token, not revoked at logout. The
- * payload becomes request.user.
+ * signature, not expired, an access token, not revoked at logout (itself or
+ * its whole refresh family). The payload becomes request.user.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -66,7 +66,10 @@ export class JwtAuthGuard implements CanActivate {
     }
     let revoked = false;
     try {
-      revoked = Boolean(payload.jti) && (await this.tokenBlacklist.isBlacklisted(payload.jti as string));
+      revoked =
+        (Boolean(payload.jti) && (await this.tokenBlacklist.isBlacklisted(payload.jti as string))) ||
+        // Its session was logged out, or its refresh token was reused.
+        (await this.tokenBlacklist.isFamilyRevoked(payload.fam));
     } catch (err) {
       throw AuthError.InvalidToken({ userId: 'unknown' }, err as Error);
     }
