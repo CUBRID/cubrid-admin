@@ -9,6 +9,7 @@ import { desktopErrorText } from '../desktopErrorText';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { ConfirmDialog } from '../../../components/ds/layout/ConfirmDialog';
 import { useResetWhen } from '../../../infrastructure/hooks/useResetWhen';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // For comparing workspace folders as typed: no surrounding spaces or
 // trailing separator ("/ws/" is "/ws").
@@ -55,6 +56,10 @@ export default function DesktopWorkspaceSettingsPage() {
   useResetWhen([bridge], () => {
     if (!bridge) setLoading(false);
   });
+  // Read once per bridge: a language switch must not read the settings again
+  // (that would drop a folder being typed and any error shown). The labels
+  // for an error are the current ones at that time.
+  const cmRef = useLatestRef(CM);
   useEffect(() => {
     if (!bridge) return;
     const loadInfo = async () => {
@@ -70,15 +75,17 @@ export default function DesktopWorkspaceSettingsPage() {
         setWorkspaceRoot(next.workspaceRoot);
         setSetupMode(setupRequired);
         // The configured workspace failed at launch: say why (a WORKSPACE_* code).
-        if (startupError) setError(desktopErrorText({ message: startupError }, CM, CM.workspaceSaveFailedMsg));
+        const labels = cmRef.current;
+        if (startupError) setError(desktopErrorText({ message: startupError }, labels, labels.workspaceSaveFailedMsg));
       } catch (err) {
-        setError(desktopErrorText(err, CM, CM.workspaceSettingsLoadFailedMsg));
+        const labels = cmRef.current;
+        setError(desktopErrorText(err, labels, labels.workspaceSettingsLoadFailedMsg));
       } finally {
         setLoading(false);
       }
     };
     void loadInfo();
-  }, [bridge, CM]);
+  }, [bridge, cmRef]);
 
   // A slow start shows its time; nothing fails only because it is slow.
   useEffect(() => {
