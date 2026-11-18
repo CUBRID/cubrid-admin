@@ -50,6 +50,8 @@ it('mirrors the header menu in English and Korean', () => {
     'Export Host',
     'Import Host',
     'Switch Workspace…',
+    'Export Workspace…',
+    'Import Workspace…',
     'Quit',
   ]);
   expect(labels(top(en, 'Host Service Management'))).toEqual([
@@ -76,17 +78,21 @@ it('mirrors the header menu in English and Korean', () => {
     '호스트 내보내기',
     '호스트 가져오기',
     '워크스페이스 전환…',
+    '워크스페이스 내보내기…',
+    '워크스페이스 가져오기…',
     '종료',
   ]);
   expect(labels(top(ko, '도움말'))).toContain('설정 파일 위치 열기');
 });
 
-it('ends File with Switch Workspace and Quit on every platform, macOS keeping Quit in its app menu too', () => {
+it('ends File with the workspace items and Quit on every platform, macOS keeping Quit in its app menu too', () => {
   for (const isMac of [false, true]) {
     const file = top(buildApplicationMenuTemplate('en', isMac, allEnabled), 'File');
-    expect(file.slice(-4).map((item) => item.type ?? item.label)).toEqual([
+    expect(file.slice(-6).map((item) => item.type ?? item.label)).toEqual([
       'separator',
       'Switch Workspace…',
+      'Export Workspace…',
+      'Import Workspace…',
       'separator',
       'Quit',
     ]);

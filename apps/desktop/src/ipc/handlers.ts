@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { listActiveJobs } from '../api/active-jobs';
-import { getRunningWorkspacePaths, startApiForWorkspace, stopDesktopApi } from '../api/api-runtime';
+import { getRunningWorkspacePaths, isDesktopApiStarting, startApiForWorkspace, stopDesktopApi } from '../api/api-runtime';
 import {
   getDesktopSettingsPath,
   isCheckForUpdatesOnStartupEnabled,
@@ -17,6 +17,13 @@ import { getProductVersion } from '../product-version';
 import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
+import {
+  assertExportPassword,
+  readWorkspaceArchiveFile,
+  WORKSPACE_ARCHIVE_EXTENSION,
+  writeWorkspaceArchiveFile,
+} from '../workspace/workspace-archive';
+import { forgetOpenedArchive, heldArchive, holdOpenedArchive, importWorkspaceEntries } from '../workspace/workspace-import';
 import { getDefaultWorkspaceRoot, isSameWorkspaceFolder, resolveWorkspacePaths } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
 import { decideApiStart, getApiStartStatus } from '../api/start-status';
@@ -42,6 +49,33 @@ const WORKSPACE_DIALOG_LABELS = {
   },
 };
 
+const ARCHIVE_DIALOG_LABELS = {
+  en: {
+    exportTitle: 'Export Workspace',
+    importTitle: 'Import Workspace',
+    importFolderTitle: 'Choose an empty folder for the imported workspace',
+    fileType: 'CUBRID Admin workspace',
+  },
+  ko: {
+    exportTitle: '워크스페이스 내보내기',
+    importTitle: '워크스페이스 가져오기',
+    importFolderTitle: '가져온 워크스페이스를 둘 빈 폴더 선택',
+    fileType: 'CUBRID Admin 워크스페이스',
+  },
+};
+
+const archiveFilters = () => [{ name: ARCHIVE_DIALOG_LABELS[getMenuLanguage()].fileType, extensions: [WORKSPACE_ARCHIVE_EXTENSION] }];
+
+const requirePassword = (password: unknown): string => {
+  if (typeof password !== 'string' || !password) throw new WorkspaceError('WORKSPACE_ARCHIVE_PASSWORD_REQUIRED');
+  return password;
+};
+
+const requireArchivePath = (filePath: unknown): string => {
+  if (typeof filePath !== 'string' || !filePath.trim()) throw new WorkspaceError('WORKSPACE_ARCHIVE_NOT_OURS');
+  return path.resolve(filePath.trim());
+};
+
 // Why the server could not start on the configured workspace at launch
 // (a WorkspaceError message); the workspace page shows it until another
 // workspace is set up.
@@ -52,8 +86,18 @@ export function setWorkspaceStartupError(error: string | null): void {
 }
 
 /**
+ * Refused while a server start is in progress (at launch, or another switch):
+ * a switch would stop that start, which then fails and reloads the page,
+ * losing what the page was doing (an import's result).
+ */
+function refuseWhileApiStarting(): void {
+  if (isDesktopApiStarting()) throw new WorkspaceError('WORKSPACE_API_STARTING');
+}
+
+/**
  * Moves the app to the workspace at `root`. It is
- * checked first (checkWorkspaceRoot) and refused while a CMS job runs; then
+ * checked first (checkWorkspaceRoot) and refused while a CMS job runs or a
+ * server start is in progress; then
  * the server stops and starts there. Only once it runs is the choice saved
  * and the window reloaded on it. If it does not start, the server goes back
  * to the workspace it was on and the reason is thrown, never a silent
@@ -63,6 +107,7 @@ async function changeWorkspace(
   root: string,
   { ignoreUnknownJobs = false }: { ignoreUnknownJobs?: boolean } = {}
 ): Promise<{ ok: true; unchanged?: true }> {
+  refuseWhileApiStarting();
   const running = getRunningWorkspacePaths();
   // The folder the server already runs on, however it was typed: nothing to do.
   if (running && root && isSameWorkspaceFolder(root, running.workspaceRoot)) {
@@ -198,6 +243,69 @@ export function registerDesktopIpcHandlers(): void {
     return { name: path.basename(filePath), base64: (await fs.promises.readFile(filePath)).toString('base64') };
   });
 
+  // The workspace in use, to a file the user names, locked with `password`.
+  ipcMain.handle('desktop:export-workspace', async (_event, password: unknown) => {
+    assertExportPassword(password);
+    const running = getRunningWorkspacePaths();
+    if (!running) throw new WorkspaceError('WORKSPACE_NOT_RUNNING');
+    const L = ARCHIVE_DIALOG_LABELS[getMenuLanguage()];
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const result = await dialog.showSaveDialog({
+      title: L.exportTitle,
+      defaultPath: path.join(dialogDefaultDirectory(app.getPath('documents')), `cubrid-admin-workspace-${stamp}.${WORKSPACE_ARCHIVE_EXTENSION}`),
+      filters: archiveFilters(),
+    });
+    if (result.canceled || !result.filePath) return null;
+    const ext = `.${WORKSPACE_ARCHIVE_EXTENSION}`;
+    const filePath = result.filePath.endsWith(ext) ? result.filePath : `${result.filePath}${ext}`;
+    rememberDialogPath(filePath, false);
+    await writeWorkspaceArchiveFile(running.workspaceRoot, password, filePath);
+    return { filePath };
+  });
+
+  ipcMain.handle('desktop:pick-workspace-archive', async () => {
+    const result = await dialog.showOpenDialog({
+      title: ARCHIVE_DIALOG_LABELS[getMenuLanguage()].importTitle,
+      defaultPath: dialogDefaultDirectory(app.getPath('documents')),
+      properties: ['openFile'],
+      filters: archiveFilters(),
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    rememberDialogPath(result.filePaths[0], false);
+    return result.filePaths[0];
+  });
+
+  // Opens the export with `password` (the page asks again on a wrong one)
+  // and keeps it here for the import: the token names it.
+  ipcMain.handle('desktop:open-workspace-archive', async (_event, filePath: unknown, password: unknown) => {
+    const entries = await readWorkspaceArchiveFile(requireArchivePath(filePath), requirePassword(password));
+    return { token: holdOpenedArchive(entries) };
+  });
+
+  ipcMain.handle('desktop:forget-workspace-archive', (_event, token: unknown) => {
+    forgetOpenedArchive(token);
+    return { ok: true };
+  });
+
+  ipcMain.handle('desktop:pick-import-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      title: ARCHIVE_DIALOG_LABELS[getMenuLanguage()].importFolderTitle,
+      defaultPath: dialogDefaultDirectory(app.getPath('documents')),
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    rememberDialogPath(result.filePaths[0], true);
+    return result.filePaths[0];
+  });
+
+  // Into `folder`; on a folder that will not do, the same export may be
+  // tried in another (the token stays until it works or is dropped).
+  ipcMain.handle('desktop:import-workspace-archive', async (_event, token: unknown, folder: unknown) => {
+    const result = await importWorkspaceEntries(heldArchive(token), typeof folder === 'string' ? folder.trim() : '');
+    forgetOpenedArchive(token);
+    return result;
+  });
+
   ipcMain.handle('desktop:set-workspace-root', (_event, workspaceRoot: string, options?: { ignoreUnknownJobs?: unknown }) =>
     changeWorkspace(workspaceRoot?.trim() ?? '', { ignoreUnknownJobs: options?.ignoreUnknownJobs === true })
   );
@@ -205,6 +313,7 @@ export function registerDesktopIpcHandlers(): void {
   // First run, or the configured workspace failed at launch: no server runs
   // yet, so this only checks and saves; main.ts then starts the server.
   ipcMain.handle('desktop:finish-workspace-setup', async (_event, workspaceRoot: string) => {
+    refuseWhileApiStarting();
     const trimmed = workspaceRoot?.trim();
     const paths = await checkWorkspaceRoot(trimmed || getWorkspacePaths().workspaceRoot);
     if (trimmed) {
