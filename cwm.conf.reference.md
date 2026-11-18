@@ -30,6 +30,18 @@ and `LOG_DIR`. Upgrading or removing the installed server keeps `cwm.conf`,
 }
 ```
 
+Sign-in requests are limited per client address: login, sign-up, changing
+the account password and deleting the account each allow 10 requests a minute,
+counted separately for each. Past that the server answers 429 with
+`Retry-After`. The session refresh and all other requests are not limited.
+
+The proxy must pass the client's address on: with nginx,
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. When the
+server listens on a Unix socket (`LISTEN_UNIX_SOCKET`) behind the proxy, a
+request has no address of its own, so the default `loopback` cannot match it:
+set `TRUST_PROXY=1`. Otherwise all users share one limit, and the server says
+so once in its log.
+
 Do not add `SEED` or `SALT` here — they're ignored on purpose. They're
 generated automatically on first run and stored in `cwm-vault/secrets.json`.
 Never edit or delete that file: doing so makes all previously stored data
@@ -44,6 +56,8 @@ unreadable.
 | `LISTEN_HOST` | Network interface to bind to, e.g. `127.0.0.1` to refuse connections from other machines | all interfaces |
 | `SSL_CERT_PATH` / `SSL_KEY_PATH` | Path to a real TLS cert/key pair. Both must be set together, or neither. | self-signed cert, auto-generated |
 | `AUTH_REGISTRATION_ENABLED` | Whether new accounts can sign up. Set to `false` once your team is registered. | `true` |
+| `HSTS_ENABLED` | Send `Strict-Transport-Security`, so browsers only use https for this server. Turn it on only with your own certificate (`SSL_CERT_PATH`): with the default self-signed certificate, a browser that has seen it no longer lets you past the certificate warning. | `false` |
+| `TRUST_PROXY` | Which reverse proxies are believed about the client's address (`X-Forwarded-For`); the login rate limit counts by that address. A hop count (`1`), or addresses and subnets (`10.0.0.5`, `loopback`), comma-separated. The default fits a proxy on the same machine (such as nginx). Set the proxy's address when it runs on another machine, or every user counts as the proxy. A hop count must equal the number of proxies in front of the server. Name only the proxies themselves. Do not use a subnet that clients connect from, nor `uniquelocal` or `linklocal`: such a client would then count as a trusted proxy and could choose its own address. `false` ignores the header. `true` and `/0` subnets are refused (they would let a client choose its own address) and the default is used. | `loopback` |
 | `CMS_REJECT_UNAUTHORIZED` | Verify TLS certificates when connecting to CUBRID CMS hosts | `false` |
 | `CMS_CA_CERT_PATH` | CA certificate to trust for CMS hosts using a private/self-signed cert | — |
 | `CMS_JOB_RETENTION_HOURS` | How long finished background-job records (copy/rename/backup/etc.) are kept | `24` |

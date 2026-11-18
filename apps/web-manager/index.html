@@ -13,17 +13,8 @@
          renders all Latin text (see --font-display/--font-sans in styles/index.css).
          Bundled locally as a build asset (src/styles/fonts.css) instead of linked from
          jsDelivr here, so it's still available offline/behind a blocked CDN. -->
-    <script>
-      (function() {
-        try {
-          var theme = localStorage.getItem('theme');
-          var supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
-          if (!theme && supportDarkMode) theme = 'dark';
-          if (!theme) theme = 'light';
-          document.documentElement.className = theme;
-        } catch (e) {}
-      })();
-    </script>
+    <!-- A file, not inline, so the Content-Security-Policy allows no inline script. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display">
     <div id="root"></div>

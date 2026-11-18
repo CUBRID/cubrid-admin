@@ -22,6 +22,7 @@ import { ModalStatusLoading,
 } from '../../../components/ds/feedback/ActionStatus';
 import { checkPositiveNumber } from '@api-interfaces';
 import { inputIssueText } from '../inputIssueText';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const PURPOSE_OPTIONS = [
   {
@@ -100,10 +101,14 @@ export default function AddVolumeModal() {
         }
       };
       fetchStatus();
+    }
+  }, [isAddVolumeModalOpen, selectedHostUid, selectedDatabase, resetAction]);
+  useResetEffect(() => {
+    if (isAddVolumeModalOpen && selectedHostUid && selectedDatabase) {
       setPurpose('data');
       setSizeMB(512);
     }
-  }, [isAddVolumeModalOpen, selectedHostUid, selectedDatabase, resetAction]);
+  }, [isAddVolumeModalOpen, selectedHostUid, selectedDatabase]);
 
   if (!isAddVolumeModalOpen) return null;
 

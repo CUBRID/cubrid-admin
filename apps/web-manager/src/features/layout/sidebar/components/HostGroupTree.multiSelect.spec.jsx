@@ -1,4 +1,4 @@
-import { act, useState } from 'react';
+import { act, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
@@ -27,7 +27,7 @@ const hostGroups = { __ungrouped__: { name: 'Ungrouped', hosts: { h1: host('h1')
 
 function Harness() {
   const [selected, setSelected] = useState(() => new Set());
-  selection = selected;
+  useEffect(() => { selection = selected; });
   return (
     <HostGroupTree
       hostGroups={hostGroups}

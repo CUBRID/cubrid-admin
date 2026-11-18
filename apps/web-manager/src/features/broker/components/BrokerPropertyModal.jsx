@@ -13,6 +13,7 @@ import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { checkEffectiveParams, parseConfText } from '@api-interfaces';
 import { paramIssuesText } from '../../../infrastructure/errors/paramIssueText';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // The param list (which keys exist, their category/guard/default) no
 // longer lives here — it comes from the connected host's `getEnv`
@@ -103,7 +104,7 @@ export default function BrokerPropertyModal() {
     }
   }, [isOpen, hostUid, hostEnv, dispatch]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     const confLines = config.data?.confdata || config.data?.conflist?.[0]?.confdata;
     if (!confLines || confLines.length === 0) return;
     const sections = {};

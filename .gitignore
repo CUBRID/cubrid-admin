@@ -135,3 +135,5 @@ cwm-vault/
 # Local plan markdown files
 *-plan.md
 
+# nx migrate run records
+.nx/migrate-runs

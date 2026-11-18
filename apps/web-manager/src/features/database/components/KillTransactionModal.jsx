@@ -14,6 +14,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useActionState } from '../../../infrastructure/hooks/useActionState';
 import { ModalStatusLoading, ModalStatusSuccess, ModalStatusError } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function KillTransactionModal() {
   const CM = useCM();
@@ -42,12 +43,14 @@ export default function KillTransactionModal() {
   const [killType, setKillType] = useState('i');
   const [dbpasswd, setDbpasswd] = useState('');
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isKillTransactionModalOpen) {
-      resetAction();
       setKillType('i');
       setDbpasswd('');
     }
+  }, [isKillTransactionModalOpen]);
+  useEffect(() => {
+    if (isKillTransactionModalOpen) resetAction();
   }, [isKillTransactionModalOpen, resetAction]);
 
   if (!isKillTransactionModalOpen || !killTransactionData) return null;

@@ -11,7 +11,7 @@ export default defineConfig([
     files: ['**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
-      reactHooks.configs['recommended-latest'],
+      reactHooks.configs.flat['recommended-latest'],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -29,6 +29,18 @@ export default defineConfig([
         argsIgnorePattern: '^[A-Z_]',
         caughtErrorsIgnorePattern: '^_',
       }],
+      'no-useless-assignment': 'error',
+      'preserve-caught-error': 'off',
+      // react-hooks 7: the React Compiler checks of its recommended set are on
+      // as errors, with exhaustive-deps raised from a warning to an error.
+      ...Object.fromEntries(
+        [
+          'static-components', 'use-memo', 'void-use-memo', 'preserve-manual-memoization',
+          'incompatible-library', 'immutability', 'globals', 'refs', 'set-state-in-effect',
+          'error-boundaries', 'purity', 'set-state-in-render', 'unsupported-syntax', 'config', 'gating',
+        ].map((rule) => [`react-hooks/${rule}`, 'error'])
+      ),
+      'react-hooks/exhaustive-deps': ['error', { additionalHooks: '(useResetEffect)' }],
     },
   },
   {

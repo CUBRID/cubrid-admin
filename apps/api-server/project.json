@@ -9,12 +9,12 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "webpack-cli build",
-        "args": ["--node-env=production"],
+        "args": ["--config-node-env=production"],
         "cwd": "apps/api-server"
       },
       "configurations": {
         "development": {
-          "args": ["--node-env=development"]
+          "args": ["--config-node-env=development"]
         }
       }
     },
@@ -54,7 +54,10 @@
     },
     "test": {
       "options": {
-        "passWithNoTests": true
+        "passWithNoTests": true,
+        "env": {
+          "NODE_OPTIONS": "--experimental-vm-modules --disable-warning=ExperimentalWarning"
+        }
       }
     },
     "build:exe": {

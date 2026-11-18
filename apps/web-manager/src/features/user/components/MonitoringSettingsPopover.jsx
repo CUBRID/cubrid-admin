@@ -8,9 +8,12 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
 import { DEFAULT_SERVICE_VOLUME_INTERVAL, SERVICE_VOLUME_INTERVAL_OPTIONS } from '@api-interfaces';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // `showServiceVolumeInterval`: the service dashboard's own setting for how
 // often it reads volume usage, next to the dashboard interval.
+const MAX_INTERVAL = 86400; // 24 hours in seconds (well below browser timer limit of 2147483s)
+
 export default function MonitoringSettingsPopover({ showServiceVolumeInterval = false }) {
   const CM = useCM();
   const [isOpen, setIsOpen] = useState(false);
@@ -33,7 +36,7 @@ export default function MonitoringSettingsPopover({ showServiceVolumeInterval = 
     { label: '30s', value: 30 },
   ];
 
-  useEffect(() => {
+  useResetEffect(({ intervals }) => {
     const clampInterval = (value) => Math.min(Math.max(value, 0), MAX_INTERVAL);
 
     const rawDashVal = preferences.dashboardInterval;
@@ -54,7 +57,7 @@ export default function MonitoringSettingsPopover({ showServiceVolumeInterval = 
 
     setCustomBrokerText(brokerVal === 0 ? '' : brokerVal.toString());
     setBrokerPresetActive(intervals.some(opt => opt.value === brokerVal));
-  }, [preferences]);
+  }, [preferences], { intervals });
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -71,7 +74,6 @@ export default function MonitoringSettingsPopover({ showServiceVolumeInterval = 
     setIsOpen(false);
   };
 
-  const MAX_INTERVAL = 86400; // 24 hours in seconds (well below browser timer limit of 2147483s)
 
   const handleDashboardPresetClick = (val) => {
     setLocalPrefs(prev => ({ ...prev, dashboardInterval: val }));

@@ -3,6 +3,7 @@ import { Icon } from '../foundation/Icon';
 import { Skeleton } from './Skeleton';
 import { EmptyState } from './EmptyState';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // The dashboard header's icon buttons, smaller.
 const PAGER_BUTTON = 'w-7 h-7 flex items-center justify-center rounded-lg border transition-all active:scale-[0.98] bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:text-amber-600 dark:hover:text-amber-500 hover:border-amber-500/50 hover:bg-white dark:hover:bg-white/5 shadow-xs disabled:opacity-40 disabled:pointer-events-none';
@@ -91,7 +92,7 @@ export const Table = ({
   const pageSize = paged ? Math.min(sortedData.length, pageRows ?? defaultPageRows) : null;
   const pageCount = pageSize ? Math.ceil(sortedData.length / pageSize) : 1;
   const currentPage = Math.min(page, pageCount - 1);
-  useEffect(() => {
+  useResetEffect(() => {
     if (page !== currentPage) setPage(currentPage);
   }, [page, currentPage]);
   const shownData = React.useMemo(

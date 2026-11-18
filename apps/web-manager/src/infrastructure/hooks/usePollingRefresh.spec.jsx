@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import React, { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
@@ -21,7 +21,8 @@ let fetchCalls;
 let handleRefresh;
 
 function Harness({ pollingIntervalSeconds = 1, onFetch, dbname }) {
-  ({ handleRefresh } = usePollingRefresh({ hostUid: 'host1', tabId: 'tab1', pollingIntervalSeconds, onFetch, dbname }));
+  const result = usePollingRefresh({ hostUid: 'host1', tabId: 'tab1', pollingIntervalSeconds, onFetch, dbname });
+  useEffect(() => { handleRefresh = result.handleRefresh; });
   return null;
 }
 

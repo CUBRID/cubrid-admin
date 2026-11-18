@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { setSelectedGroup, setHighlightedHost, moveHost } from '../../../host/hostSlice';
 import { orderedGroupEntries, sortHostUidsByHaRole, UNGROUPED_GROUP_ID, HOST_DRAG_MIME } from '../../../host/hostGroupUtils';
@@ -129,7 +129,7 @@ export default function HostGroupTree({
     for (const hostUid of targets) {
       await dispatch(moveHost({ hostUid, targetGroupId: groupId }));
     }
-  }, [clearDragState, dispatch, selectedHostUids, hostGroups]);
+  }, [clearDragState, dispatch, selectedHostUids, hostGroups, draggedHost]);
 
   const toggleGroup = (groupId) => {
     setExpandedGroups((prev) => {
@@ -146,22 +146,26 @@ export default function HostGroupTree({
     toggleGroup(groupId);
   };
 
-  const allEntries = orderedGroupEntries(hostGroups);
-  const groupEntries = allEntries.filter(([groupId]) => groupId !== UNGROUPED_GROUP_ID);
-  const ungroupedEntry = allEntries.find(([groupId]) => groupId === UNGROUPED_GROUP_ID);
-  const ungroupedHostsMap = ungroupedEntry?.[1]?.hosts || {};
-  const ungroupedHostUids = sortHostUidsByHaRole(Object.keys(ungroupedHostsMap), ungroupedHostsMap, haInfo);
+  // The lists derived from the groups, the same while the groups and HA
+  // info are: handleMultiSelect below keeps its identity on them.
+  const { groupEntries, ungroupedHostsMap, ungroupedHostUids, flattenedHostUids } = useMemo(() => {
+    const allEntries = orderedGroupEntries(hostGroups);
+    const entries = allEntries.filter(([groupId]) => groupId !== UNGROUPED_GROUP_ID);
+    const ungroupedEntry = allEntries.find(([groupId]) => groupId === UNGROUPED_GROUP_ID);
+    const hostsMap = ungroupedEntry?.[1]?.hosts || {};
+    const ungroupedUids = sortHostUidsByHaRole(Object.keys(hostsMap), hostsMap, haInfo);
+    // Flattened top-to-bottom host order (regardless of group collapse state)
+    // for shift-click range selection — must match the order rendered below.
+    const flattened = [
+      ...entries.flatMap(([, group]) => {
+        const groupHostsMap = group.hosts || {};
+        return sortHostUidsByHaRole(Object.keys(groupHostsMap), groupHostsMap, haInfo);
+      }),
+      ...ungroupedUids,
+    ];
+    return { groupEntries: entries, ungroupedHostsMap: hostsMap, ungroupedHostUids: ungroupedUids, flattenedHostUids: flattened };
+  }, [hostGroups, haInfo]);
   const isUngroupedDropTarget = dropTargetGroupId === UNGROUPED_GROUP_ID && draggedHost?.sourceGroupId !== UNGROUPED_GROUP_ID;
-
-  // Flattened top-to-bottom host order (regardless of group collapse state)
-  // for shift-click range selection — must match the order rendered below.
-  const flattenedHostUids = [
-    ...groupEntries.flatMap(([, group]) => {
-      const hostsMap = group.hosts || {};
-      return sortHostUidsByHaRole(Object.keys(hostsMap), hostsMap, haInfo);
-    }),
-    ...ungroupedHostUids,
-  ];
 
   const handleMultiSelect = useCallback((e, uid) => {
     if (!onSelectedHostUidsChange) return;

@@ -1,4 +1,4 @@
-import apiClient from '../../api/apiClient';
+import apiClient, { appSessionKey } from '../../api/apiClient';
 import { createSharedReads, createSingleFlight } from '../../infrastructure/utils/singleFlight';
 
 const volumeReads = createSingleFlight();
@@ -20,7 +20,7 @@ export const databaseApi = {
   readStartInfo: (hostUid, { fresh = false } = {}) => {
     const url = `/${hostUid}/database/start-info`;
     // Do not share a response across login sessions.
-    const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, url]);
+    const key = JSON.stringify([appSessionKey(), url]);
     return startInfoReads(key, () => apiClient.get(url), { fresh });
   },
   startDatabase: (hostUid, dbname) => {
@@ -51,7 +51,7 @@ export const databaseApi = {
   getVolumeInfo: (hostUid, dbname) => {
     const url = `/${hostUid}/database/volume-info/${encodeURIComponent(dbname)}`;
     // Do not share a response across login sessions.
-    const key = JSON.stringify([apiClient.defaults.headers.common.Authorization, url]);
+    const key = JSON.stringify([appSessionKey(), url]);
     return volumeReads(key, () => apiClient.get(url));
   },
   getClassInfo: (hostUid, dbname, dbstatus) => {

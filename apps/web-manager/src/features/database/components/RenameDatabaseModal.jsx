@@ -21,6 +21,7 @@ import { inputIssueText } from '../inputIssueText';
 import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { useFreshDbList } from '../useFreshDbList';
 import { JobWarnings } from '../../../infrastructure/cmsJob/JobWarnings';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 
 export default function RenameDatabaseModal() {
@@ -55,14 +56,16 @@ export default function RenameDatabaseModal() {
   // parseDbResponse), so by the time the success view renders it's gone.
   const [renamedFromDb, setRenamedFromDb] = useState('');
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isRenameDatabaseModalOpen) {
       setNewDbName('');
       setForcedel(false);
       setWarnings([]);
       setRenamedFromDb('');
-      resetAction();
     }
+  }, [isRenameDatabaseModalOpen]);
+  useEffect(() => {
+    if (isRenameDatabaseModalOpen) resetAction();
     // Only (re)initialize when the modal opens — NOT whenever selectedDatabase
     // changes while it's already open. A successful rename dispatches
     // fetchDatabaseStartInfo, which clears state.database.selectedDatabase to
@@ -70,7 +73,7 @@ export default function RenameDatabaseModal() {
     // databaseCoreSlice's parseDbResponse). That change used to re-trigger
     // this effect mid-flow, call resetAction(), and bounce the modal off its
     // success screen back onto a blank form.
-  }, [isRenameDatabaseModalOpen]);
+  }, [isRenameDatabaseModalOpen, resetAction]);
 
   if (!isRenameDatabaseModalOpen) return null;
 

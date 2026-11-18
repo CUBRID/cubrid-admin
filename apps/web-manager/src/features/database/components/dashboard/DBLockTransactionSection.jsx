@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchDashboardLocks,
@@ -40,9 +40,9 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
   // of object, so the badge adds up the rows' lock counts.
   const lockTotal = (locks || []).reduce((sum, row) => sum + (Number(row?.count) || 0), 0);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     if (hostUid && dbname) dispatch(fetchDashboardLocks({ hostUid, dbname }));
-  };
+  }, [dispatch, hostUid, dbname]);
 
   // The signal reaches every open DB dashboard, hidden tabs included; only a
   // logged-in database re-reads its locks (a per-db request the server
@@ -54,9 +54,9 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
     if (lastSeenKillSignal.current === transactionKillSignal) return;
     lastSeenKillSignal.current = transactionKillSignal;
     if (isLoggedIn) refresh();
-  }, [transactionKillSignal, hostUid, dbname, isLoggedIn]);
+  }, [transactionKillSignal, hostUid, dbname, isLoggedIn, refresh]);
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'locks' }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSectionsRef: pollingProps.collapsedSections, section: 'locks' }, refresh);
 
   useEffect(() => {
     let interval;
@@ -64,7 +64,7 @@ export default function DBLockTransactionSection({ locks, locksStatus, pollingPr
       interval = setInterval(refresh, refreshInterval * 1000);
     }
     return () => clearInterval(interval);
-  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname, refresh]);
 
   useEffect(() => {
     if (!rowMenu) return;

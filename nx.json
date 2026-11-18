@@ -1,6 +1,6 @@
 {
   "installation": {
-    "version": "22.7.12"
+    "version": "24.0.6"
   },
   "plugins": [
     {
@@ -28,10 +28,17 @@
       "exclude": []
     },
     {
+      "plugin": "@nx/js/typescript",
+      "options": {
+        "typecheck": {
+          "targetName": "typecheck"
+        }
+      }
+    },
+    {
       "plugin": "@nx/vite/plugin",
       "options": {
         "buildTargetName": "build",
-        "testTargetName": "test",
         "serveTargetName": "serve",
         "devTargetName": "dev",
         "previewTargetName": "preview",
@@ -39,6 +46,12 @@
         "typecheckTargetName": "typecheck",
         "buildDepsTargetName": "build-deps",
         "watchDepsTargetName": "watch-deps"
+      }
+    },
+    {
+      "plugin": "@nx/vitest",
+      "options": {
+        "testTargetName": "test"
       }
     }
   ],
@@ -67,10 +80,19 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["production", "^production", { "runtime": "node scripts/product-version.cjs" }]
+      "inputs": [
+        "production",
+        "^production",
+        {
+          "runtime": "node scripts/product-version.cjs"
+        }
+      ]
     }
   },
   "namedInputs": {
     "production": ["default", "!{projectRoot}/**/*.spec.ts", "!{projectRoot}/**/*.test.ts"]
+  },
+  "affected": {
+    "legacy": true
   }
 }
