@@ -107,6 +107,8 @@ import BrokerTree from '../sidebar/components/BrokerTree';
 import LogTree from '../sidebar/components/LogTree';
 import SidebarEmptyState from '../sidebar/components/SidebarEmptyState';
 import CMSUserManagementModal from '../../host/components/CMSUserManagementModal';
+import { HostStatusDot } from '../../host/components/HostStatusDot';
+import { useHostConnectionStatus } from '../../host/useHostConnectionStatus';
 import EditCMSUserModal from '../../host/components/EditCMSUserModal';
 import { openCreateGroupModal, openDeleteGroupModal, openRenameGroupModal, openAddHostModal, openManageGroupMembersModal } from '../../host/hostSlice';
 import { getUnauthorizedHostUids, UNGROUPED_GROUP_ID, HOST_DRAG_MIME, orderedGroupEntries } from '../../host/hostGroupUtils';
@@ -238,6 +240,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   const [selectDatabasesModal, setSelectDatabasesModal] = useState(null);
 
   const { hosts, hostGroups, selectedHostUid, selectedGroupUid, loading: hostsLoading, authorizedHosts, isLoggingIntoHost, hostAuthErrors, haInfo, reconnectQueue = NO_RECONNECT } = useSelector((state) => state.host, shallowEqual);
+  const selectedHostStatus = useHostConnectionStatus(selectedHostUid);
   const { databasesByHost, loggedInDatabases, haDbNamesByHost, navigatorDatabasesByHost, navigatorActiveDatabasesByHost } = useSelector((state) => state.database, shallowEqual);
   const { brokersByHost, navigatorBrokersByHost } = useSelector((state) => state.broker, shallowEqual);
   // The lists the trees show; a multi-selection is kept within them.
@@ -1163,8 +1166,8 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
                         </span>
                       </div>
                     ) : (
-                      authorizedHosts.includes(selectedHostUid) && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse" />
+                      selectedHostUid && (
+                        <HostStatusDot status={selectedHostStatus.status} text={selectedHostStatus.text} />
                       )
                     )}
                   </div>
