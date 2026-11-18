@@ -49,6 +49,28 @@ export class AuthError extends AppError {
   }
 
   /**
+   * Creates an error indicating that an admin disabled the account.
+   */
+  static AccountDisabled(additionalData?: Record<string, any>, originalError?: Error) {
+    return new AuthError('AUTH', AuthErrorCode.ACCOUNT_DISABLED, additionalData, originalError);
+  }
+
+  /**
+   * Creates an error indicating that the account signed up and waits for an
+   * administrator to approve it.
+   */
+  static AccountPendingApproval(additionalData?: Record<string, any>, originalError?: Error) {
+    return new AuthError('AUTH', AuthErrorCode.ACCOUNT_PENDING_APPROVAL, additionalData, originalError);
+  }
+
+  /**
+   * Creates an error indicating that the account must set a new password first.
+   */
+  static PasswordChangeRequired(additionalData?: Record<string, any>, originalError?: Error) {
+    return new AuthError('AUTH', AuthErrorCode.PASSWORD_CHANGE_REQUIRED, additionalData, originalError);
+  }
+
+  /**
    * Creates an error for an unknown authentication issue.
    */
   static Unknown(additionalData?: Record<string, any>, originalError?: Error) {

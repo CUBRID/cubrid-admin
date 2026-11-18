@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { logoutUser, fetchUser } from '../../auth/authSlice';
 import { fetchPreferences } from '../../user/userSlice';
 import UserProfileModal from '../../user/components/UserProfileModal';
+import { useNavigate } from 'react-router-dom';
 
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -10,6 +11,8 @@ import HeaderMenu from './HeaderMenu';
 import LanguageToggle from './LanguageToggle';
 import { useCM } from '../../../constants/useCM';
 import { isDesktopApp } from '../../desktop/isDesktopApp';
+import { usePendingApprovals } from '../../admin/usePendingApprovals';
+import { ToastContext } from '../../../infrastructure/context/toastContextValue';
 
 export default function Header({ theme, toggleTheme }) {
   const CM = useCM();
@@ -25,7 +28,14 @@ export default function Header({ theme, toggleTheme }) {
   const headerRef = useRef(null);
   const rowRef = useRef(null);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading, error: authError } = useSelector((state) => state.auth, shallowEqual);
+  const toast = useContext(ToastContext);
+  // Every administrator hears of new sign-ups: a count on the button, and a
+  // note when one arrives while they work.
+  const pendingApprovals = usePendingApprovals(!desktopApp && user?.isAdmin === true, (added) =>
+    toast?.info(CM.newPendingApprovalsToast(added), { duration: 8000 })
+  );
 
   useEffect(() => {
     if (isAuthenticated && !user) {
@@ -105,6 +115,28 @@ export default function Header({ theme, toggleTheme }) {
             {!desktopApp && (
               <>
                 <div className="w-px h-5 bg-slate-200 dark:bg-white/8 mx-1" />
+
+                {/* Web Manager account control, administrators only. */}
+                {user?.isAdmin && (
+                  <button
+                    data-testid="header-user-accounts-btn"
+                    className={`${iconBtn} relative`}
+                    onClick={() => navigate('/admin/accounts')}
+                    title={pendingApprovals ? `${CM.userAdministration} · ${CM.pendingApprovalsBadge(pendingApprovals)}` : CM.userAdministration}
+                    aria-label={pendingApprovals ? `${CM.userAdministration}, ${CM.pendingApprovalsBadge(pendingApprovals)}` : CM.userAdministration}
+                  >
+                    <Icon name="manage_accounts" size="19px" weight={300} />
+                    {pendingApprovals > 0 && (
+                      <span
+                        data-testid="header-pending-approvals"
+                        aria-hidden="true"
+                        className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-[18px] text-center tabular-nums"
+                      >
+                        {pendingApprovals > 99 ? '99+' : pendingApprovals}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {/* User profile pill */}
                 <button

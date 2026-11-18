@@ -26,6 +26,8 @@ import { CmsJobModule } from '@cms-job/cms-job.module';
 import { selectAppGuard } from './desktop/select-app-guard';
 import { DesktopUserService } from './desktop/desktop-user.service';
 import { VersionModule } from './version/version.module';
+import { AccountModule } from '@account/account.module';
+import { AdminModule } from '@admin/admin.module';
 
 /**
  * Root application module that configures all feature modules and global providers.
@@ -60,6 +62,8 @@ import { VersionModule } from './version/version.module';
     LogModule,
     HaModule,
     VersionModule,
+    AccountModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

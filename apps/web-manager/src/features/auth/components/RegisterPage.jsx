@@ -5,9 +5,11 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { Input } from '../../../components/ds/forms/Input';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useCM } from '../../../constants/useCM';
+import { useRegistrationOpen } from '../useRegistrationOpen';
 
 export default function RegisterPage() {
   const CM = useCM();
+  const registrationOpen = useRegistrationOpen();
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -70,8 +72,10 @@ export default function RegisterPage() {
     setApiError('');
     setLoading(true);
     try {
-      await authApi.register(username, password);
-      navigate('/login', { replace: true, state: { registrationSuccess: true } });
+      const result = await authApi.register(username, password);
+      // A sign-up an administrator must approve can't sign in yet; say so.
+      const pending = result?.status === 'pending';
+      navigate('/login', { replace: true, state: pending ? { registrationPending: true } : { registrationSuccess: true } });
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.error || CM.registrationFailed;
       setApiError(msg);
@@ -139,7 +143,15 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Form */}
+        {/* Form, or why there is none: sign-up is closed (an administrator
+            exists, or it was turned off). */}
+        {registrationOpen === false ? (
+          <div data-testid="register-closed">
+            <InfoBanner variant="info" title={CM.signUpClosedTitle}>
+              {CM.signUpClosedMsg}
+            </InfoBanner>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
 
           {/* Username */}
@@ -239,6 +251,7 @@ export default function RegisterPage() {
             )}
           </button>
         </form>
+        )}
 
         {/* Already have account */}
         <p className="mt-5 text-center text-14 text-slate-500 dark:text-slate-400">

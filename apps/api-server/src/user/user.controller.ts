@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Post, Put, Request } from '@nestjs/common';
 import { UserService } from './user.service';
-import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto } from '@type/index';
+import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto, SetInitialPasswordDto } from '@type/index';
 import { UpdateUserInfoRequest, UserResponse } from '@api-interfaces';
-import { NotOnDesktop } from '@common';
+import { AllowPendingPasswordChange, NotOnDesktop } from '@common';
 
 /**
  * Controller for handling user-related operations.
@@ -33,6 +33,7 @@ export class UserController {
    * // Returns: { uuid: "123", id: "user1", department: "IT", host_groups: {}, ... }
    * ```
    */
+  @AllowPendingPasswordChange()
   @Get()
   async getUserData(@Request() req): Promise<UserResponse> {
     const userId = req.user.sub;
@@ -54,6 +55,8 @@ export class UserController {
    * // Returns: { dashboardInterval: 10, brokerStatusInterval: 20 }
    * ```
    */
+  // The UI language comes from preferences, also on the password-change screen.
+  @AllowPendingPasswordChange()
   @Get('preferences')
   async getUserPreferences(@Request() req): Promise<UserPreference> {
     const userId = req.user.sub;
@@ -77,10 +80,24 @@ export class UserController {
    * ```
    */
   @NotOnDesktop()
+  @AllowPendingPasswordChange()
   @Post('credential')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req): Promise<void> {
     const userId = req.user.sub;
     await this.userService.changePassword(userId, dto);
+  }
+
+  /**
+   * Sets the first password after an admin created the account or reset its
+   * password; refused when no such change is pending.
+   *
+   * POST /user/initial-password  Body: { newPassword }
+   */
+  @NotOnDesktop()
+  @AllowPendingPasswordChange()
+  @Post('initial-password')
+  async setInitialPassword(@Body() dto: SetInitialPasswordDto, @Request() req): Promise<void> {
+    await this.userService.setInitialPassword(req.user.sub, dto.newPassword);
   }
 
   /**

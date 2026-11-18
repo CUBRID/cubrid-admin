@@ -154,7 +154,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
                   {profile.id || '—'}
                 </p>
                 <p className="text-12 font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest mt-0.5">
-                  {CM.administratorLabel}
+                  {user?.isAdmin ? CM.administratorLabel : CM.userRoleLabel}
                 </p>
               </div>
             </div>

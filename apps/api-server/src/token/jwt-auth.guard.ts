@@ -3,19 +3,33 @@ import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { JsonWebTokenError, TokenExpiredError } from '@nestjs/jwt';
 import { AuthError } from '@error/auth/auth-error';
+import { ADMIN_ONLY } from '@common/decorators/admin-only.decorator';
+import { ALLOW_PENDING_PASSWORD_CHANGE } from '@common/decorators/allow-pending-password-change.decorator';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(private reflector: Reflector) {
     super();
   }
-  canActivate(context) {
-    const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    return isPublic ? true : super.canActivate(context);
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    if (this.flag(context, 'isPublic')) return true;
+
+    const authenticated = await (super.canActivate(context) as Promise<boolean>);
+    if (!authenticated) return false;
+
+    const user = context.switchToHttp().getRequest()?.user;
+    // Before the admin check: an admin with a pending password change
+    // still has to set it first.
+    if (user?.mustChangePassword && !this.flag(context, ALLOW_PENDING_PASSWORD_CHANGE)) {
+      throw AuthError.PasswordChangeRequired({ userId: user.sub });
+    }
+    if (this.flag(context, ADMIN_ONLY) && !user?.isAdmin) {
+      throw AuthError.PermissionDenied({ userId: user?.sub ?? 'unknown', reason: 'ADMIN_REQUIRED' });
+    }
+    return true;
   }
+
   handleRequest<TUser = any>(
     err: any,
     user: any,
@@ -23,6 +37,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     context: ExecutionContext,
     status?: any
   ): TUser {
+    // The strategy's own refusal (disabled account, ended session, ...)
+    // keeps its reason instead of turning into a generic invalid token.
+    if (err instanceof AuthError) {
+      throw err;
+    }
+
     if (!user) {
       throw AuthError.InvalidToken(
         { userId: 'unknown' },
@@ -36,5 +56,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw AuthError.InternalError({ userId: user?.sub || 'unknown' }, err);
     }
     return super.handleRequest(err, user, info, context, status);
+  }
+
+  private flag(context: ExecutionContext, key: string): boolean {
+    return this.reflector.getAllAndOverride<boolean>(key, [context.getHandler(), context.getClass()]) === true;
   }
 }

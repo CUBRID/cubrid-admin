@@ -1,12 +1,13 @@
-import { Body, Controller, Post, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserDTO } from '@type/index';
 import {
   LoginResponse,
   LogoutRequest,
   RefreshTokenRequest,
+  RegisterResponse,
 } from '@api-interfaces';
-import { NotOnDesktop, Public } from '@common';
+import { AllowPendingPasswordChange, NotOnDesktop, Public } from '@common';
 import { ValidationError } from '@error/validation/validation-error';
 
 // The desktop app has no app login (DesktopUserGuard).
@@ -30,6 +31,7 @@ export class AuthController {
     return await this.authService.refresh(body.refreshToken.trim());
   }
 
+  @AllowPendingPasswordChange()
   @Post('logout')
   async logout(@Request() req, @Body() body: LogoutRequest): Promise<{ success: true }> {
     const { jti, exp } = req.user ?? {};
@@ -37,9 +39,16 @@ export class AuthController {
     return { success: true };
   }
 
+  /** Whether the sign-up page is open, so the login page can hide its link. */
+  @Public()
+  @Get('registration')
+  async registration(): Promise<{ enabled: boolean }> {
+    return { enabled: await this.authService.isRegistrationEnabled() };
+  }
+
   @Public()
   @Post('register')
-  async register(@Body() userDTO: UserDTO): Promise<void> {
-    await this.authService.register(userDTO);
+  async register(@Body() userDTO: UserDTO): Promise<RegisterResponse> {
+    return this.authService.register(userDTO);
   }
 }

@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@config/config.module';
 import { ConfigService } from '@config/config.service';
+import { AccountModule } from '@account/account.module';
 import { JwtStrategy } from './jwt-strategy';
 import { RefreshTokenService } from './refresh-token.service';
 import { TokenBlacklistService } from './token-blacklist.service';
@@ -17,6 +18,7 @@ import { ACCESS_TOKEN_EXPIRES } from './token.constants';
 @Module({
   imports: [
     ConfigModule,
+    AccountModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

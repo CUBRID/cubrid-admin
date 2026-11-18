@@ -1,6 +1,11 @@
 // Export decorators
 export { Public } from './decorators/public.decorator';
 export { NotOnDesktop } from './decorators/not-on-desktop.decorator';
+export { AdminOnly, ADMIN_ONLY } from './decorators/admin-only.decorator';
+export {
+  AllowPendingPasswordChange,
+  ALLOW_PENDING_PASSWORD_CHANGE,
+} from './decorators/allow-pending-password-change.decorator';
 export { HandleAuthErrors } from './decorators/handle-auth-errors.decorator';
 export { HandleUserErrors } from './decorators/handle-user-errors.decorator';
 export { HandleHostErrors } from './decorators/handle-host-errors.decorator';

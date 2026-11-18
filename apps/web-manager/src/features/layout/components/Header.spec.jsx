@@ -2,16 +2,24 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../auth/authSlice', () => ({ logoutUser: () => ({ type: 'logout' }), fetchUser: () => ({ type: 'fetchUser' }) }));
 vi.mock('../../user/userSlice', () => ({ fetchPreferences: () => ({ type: 'fetchPreferences' }) }));
 vi.mock('../../user/components/UserProfileModal', () => ({ default: () => null }));
+// layoutSlice reads the OS theme at import time; jsdom has no matchMedia.
+vi.hoisted(() => {
+  window.matchMedia ??= () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined });
+});
 vi.mock('./LanguageToggle', () => ({ default: () => <span>EN KR</span> }));
 vi.mock('./HeaderMenu', () => ({ default: ({ folded }) => <nav data-testid="menu" data-folded={String(folded)} /> }));
+vi.mock('../../admin/adminApi', () => ({ adminApi: { countPending: vi.fn() } }));
 
 import Header from './Header';
 import { CM } from '../../../constants/cmLabels';
+import { adminApi } from '../../admin/adminApi';
+import { resetPendingApprovals } from '../../admin/usePendingApprovals';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,6 +29,8 @@ let overflowBy;
 const spies = [];
 
 beforeEach(() => {
+  resetPendingApprovals();
+  adminApi.countPending.mockReset().mockResolvedValue({ count: 0 });
   // jsdom has no layout: the row is `overflowBy` wider than the header at
   // fold 0, and each fold step takes 100 off.
   overflowBy = 0;
@@ -42,9 +52,21 @@ afterEach(async () => {
   spies.splice(0).forEach((spy) => spy.mockRestore());
 });
 
-const render = () => act(async () => {
-  const store = configureStore({ reducer: () => ({ auth: { user: { id: 'admin1' }, isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } } }) });
-  root.render(<Provider store={store}><Header theme="light" toggleTheme={() => undefined} /></Provider>);
+let actions = [];
+const render = (user = { id: 'admin1' }) => act(async () => {
+  actions = [];
+  const state = { auth: { user, isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } } };
+  const store = configureStore({ reducer: (s = state, action) => { actions.push(action); return s; } });
+  root.render(
+    <Provider store={store}>
+      <MemoryRouter initialEntries={['/home']}>
+        <Routes>
+          <Route path="/home" element={<Header theme="light" toggleTheme={() => undefined} />} />
+          <Route path="/admin/accounts" element={<div data-testid="admin-page" />} />
+        </Routes>
+      </MemoryRouter>
+    </Provider>
+  );
 });
 const logout = () => container.querySelector(`button[title="${CM.logout}"]`);
 
@@ -74,5 +96,39 @@ describe('Header folding', () => {
     expect(container.querySelector('button[title="admin1"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="menu"]').dataset.folded).toBe('true');
     expect(logout()).not.toBeNull();
+  });
+});
+
+describe('Header account control', () => {
+  const accountsButton = () => container.querySelector('[data-testid="header-user-accounts-btn"]');
+
+  it('shows no User Accounts button to a non-admin', async () => {
+    await render({ id: 'alice', isAdmin: false });
+    expect(accountsButton()).toBeNull();
+  });
+
+  it('opens the User Administration page for an admin', async () => {
+    await render({ id: 'root', isAdmin: true });
+    expect(accountsButton()).not.toBeNull();
+    await act(async () => accountsButton().click());
+    expect(container.querySelector('[data-testid="admin-page"]')).not.toBeNull();
+  });
+
+  it('counts sign-ups awaiting approval on the button, for admins only', async () => {
+    adminApi.countPending.mockResolvedValue({ count: 2 });
+    await render({ id: 'root', isAdmin: true });
+    expect(container.querySelector('[data-testid="header-pending-approvals"]').textContent).toBe('2');
+    expect(accountsButton().getAttribute('aria-label')).toContain('2 sign-up requests awaiting approval');
+
+    adminApi.countPending.mockClear();
+    await render({ id: 'alice', isAdmin: false });
+    expect(adminApi.countPending).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="header-pending-approvals"]')).toBeNull();
+  });
+
+  it('shows no count when nothing is waiting', async () => {
+    await render({ id: 'root', isAdmin: true });
+    expect(adminApi.countPending).toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="header-pending-approvals"]')).toBeNull();
   });
 });

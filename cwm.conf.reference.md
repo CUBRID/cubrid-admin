@@ -43,7 +43,9 @@ unreadable.
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist. Leave unset for same-origin only. | — |
 | `LISTEN_HOST` | Network interface to bind to, e.g. `127.0.0.1` to refuse connections from other machines | all interfaces |
 | `SSL_CERT_PATH` / `SSL_KEY_PATH` | Path to a real TLS cert/key pair. Both must be set together, or neither. | self-signed cert, auto-generated |
-| `AUTH_REGISTRATION_ENABLED` | Whether new accounts can sign up. Set to `false` once your team is registered. | `true` |
+| `AUTH_REGISTRATION_ENABLED` | Whether new accounts can sign up. Left out, sign-up is open; when `AUTH_REGISTRATION_APPROVAL` is `false`, it is open only until an administrator exists and then closes by itself. An administrator's switch in **User Accounts** overrides this. | open |
+| `AUTH_REGISTRATION_APPROVAL` | Whether a new sign-up waits for an administrator to approve it before it can sign in. Every administrator sees waiting requests in **User Accounts**, and any one of them can approve or reject them. A fresh install's first account, and sign-ups while no active administrator exists, are active at once. An administrator's switch in **User Accounts** overrides this. | `true` |
+| `ADMIN_USERS` | Comma-separated ids of **existing** accounts that are always administrators, e.g. `"admin,ops-lead"`. Use it to name the first administrator of an install that already has accounts; a fresh install doesn't need it, since its first account becomes the administrator. These accounts can't be demoted, disabled or deleted from the UI, and these ids can't be used to sign up (an administrator can still create them). Read at startup: restart after changing it. If it's removed and no other administrator remains, set it again to regain account control. | — |
 | `CMS_REJECT_UNAUTHORIZED` | Verify TLS certificates when connecting to CUBRID CMS hosts | `false` |
 | `CMS_CA_CERT_PATH` | CA certificate to trust for CMS hosts using a private/self-signed cert | — |
 | `CMS_JOB_RETENTION_HOURS` | How long finished background-job records (copy/rename/backup/etc.) are kept | `24` |

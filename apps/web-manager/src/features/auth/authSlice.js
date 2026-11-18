@@ -54,6 +54,9 @@ const initialState = {
   token: token || null,
   refreshToken: refreshToken || null,
   user: null,
+  // The last fetchUser settled (either way), so screens waiting for the
+  // account can stop waiting even when it failed.
+  userFetchSettled: false,
   loading: false,
   error: null,
 };
@@ -84,6 +87,9 @@ const authSlice = createSlice({
       state.token = action.payload.token;
       state.refreshToken = action.payload.refreshToken ?? null;
       state.user = action.payload.user;
+      // The login page knows only the id; the account (admin rights, a
+      // pending password change) is read again for this session.
+      state.userFetchSettled = false;
       state.error = null;
       localStorage.setItem('token', action.payload.token);
       if (action.payload.refreshToken) {
@@ -112,6 +118,7 @@ const authSlice = createSlice({
       state.token = null;
       state.refreshToken = null;
       state.user = null;
+      state.userFetchSettled = false;
       state.error = null;
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
@@ -119,6 +126,10 @@ const authSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    // The user set their own password after an admin created or reset it.
+    passwordChangeCompleted: (state) => {
+      if (state.user) state.user = { ...state.user, mustChangePassword: false };
     },
   },
   extraReducers: (builder) => {
@@ -129,10 +140,12 @@ const authSlice = createSlice({
       .addCase(fetchUser.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
+        state.userFetchSettled = true;
       })
       .addCase(fetchUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.userFetchSettled = true;
       })
       .addCase(updateAccount.pending, (state) => {
         state.loading = true;
@@ -155,5 +168,6 @@ export const {
   sessionRefreshed,
   logout,
   clearError,
+  passwordChangeCompleted,
 } = authSlice.actions;
 export default authSlice.reducer;

@@ -18,3 +18,14 @@ export class ChangePasswordDto {
   @IsNotEmpty()
   newPassword: string;
 }
+
+/**
+ * Validated body for setting a first password while an admin-required change
+ * is pending. No old password: the session was opened with the temporary one
+ * moments ago, and this works only while the change is pending.
+ */
+export class SetInitialPasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  newPassword: string;
+}

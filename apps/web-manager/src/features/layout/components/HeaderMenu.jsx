@@ -16,6 +16,9 @@ export default function HeaderMenu({ folded = false }) {
   const navigate = useNavigate();
   const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts } = useSelector((state) => state.host, shallowEqual);
   const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
+  // Web Manager account control: administrators in a browser only (the
+  // desktop app has no app accounts), so not one of the shared MENU_ACTIONS.
+  const isAdmin = useSelector((state) => state.auth?.user?.isAdmin === true);
 
   const enabled = getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts });
   // Only Edit Host, CMS Account Management and Host Engine Version are ever
@@ -110,6 +113,13 @@ export default function HeaderMenu({ folded = false }) {
         label={CM.serviceDashboard}
         {...action(MENU_ACTIONS.serviceDashboard)}
       />
+      {isAdmin && !isDesktopApp() && (
+        <MenuItem
+          icon="manage_accounts"
+          label={CM.userAdministration}
+          onClick={() => navigate('/admin/accounts')}
+        />
+      )}
       <MenuDivider />
       <MenuItem
         icon="supervisor_account"

@@ -21,6 +21,11 @@ export class ConfigService {
   public cmsRejectUnauthorized!: boolean;
   public cmsForwardEnabled!: boolean;
   public authRegistrationEnabled!: boolean;
+  /** AUTH_REGISTRATION_ENABLED as set, or undefined when cwm.conf leaves it out. */
+  private authRegistrationSetting?: boolean;
+  /** AUTH_REGISTRATION_APPROVAL as set, or undefined when cwm.conf leaves it out. */
+  private authRegistrationApprovalSetting?: boolean;
+  private configuredAdmins!: ReadonlySet<string>;
   public listenHost?: string;
   private readonly listenUnixSocket?: string;
   private readonly desktopMode: boolean;
@@ -61,7 +66,10 @@ export class ConfigService {
     this.cmsForwardEnabled = this.resolveCmsForwardEnabled(args);
     this.desktopMode = (process.env.CWM_DESKTOP ?? '').trim() === '1';
     // The desktop app has one built-in user and no accounts to sign up for.
-    this.authRegistrationEnabled = this.desktopMode ? false : this.resolveAuthRegistrationEnabled(args);
+    this.authRegistrationSetting = this.desktopMode ? false : this.resolveAuthRegistrationSetting(args);
+    this.authRegistrationEnabled = this.authRegistrationSetting ?? true;
+    this.authRegistrationApprovalSetting = this.resolveOptionalBoolean(args, 'AUTH_REGISTRATION_APPROVAL');
+    this.configuredAdmins = this.resolveConfiguredAdmins(args);
 
     this.resolveLogSettings(args);
 
@@ -159,6 +167,32 @@ export class ConfigService {
     return this.authRegistrationEnabled;
   }
 
+  /**
+   * AUTH_REGISTRATION_ENABLED when cwm.conf (or env/CLI) sets it; undefined
+   * when left out, in which case sign-up is open only until an
+   * administrator exists (AccountSettingsService).
+   */
+  getAuthRegistrationSetting(): boolean | undefined {
+    return this.authRegistrationSetting;
+  }
+
+  /**
+   * AUTH_REGISTRATION_APPROVAL when cwm.conf (or env/CLI) sets it; undefined
+   * when left out, in which case new sign-ups wait for an administrator.
+   */
+  getAuthRegistrationApprovalSetting(): boolean | undefined {
+    return this.authRegistrationApprovalSetting;
+  }
+
+  /**
+   * Account ids that are always admin (ADMIN_USERS in cwm.conf, comma
+   * separated). How an existing install gets its first admin; the UI can't
+   * demote, disable or delete them.
+   */
+  getConfiguredAdmins(): ReadonlySet<string> {
+    return this.configuredAdmins;
+  }
+
   isLogToFileEnabled(): boolean {
     return this.logToFile;
   }
@@ -233,17 +267,26 @@ export class ConfigService {
     return !this.isProduction();
   }
 
-  private resolveAuthRegistrationEnabled(args: Record<string, string>): boolean {
+  private resolveAuthRegistrationSetting(args: Record<string, string>): boolean | undefined {
     const raw = args.AUTH_REGISTRATION_ENABLED ?? process.env.AUTH_REGISTRATION_ENABLED;
     if (raw != null && raw !== '') {
       return parseBooleanEnv(raw);
     }
 
-    // Default: registration is open.
-    // This is a self-hosted management tool — network access is the security boundary.
-    // Operators who want to lock down sign-ups after initial setup can set
-    // AUTH_REGISTRATION_ENABLED=false in cwm.conf.
-    return true;
+    // Left out: sign-up is open until an administrator exists, so a fresh
+    // install can register its first (admin) account and then closes by
+    // itself. An install without an admin stays open as before.
+    return undefined;
+  }
+
+  private resolveOptionalBoolean(args: Record<string, string>, key: string): boolean | undefined {
+    const raw = args[key] ?? process.env[key];
+    return raw != null && raw !== '' ? parseBooleanEnv(raw) : undefined;
+  }
+
+  private resolveConfiguredAdmins(args: Record<string, string>): ReadonlySet<string> {
+    const raw = args.ADMIN_USERS ?? process.env.ADMIN_USERS ?? '';
+    return new Set(raw.split(',').map((id) => id.trim()).filter(Boolean));
   }
 
   private resolveCmsCaCert(args: Record<string, string>): string | undefined {

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { UserRepositoryService } from '@repository';
 import { PasswordService } from '@security';
+import { AccountAccessService } from '@account/account-access.service';
 import { UserError } from '@error/user/user-error';
 import {
   ChangePasswordRequest,
@@ -38,11 +39,19 @@ describe('UserService', () => {
       loadUserById: jest.fn(),
       atomicUpdateUser: jest.fn(),
       deleteUser: jest.fn(),
+      listUsers: jest.fn().mockResolvedValue([]),
     };
 
     const mockPasswordService = {
       comparePlainAndHash: jest.fn(),
       getHashedValue: jest.fn(),
+    };
+
+    const isAdmin = (u: User) => u.role === 'admin';
+    const mockAccountAccess = {
+      isAdmin: jest.fn(isAdmin),
+      isActiveAdmin: jest.fn((u: User) => isAdmin(u) && u.status !== 'disabled'),
+      invalidate: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -56,6 +65,7 @@ describe('UserService', () => {
           provide: PasswordService,
           useValue: mockPasswordService,
         },
+        { provide: AccountAccessService, useValue: mockAccountAccess },
       ],
     }).compile();
 
@@ -417,6 +427,114 @@ describe('UserService', () => {
       expect(repository.loadUserById).toHaveBeenCalledWith(mockUserId);
       expect(passwordService.comparePlainAndHash).not.toHaveBeenCalled();
       expect(repository.deleteUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('account control', () => {
+    const runModifier = async (user: User) => {
+      const modifier = repository.atomicUpdateUser.mock.calls[0][1];
+      return modifier(user);
+    };
+
+    it('returns admin rights and defaults, never the session version', async () => {
+      repository.loadUserById.mockResolvedValue({ ...mockUser, role: 'admin', sessionVersion: 4 });
+      const result = await service.getUserData('testuser');
+      expect(result).toMatchObject({ role: 'admin', status: 'active', isAdmin: true });
+      expect(result).not.toHaveProperty('sessionVersion');
+    });
+
+    it('reads an account from before roles as an active non-admin', async () => {
+      repository.loadUserById.mockResolvedValue(mockUser);
+      await expect(service.getUserData('testuser')).resolves.toMatchObject({
+        role: 'user',
+        status: 'active',
+        isAdmin: false,
+      });
+    });
+
+    it('updateUser changes only the department, not role, status or password', async () => {
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.updateUser('testuser', {
+        department: 'Ops',
+        role: 'admin',
+        status: 'active',
+        password: 'x',
+        sessionVersion: 0,
+      } as any);
+      const updated = await runModifier({ ...mockUser, role: 'user' });
+      expect(updated).toMatchObject({ department: 'Ops', role: 'user', password: 'hashed-password' });
+      expect(updated).not.toHaveProperty('sessionVersion');
+    });
+
+    it('changing the password clears an admin-required change', async () => {
+      // The old password matches; the new one differs from it.
+      passwordService.comparePlainAndHash.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      passwordService.getHashedValue.mockResolvedValue('new-hash');
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.changePassword('testuser', { oldPassword: 'old', newPassword: 'NewPassw0rd' });
+      const updated = await runModifier({ ...mockUser, mustChangePassword: true });
+      expect(updated.mustChangePassword).toBeUndefined();
+    });
+
+    it('refuses to set the temporary password again', async () => {
+      passwordService.comparePlainAndHash.mockResolvedValue(true);
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.changePassword('testuser', { oldPassword: 'Temp1234', newPassword: 'Temp1234' });
+      await expect(runModifier({ ...mockUser, mustChangePassword: true })).rejects.toMatchObject({
+        code: 'PASSWORD_UNCHANGED',
+      });
+    });
+
+    it('sets a first password without the old one while a change is pending', async () => {
+      passwordService.comparePlainAndHash.mockResolvedValue(false);
+      passwordService.getHashedValue.mockResolvedValue('new-hash');
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.setInitialPassword('testuser', 'Mine5678');
+      const updated = await runModifier({ ...mockUser, mustChangePassword: true });
+      expect(updated.password).toBe('new-hash');
+      expect(updated.mustChangePassword).toBeUndefined();
+    });
+
+    it('refuses a first password when no change is pending', async () => {
+      passwordService.getHashedValue.mockResolvedValue('new-hash');
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.setInitialPassword('testuser', 'Mine5678');
+      await expect(runModifier({ ...mockUser })).rejects.toMatchObject({
+        code: 'PERMISSION_DENIED',
+        additionalData: expect.objectContaining({ reason: 'NO_PENDING_PASSWORD_CHANGE' }),
+      });
+    });
+
+    it('refuses the temporary password, and one that breaks the policy, as the first password', async () => {
+      passwordService.comparePlainAndHash.mockResolvedValue(true);
+      passwordService.getHashedValue.mockResolvedValue('same-hash');
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.setInitialPassword('testuser', 'Temp1234');
+      await expect(runModifier({ ...mockUser, mustChangePassword: true })).rejects.toMatchObject({ code: 'PASSWORD_UNCHANGED' });
+
+      await expect(service.setInitialPassword('testuser', 'weak')).rejects.toMatchObject({ code: 'BAD_NEW_PASSWORD' });
+    });
+
+    it('refuses to delete the last active admin', async () => {
+      repository.loadUserById.mockResolvedValue({ ...mockUser, role: 'admin' });
+      passwordService.comparePlainAndHash.mockResolvedValue(true);
+      repository.listUsers.mockResolvedValue([
+        { ...mockUser, role: 'admin' },
+        { ...mockUser, id: 'other', role: 'admin', status: 'disabled' },
+      ]);
+      await expect(service.deleteUser('testuser', { password: 'pw' })).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+      expect(repository.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('lets an admin delete themselves when another active admin remains', async () => {
+      repository.loadUserById.mockResolvedValue({ ...mockUser, role: 'admin' });
+      passwordService.comparePlainAndHash.mockResolvedValue(true);
+      repository.listUsers.mockResolvedValue([
+        { ...mockUser, role: 'admin' },
+        { ...mockUser, id: 'other', role: 'admin' },
+      ]);
+      await service.deleteUser('testuser', { password: 'pw' });
+      expect(repository.deleteUser).toHaveBeenCalledWith('testuser');
     });
   });
 });

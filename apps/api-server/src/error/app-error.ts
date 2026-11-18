@@ -172,6 +172,9 @@ export class AppError extends Error {
           case AuthErrorCode.INVALID_TOKEN:
             return 401;
           case AuthErrorCode.PERMISSION_DENIED:
+          case AuthErrorCode.ACCOUNT_DISABLED:
+          case AuthErrorCode.ACCOUNT_PENDING_APPROVAL:
+          case AuthErrorCode.PASSWORD_CHANGE_REQUIRED:
             return 403;
           case AuthErrorCode.INTERNAL_ERROR:
             return 500;
@@ -216,7 +219,15 @@ export class AppError extends Error {
             return 500; // Internal server error
           case UserErrorCode.OLD_PASSWORD_MISMATCH:
           case UserErrorCode.BAD_NEW_PASSWORD:
+          case UserErrorCode.INVALID_ACCOUNT_ID:
+          case UserErrorCode.PASSWORD_UNCHANGED:
             return 400; // Bad request
+          case UserErrorCode.ADMIN_SELF_CHANGE:
+          case UserErrorCode.LAST_ADMIN:
+          case UserErrorCode.ADMIN_BY_CONFIG:
+          case UserErrorCode.ACCOUNT_PENDING:
+          case UserErrorCode.NOT_PENDING:
+            return 409; // Conflict - refused to keep an admin in place
           case UserErrorCode.UNKNOWN:
             return 500; // Internal server error
 

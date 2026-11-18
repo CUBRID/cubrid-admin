@@ -95,6 +95,12 @@ it('says a wrong ID or password in plain words', async () => {
   expect(container.textContent).not.toContain('Invalid credentials.');
 });
 
+it('tells a sign-up awaiting approval to wait, not that the password is wrong', async () => {
+  await tryLogin({ response: { status: 403, data: { message: 'This account is waiting for an administrator to approve it.', data: { type: '/errors/auth/account_pending_approval' } } } });
+  expect(container.querySelector('[data-testid="login-awaiting-approval"]').textContent).toContain('Waiting for approval');
+  expect(container.textContent).not.toContain('Login failed. Check your ID and password.');
+});
+
 it('shows any other login failure as the server says it', async () => {
   await tryLogin({ response: { data: { message: 'Could not reach the server.', data: { type: '/errors/internal/internal_error' } } } });
   expect(container.textContent).toContain('Could not reach the server.');
