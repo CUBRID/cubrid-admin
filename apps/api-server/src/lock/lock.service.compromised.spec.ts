@@ -4,7 +4,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { LockError, LockErrorCode } from '@error/lock/lock-error';
-import { createLockFs, LockService } from './lock.service';
+import { createLockFs, FileLock, LockService } from './lock.service';
 
 // The real proper-lockfile and file system on a temp storage folder. A lock
 // is compromised the way another process does it (the lock directory is
@@ -122,8 +122,10 @@ describe('LockService with a compromised lock', () => {
     const lockDir = `${path.join(tmpDir, filename)}.lock`;
     let heldBeforeRemoval: boolean | undefined;
     let errorAtWrite: unknown;
+    let seenLock: FileLock | undefined;
 
     const result = await service.withLock(filename, async (lock) => {
+      seenLock = lock;
       heldBeforeRemoval = lock.compromised === null;
       // Another process took the lock for stale and removed it.
       await fs.rm(lockDir, { recursive: true, force: true });
@@ -139,6 +141,9 @@ describe('LockService with a compromised lock', () => {
 
     // The work finished on its own terms: its result stands.
     expect(result).toBe('nothing written');
+    // A compromised lock also counts as releasing: a late stat error of it is still mapped.
+    expect(seenLock!.compromised).not.toBeNull();
+    expect(seenLock!.releasing).toBe(true);
     expect(heldBeforeRemoval).toBe(true);
     // The write guard refused before the write would have happened.
     expect(errorAtWrite).toBeInstanceOf(LockError);
@@ -159,6 +164,15 @@ describe('LockService with a compromised lock', () => {
     expect(next).toBe('next-ok');
     await expect(fs.stat(lockDir)).rejects.toMatchObject({ code: 'ENOENT' });
   }, 20000);
+
+  it('registers each lock under the path the library uses for its lock directory', async () => {
+    await service.withLock('registry-key.json', async (lock) => {
+      const registry = (service as unknown as { locksByPath: Map<string, unknown> }).locksByPath;
+      expect(registry.get(`${path.resolve(tmpDir, 'registry-key.json')}.lock`)).toBe(lock);
+      await expect(fs.stat(`${path.resolve(tmpDir, 'registry-key.json')}.lock`)).resolves.toBeDefined();
+      return undefined;
+    });
+  });
 
   it('probes the mtime precision once: the second lock of a service skips the utimes probe', async () => {
     let utimesCalls = 0;

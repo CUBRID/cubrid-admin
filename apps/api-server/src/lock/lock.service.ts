@@ -203,6 +203,10 @@ export class LockService {
           const at = Date.now();
           const duringRelease = lock.releasing;
           lock.compromised = { at, error: err, duringRelease };
+          // The library has dropped this lock, and the service does not
+          // release it again: from here on it counts as releasing too, so a
+          // late stat/utimes error of it is still reported as ENOENT.
+          lock.releasing = true;
           const detail =
             `code=${err?.code}${err?.originalCode ? ', originalCode=' + err.originalCode : ''}, ` +
             `syscall=${err?.syscall ?? '-'}, path=${err?.path ?? '-'}`;
@@ -225,8 +229,9 @@ export class LockService {
       },
     });
     lock.acquiredAt = Date.now();
-    // proper-lockfile's lock directory is `${file}.lock` (no lockfilePath option is given).
-    this.locksByPath.set(`${filePath}.lock`, lock);
+    // proper-lockfile's lock directory is path.resolve(file) + '.lock' (realpath
+    // is off and no lockfilePath option is given): the same resolution here.
+    this.locksByPath.set(`${path.resolve(filePath)}.lock`, lock);
     return lock;
   }
 
