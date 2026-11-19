@@ -78,29 +78,56 @@ export type AuthTokens = {
   expiresIn: number;
 };
 
-const baseOptions: CookieOptions = { httpOnly: true, secure: true, sameSite: 'strict' };
 const accessPath = `/${API_PREFIX}`;
 const refreshPath = `/${API_PREFIX}/auth`;
 
-export function setAuthCookies(res: Response, tokens: AuthTokens): void {
+/**
+ * Whether the browser sees the page over https, so the cookies can be Secure.
+ * The server itself always listens on https, but behind a reverse proxy that
+ * serves http (as 0.1.0 allowed) the browser would drop a Secure cookie and
+ * the login would not stick. The page's scheme is taken from Origin (Referer
+ * when there is none): the browser sets them and a page script cannot.
+ * X-Forwarded-Proto is not used: any client can send it, and whether it can
+ * be believed depends on the proxy settings; Origin needs none. A client
+ * that sends an http origin only gets its own
+ * cookies without Secure. No header, https, 'null' or anything unreadable
+ * keeps Secure. The names have no __Host-/__Secure- prefix, which a browser
+ * would refuse without Secure.
+ */
+export function cookieSecureFor(req: Request): boolean {
+  const headers = req?.headers ?? {};
+  const source = [headers.origin, headers.referer].find((value) => typeof value === 'string' && value.trim());
+  if (!source || source === 'null') return true;
+  try {
+    return new URL(source).protocol !== 'http:';
+  } catch {
+    return true;
+  }
+}
+
+const optionsFor = (req: Request): CookieOptions => ({ httpOnly: true, secure: cookieSecureFor(req), sameSite: 'strict' });
+
+export function setAuthCookies(req: Request, res: Response, tokens: AuthTokens): void {
   const names = authCookieNames();
+  const options = optionsFor(req);
   res.cookie(names.access, tokens.token, {
-    ...baseOptions,
+    ...options,
     path: accessPath,
     maxAge: ACCESS_TOKEN_EXPIRES_SEC * 1000,
   });
   res.cookie(names.refresh, tokens.refreshToken, {
-    ...baseOptions,
+    ...options,
     path: refreshPath,
     maxAge: REFRESH_TOKEN_EXPIRES_MS,
   });
 }
 
-/** Same name, path and flags as when set; otherwise the browser keeps the cookie. */
-export function clearAuthCookies(res: Response): void {
+/** Same name, path and flags as when set (Secure by the same rule); otherwise the browser keeps the cookie. */
+export function clearAuthCookies(req: Request, res: Response): void {
   const names = authCookieNames();
-  res.clearCookie(names.access, { ...baseOptions, path: accessPath });
-  res.clearCookie(names.refresh, { ...baseOptions, path: refreshPath });
+  const options = optionsFor(req);
+  res.clearCookie(names.access, { ...options, path: accessPath });
+  res.clearCookie(names.refresh, { ...options, path: refreshPath });
 }
 
 export const readAccessCookie = (req: Request) => readCookie(req, authCookieNames().access);

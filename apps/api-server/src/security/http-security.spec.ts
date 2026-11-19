@@ -23,6 +23,12 @@ describe('httpSecurityHeaders', () => {
     expect(res.headers['content-security-policy-report-only']).toBeUndefined();
   });
 
+  it('does not move http requests to https, so an http reverse proxy works', async () => {
+    const res = await request(appWith({ hsts: false })).get('/');
+    expect(res.headers['content-security-policy']).not.toContain('upgrade-insecure-requests');
+    expect(CONTENT_SECURITY_POLICY).not.toHaveProperty('upgrade-insecure-requests');
+  });
+
   it('only reports in report-only mode', async () => {
     const res = await request(appWith({ hsts: false, cspReportOnly: true })).get('/');
     expect(res.headers['content-security-policy']).toBeUndefined();
