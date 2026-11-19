@@ -27,10 +27,11 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() userDTO: UserDTO,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @Req() req: Request
   ): Promise<LoginResponse> {
     const tokens = await this.authService.login(userDTO);
-    setAuthCookies(res, tokens);
+    setAuthCookies(req, res, tokens);
     return { expiresIn: tokens.expiresIn };
   }
 
@@ -47,12 +48,12 @@ export class AuthController {
         throw AuthError.InvalidToken({ reason: 'REFRESH_TOKEN_MISSING' });
       }
       const tokens = await this.authService.refresh(refreshToken);
-      setAuthCookies(res, tokens);
+      setAuthCookies(req, res, tokens);
       return { expiresIn: tokens.expiresIn };
     } catch (err) {
       // A refresh token that is missing, spent or revoked ends the session;
       // a server fault leaves the cookies for the next try.
-      if (err instanceof AuthError && err.code === AuthErrorCode.INVALID_TOKEN) clearAuthCookies(res);
+      if (err instanceof AuthError && err.code === AuthErrorCode.INVALID_TOKEN) clearAuthCookies(req, res);
       if (err instanceof AuthError && err.code === AuthErrorCode.REFRESH_IN_PROGRESS) {
         res.setHeader('Retry-After', String(REFRESH_RETRY_AFTER_SEC));
       }
@@ -70,7 +71,7 @@ export class AuthController {
     try {
       await this.authService.logout(readAccessCookie(req), readRefreshCookie(req));
     } finally {
-      clearAuthCookies(res);
+      clearAuthCookies(req, res);
     }
     return { success: true };
   }
