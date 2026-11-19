@@ -41,3 +41,39 @@ export function outdentSqlLines(view) {
 }
 
 export const sqlTabKeymap = [{ key: 'Tab', run: insertSqlTab, shift: outdentSqlLines }];
+
+const OPENERS = /[([]\s*$/;
+const CLOSER_AFTER = { '(': ')', '[': ']' };
+
+/**
+ * Enter as Monaco did it: the new line gets the indentation of the line it
+ * breaks (a tab counts as 4 spaces, written as spaces), one level more after
+ * an opening ( or [, and between ( and ) the closing one goes on its own line
+ * at the line's indentation. The text after the cursor moves down as it is.
+ */
+export function insertSqlNewline(view) {
+  const { state } = view;
+  if (state.readOnly) return false;
+  view.dispatch(
+    state.changeByRange((range) => {
+      const line = state.doc.lineAt(range.from);
+      const before = line.text.slice(0, range.from - line.from);
+      const leading = /^[ \t]*/.exec(before)[0];
+      const indent = countColumn(leading, SQL_INDENT_SIZE);
+      const opener = OPENERS.test(before) ? before.trimEnd().slice(-1) : null;
+      const pad = (n) => ' '.repeat(n);
+      if (!opener) {
+        const insert = `\n${pad(indent)}`;
+        return { changes: { from: range.from, to: range.to, insert }, range: EditorSelection.cursor(range.from + insert.length) };
+      }
+      const inner = `\n${pad(indent + SQL_INDENT_SIZE)}`;
+      const closes = state.doc.sliceString(range.to, range.to + 1) === CLOSER_AFTER[opener];
+      const insert = closes ? `${inner}\n${pad(indent)}` : inner;
+      return { changes: { from: range.from, to: range.to, insert }, range: EditorSelection.cursor(range.from + inner.length) };
+    }),
+    { scrollIntoView: true, userEvent: 'input' }
+  );
+  return true;
+}
+
+export const sqlEnterKeymap = [{ key: 'Enter', run: insertSqlNewline }];

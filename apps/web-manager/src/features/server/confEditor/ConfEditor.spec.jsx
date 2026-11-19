@@ -153,3 +153,14 @@ describe('Enter and long lines, as in the textarea before', () => {
     expect(viewOf().contentDOM.classList.contains('cm-lineWrapping')).toBe(true);
   });
 });
+
+it('Edit > Redo in the desktop app redoes in the conf editor', () => {
+  render({ value: LOADED, onChange: vi.fn() });
+  const view = viewOf();
+  act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: 'x=1\n' } }));
+  act(() => { undo(view); });
+  const event = new CustomEvent('cwm-edit-redo', { bubbles: true, cancelable: true });
+  act(() => { view.contentDOM.dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(true);
+  expect(view.state.doc.toString()).toBe(`${LOADED}x=1\n`);
+});

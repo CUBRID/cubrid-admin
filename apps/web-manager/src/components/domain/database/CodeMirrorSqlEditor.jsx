@@ -8,7 +8,8 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import { sqlCompletionSource, sqlHighlighting, sqlLanguage } from './sqlLanguage';
 import { useCM } from '../../../constants/useCM';
 import { EDITOR_ASSIST } from '../../../constants/editorAssist';
-import { SQL_INDENT_SIZE, sqlTabKeymap } from './sqlTab';
+import { editMenuRedo } from '../editMenuRedo';
+import { SQL_INDENT_SIZE, sqlEnterKeymap, sqlTabKeymap } from './sqlTab';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -112,10 +113,12 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
         // No wrapping: long lines scroll sideways, as in Monaco before (wordWrap off).
         keymap.of([
           ...closeBracketsKeymap, ...(EDITOR_ASSIST ? completionKeymap : []),
-          // Tab as in Monaco before: spaces to the next tab stop at the cursor (sqlTab.js).
-          ...searchKeymap, ...historyKeymap, ...sqlTabKeymap, ...defaultKeymap,
+          // Tab and Enter as in Monaco before (sqlTab.js): spaces to the next tab stop
+          // at the cursor; the new line keeps the indentation, one level more after (.
+          ...searchKeymap, ...historyKeymap, ...sqlTabKeymap, ...sqlEnterKeymap, ...defaultKeymap,
         ]),
         indentUnit.of(' '.repeat(SQL_INDENT_SIZE)),
+        editMenuRedo,
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),

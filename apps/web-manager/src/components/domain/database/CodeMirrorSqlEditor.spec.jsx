@@ -253,3 +253,51 @@ describe('Tab in the SQL editor (as in Monaco before)', () => {
     expect(view.state.doc.toString()).toBe('SELECT 1');
   });
 });
+
+describe('Enter in the SQL editor (as in Monaco before)', () => {
+  const enterAt = (value, anchor) => {
+    render({ value });
+    const view = viewOf();
+    act(() => view.dispatch({ selection: { anchor } }));
+    act(() => {
+      view.contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
+    });
+    return view;
+  };
+
+  it('keeps the indentation of the line on the new line', () => {
+    const view = enterAt('    SELECT 1', 12);
+    expect(view.state.doc.toString()).toBe('    SELECT 1\n    ');
+    expect(view.state.selection.main.head).toBe(17);
+  });
+
+  it('writes a tab indentation as 4 spaces', () => {
+    expect(enterAt('\tSELECT 1', 9).state.doc.toString()).toBe('\tSELECT 1\n    ');
+  });
+
+  it('goes one level deeper after (, and puts ) on its own line between ( and )', () => {
+    expect(enterAt('SELECT (', 8).state.doc.toString()).toBe('SELECT (\n    ');
+    const view = enterAt('  IN ()', 6);
+    expect(view.state.doc.toString()).toBe('  IN (\n      \n  )');
+    expect(view.state.selection.main.head).toBe(13);
+  });
+
+  it('right after the indentation: the spaces stay and the text moves down with the same indentation', () => {
+    expect(enterAt('    SELECT 1', 4).state.doc.toString()).toBe('    \n    SELECT 1');
+  });
+});
+
+describe('Edit > Redo in the desktop app', () => {
+  it('redoes in the editor when the menu offers it, and takes the event', () => {
+    const onChange = vi.fn();
+    render({ value: 'SELECT 1', onChange });
+    const view = viewOf();
+    act(() => view.dispatch({ changes: { from: 8, insert: ' FROM t' } }));
+    act(() => { undo(view); });
+    expect(view.state.doc.toString()).toBe('SELECT 1');
+    const event = new CustomEvent('cwm-edit-redo', { bubbles: true, cancelable: true });
+    act(() => { view.contentDOM.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe('SELECT 1 FROM t');
+  });
+});

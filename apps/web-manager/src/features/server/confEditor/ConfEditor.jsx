@@ -15,6 +15,7 @@ import { paramHintDom } from './confParams';
 import { confCompletionSource, paramsFor } from './confComplete';
 import { confDiagnostics } from './confLint';
 import { EDITOR_ASSIST } from '../../../constants/editorAssist';
+import { editMenuRedo } from '../../../components/domain/editMenuRedo';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -163,6 +164,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         ]),
         // Long lines wrap, as in the textarea (pre-wrap) before.
         EditorView.lineWrapping,
+        editMenuRedo,
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),
