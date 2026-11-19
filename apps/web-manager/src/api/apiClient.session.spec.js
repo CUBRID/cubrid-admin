@@ -26,6 +26,15 @@ vi.mock('../app/store', async () => {
   };
 });
 
+// jsdom has no matchMedia; the real store (layoutSlice's theme) reads it when
+// a tab's late import gets it instead of the mock above.
+if (typeof window.matchMedia !== 'function') {
+  window.matchMedia = (query) => ({
+    matches: false, media: query, onchange: null,
+    addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+  });
+}
+
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const KEY = 'cwm-session-expires-at';
@@ -98,7 +107,12 @@ beforeEach(() => {
   });
   localStorage.clear();
 });
-afterEach(() => {
+afterEach(async () => {
+  // A tab's storage listener imports the store when it hears of another tab;
+  // the tabs of earlier tests hear it too. Let those imports finish while the
+  // store is still mocked, not after the file ends (the real store needs
+  // window.matchMedia, which jsdom lacks).
+  await vi.dynamicImportSettled();
   vi.useRealTimers();
   localStorage.clear();
 });
