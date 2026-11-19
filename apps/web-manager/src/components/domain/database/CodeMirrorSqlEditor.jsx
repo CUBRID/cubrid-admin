@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
+import { indentUnit } from '@codemirror/language';
 import { EditorView, drawSelection, highlightActiveLine, keymap, placeholder as placeholderText } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { sqlCompletionSource, sqlHighlighting, sqlLanguage } from './sqlLanguage';
 import { useCM } from '../../../constants/useCM';
 import { EDITOR_ASSIST } from '../../../constants/editorAssist';
+import { SQL_INDENT_SIZE, sqlTabKeymap } from './sqlTab';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -110,8 +112,10 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
         EditorView.lineWrapping,
         keymap.of([
           ...closeBracketsKeymap, ...(EDITOR_ASSIST ? completionKeymap : []),
-          ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap,
+          // Tab as in Monaco before: spaces to the next tab stop at the cursor (sqlTab.js).
+          ...searchKeymap, ...historyKeymap, ...sqlTabKeymap, ...defaultKeymap,
         ]),
+        indentUnit.of(' '.repeat(SQL_INDENT_SIZE)),
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),

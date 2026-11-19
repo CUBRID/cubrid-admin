@@ -107,3 +107,15 @@ it('shows no hint while the pointer rests on a key name', async () => {
   expect(container.querySelector('.cm-tooltip-hover')).toBeNull();
   expect(document.querySelector('.cm-conf-hint')).toBeNull();
 });
+
+it('leaves Tab and Shift+Tab to the page: the focus moves on, as in the textarea before, and the text stays', () => {
+  render({ value: LOADED, onChange: vi.fn() });
+  const view = viewOf();
+  act(() => view.dispatch({ selection: { anchor: 5 } }));
+  for (const shiftKey of [false, true]) {
+    const event = new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', keyCode: 9, shiftKey, bubbles: true, cancelable: true });
+    act(() => { view.contentDOM.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(false);
+  }
+  expect(view.state.doc.toString()).toBe(LOADED);
+});

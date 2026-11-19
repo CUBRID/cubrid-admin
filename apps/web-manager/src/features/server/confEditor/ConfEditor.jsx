@@ -4,7 +4,7 @@ import {
   EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, hoverTooltip, keymap, lineNumbers,
   placeholder as placeholderText,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { forceLinting, linter, lintGutter, lintKeymap } from '@codemirror/lint';
@@ -155,7 +155,8 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         ] : []),
         keymap.of([
           ...(EDITOR_ASSIST ? [...completionKeymap, ...lintKeymap] : []),
-          ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap,
+          // No Tab key: Tab and Shift+Tab move the focus, as in the textarea before.
+          ...searchKeymap, ...historyKeymap, ...defaultKeymap,
         ]),
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
