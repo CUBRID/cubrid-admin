@@ -31,10 +31,17 @@ const DAY = 24 * HOUR;
 const KEY = 'cwm-session-expires-at';
 
 /** The browser holds a session whose access cookie ends `ms` from now. */
-const signedIn = (ms, lifetimeSec = DAY / 1000) => {
+const signedIn = (ms, lifetimeSec = DAY / 1000, user) => {
   server.jar = { access: Date.now() + ms, refresh: 'r1' };
   server.lifetime = lifetimeSec;
-  localStorage.setItem(KEY, JSON.stringify({ expiresAt: Date.now() + ms, expiresIn: lifetimeSec }));
+  localStorage.setItem(KEY, JSON.stringify({ expiresAt: Date.now() + ms, expiresIn: lifetimeSec, ...(user ? { user } : {}) }));
+};
+
+/** What another tab's write of the shared session looks like here. */
+const otherTabWrites = (value) => {
+  if (value === null) localStorage.removeItem(KEY);
+  else localStorage.setItem(KEY, JSON.stringify(value));
+  window.dispatchEvent(new StorageEvent('storage', { key: KEY, newValue: value === null ? null : JSON.stringify(value) }));
 };
 
 // A Web Locks stand-in that runs one holder at a time, shared by the "tabs".
@@ -232,4 +239,48 @@ it('changes the session key on login and logout, not on a refresh', async () => 
   expect(tab.appSessionKey()).toBe(first);
   tab.setAppSession(null);
   expect(tab.appSessionKey()).not.toBe(first);
+});
+
+it('loads the page again when another tab logs in as another account', async () => {
+  signedIn(HOUR, DAY / 1000, 'alice');
+  const tab = await openTab();
+  const reload = vi.spyOn(tab.pageActions, 'reload').mockImplementation(() => {});
+  otherTabWrites({ expiresAt: Date.now() + DAY, expiresIn: DAY / 1000, user: 'bob' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reload).toHaveBeenCalledTimes(1);
+});
+
+it("takes the same account's login or refresh from another tab without loading again", async () => {
+  signedIn(HOUR, DAY / 1000, 'alice');
+  const tab = await openTab();
+  const reload = vi.spyOn(tab.pageActions, 'reload').mockImplementation(() => {});
+  otherTabWrites({ expiresAt: Date.now() + DAY, expiresIn: DAY / 1000, user: 'alice' });
+  // A session kept by an older build has no user: taken as before.
+  otherTabWrites({ expiresAt: Date.now() + 2 * DAY, expiresIn: DAY / 1000 });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reload).not.toHaveBeenCalled();
+});
+
+it('goes to the login screen at once when another tab logs out', async () => {
+  signedIn(HOUR, DAY / 1000, 'alice');
+  const tab = await openTab();
+  const { store } = await import('../app/store');
+  expect(store.getState().auth.isAuthenticated).toBe(true);
+  const reload = vi.spyOn(tab.pageActions, 'reload').mockImplementation(() => {});
+  otherTabWrites(null);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(store.getState().auth.isAuthenticated).toBe(false);
+  expect(reload).not.toHaveBeenCalled();
+});
+
+it('keeps the account in the shared session across a refresh, and a login stores it', async () => {
+  signedIn(-HOUR, DAY / 1000, 'alice');
+  const { refreshSession } = await openTab();
+  await refreshSession();
+  expect(JSON.parse(localStorage.getItem(KEY))).toEqual({ expiresAt: Date.now() + DAY, expiresIn: DAY / 1000, user: 'alice' });
+
+  const { store } = await import('../app/store');
+  const { loginSuccess } = await import('../features/auth/authSlice');
+  store.dispatch(loginSuccess({ expiresIn: 3600, user: { id: 'bob' } }));
+  expect(JSON.parse(localStorage.getItem(KEY))).toEqual({ expiresAt: Date.now() + 3600 * 1000, expiresIn: 3600, user: 'bob' });
 });

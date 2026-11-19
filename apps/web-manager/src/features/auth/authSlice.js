@@ -77,7 +77,9 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.user = action.payload.user;
       state.error = null;
-      setAppSession(session);
+      // The ID goes with the session the tabs share (see SESSION_EXPIRY_KEY).
+      const user = action.payload.user?.id;
+      setAppSession(typeof user === 'string' && user ? { ...session, user } : session);
     },
     // The session is already kept (this tab's refresh, or another tab's);
     // the state only follows.
