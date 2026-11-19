@@ -9,6 +9,12 @@ import {
   isTerminalJobStatus,
 } from './cms-job.cleanup';
 
+/** What a write under a file lock needs from it: a check that the lock is still ours. */
+export interface HeldLock {
+  assertHeld: () => void;
+}
+const NO_LOCK: HeldLock = { assertHeld: () => undefined };
+
 @Injectable()
 export class CmsJobStore {
   private jobsRoot(): string {
@@ -217,14 +223,17 @@ export class CmsJobStore {
   async finalizeOrphanedJob(
     userKey: string,
     job: CmsJobRecord,
-    underOpsLock: (fn: () => Promise<void>) => Promise<unknown> = (fn) => fn()
+    underOpsLock: (fn: (lock: HeldLock) => Promise<void>) => Promise<unknown> = (fn) => fn(NO_LOCK)
   ): Promise<void> {
     await this.saveJob(userKey, job);
     // Read and written back under the lock createJob takes to add a lock
     // entry: a followed job can end minutes after the restart, and a lock
     // written meanwhile for another job must not be dropped with this one's.
-    await underOpsLock(async () => {
+    // Each write first checks the lock is still ours (assertHeld).
+    await underOpsLock(async (lock) => {
+      lock.assertHeld();
       await this.removeJobIdFromOperations(userKey, job.jobId);
+      lock.assertHeld();
       await this.removeJobIdFromGlobalOperations(job.jobId);
     });
   }

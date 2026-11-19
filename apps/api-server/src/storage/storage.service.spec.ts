@@ -3,6 +3,9 @@ import { StorageService } from './storage.service';
 import { LockService } from '@lock/lock.service';
 import * as fs from 'fs/promises';
 
+// The lock a work function gets from withLock; its writes check it is still held.
+const HELD_LOCK = { assertHeld: () => undefined } as any;
+
 // Mock dependencies
 jest.mock('fs/promises');
 jest.mock('@lock/lock.service');
@@ -28,8 +31,8 @@ describe('StorageService', () => {
 
         // Mock implementation of withLock to just run the worker function
         lockService.withLock.mockImplementation(
-            async (filename: string, work: () => Promise<any>) => {
-                return work();
+            async (filename: string, work: (lock: unknown) => Promise<any>) => {
+                return work(HELD_LOCK);
             },
         );
 
@@ -132,12 +135,12 @@ describe('StorageService', () => {
                 .spyOn(service, 'readUnsafe')
                 .mockResolvedValue('data');
 
-            let capturedWorker: (() => Promise<any>) | null = null;
+            let capturedWorker: ((lock: unknown) => Promise<any>) | null = null;
             lockService.withLock.mockImplementation(
-                async (filename: string, work: () => Promise<any>) => {
+                async (filename: string, work: (lock: unknown) => Promise<any>) => {
                     expect(filename).toBe('test.txt');
                     capturedWorker = work;
-                    return work();
+                    return work(HELD_LOCK);
                 },
             );
 
@@ -157,12 +160,12 @@ describe('StorageService', () => {
                 .spyOn(service, 'writeUnsafe')
                 .mockResolvedValue(undefined);
 
-            let capturedWorker: (() => Promise<any>) | null = null;
+            let capturedWorker: ((lock: unknown) => Promise<any>) | null = null;
             lockService.withLock.mockImplementation(
-                async (filename: string, work: () => Promise<any>) => {
+                async (filename: string, work: (lock: unknown) => Promise<any>) => {
                     expect(filename).toBe('test.txt');
                     capturedWorker = work;
-                    return work();
+                    return work(HELD_LOCK);
                 },
             );
 
@@ -184,12 +187,12 @@ describe('StorageService', () => {
                 .spyOn(service, 'createUnsafe')
                 .mockResolvedValue(undefined);
 
-            let capturedWorker: (() => Promise<any>) | null = null;
+            let capturedWorker: ((lock: unknown) => Promise<any>) | null = null;
             lockService.withLock.mockImplementation(
-                async (filename: string, work: () => Promise<any>) => {
+                async (filename: string, work: (lock: unknown) => Promise<any>) => {
                     expect(filename).toBe('test.txt');
                     capturedWorker = work;
-                    return work();
+                    return work(HELD_LOCK);
                 },
             );
 
@@ -209,12 +212,12 @@ describe('StorageService', () => {
                 .spyOn(service, 'createAndWriteUnsafe')
                 .mockResolvedValue(undefined);
 
-            let capturedWorker: (() => Promise<any>) | null = null;
+            let capturedWorker: ((lock: unknown) => Promise<any>) | null = null;
             lockService.withLock.mockImplementation(
-                async (filename: string, work: () => Promise<any>) => {
+                async (filename: string, work: (lock: unknown) => Promise<any>) => {
                     expect(filename).toBe('test.txt');
                     capturedWorker = work;
-                    return work();
+                    return work(HELD_LOCK);
                 },
             );
 
@@ -237,12 +240,12 @@ describe('StorageService', () => {
                 .spyOn(service, 'deleteUnsafe')
                 .mockResolvedValue(undefined);
 
-            let capturedWorker: (() => Promise<any>) | null = null;
+            let capturedWorker: ((lock: unknown) => Promise<any>) | null = null;
             lockService.withLock.mockImplementation(
-                async (filename: string, work: () => Promise<any>) => {
+                async (filename: string, work: (lock: unknown) => Promise<any>) => {
                     expect(filename).toBe('test.txt');
                     capturedWorker = work;
-                    return work();
+                    return work(HELD_LOCK);
                 },
             );
 

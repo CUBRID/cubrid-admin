@@ -8,6 +8,9 @@ jest.mock('@common', () => ({
 
 import { pollCmsAsyncJob } from '@common';
 
+// The lock a work function gets from withLock; its writes check it is still held.
+const HELD_LOCK = { assertHeld: () => undefined } as any;
+
 const renameJob = (patch: Partial<CmsJobRecord> = {}): CmsJobRecord => ({
   jobId: 'job-1', userId: 'user-1', hostUid: 'host-1', dbname: 'olddb',
   type: 'rename', status: 'running', createdAt: '2026-10-26T01:00:00Z', cmsUuid: 'uuid-1',
@@ -36,7 +39,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
       updateAutoStartAfterRename: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
-    const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
+    const lockService = { withLock: jest.fn((_file: string, fn: (lock: unknown) => Promise<unknown>) => fn(HELD_LOCK)) };
     const hostService = { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) };
 
     service = new CmsJobService(
@@ -210,7 +213,7 @@ describe('CmsJobService delete job', () => {
       forgetDeletedDatabase: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
-    const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
+    const lockService = { withLock: jest.fn((_file: string, fn: (lock: unknown) => Promise<unknown>) => fn(HELD_LOCK)) };
     const hostService = { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) };
 
     service = new CmsJobService(
@@ -338,7 +341,7 @@ describe('CmsJobService: a create job running when the server restarted', () => 
     lifecycleService = { resumeCreateDatabase: jest.fn() };
     service = new CmsJobService(
       store as any,
-      { withLock: jest.fn((_f: string, fn: () => Promise<unknown>) => fn()) } as any,
+      { withLock: jest.fn((_f: string, fn: (lock: unknown) => Promise<unknown>) => fn(HELD_LOCK)) } as any,
       {} as any,
       { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) } as any,
       managementService as any,
