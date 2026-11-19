@@ -241,6 +241,25 @@ describe('CmsJobService delete job', () => {
     expect(lifecycleService.forgetDeletedDatabase).toHaveBeenCalledWith('user-1', 'host-1', 'gonedb');
   });
 
+  it('ends the job and only warns when the operation lock cannot be cleared under a compromised file lock', async () => {
+    const job = deleteJob();
+    store.getJob.mockResolvedValue(job);
+    store.readGlobalOperations.mockResolvedValue({ 'op-key': { jobId: 'job-2', userKey: 'ukey' } });
+    const brokenLock = { assertHeld: () => { throw new Error('Lock compromised'); } };
+    (service as any).lockService.withLock.mockImplementation((_f: string, fn: (lock: unknown) => Promise<unknown>) => fn(brokenLock));
+    const warn = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
+
+    await expect((service as any).runJob('ukey', 'job-2', 'op-key')).resolves.toBeUndefined();
+
+    expect(job.status).toBe('succeeded');
+    expect(store.saveJob).toHaveBeenCalledWith('ukey', expect.objectContaining({ jobId: 'job-2', status: 'succeeded' }));
+    // Nothing was written under the compromised lock, and the job is not reported as crashed.
+    expect(store.writeGlobalOperations).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/Job job-2: its operation lock entry was not cleared \(Lock compromised\)/));
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('shows what the cleanup after a delete could not do as job warnings, the job still succeeded', async () => {
     const job = deleteJob();
     store.getJob.mockResolvedValue(job);

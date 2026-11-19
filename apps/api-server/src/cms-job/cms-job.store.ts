@@ -14,6 +14,9 @@ export interface HeldLock {
   assertHeld: () => void;
 }
 const NO_LOCK: HeldLock = { assertHeld: () => undefined };
+/** Runs `fn` under the global operations lock (CmsJobService passes LockService.withLock). */
+export type UnderOpsLock = (fn: (lock: HeldLock) => Promise<void>) => Promise<unknown>;
+const withoutLock: UnderOpsLock = (fn) => fn(NO_LOCK);
 
 @Injectable()
 export class CmsJobStore {
@@ -172,10 +175,13 @@ export class CmsJobStore {
    * After API server restart, in-memory workers are gone but JSON may still be queued/running.
    * Mark those jobs failed and release operation locks so clients stop polling.
    */
-  async failOrphanedActiveJobs(error: {
-    message: string;
-    code?: string;
-  }): Promise<number> {
+  async failOrphanedActiveJobs(
+    error: {
+      message: string;
+      code?: string;
+    },
+    underOpsLock: UnderOpsLock = withoutLock
+  ): Promise<number> {
     const finishedAt = new Date().toISOString();
     let failed = 0;
 
@@ -188,8 +194,12 @@ export class CmsJobStore {
         job.error = { message: error.message, code: error.code };
         job.finishedAt = finishedAt;
         await this.saveJob(userKey, job);
-        await this.removeJobIdFromOperations(userKey, job.jobId);
-        await this.removeJobIdFromGlobalOperations(job.jobId);
+        await underOpsLock(async (lock) => {
+          lock.assertHeld();
+          await this.removeJobIdFromOperations(userKey, job.jobId);
+          lock.assertHeld();
+          await this.removeJobIdFromGlobalOperations(job.jobId);
+        });
         failed += 1;
       }
     }
@@ -223,7 +233,7 @@ export class CmsJobStore {
   async finalizeOrphanedJob(
     userKey: string,
     job: CmsJobRecord,
-    underOpsLock: (fn: (lock: HeldLock) => Promise<void>) => Promise<unknown> = (fn) => fn(NO_LOCK)
+    underOpsLock: UnderOpsLock = withoutLock
   ): Promise<void> {
     await this.saveJob(userKey, job);
     // Read and written back under the lock createJob takes to add a lock
@@ -258,7 +268,8 @@ export class CmsJobStore {
    */
   async purgeExpiredJobs(
     retentionMs = getJobRetentionMs(),
-    staleRunningMs = getStaleRunningJobMs()
+    staleRunningMs = getStaleRunningJobMs(),
+    underOpsLock: UnderOpsLock = withoutLock
   ): Promise<number> {
     const root = this.jobsRoot();
     const now = Date.now();
@@ -322,8 +333,12 @@ export class CmsJobStore {
         if (!shouldRemove) continue;
 
         await fs.unlink(filePath);
-        await this.removeJobIdFromOperations(userKey, jobId);
-        await this.removeJobIdFromGlobalOperations(jobId);
+        await underOpsLock(async (lock) => {
+          lock.assertHeld();
+          await this.removeJobIdFromOperations(userKey, jobId);
+          lock.assertHeld();
+          await this.removeJobIdFromGlobalOperations(jobId);
+        });
         removed += 1;
       }
     }
