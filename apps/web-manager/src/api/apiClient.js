@@ -162,7 +162,7 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// This tab's app session: { expiresAt, expiresIn } or null (see setAppSession).
+// This tab's app session: { expiresAt, expiresIn, user? } or null (see setAppSession).
 let knownSession = null;
 let appSessionGeneration = 0;
 
@@ -256,7 +256,11 @@ export const ACCESS_TOKEN_REFRESH_TIMEOUT_MS = 15000;
 /** Refresh this long before the access token expires. */
 export const SESSION_REFRESH_LEAD_MS = 5 * 60 * 1000;
 
-/** localStorage key of the session's expiry: { expiresAt (epoch ms), expiresIn (s) }. */
+/**
+ * localStorage key of the session's expiry: { expiresAt (epoch ms), expiresIn (s), user? }.
+ * user is the ID the session logged in with (not a secret): the other tabs
+ * tell from it that the browser's cookies now belong to another account.
+ */
 export const SESSION_EXPIRY_KEY = 'cwm-session-expires-at';
 
 // Tokens kept by builds before the cookies; no longer used.
@@ -335,9 +339,28 @@ const withSessionRefreshLock = (run) => (
     : run()
 );
 
+const accountOf = (session) => (typeof session?.user === 'string' && session.user ? session.user : null);
+
+/** The page reload; an object so tests can watch it (jsdom cannot reload). */
+export const pageActions = { reload: () => window.location.reload() };
+
+// The browser's cookies now belong to another account (another tab logged in
+// as someone else): load the page again, so the header, the host list and the
+// open tabs are that account's. Unsaved edits get the usual leave-page
+// question (beforeunload).
+const otherAccount = (session) => {
+  const mine = accountOf(knownSession);
+  const theirs = accountOf(session);
+  return Boolean(mine && theirs && mine !== theirs);
+};
+
 // Another tab's refresh (or login) got new cookies: this tab already sends
-// them; it only takes the new expiry.
+// them; it only takes the new expiry, unless they are another account's.
 async function adoptSession(session) {
+  if (otherAccount(session)) {
+    pageActions.reload();
+    return session;
+  }
   knownSession = session;
   scheduleSessionRefresh(session);
   const { store } = await import('../app/store');
@@ -366,10 +389,13 @@ async function requestSessionRefresh(sessionInUse) {
       })
     );
 
-    const session = sessionFromResponse(response.data);
-    if (!session) {
+    const fresh = sessionFromResponse(response.data);
+    if (!fresh) {
       throw new Error(getCM(getStoredLocale()).sessionRefreshFailedMsg);
     }
+    // The same account as before the refresh.
+    const user = accountOf(sessionInUse) ?? accountOf(knownSession);
+    const session = user ? { ...fresh, user } : fresh;
     writeStoredSession(session);
     return adoptSession(session);
   });
@@ -424,6 +450,12 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // An expiry another tab stored (refresh or login) is used here at once.
   window.addEventListener('storage', (event) => {
     if (event.key !== SESSION_EXPIRY_KEY || !sessionRefreshEnabled()) return;
+    // Another tab logged out (the server cleared the shared cookies): this
+    // tab goes to the login screen now, not at its next request's 401.
+    if (event.newValue === null) {
+      if (knownSession) void handleSystemSessionExpired();
+      return;
+    }
     const session = parseSession(event.newValue);
     if (!session || session.expiresAt === knownSession?.expiresAt) return;
     void adoptSession(session);
