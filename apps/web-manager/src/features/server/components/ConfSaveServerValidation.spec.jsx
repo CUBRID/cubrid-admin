@@ -9,6 +9,13 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 // the status modal. These cover that path for cubrid.conf/cm.conf
 // (CubridConfigEditor) and broker.conf (BrokerConfigEditor).
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+// CodeMirror needs layout jsdom lacks; these tests are about loading and
+// saving, so the editor is a plain textarea with the same test id.
+vi.mock('../confEditor/ConfEditor', () => ({
+  default: ({ value, onChange, readOnly, testId }) => (
+    <textarea data-testid={testId} value={value} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
 vi.mock('../../../infrastructure/hooks/useConfirm', () => ({ useConfirm: () => confirmMock }));
 vi.mock('../../host/hostApi', () => ({ hostApi: { getHostConfig: vi.fn(), setHostConfig: vi.fn() } }));
 vi.mock('../../broker/brokerApi', () => ({ brokerApi: { getBrokerConfig: vi.fn(), updateBrokerConfig: vi.fn() } }));
@@ -56,11 +63,14 @@ const edit = async (textarea, next) => act(async () => {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, next);
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 });
+// The editor is a lazy chunk: wait for it after each render.
+const settle = () => act(async () => { await vi.dynamicImportSettled(); });
 const q = id => container.querySelector(`[data-testid="${id}"]`);
 
 async function saveCmConf(next) {
   hostApi.getHostConfig.mockResolvedValue(config('[cm]\ncm_port=8001'));
   await act(async () => root.render(<Provider store={store}><CubridConfigEditor hostUid="host" confname="cmconf" /></Provider>));
+  await settle();
   await edit(q('cubrid-config-textarea'), next);
   await act(async () => q('cubrid-config-save-btn').click());
 }
@@ -92,6 +102,7 @@ it('broker.conf: success shows only the server warnings (the restart was said be
   brokerApi.getBrokerConfig.mockResolvedValue(config('[broker]\nMASTER_SHM_ID=30001'));
   brokerApi.updateBrokerConfig.mockResolvedValue({ success: true, warnings: ['Line 1: some warning'] });
   await act(async () => root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>));
+  await settle();
   await edit(q('broker-config-textarea'), '[broker]\nMASTER_SHM_ID=30002');
   await act(async () => q('broker-config-save-btn').click());
   expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ description: CM.brokerConfigSaveConfirmDesc }));
@@ -104,6 +115,7 @@ it('broker.conf: a server rejection shows its reasons and no restart notice', as
     { lineNo: 4, key: 'MAX_NUM_APPL_SERVER', message: '[%query_editor] MAX_NUM_APPL_SERVER — Must be >= MIN_NUM_APPL_SERVER (currently 8)' },
   ]));
   await act(async () => root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>));
+  await settle();
   await edit(q('broker-config-textarea'), '[broker]\nMASTER_SHM_ID=30002');
   await act(async () => q('broker-config-save-btn').click());
   const status = store.getState().lastStatus;
@@ -116,7 +128,7 @@ it('offers to reload when the file changed on the host since it was opened, and 
   confirmMock.mockResolvedValue(true);
   await saveCmConf('[cm]\ncm_port=8002');
   hostApi.getHostConfig.mockResolvedValue(config('[cm]\ncm_port=9000'));
-  await act(async () => {});
+  await act(async () => { await Promise.resolve(); });
 
   expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ title: CM.confChangedOnHostTitle, confirmLabel: CM.reloadFileBtn }));
   expect(hostApi.getHostConfig).toHaveBeenCalledTimes(2);
@@ -138,6 +150,7 @@ it('broker.conf: sends the loaded file and offers a reload when it changed on th
   brokerApi.updateBrokerConfig.mockRejectedValue(changedOnHost);
   confirmMock.mockResolvedValue(true);
   await act(async () => root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>));
+  await settle();
   await edit(q('broker-config-textarea'), '[broker]\nMASTER_SHM_ID=30002');
   await act(async () => q('broker-config-save-btn').click());
 
