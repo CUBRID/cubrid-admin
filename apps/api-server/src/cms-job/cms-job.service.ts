@@ -276,7 +276,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       throw DatabaseError.DatabaseActionInProgress({ hostUid, dbname: busy.dbname });
     }
 
-    await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async () => {
+    await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async (lock) => {
       const ops = await this.store.readGlobalOperations();
       const existing = ops[operationKey];
       if (existing) {
@@ -299,6 +299,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         }
       }
       ops[operationKey] = { jobId, userKey: uKey };
+      lock.assertHeld();
       await this.store.writeGlobalOperations(ops);
     });
 
@@ -600,10 +601,11 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     } finally {
       job.finishedAt = new Date().toISOString();
       await this.store.saveJob(uKey, job);
-      await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async () => {
+      await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async (lock) => {
         const ops = await this.store.readGlobalOperations();
         if (ops[operationKey]?.jobId === jobId) {
           delete ops[operationKey];
+          lock.assertHeld();
           await this.store.writeGlobalOperations(ops);
         }
       });
