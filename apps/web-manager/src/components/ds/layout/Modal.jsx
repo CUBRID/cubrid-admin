@@ -71,7 +71,8 @@ export const Modal = ({
   useEffect(() => {
     if (!onSubmit || !isOpen) return undefined;
     const handleEnter = (e) => {
-      if (!isTopModal()) return;
+      // Already handled where it was pressed (e.g. find next in an editor's find field), as Escape above.
+      if (e.defaultPrevented || !isTopModal()) return;
       if (e.key !== 'Enter') return;
       const tag = e.target?.tagName;
       if (tag !== 'INPUT') return;

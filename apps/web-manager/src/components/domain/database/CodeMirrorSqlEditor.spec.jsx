@@ -5,10 +5,12 @@ import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { CompletionContext } from '@codemirror/autocomplete';
+import { CompletionContext, completionStatus, startCompletion } from '@codemirror/autocomplete';
+import { SearchQuery, openSearchPanel, setSearchQuery } from '@codemirror/search';
 import { undo } from '@codemirror/commands';
 import { syntaxTree } from '@codemirror/language';
 import CodeMirrorSqlEditor from './CodeMirrorSqlEditor';
+import { Modal } from '../../ds/layout/Modal';
 import { sqlLanguage } from './sqlLanguage';
 
 const store = (locale = 'en') => configureStore({ reducer: { user: () => ({ preferences: { uiLocale: locale } }) } });
@@ -99,5 +101,50 @@ describe('CodeMirrorSqlEditor', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(view.dom.className).not.toBe(lightClass);
+  });
+});
+
+describe('CodeMirrorSqlEditor without completion (EDITOR_ASSIST is off)', () => {
+  it('opens no completion list while typing or on Ctrl+Space', async () => {
+    render({ value: '' });
+    const view = viewOf();
+    act(() => view.dispatch({ changes: { from: 0, insert: 'sel' }, selection: { anchor: 3 }, userEvent: 'input.type' }));
+    act(() => { startCompletion(view); });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    expect(completionStatus(view.state)).toBeNull();
+    expect(container.querySelector('.cm-tooltip-autocomplete')).toBeNull();
+  });
+});
+
+describe('CodeMirrorSqlEditor in a dialog that saves on Enter', () => {
+  const renderInModal = (onSubmit) => act(() => root.render(
+    <Provider store={store()}>
+      <Modal isOpen title="Edit Query Plan" onClose={vi.fn()} onSubmit={onSubmit}>
+        <input data-testid="plan-id" defaultValue="plan_1" />
+        <CodeMirrorSqlEditor testId="sql" value="SELECT 1 FROM db_root; SELECT 1 FROM db_root;" />
+      </Modal>
+    </Provider>,
+  ));
+  const enter = (el) => {
+    const event = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true });
+    act(() => { el.dispatchEvent(event); });
+    return event;
+  };
+
+  it('finds the next match on Enter in the find field without saving the plan', () => {
+    const onSubmit = vi.fn();
+    renderInModal(onSubmit);
+    const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+    act(() => { openSearchPanel(view); });
+    const find = document.querySelector('.cm-search input[name=search]');
+    act(() => { view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: 'db_root' })) }); });
+    const before = view.state.selection.main.from;
+    expect(enter(find).defaultPrevented).toBe(true);
+    expect(view.state.selection.main.from).not.toBe(before);
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    // Enter in the dialog's own fields still saves.
+    enter(document.querySelector('[data-testid="plan-id"]'));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
