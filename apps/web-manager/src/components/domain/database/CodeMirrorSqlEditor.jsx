@@ -4,7 +4,7 @@ import { EditorView, drawSelection, highlightActiveLine, keymap, placeholder as 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
-import { sqlHighlighting, sqlLanguage } from './sqlLanguage';
+import { sqlCompletionSource, sqlHighlighting, sqlLanguage } from './sqlLanguage';
 import { useCM } from '../../../constants/useCM';
 import { EDITOR_ASSIST } from '../../../constants/editorAssist';
 
@@ -106,7 +106,7 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
         closeBrackets(),
         sqlLanguage,
         sqlHighlighting,
-        ...(EDITOR_ASSIST ? [autocompletion({ icons: false })] : []),
+        ...(EDITOR_ASSIST ? [autocompletion({ override: [sqlCompletionSource], icons: false })] : []),
         EditorView.lineWrapping,
         keymap.of([
           ...closeBracketsKeymap, ...(EDITOR_ASSIST ? completionKeymap : []),

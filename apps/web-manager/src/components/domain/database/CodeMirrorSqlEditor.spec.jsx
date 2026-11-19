@@ -5,13 +5,13 @@ import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { CompletionContext, completionStatus, startCompletion } from '@codemirror/autocomplete';
+import { CompletionContext, acceptCompletion, autocompletion, completionStatus, startCompletion } from '@codemirror/autocomplete';
 import { SearchQuery, openSearchPanel, setSearchQuery } from '@codemirror/search';
 import { undo } from '@codemirror/commands';
 import { syntaxTree } from '@codemirror/language';
 import CodeMirrorSqlEditor from './CodeMirrorSqlEditor';
 import { Modal } from '../../ds/layout/Modal';
-import { sqlLanguage } from './sqlLanguage';
+import { sqlCompletionSource, sqlLanguage } from './sqlLanguage';
 
 const store = (locale = 'en') => configureStore({ reducer: { user: () => ({ preferences: { uiLocale: locale } }) } });
 let container;
@@ -41,6 +41,36 @@ describe('SQL language', () => {
     const [source] = s.languageDataAt('autocomplete', 3).filter((f) => typeof f === 'function');
     const result = await source(new CompletionContext(s, 3, true));
     expect(result.options.map((o) => o.label)).toContain('SELECT');
+  });
+
+  // Completion is off in the editor (EDITOR_ASSIST); here it is turned on directly.
+  it('replaces the whole word at the cursor, also the part after it', async () => {
+    const complete = async (withCursor) => {
+      const cursor = withCursor.indexOf('|');
+      const parent = document.createElement('div');
+      document.body.appendChild(parent);
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: withCursor.replace('|', ''),
+          selection: { anchor: cursor },
+          extensions: [sqlLanguage, autocompletion({ override: [sqlCompletionSource], interactionDelay: 0 })],
+        }),
+      });
+      try {
+        startCompletion(view);
+        for (let i = 0; i < 50 && completionStatus(view.state) !== 'active'; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(completionStatus(view.state)).toBe('active');
+        expect(acceptCompletion(view)).toBe(true);
+        return view.state.doc.toString();
+      } finally {
+        view.destroy();
+        parent.remove();
+      }
+    };
+    expect(await complete('SELEC|T 1 FROM db_root')).toBe('SELECT 1 FROM db_root');
+    expect(await complete('SELECT 1 FR|OM db_root')).toBe('SELECT 1 FROM db_root');
+    expect(await complete('SELECT 1 FRO|')).toBe('SELECT 1 FROM');
   });
 
   it('marks keywords, strings and numbers', () => {

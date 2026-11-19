@@ -11,7 +11,8 @@ import { forceLinting, linter, lintGutter, lintKeymap } from '@codemirror/lint';
 import { useCM } from '../../../constants/useCM';
 import { confHighlighting, confLanguage } from './confLanguage';
 import { confContextAt, confKeyAt } from './confContext';
-import { confParams, confSectionNames, describeGuard, paramHintDom } from './confParams';
+import { paramHintDom } from './confParams';
+import { confCompletionSource, paramsFor } from './confComplete';
 import { confDiagnostics } from './confLint';
 import { EDITOR_ASSIST } from '../../../constants/editorAssist';
 
@@ -91,15 +92,6 @@ const darkTheme = EditorView.theme(withBase({
 
 const isDark = () => document.documentElement.classList.contains('dark');
 
-// Parameter lists are built once per file kind and schema payload.
-const paramCache = new WeakMap();
-function paramsFor(kind, paramSchemas) {
-  if (!paramSchemas) return confParams(kind, null);
-  let byKind = paramCache.get(paramSchemas);
-  if (!byKind) paramCache.set(paramSchemas, (byKind = {}));
-  return (byKind[kind] ??= confParams(kind, paramSchemas));
-}
-
 /**
  * The conf file editor (CodeMirror 6): section/key/value colors, line
  * numbers, find (Ctrl/Cmd+F), undo. With EDITOR_ASSIST (off for now) also
@@ -125,31 +117,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
 
   useEffect(() => {
     const ctx = () => latest.current;
-    const complete = (context) => {
-      const { CM: L, kind: k, paramSchemas: schemas } = ctx();
-      const where = confContextAt(context.state.doc, context.pos);
-      if (where.place === 'comment') return null;
-      if (!context.explicit && !where.text && where.place !== 'heading') return null;
-      const params = paramsFor(k, schemas);
-      let options = [];
-      if (where.place === 'heading') {
-        options = confSectionNames(k).map((label) => ({ label, type: 'namespace' }));
-      } else if (where.place === 'key') {
-        options = params.forSection(where.section).map((param) => ({
-          label: param.name,
-          type: 'property',
-          detail: describeGuard(L, param.guard),
-          // A function here must return a DOM node, not a string.
-          info: () => paramHintDom(L, param, false),
-          apply: `${param.name}=`,
-        }));
-      } else {
-        const guard = params.get(where.key, where.section)?.guard;
-        const words = guard?.kind === 'enum' ? guard.options : guard?.kind === 'boolean' ? ['yes', 'no'] : [];
-        options = words.map((label) => ({ label, type: 'enum' }));
-      }
-      return options.length ? { from: where.from, options, validFor: /^[\w@%.:-]*$/ } : null;
-    };
+    const complete = confCompletionSource(ctx);
     const hint = hoverTooltip((view, pos) => {
       const hit = confKeyAt(view.state.doc, pos);
       if (!hit) return null;
