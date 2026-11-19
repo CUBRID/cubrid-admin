@@ -287,6 +287,44 @@ describe('Enter in the SQL editor (as in Monaco before)', () => {
   });
 });
 
+describe(') and ] typed on a blank line (as in Monaco before)', () => {
+  // Typing as CodeMirror does it: the editor's input handlers first, then a plain insert.
+  const typeAt = (value, anchor, text) => {
+    render({ value });
+    const view = viewOf();
+    act(() => view.dispatch({ selection: { anchor } }));
+    act(() => {
+      const { from, to } = view.state.selection.main;
+      const insert = () => view.state.update({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
+      if (!view.state.facet(EditorView.inputHandler).some((h) => h(view, from, to, text, insert))) view.dispatch(insert());
+    });
+    return view;
+  };
+
+  it('puts ) at the indentation of the line with its (', () => {
+    const doc = '    SELECT (\n        x\n        ';
+    const view = typeAt(doc, doc.length, ')');
+    expect(view.state.doc.toString()).toBe('    SELECT (\n        x\n    )');
+    expect(view.state.selection.main.head).toBe(view.state.doc.length);
+  });
+
+  it('does the same for ]', () => {
+    const doc = '  a [\n      ';
+    expect(typeAt(doc, doc.length, ']').state.doc.toString()).toBe('  a [\n  ]');
+  });
+
+  it('skips pairs already closed before it', () => {
+    const doc = 'SELECT (\n    f(1),\n    g(\n        2\n    )\n        ';
+    expect(typeAt(doc, doc.length, ')').state.doc.toString()).toBe('SELECT (\n    f(1),\n    g(\n        2\n    )\n)');
+  });
+
+  it('leaves a line with text, and a ) with no ( before it, as typed', () => {
+    const withText = '    SELECT (\n        x';
+    expect(typeAt(withText, withText.length, ')').state.doc.toString()).toBe('    SELECT (\n        x)');
+    expect(typeAt('    ', 4, ')').state.doc.toString()).toBe('    )');
+  });
+});
+
 describe('Edit > Redo in the desktop app', () => {
   it('redoes in the editor when the menu offers it, and takes the event', () => {
     const onChange = vi.fn();

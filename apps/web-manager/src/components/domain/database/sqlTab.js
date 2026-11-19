@@ -77,3 +77,40 @@ export function insertSqlNewline(view) {
 }
 
 export const sqlEnterKeymap = [{ key: 'Enter', run: insertSqlNewline }];
+
+const OPENER_OF = { ')': '(', ']': '[' };
+
+/**
+ * Typing ) or ] on a line that holds only spaces puts it at the indentation of
+ * the line with its opening ( or [, as Monaco did (the line Enter indented one
+ * level deeper goes back out). A line with other text is left as it is.
+ * For EditorView.inputHandler; returns whether it took the input.
+ */
+export function outdentClosingBracket(view, from, to, text) {
+  const open = OPENER_OF[text];
+  if (!open || from !== to || view.state.readOnly) return false;
+  const { doc } = view.state;
+  const line = doc.lineAt(from);
+  if (/\S/.test(line.text)) return false;
+  let depth = 0;
+  for (let pos = line.from - 1; pos >= 0; pos -= 1) {
+    const ch = doc.sliceString(pos, pos + 1);
+    if (ch === text) depth += 1;
+    else if (ch === open) {
+      if (depth === 0) {
+        const opener = doc.lineAt(pos);
+        const indent = countColumn(/^[ \t]*/.exec(opener.text)[0], SQL_INDENT_SIZE);
+        const insert = ' '.repeat(indent) + text;
+        view.dispatch({
+          changes: { from: line.from, to: line.to, insert },
+          selection: { anchor: line.from + insert.length },
+          userEvent: 'input.type',
+          scrollIntoView: true,
+        });
+        return true;
+      }
+      depth -= 1;
+    }
+  }
+  return false;
+}

@@ -9,7 +9,7 @@ import { sqlCompletionSource, sqlHighlighting, sqlLanguage } from './sqlLanguage
 import { useCM } from '../../../constants/useCM';
 import { EDITOR_ASSIST } from '../../../constants/editorAssist';
 import { editMenuRedo } from '../editMenuRedo';
-import { SQL_INDENT_SIZE, sqlEnterKeymap, sqlTabKeymap } from './sqlTab';
+import { SQL_INDENT_SIZE, outdentClosingBracket, sqlEnterKeymap, sqlTabKeymap } from './sqlTab';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -118,6 +118,8 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
           ...searchKeymap, ...historyKeymap, ...sqlTabKeymap, ...sqlEnterKeymap, ...defaultKeymap,
         ]),
         indentUnit.of(' '.repeat(SQL_INDENT_SIZE)),
+        // ) or ] on a line of spaces goes to the indentation of its opening line, as in Monaco.
+        EditorView.inputHandler.of(outdentClosingBracket),
         editMenuRedo,
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
