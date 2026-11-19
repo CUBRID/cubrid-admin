@@ -259,4 +259,28 @@ describe('StorageService', () => {
             expect(deleteUnsafeSpy).toHaveBeenCalledWith('test.txt');
         });
     });
+
+    describe('a lock compromised before the write', () => {
+        const brokenLock = {
+            assertHeld: () => { throw Object.assign(new Error('Lock compromised'), { code: 'STALE_LOCK' }); },
+        } as any;
+
+        beforeEach(() => {
+            lockService.withLock.mockImplementation(async (_filename: string, work: (lock: unknown) => Promise<any>) => work(brokenLock));
+        });
+
+        it('write() writes nothing and fails', async () => {
+            await expect(service.write('test.txt', 'data')).rejects.toMatchObject({ code: 'STALE_LOCK' });
+            expect(mockedFs.writeFile).not.toHaveBeenCalled();
+            expect(mockedFs.rename).not.toHaveBeenCalled();
+        });
+
+        it('create(), createAndWrite() and delete() do nothing and fail', async () => {
+            await expect(service.create('test.txt')).rejects.toMatchObject({ code: 'STALE_LOCK' });
+            await expect(service.createAndWrite('test.txt', 'data')).rejects.toMatchObject({ code: 'STALE_LOCK' });
+            await expect(service.delete('test.txt')).rejects.toMatchObject({ code: 'STALE_LOCK' });
+            expect(mockedFs.writeFile).not.toHaveBeenCalled();
+            expect(mockedFs.rm).not.toHaveBeenCalled();
+        });
+    });
 });

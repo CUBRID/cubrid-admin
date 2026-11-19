@@ -86,6 +86,7 @@ describe('LockService', () => {
         filePath: 'path/to/file',
         release: mockRelease,
         acquiredAt: Date.now(),
+        releasing: false,
         compromised: null,
         assertHeld: () => undefined,
       };
@@ -102,6 +103,7 @@ describe('LockService', () => {
         filePath: 'path/to/file',
         release: mockRelease,
         acquiredAt: Date.now(),
+        releasing: false,
         compromised: null,
         assertHeld: () => undefined,
       };
