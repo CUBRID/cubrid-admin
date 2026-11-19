@@ -54,6 +54,11 @@ npm run dev:stack
 NestJS API(:8080)와 HTTPS 프록시(:443)를 함께 실행합니다.
 같은 자체 서명 인증서를 공유하므로 브라우저에서 한 번만 신뢰하면 됩니다.
 
+### 로그인 쿠키 관련 주의
+
+- 로그인 토큰은 Secure 쿠키라서 `localhost`가 아닌 주소(LAN IP 등)에서 http로 Vite에 접속하면 로그인되지 않습니다. 이때는 방법 2의 HTTPS 프록시로 접속하세요.
+- 웹 화면과 API를 서로 다른 호스트(출처)에 두는 구성은 지원하지 않습니다. 같은 서버가 웹 화면을 내려 주거나, 프록시로 같은 출처에 두세요.
+
 ---
 
 ## 빌드
@@ -128,7 +133,7 @@ dist/executables/
 | `PORT` | 서버 포트 | `8080` |
 | `ENVIRONMENT` | `production` / `development` | `production` |
 | `STORAGE_PATH` | 데이터 저장 경로 | `./storage` |
-| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분, 없으면 전체 허용) | — |
+| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분). 없으면 같은 출처만 허용. `*`이면 모든 출처를 허용하지만 로그인 쿠키는 싣지 않음 | — |
 | `LISTEN_HOST` | 바인드할 네트워크 인터페이스 (예: `127.0.0.1`로 로컬 전용 제한) | 전체 인터페이스 |
 | `SSL_CERT_PATH` | 공인 인증서 경로 (없으면 자체 서명 인증서 자동 생성) | — |
 | `SSL_KEY_PATH` | 공인 인증서 키 경로 (`SSL_CERT_PATH`와 함께 설정 필요) | — |
@@ -258,6 +263,6 @@ E2E 환경과 실제 CMS 테스트 규칙은 [`e2e/README.md`](e2e/README.md)를
 | `STORAGE_PATH` | 데이터 저장 경로 | — |
 | `SSL_CERT_PATH` | SSL 인증서 경로 (없으면 자동 생성) | — |
 | `SSL_KEY_PATH` | SSL 키 경로 | — |
-| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분) | — |
+| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분, `ENVIRONMENT`가 `production`이 아니면 무시하고 `*`) | — |
 | `CWM_DESKTOP` | Electron 모드 (`1`) | — |
 | `CWM_UPDATE_CHECK_REPO` | 업데이트 확인 시 조회할 GitHub 리포 (`owner/repo`, 형식이 틀리면 무시) | — (기본: `CUBRID/cubrid-admin`) |

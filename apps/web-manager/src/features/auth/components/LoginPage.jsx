@@ -64,12 +64,12 @@ export default function LoginPage() {
     dispatch(loginStart());
     try {
       const response = await authApi.login(username, password);
-      if (!response?.token || !response?.refreshToken) {
+      // The tokens come as cookies; the answer says how long the access lasts.
+      if (!Number.isFinite(response?.expiresIn)) {
         throw new Error(CM.loginTokenMissingMsg);
       }
       dispatch(loginSuccess({
-        token: response.token,
-        refreshToken: response.refreshToken,
+        expiresIn: response.expiresIn,
         user: { id: username },
       }));
       navigate('/home', { replace: true });

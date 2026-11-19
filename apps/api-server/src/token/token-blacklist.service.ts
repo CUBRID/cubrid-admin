@@ -10,6 +10,9 @@ type BlacklistEntry = {
   expiresAt: string;
 };
 
+// Family entries share the store with access jtis, under their own prefix.
+const familyKey = (familyId: string) => `family:${familyId}`;
+
 @Injectable()
 export class TokenBlacklistService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TokenBlacklistService.name);
@@ -41,6 +44,19 @@ export class TokenBlacklistService implements OnModuleInit, OnModuleDestroy {
     await fs.mkdir(this.root(), { recursive: true });
     const entry: BlacklistEntry = { jti, expiresAt: expiresAt.toISOString() };
     await fs.writeFile(this.entryPath(jti), JSON.stringify(entry), 'utf8');
+  }
+
+  /**
+   * Revokes every token of a refresh family (an access JWT carries it as
+   * `fam`) for `lifetimeMs`: as long as any of them could still be used,
+   * including a refresh token written by a rotation that ran during logout.
+   */
+  async revokeFamily(familyId: string, lifetimeMs: number): Promise<void> {
+    await this.add(familyKey(familyId), new Date(Date.now() + lifetimeMs));
+  }
+
+  async isFamilyRevoked(familyId: string | undefined): Promise<boolean> {
+    return familyId ? this.isBlacklisted(familyKey(familyId)) : false;
   }
 
   async isBlacklisted(jti: string): Promise<boolean> {

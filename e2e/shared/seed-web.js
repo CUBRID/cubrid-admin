@@ -14,7 +14,8 @@ const host = getCmsTarget();
 async function request(route, options = {}) {
   const response = await fetch(`${apiUrl}${route}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    // Every state-changing request needs this header (the server's CSRF check).
+    headers: { 'Content-Type': 'application/json', 'X-CWM-Request': '1', ...(options.headers || {}) },
   });
   const text = await response.text();
   let body;
@@ -23,7 +24,7 @@ async function request(route, options = {}) {
   } catch {
     body = text;
   }
-  return { ok: response.ok, status: response.status, body };
+  return { ok: response.ok, status: response.status, body, setCookie: response.headers.getSetCookie?.() ?? [] };
 }
 
 async function main() {
@@ -39,12 +40,13 @@ async function main() {
     method: 'POST',
     body: JSON.stringify({ id: credentials.username, password: credentials.password }),
   });
-  const token = login.body?.data?.token || login.body?.token;
-  if (!login.ok || !token) {
+  // The login lives in httpOnly cookies (no token in the body): send them back.
+  const sessionCookie = login.setCookie.map((line) => line.split(';')[0].trim()).filter((pair) => pair.startsWith('cwm_access')).join('; ');
+  if (!login.ok || !sessionCookie) {
     throw new Error(`Login failed (${login.status}): ${JSON.stringify(login.body)}`);
   }
 
-  const hostList = await request('/host', { headers: { Authorization: `Bearer ${token}` } });
+  const hostList = await request('/host', { headers: { Cookie: sessionCookie } });
   if (!hostList.ok) {
     throw new Error(`Host listing failed (${hostList.status}): ${JSON.stringify(hostList.body)}`);
   }
@@ -54,7 +56,7 @@ async function main() {
     if (groupName !== 'Default Group' && groupName !== 'DEFAULT') {
       await request(`/host/group/${encodeURIComponent(groupName)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Cookie: sessionCookie },
       }).catch(() => undefined);
     }
   }
@@ -72,7 +74,7 @@ async function main() {
   if (matchingHosts.length === 0) {
     const added = await request('/host', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Cookie: sessionCookie },
       body: JSON.stringify(host),
     });
     if (!added.ok) {
@@ -87,7 +89,7 @@ async function main() {
     for (const duplicate of duplicates) {
       const removed = await request(`/host/${duplicate.uid}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Cookie: sessionCookie },
       });
       if (!removed.ok) {
         throw new Error(`Duplicate host cleanup failed (${removed.status}): ${JSON.stringify(removed.body)}`);
@@ -98,7 +100,7 @@ async function main() {
     // record left with an invalid password when a previous test was aborted.
     const updated = await request(`/host/${canonical.uid}`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Cookie: sessionCookie },
       body: JSON.stringify(host),
     });
     if (!updated.ok) {
@@ -107,28 +109,28 @@ async function main() {
   }
 
   const activeHostUid = matchingHosts.length > 0 ? matchingHosts[0].uid : (
-    (await request('/host', { headers: { Authorization: `Bearer ${token}` } }))
+    (await request('/host', { headers: { Cookie: sessionCookie } }))
       .body?.data?.host_groups?.['Default Group']?.hosts?.[0]?.uid
   );
 
   if (activeHostUid) {
     await request(`/${activeHostUid}/cms-auth/login`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Cookie: sessionCookie },
       body: JSON.stringify({ id: host.id, password: host.password }),
     }).catch(() => undefined);
 
     const dbname = process.env.E2E_DB || 'demodb';
     await request(`/${activeHostUid}/database/register/${encodeURIComponent(dbname)}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Cookie: sessionCookie },
       body: JSON.stringify({ id: 'dba', password: '' }),
     }).catch(() => undefined);
 
     const offlineDb = process.env.E2E_OFFLINE_DB || 'db1';
     await request(`/${activeHostUid}/database/register/${encodeURIComponent(offlineDb)}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Cookie: sessionCookie },
       body: JSON.stringify({ id: 'dba', password: 'admin123' }),
     }).catch(() => undefined);
   }

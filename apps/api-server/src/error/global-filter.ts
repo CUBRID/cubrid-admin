@@ -2,6 +2,7 @@ import { Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs
 import { BaseExceptionFilter } from '@nestjs/core';
 import { Response } from 'express';
 import { AppError } from './app-error';
+import { isExpectedAuthRejection } from './auth/auth-error';
 import { StandardResponse } from '@api-interfaces';
 
 const INTERNAL_ERROR_NOTE = 'An internal server error occurred.';
@@ -25,6 +26,12 @@ const HTTP_EXCEPTION_FIELDS = ['reason', 'jobId', 'maxLines', 'maxBytes'];
  * @category Errors
  * @since 1.0.0
  */
+const EXPECTED_REJECTION_LABELS: Record<number, string> = {
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  503: 'Service Unavailable',
+};
+
 @Catch()
 export class GlobalExceptionFilter extends BaseExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -93,11 +100,13 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         detail: note,
       };
 
-      if (status === HttpStatus.UNAUTHORIZED && exception.kind === 'AUTH') {
-        // Our own login (JWT) missing or invalid: expected traffic, not a server fault.
-        // A CMS-side 401 (lost CMS token, changed cm.pass, CMS restart) is an
-        // operational fault and keeps the full ERROR with its details below.
-        this.logger.warn(`Unauthorized [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
+      if (isExpectedAuthRejection(exception)) {
+        // Our own login (JWT) missing or invalid, or a request without the
+        // CSRF header: expected traffic, not a server fault. A CMS-side 401
+        // (lost CMS token, changed cm.pass, CMS restart) is an operational
+        // fault and keeps the full ERROR with its details below.
+        const label = EXPECTED_REJECTION_LABELS[status] ?? `HTTP ${status}`;
+        this.logger.warn(`${label} [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         const logDetails = exception.toLogDetails(req.url);
         this.logger.error(

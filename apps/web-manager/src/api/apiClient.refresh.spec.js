@@ -18,8 +18,7 @@ const expired = (config) => Promise.reject(Object.assign(new Error('401'), {
 let postSpy;
 beforeEach(() => {
   dispatched.length = 0;
-  localStorage.setItem('token', 'old');
-  localStorage.setItem('refreshToken', 'r1');
+  localStorage.setItem('cwm-session-expires-at', JSON.stringify({ expiresAt: Date.now() + 60_000, expiresIn: 86400 }));
   apiClient.defaults.adapter = expired;
   postSpy = vi.spyOn(axios, 'post');
 });
@@ -34,8 +33,8 @@ it('gives the token refresh a time limit', async () => {
 
   expect(postSpy).toHaveBeenCalledWith(
     expect.stringMatching(/\/auth\/refresh$/),
-    { refreshToken: 'r1' },
-    expect.objectContaining({ timeout: ACCESS_TOKEN_REFRESH_TIMEOUT_MS }),
+    {},
+    expect.objectContaining({ timeout: ACCESS_TOKEN_REFRESH_TIMEOUT_MS, withCredentials: true }),
   );
   expect(ACCESS_TOKEN_REFRESH_TIMEOUT_MS).toBe(15000);
 });
@@ -54,8 +53,7 @@ it('releases the requests waiting on a refresh that fails, and the next 401 refr
   expect(dispatched.map((a) => a.type)).toContain('auth/logout');
 
   // Nothing is left stuck: a later 401 starts a new refresh.
-  localStorage.setItem('refreshToken', 'r2');
-  postSpy.mockResolvedValueOnce({ data: { data: { token: 'new', refreshToken: 'r3' } } });
+  postSpy.mockResolvedValueOnce({ data: { data: { expiresIn: 86400 } } });
   await apiClient.get('/c').catch(() => undefined);
   expect(postSpy).toHaveBeenCalledTimes(2);
 });
