@@ -177,6 +177,32 @@ describe('CodeMirrorSqlEditor in a dialog that saves on Enter', () => {
     enter(document.querySelector('[data-testid="plan-id"]'));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
+
+  // The Enter that ends a Korean (IME) composition: isComposing, keyCode 229.
+  const composingEnter = (el, how) => {
+    const event = new KeyboardEvent('keydown', { key: 'Enter', isComposing: how === 'isComposing', bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'keyCode', { value: how === 'keyCode' ? 229 : 13 });
+    act(() => { el.dispatchEvent(event); });
+  };
+
+  it.each([['isComposing'], ['keyCode']])('does not save the plan on the Enter that ends a composition (%s) in the find, replace or dialog fields', (how) => {
+    const onSubmit = vi.fn();
+    renderInModal(onSubmit);
+    const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+    act(() => { openSearchPanel(view); });
+    composingEnter(document.querySelector('.cm-search input[name=search]'), how);
+    composingEnter(document.querySelector('.cm-search input[name=replace]'), how);
+    composingEnter(document.querySelector('[data-testid="plan-id"]'), how);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(document.querySelector('.cm-editor')).not.toBeNull();
+  });
+});
+
+describe('long lines in the SQL editor', () => {
+  it('do not wrap, as in Monaco before (wordWrap off)', () => {
+    render({ value: 'SELECT 1' });
+    expect(viewOf().contentDOM.classList.contains('cm-lineWrapping')).toBe(false);
+  });
 });
 
 describe('Tab in the SQL editor (as in Monaco before)', () => {

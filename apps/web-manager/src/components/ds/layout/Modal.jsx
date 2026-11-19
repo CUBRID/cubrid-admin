@@ -74,6 +74,8 @@ export const Modal = ({
       // Already handled where it was pressed (e.g. find next in an editor's find field), as Escape above.
       if (e.defaultPrevented || !isTopModal()) return;
       if (e.key !== 'Enter') return;
+      // The Enter that ends an IME composition (Korean, Japanese) only confirms the text.
+      if (e.isComposing || e.keyCode === 229) return;
       const tag = e.target?.tagName;
       if (tag !== 'INPUT') return;
       const type = (e.target.type || 'text').toLowerCase();

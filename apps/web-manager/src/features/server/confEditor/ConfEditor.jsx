@@ -4,7 +4,7 @@ import {
   EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, hoverTooltip, keymap, lineNumbers,
   placeholder as placeholderText,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, insertNewline } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { forceLinting, linter, lintGutter, lintKeymap } from '@codemirror/lint';
@@ -156,8 +156,13 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         keymap.of([
           ...(EDITOR_ASSIST ? [...completionKeymap, ...lintKeymap] : []),
           // No Tab key: Tab and Shift+Tab move the focus, as in the textarea before.
+          // Enter only breaks the line at the cursor, as in the textarea: no indent
+          // copied, the spaces around the cursor and blank lines left as they are.
+          { key: 'Enter', run: insertNewline },
           ...searchKeymap, ...historyKeymap, ...defaultKeymap,
         ]),
+        // Long lines wrap, as in the textarea (pre-wrap) before.
+        EditorView.lineWrapping,
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),

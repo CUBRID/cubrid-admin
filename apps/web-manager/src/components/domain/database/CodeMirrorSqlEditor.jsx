@@ -109,7 +109,7 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
         sqlLanguage,
         sqlHighlighting,
         ...(EDITOR_ASSIST ? [autocompletion({ override: [sqlCompletionSource], icons: false })] : []),
-        EditorView.lineWrapping,
+        // No wrapping: long lines scroll sideways, as in Monaco before (wordWrap off).
         keymap.of([
           ...closeBracketsKeymap, ...(EDITOR_ASSIST ? completionKeymap : []),
           // Tab as in Monaco before: spaces to the next tab stop at the cursor (sqlTab.js).
