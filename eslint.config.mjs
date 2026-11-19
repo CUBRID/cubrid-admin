@@ -47,6 +47,11 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      // Added to eslint:recommended in ESLint 10. Off to keep the checks this
+      // code base had before the upgrade; turning them on (and fixing what they
+      // report) is its own change.
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
     },
   },
 ];

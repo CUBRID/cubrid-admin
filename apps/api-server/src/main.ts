@@ -6,16 +6,19 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as express from 'express';
+import cookieParser from 'cookie-parser';
+import { API_PREFIX, CSRF_HEADER, authCookieNames } from '@token/auth-cookies';
 import { getHttpsOptions, logStartupBanner, createWinstonLogger, startLogConfigWatcher } from '@util';
 import { embeddedPublicFiles } from './util/standalone-executable';
 import { GlobalExceptionFilter } from '@error/global-filter';
 import { createValidationPipe } from '@error/validation/create-validation-pipe';
 import { ConfigService } from '@config/config.service';
 import { SuccessResponseInterceptor, LoggingInterceptor } from '@common'; // Updated import
+import { httpSecurityHeaders } from './security/http-security';
 
 async function bootstrap() {
   loadRuntimeEnv();
-  const httpsOptions = getHttpsOptions();
+  const httpsOptions = await getHttpsOptions();
   // A standalone instance (not DI-managed) since this runs before Nest's DI
   // container exists — app.get(ConfigService) below constructs its own,
   // functionally identical instance from the same env for everything else.
@@ -31,7 +34,10 @@ async function bootstrap() {
     // would be recorded, silently dropping ordinary traffic.
     logger: appLogger,
   });
-  app.getHttpAdapter().getInstance().set('trust proxy', true);
+  // Only the proxies TRUST_PROXY names (by default one on this machine) are
+  // believed about the client's address: req.ip, which the login rate limit
+  // counts by, is never a value the client wrote into X-Forwarded-For.
+  app.getHttpAdapter().getInstance().set('trust proxy', bootConfig.getTrustProxy());
   const configService = app.get(ConfigService);
   const port: string = configService.getPort();
   const listenHost = configService.getListenHost();
@@ -39,13 +45,15 @@ async function bootstrap() {
   const desktopMode = configService.isDesktopMode();
 
   if (allowedOrigins.includes('*')) {
-    // Development mode: allow all origins.
-    console.log('[main.ts] Enabling CORS for all origins (dev).');
+    // Any origin may call, but never with the login cookies: echoing the
+    // origin back with credentials would let any page (another port of the
+    // same site included) send the cookies and read the answer.
+    console.log('[main.ts] Enabling CORS for all origins, without credentials.');
     app.enableCors({
-      origin: true,
+      origin: '*',
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-      credentials: true,
+      allowedHeaders: ['Content-Type', 'Accept', CSRF_HEADER],
+      credentials: false,
     });
   } else if (allowedOrigins.length > 0) {
     // Production with explicit whitelist: only listed origins allowed cross-origin.
@@ -64,7 +72,7 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS'));
       },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      allowedHeaders: ['Content-Type', 'Accept', CSRF_HEADER],
       credentials: true,
     });
   }
@@ -75,7 +83,14 @@ async function bootstrap() {
 
   // Desktop mode uses UDS + Electron proxy that strips /api — no prefix needed.
   if (!desktopMode) {
-    app.setGlobalPrefix('api');
+    app.setGlobalPrefix(API_PREFIX);
+    // The app session's tokens arrive as cookies (auth-cookies.ts), named
+    // after this installation's id: made or read now, so a storage that
+    // cannot hold it stops the start instead of the first login.
+    app.use(cookieParser());
+    authCookieNames();
+    // Security headers on everything the server sends, the web screens included.
+    app.use(httpSecurityHeaders({ hsts: configService.isHstsEnabled() }));
   }
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new SuccessResponseInterceptor());

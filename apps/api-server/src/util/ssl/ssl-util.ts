@@ -9,7 +9,7 @@ export type HttpsKeyCert = { key: Buffer; cert: Buffer };
  * Production: reads PEM paths from `SSL_CERT_PATH` and `SSL_KEY_PATH` (e.g. under `/etc`).
  * Non-production: self-signed certs next to the executable / project (see `getOrCreateSSLCert`).
  */
-export function getHttpsOptions(): HttpsKeyCert {
+export async function getHttpsOptions(): Promise<HttpsKeyCert> {
   const certPath = process.env.SSL_CERT_PATH?.trim();
   const keyPath = process.env.SSL_KEY_PATH?.trim();
 
@@ -55,7 +55,7 @@ function resolveSslDir(): string {
   return path.join(serverHome(path.resolve(__dirname, '..', '..')), 'ssl');
 }
 
-export function getOrCreateSSLCert(): HttpsKeyCert {
+export async function getOrCreateSSLCert(): Promise<HttpsKeyCert> {
   const sslDir = resolveSslDir();
   const certPath = path.join(sslDir, 'cert.pem');
   const keyPath = path.join(sslDir, 'key.pem');
@@ -99,18 +99,18 @@ export function getOrCreateSSLCert(): HttpsKeyCert {
 
   const certExtensions = [
     {
-      name: 'subjectAltName',
+      name: 'subjectAltName' as const,
       altNames: [
-        { type: 2, value: 'localhost' },
-        ...serverIPs.map((ip) => ({ type: 7, ip })),
+        { type: 2 as const, value: 'localhost' },
+        ...serverIPs.map((ip) => ({ type: 7 as const, ip })),
       ],
     },
   ];
 
   if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
     if (!fs.existsSync(sslDir)) fs.mkdirSync(sslDir);
-    const pems = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
-      days: 365,
+    // Valid for 365 days (selfsigned's default since 5, which dropped `days`).
+    const pems = await selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
       algorithm: 'sha256',
       keySize: 2048,
       extensions: certExtensions,

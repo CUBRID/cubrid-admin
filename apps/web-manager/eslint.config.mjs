@@ -11,7 +11,7 @@ export default defineConfig([
     files: ['**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
-      reactHooks.configs['recommended-latest'],
+      reactHooks.configs.flat['recommended-latest'],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -29,6 +29,22 @@ export default defineConfig([
         argsIgnorePattern: '^[A-Z_]',
         caughtErrorsIgnorePattern: '^_',
       }],
+      // Added to eslint:recommended in ESLint 10. Off to keep the checks this
+      // app had before the upgrade; turning them on is its own change.
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
+      // react-hooks 7 adds React Compiler checks to its recommended set. This
+      // app does not use the React Compiler, and meeting them means reworking
+      // about 120 places (most are setState in an effect), which changes how
+      // components behave. Off until that is done as its own change; the
+      // checks react-hooks 5 had (rules-of-hooks, exhaustive-deps) stay on.
+      ...Object.fromEntries(
+        [
+          'static-components', 'use-memo', 'void-use-memo', 'preserve-manual-memoization',
+          'incompatible-library', 'immutability', 'globals', 'refs', 'set-state-in-effect',
+          'error-boundaries', 'purity', 'set-state-in-render', 'unsupported-syntax', 'config', 'gating',
+        ].map((rule) => [`react-hooks/${rule}`, 'off'])
+      ),
     },
   },
   {

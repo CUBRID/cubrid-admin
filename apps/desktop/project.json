@@ -16,7 +16,7 @@
     "serve": {
       "executor": "nx:run-commands",
       "dependsOn": [
-        { "target": "build", "projects": "self" },
+        { "target": "build" },
         { "target": "build", "projects": "api-server" },
         { "target": "build-electron", "projects": "web-manager" }
       ],
@@ -27,7 +27,7 @@
     },
     "prepare-app": {
       "executor": "nx:run-commands",
-      "dependsOn": [{ "target": "build", "projects": "self" }],
+      "dependsOn": [{ "target": "build" }],
       "options": {
         "command": "node scripts/stage-desktop-app.mjs",
         "cwd": "{workspaceRoot}"
@@ -36,7 +36,7 @@
     "package": {
       "executor": "nx:run-commands",
       "dependsOn": [
-        { "target": "prepare-app", "projects": "self" },
+        { "target": "prepare-app" },
         { "target": "build", "projects": "api-server" },
         { "target": "build-electron", "projects": "web-manager" }
       ],

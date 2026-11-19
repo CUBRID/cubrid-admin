@@ -147,6 +147,8 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'The authentication token is invalid.';
       case AuthErrorCode.PERMISSION_DENIED:
         return 'You do not have permission to perform this action.';
+      case AuthErrorCode.REFRESH_IN_PROGRESS:
+        return 'The session is being refreshed. Try again shortly.';
       case AuthErrorCode.INTERNAL_ERROR:
       case AuthErrorCode.UNKNOWN:
       default:

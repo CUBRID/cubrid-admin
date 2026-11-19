@@ -567,6 +567,33 @@ export const CM = {
   reloadConfig: 'Reload config',
 
   sourceEditor: 'Source Editor',
+  // Conf editor hints: what a parameter's value may be (confParams.js).
+  confHint: {
+    between: (a, b) => `${a} to ${b}`,
+    atLeast: (a) => `at least ${a}`,
+    atMost: (a) => `at most ${a}`,
+    approx: (short, exact) => `about ${short} (${exact})`,
+    orInteger: (range) => `or an integer${range ? `, ${range}` : ''}`,
+    oneOf: (list) => `one of ${list}`,
+    boolean: 'yes / no',
+    integer: 'Integer',
+    hexInteger: 'Hexadecimal integer',
+    decimal: 'Number',
+    intList: 'Comma-separated integers',
+    size: 'Size (K/M/G/T; bytes without a unit)',
+    brokerSize: (unit) => `Size (B/K/KB/M/MB/G/GB; ${unit === 'M' ? 'MB' : 'KB'} without a unit)`,
+    brokerTime: 'Time (ms/s/min/h; seconds without a unit)',
+    time: 'Time (ms/s/min/h; milliseconds without a unit)',
+    cmsMegabytes: 'Megabytes (a trailing M is allowed)',
+    string: 'Text',
+    nonEmptyString: 'Text, not empty',
+    opaque: 'A word the engine accepts',
+    defaultLabel: 'Default',
+    scopeLabel: 'Affects',
+    brokerSectionOnly: 'Only in the [broker] section',
+    instanceSectionOnly: 'Only in a [%broker] section',
+    deprecated: 'Deprecated: the engine still reads it but reports it',
+  },
   configPlaceholder: '# Configuration content...',
   tableEditor: 'Table Editor',
 
@@ -576,6 +603,8 @@ export const CM = {
   createAccount: 'Create Account',
   registrationFailed: 'Registration failed. Please try again.',
   loginFailedMsg: 'Login failed. Check your ID and password.',
+  // The login rate limit (429); `seconds` from Retry-After when the server sent it.
+  tooManyAttemptsMsg: (seconds) => (seconds ? `Too many attempts. Try again in ${seconds} seconds.` : 'Too many attempts. Try again shortly.'),
   minChars3: 'At least 3 characters',
 
   // Broker UI
@@ -2129,6 +2158,7 @@ export const CM = {
   updateStatusMalformedMsg: 'The update status could not be read.',
   unknownActionMsg: (action) => `Unknown action: ${action}`,
   reloadApplication: 'Reload Application',
+  editorLoadFailed: 'Could not load the editor. Reload to try again.',
   errYear: 'The year value of date is not valid.',
   errMonth: 'The month value of date is not valid.',
   errDay: 'The day value of date is not valid.',

@@ -22,16 +22,16 @@ test.describe('Feature: Database Lifecycle (Start / Stop)', () => {
     return active.some(db => (typeof db === 'string' ? db : db.dbname) === dbname);
   }
 
-  // Browser fetch supports both web and Electron's API proxy. Reuse only the
-  // target host's request context; never print authentication headers.
+  // Browser fetch supports both web and Electron's API proxy; the web's
+  // session cookies go with it, and POST needs the X-CWM-Request header.
   async function databaseRequest(page, operation = 'start-info') {
     expect(apiContext, 'No API context captured for the selected host').toBeTruthy();
-    return page.evaluate(async ({ url, authorization, operation, dbname }) => {
+    return page.evaluate(async ({ url, operation, dbname }) => {
       const endpoint = operation === 'start-info' ? url
         : url.replace(/start-info$/, `${operation}/${encodeURIComponent(dbname)}`);
       const response = await fetch(endpoint, {
         method: operation === 'start-info' ? 'GET' : 'POST',
-        headers: { Authorization: authorization, 'Content-Type': 'application/json' },
+        headers: { 'X-CWM-Request': '1', 'Content-Type': 'application/json' },
         ...(operation === 'start-info' ? {} : { body: '{}' }),
         signal: AbortSignal.timeout(65000),
       });
@@ -86,7 +86,7 @@ test.describe('Feature: Database Lifecycle (Start / Stop)', () => {
     hostUid = await hostTree.getUidByConnection(E2E_HOST_ADDRESS, E2E_HOST_PORT);
     page.on('request', request => {
       if (request.method() === 'GET' && request.url().endsWith(`/${hostUid}/database/start-info`)) {
-        apiContext = { url: request.url(), authorization: request.headers().authorization };
+        apiContext = { url: request.url() };
       }
     });
     await hostTree.activateHost(hostUid);

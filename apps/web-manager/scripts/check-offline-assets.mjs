@@ -38,18 +38,6 @@ export const ALLOWED = [
   { prefix: 'https://redux-toolkit.js.org/Errors', reason: 'text in Redux Toolkit error messages' },
   { exact: 'https://bit.ly/3cXEKWf', reason: 'text in Immer error messages' },
   { exact: 'https://bit.ly/wb-precache', file: /^workbox-[\w-]+\.js$/, reason: 'text in a Workbox warning' },
-  {
-    exact: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs',
-    file: /^MonacoSqlEditor-[\w-]+\.js$/,
-    reason: "@monaco-editor/loader's default; unused, loader.config({ monaco }) sets the bundled Monaco before an editor is made",
-  },
-  ...[
-    'https://code.visualstudio.com/docs/',
-    'https://github.com/microsoft/',
-    'https://github.com/markedjs/marked',
-    'https://github.com/suren-atoyan/monaco-loader',
-  ].map((prefix) => ({ prefix, file: /^MonacoSqlEditor-[\w-]+\.js$/, reason: 'text and links inside Monaco messages' })),
-  { exact: 'https://microsoft.com', file: /^MonacoSqlEditor-[\w-]+\.js$/, reason: 'example link in Monaco markdown parsing' },
 ];
 
 function isLocal(url) {
@@ -83,7 +71,10 @@ function listFiles(dir) {
 export function findOutsideUrls(dir) {
   const found = [];
   for (const file of listFiles(dir)) {
-    const text = fs.readFileSync(file, 'utf8');
+    const raw = fs.readFileSync(file, 'utf8');
+    // A CSS comment loads nothing (the CSS minifier keeps license comments
+    // such as /*! tailwindcss | https://tailwindcss.com */).
+    const text = file.endsWith('.css') ? raw.replace(/\/\*[\s\S]*?\*\//g, '') : raw;
     for (const match of text.matchAll(URL_PATTERN)) {
       if (!isAllowed(match[0], file)) {
         found.push({ file: path.relative(dir, file), url: match[0] });

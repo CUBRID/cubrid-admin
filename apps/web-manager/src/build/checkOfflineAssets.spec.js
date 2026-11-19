@@ -20,8 +20,12 @@ describe('check:offline (apps/web-manager/scripts/check-offline-assets.mjs)', ()
 
   it('passes a build that only refers to itself, this machine and allowed text', () => {
     write('assets/index-abc.js', 'const api="https://localhost:8080";window.open("https://www.cubrid.org/");const ns="http://www.w3.org/2000/svg";');
-    write('assets/MonacoSqlEditor-x1.js', 'var d={paths:{vs:"https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs"}};');
     expect(findOutsideUrls(dir)).toEqual([]);
+  });
+
+  it('ignores a URL in a CSS comment, but not a url() next to it', () => {
+    write('assets/index.css', '/*! tailwindcss v4 | MIT License | https://tailwindcss.com */\n.a{background:url(https://cdn.example.com/a.png)}');
+    expect(findOutsideUrls(dir)).toEqual([{ file: 'assets/index.css', url: 'https://cdn.example.com/a.png' }]);
   });
 
   it('catches a CDN script tag in the HTML', () => {
@@ -35,9 +39,9 @@ describe('check:offline (apps/web-manager/scripts/check-offline-assets.mjs)', ()
     expect(findOutsideUrls(dir).map((found) => found.file).sort()).toEqual(['assets/index.css', 'index.html']);
   });
 
-  it('allows the Monaco loader default only in the Monaco chunk, and no other CDN URL', () => {
-    write('assets/index-abc.js', 'load("https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs");');
-    write('assets/MonacoSqlEditor-x1.js', 'load("https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js");');
+  it('catches a CDN URL in any JS chunk', () => {
+    write('assets/index-abc.js', 'load("https://cdn.jsdelivr.net/npm/some-lib@1/min/vs");');
+    write('assets/CodeMirrorSqlEditor-x1.js', 'load("https://cdn.jsdelivr.net/npm/some-lib@1/min/vs/loader.js");');
     expect(findOutsideUrls(dir)).toHaveLength(2);
   });
 
