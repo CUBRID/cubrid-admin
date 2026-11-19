@@ -6,6 +6,7 @@ import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/sea
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { sqlHighlighting, sqlLanguage } from './sqlLanguage';
 import { useCM } from '../../../constants/useCM';
+import { EDITOR_ASSIST } from '../../../constants/editorAssist';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -74,8 +75,9 @@ const isDark = () => document.documentElement.classList.contains('dark');
 
 /**
  * The SQL input of the query plan dialogs (CodeMirror 6): SQL keyword colors,
- * keyword completion (Ctrl+Space, or while typing), find (Ctrl/Cmd+F), undo,
- * light/dark colors following the app. Loaded through SqlCodeEditor.
+ * find (Ctrl/Cmd+F), undo, light/dark colors following the app. With
+ * EDITOR_ASSIST (off for now) also keyword completion (Ctrl+Space, or while
+ * typing). Loaded through SqlCodeEditor.
  */
 export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly = false, testId, placeholder }) {
   const CM = useCM();
@@ -104,9 +106,12 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
         closeBrackets(),
         sqlLanguage,
         sqlHighlighting,
-        autocompletion({ icons: false }),
+        ...(EDITOR_ASSIST ? [autocompletion({ icons: false })] : []),
         EditorView.lineWrapping,
-        keymap.of([...closeBracketsKeymap, ...completionKeymap, ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap]),
+        keymap.of([
+          ...closeBracketsKeymap, ...(EDITOR_ASSIST ? completionKeymap : []),
+          ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap,
+        ]),
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),

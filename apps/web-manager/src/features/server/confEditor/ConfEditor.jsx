@@ -13,6 +13,7 @@ import { confHighlighting, confLanguage } from './confLanguage';
 import { confContextAt, confKeyAt } from './confContext';
 import { confParams, confSectionNames, describeGuard, paramHintDom } from './confParams';
 import { confDiagnostics } from './confLint';
+import { EDITOR_ASSIST } from '../../../constants/editorAssist';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -101,9 +102,10 @@ function paramsFor(kind, paramSchemas) {
 
 /**
  * The conf file editor (CodeMirror 6): section/key/value colors, line
- * numbers, find (Ctrl/Cmd+F), undo, parameter name and value completion,
- * a hint on hover, and underlines for what the server would refuse or warn
- * about on save. It never blocks typing or saving.
+ * numbers, find (Ctrl/Cmd+F), undo. With EDITOR_ASSIST (off for now) also
+ * parameter name and value completion, a hint on hover, and underlines for
+ * what the server would refuse or warn about on save. It never blocks typing
+ * or saving.
  *
  * @param {'cubridconf'|'brokerconf'|'cmconf'} kind
  * @param paramSchemas the host's getEnv paramSchemas (undefined until read)
@@ -176,12 +178,17 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         highlightSelectionMatches(),
         confLanguage,
         confHighlighting,
-        autocompletion({ override: [complete], icons: false }),
-        hint,
-        // Debounced, so a large file is not re-checked on every key.
-        linter((v) => confDiagnostics(ctx().CM, v.state.doc, ctx().kind, ctx().paramSchemas), { delay: 500 }),
-        lintGutter(),
-        keymap.of([...completionKeymap, ...searchKeymap, ...historyKeymap, ...lintKeymap, indentWithTab, ...defaultKeymap]),
+        ...(EDITOR_ASSIST ? [
+          autocompletion({ override: [complete], icons: false }),
+          hint,
+          // Debounced, so a large file is not re-checked on every key.
+          linter((v) => confDiagnostics(ctx().CM, v.state.doc, ctx().kind, ctx().paramSchemas), { delay: 500 }),
+          lintGutter(),
+        ] : []),
+        keymap.of([
+          ...(EDITOR_ASSIST ? [...completionKeymap, ...lintKeymap] : []),
+          ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap,
+        ]),
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),
@@ -230,7 +237,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({ effects: compartments.current.phrases.reconfigure(EditorState.phrases.of(CM.codeMirrorPhrases ?? {})) });
-    forceLinting(view);
+    if (EDITOR_ASSIST) forceLinting(view);
   }, [CM, kind, paramSchemas]);
 
   return <div ref={hostRef} data-testid={testId ? `${testId}-editor` : undefined} className="absolute inset-0" />;

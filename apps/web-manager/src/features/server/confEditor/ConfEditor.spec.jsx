@@ -5,6 +5,8 @@ import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EditorView } from '@codemirror/view';
 import { undo } from '@codemirror/commands';
+import { completionStatus, startCompletion } from '@codemirror/autocomplete';
+import { diagnosticCount } from '@codemirror/lint';
 import ConfEditor from './ConfEditor';
 
 const store = configureStore({ reducer: { user: () => ({ preferences: { uiLocale: 'en' } }) } });
@@ -60,4 +62,48 @@ it('shows the placeholder in the UI language', () => {
   expect(container.querySelector('.cm-placeholder')?.textContent).toBe('# Configuration...');
   render({ value: '', placeholder: '# 설정 내용...' });
   expect(container.querySelector('.cm-placeholder')?.textContent).toBe('# 설정 내용...');
+});
+
+// What getEnv sends (paramSchemas), cut down: enough for an underline and a hint on cubrid_port_id.
+const SCHEMAS = {
+  database: [{ key: 'cubrid_port_id', category: 'common', guard: { kind: 'int', min: 1, max: 65535 }, default: '1523', scope: 'BOTH' }],
+  broker: [],
+  cm: [],
+  knownKeys: { strict: true, catalogVersion: '11.4.5', database: ['cubrid_port_id'], broker: [], databaseGuards: {}, databaseScopes: { cubrid_port_id: 'BOTH' }, databaseDeprecated: [] },
+};
+const wait = (ms) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
+
+// EDITOR_ASSIST is off: the editor offers none of these.
+it('opens no completion list while typing a key or on Ctrl+Space', async () => {
+  render({ value: '[common]\n', paramSchemas: SCHEMAS });
+  const view = viewOf();
+  const end = view.state.doc.length;
+  act(() => view.dispatch({ changes: { from: end, insert: 'cubrid_po' }, selection: { anchor: end + 9 }, userEvent: 'input.type' }));
+  act(() => { startCompletion(view); });
+  await wait(300);
+  expect(completionStatus(view.state)).toBeNull();
+  expect(container.querySelector('.cm-tooltip-autocomplete')).toBeNull();
+});
+
+it('underlines no value and shows no lint gutter', async () => {
+  render({ value: '[common]\ncubrid_port_id=abc\n', paramSchemas: SCHEMAS });
+  // The check would run 500 ms after the text is set.
+  await wait(900);
+  const view = viewOf();
+  expect(diagnosticCount(view.state)).toBe(0);
+  expect(container.querySelector('.cm-lintRange')).toBeNull();
+  expect(container.querySelector('.cm-gutter-lint')).toBeNull();
+});
+
+it('shows no hint while the pointer rests on a key name', async () => {
+  render({ value: '[common]\ncubrid_port_id=1523\n', paramSchemas: SCHEMAS });
+  const view = viewOf();
+  // jsdom has no layout: place the pointer on the key by hand.
+  const keyPos = view.state.doc.toString().indexOf('cubrid_port_id') + 3;
+  vi.spyOn(view, 'posAtCoords').mockReturnValue(keyPos);
+  vi.spyOn(view, 'coordsAtPos').mockReturnValue({ top: 20, bottom: 40, left: 35, right: 45 });
+  view.contentDOM.querySelector('.cm-line:nth-child(2)').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 40, clientY: 30 }));
+  await wait(600);
+  expect(container.querySelector('.cm-tooltip-hover')).toBeNull();
+  expect(document.querySelector('.cm-conf-hint')).toBeNull();
 });
