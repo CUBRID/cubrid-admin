@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { app } from 'electron';
 
-function isPackagedRuntime(): boolean {
+export function isPackagedRuntime(): boolean {
   if (app.isPackaged) {
     return true;
   }
@@ -117,17 +117,43 @@ export function getDesktopDataRoot(): string {
 /**
  * Where 0.1.0 kept `desktop-settings.json` and the default `cwm-workspace/`:
  * the folder that contains the .app (macOS) or the executable. `null` when that
- * is where the settings are now (a portable build), with CWM_PORTABLE_APP_ROOT,
- * or in dev mode.
+ * is where the settings are now, and when the executable runs from a place
+ * 0.1.0 could not have used: a Windows portable exe or an AppImage (both run
+ * from a temporary folder), a .app run translocated or from a read-only place
+ * (a mounted dmg). Also `null` with CWM_PORTABLE_APP_ROOT and in dev mode.
  */
 export function getLegacyDataRoot(): string | null {
   if (process.env.CWM_PORTABLE_APP_ROOT?.trim() || !isPackagedRuntime()) {
     return null;
   }
+  if (process.env.PORTABLE_EXECUTABLE_DIR?.trim() || process.env.APPIMAGE?.trim()) {
+    return null;
+  }
 
   const bundlePath = getAppBundlePath();
+  if (bundlePath && cannotKeepFilesBeside(bundlePath)) {
+    return null;
+  }
   const legacyRoot = bundlePath ? path.dirname(bundlePath) : getExecutableDir();
   return path.resolve(legacyRoot) === path.resolve(getDesktopDataRoot()) ? null : legacyRoot;
+}
+
+/** Whether `child` is `parent` or inside it (case-insensitive on Windows, as path.win32.relative is). */
+function isInside(child: string, parent: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+/**
+ * Whether `resolvedPath` is in the folder the Windows installer (NSIS) installed
+ * the app into: its update and uninstall remove that folder with everything in
+ * it, so a workspace there would be lost. A portable exe has no install folder.
+ */
+export function isPathInsideInstallFolder(resolvedPath: string): boolean {
+  if (process.platform !== 'win32' || !isPackagedRuntime() || process.env.PORTABLE_EXECUTABLE_DIR?.trim()) {
+    return false;
+  }
+  return isInside(resolvedPath, getExecutableDir());
 }
 
 /** macOS `.app` bundle path when running a packaged build; otherwise `null`. */

@@ -48,6 +48,9 @@ export default function DesktopWorkspaceSettingsPage() {
   const [askIgnoreUnknownJobs, setAskIgnoreUnknownJobs] = useState(false);
   // The server start in progress: { state: 'idle' | 'starting' | 'slow', elapsedMs }.
   const [startStatus, setStartStatus] = useState({ state: 'idle' });
+  // First run: the workspace used last by another copy of the app, offered until declined.
+  const [previous, setPrevious] = useState(null);
+  const [previousDeclined, setPreviousDeclined] = useState(false);
   const navigate = useNavigate();
 
   const loadInfo = useCallback(async () => {
@@ -59,14 +62,16 @@ export default function DesktopWorkspaceSettingsPage() {
     setLoading(true);
     setError('');
     try {
-      const [next, setupRequired, startupError] = await Promise.all([
+      const [next, setupRequired, startupError, previousWorkspace] = await Promise.all([
         bridge.getWorkspaceInfo(),
         bridge.isWorkspaceSetupRequired(),
         bridge.getWorkspaceStartupError?.() ?? null,
+        bridge.getPreviousWorkspace?.() ?? null,
       ]);
       setInfo(next);
       setWorkspaceRoot(next.workspaceRoot);
       setSetupMode(setupRequired);
+      setPrevious(setupRequired && previousWorkspace?.workspaceRoot ? previousWorkspace : null);
       // The configured workspace failed at launch: say why (a WORKSPACE_* code).
       if (startupError) setError(desktopErrorText({ message: startupError }, CM, CM.workspaceSaveFailedMsg));
     } catch (err) {
@@ -99,13 +104,13 @@ export default function DesktopWorkspaceSettingsPage() {
     }
   };
 
-  const handleContinue = async () => {
+  const handleContinue = async (root = workspaceRoot) => {
     if (!bridge) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await bridge.finishWorkspaceSetup(workspaceRoot);
+      await bridge.finishWorkspaceSetup(root);
       setMessage(CM.applyingWorkspaceMsg);
     } catch (err) {
       setError(desktopErrorText(err, CM, CM.workspaceSaveFailedMsg));
@@ -142,6 +147,8 @@ export default function DesktopWorkspaceSettingsPage() {
       setError(desktopErrorText(err, CM, CM.workspaceSaveFailedMsg));
     }
   };
+
+  const offeringPrevious = setupMode && Boolean(previous) && !previousDeclined;
 
   // Saving the folder the app already runs on would restart it for nothing.
   const unchanged = Boolean(info)
@@ -203,15 +210,47 @@ export default function DesktopWorkspaceSettingsPage() {
         <p className="text-sm text-slate-500">{CM.loadingLabel}</p>
       ) : (
         <div className="space-y-5">
-          <Input
-            data-testid="workspace-root-input"
-            label={CM.workspaceFolderLabel}
-            value={workspaceRoot}
-            onChange={(e) => setWorkspaceRoot(e.target.value)}
-            placeholder={info?.defaultWorkspaceRoot}
-          />
+          {offeringPrevious ? (
+            <div
+              data-testid="previous-workspace-offer"
+              className="rounded-xl border border-slate-200 dark:border-white/10 p-4 space-y-3"
+            >
+              <p className="text-15 font-semibold text-slate-900 dark:text-white">{CM.previousWorkspaceTitle}</p>
+              <p data-testid="previous-workspace-path" className="text-14 font-mono break-all text-slate-600 dark:text-slate-300">
+                {previous.workspaceRoot}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  data-testid="previous-workspace-use-btn"
+                  disabled={saving || starting}
+                  onClick={() => void handleContinue(previous.workspaceRoot)}
+                  className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+                >
+                  {CM.usePreviousWorkspaceBtn}
+                </button>
+                <button
+                  type="button"
+                  data-testid="previous-workspace-new-btn"
+                  disabled={saving || starting}
+                  onClick={() => setPreviousDeclined(true)}
+                  className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40 disabled:opacity-50"
+                >
+                  {CM.startNewWorkspaceBtn}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <Input
+              data-testid="workspace-root-input"
+              label={CM.workspaceFolderLabel}
+              value={workspaceRoot}
+              onChange={(e) => setWorkspaceRoot(e.target.value)}
+              placeholder={info?.defaultWorkspaceRoot}
+            />
+          )}
 
-          {info && (
+          {info && !offeringPrevious && (
             <div className="text-14 text-slate-500 dark:text-slate-400 space-y-1 font-mono break-all">
               {!info.isCustomWorkspace && (
                 <p className="text-amber-600 dark:text-amber-400">
@@ -261,37 +300,39 @@ export default function DesktopWorkspaceSettingsPage() {
             </InfoBanner>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              data-testid="workspace-pick-btn"
-              onClick={() => void handlePick()}
-              className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40"
-            >
-              {CM.selectFolderEllipsis}
-            </button>
-            {setupMode ? (
+          {!offeringPrevious && (
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                data-testid="workspace-continue-btn"
-                disabled={saving || starting || !workspaceRoot.trim()}
-                onClick={() => void handleContinue()}
-                className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+                data-testid="workspace-pick-btn"
+                onClick={() => void handlePick()}
+                className="h-10 px-4 text-15 font-semibold rounded-xl border border-slate-200 dark:border-white/10 hover:border-amber-500/40"
               >
-                {CM.continueBtn}
+                {CM.selectFolderEllipsis}
               </button>
-            ) : (
-              <button
-                type="button"
-                data-testid="workspace-save-btn"
-                disabled={saving || starting || !workspaceRoot.trim() || unchanged}
-                onClick={() => void handleSave()}
-                className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
-              >
-                {CM.save}
-              </button>
-            )}
-          </div>
+              {setupMode ? (
+                <button
+                  type="button"
+                  data-testid="workspace-continue-btn"
+                  disabled={saving || starting || !workspaceRoot.trim()}
+                  onClick={() => void handleContinue()}
+                  className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+                >
+                  {CM.continueBtn}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="workspace-save-btn"
+                  disabled={saving || starting || !workspaceRoot.trim() || unchanged}
+                  onClick={() => void handleSave()}
+                  className="h-10 px-4 text-15 font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-black disabled:opacity-50"
+                >
+                  {CM.save}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
       <ConfirmDialog

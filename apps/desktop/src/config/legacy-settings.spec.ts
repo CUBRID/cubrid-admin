@@ -2,8 +2,16 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { adoptLegacyDesktopSettings } from './legacy-settings';
+import { isPathInsideAppBundle, isPathInsideInstallFolder } from './portable-root';
 
 jest.mock('electron', () => ({ app: { isPackaged: false } }));
+jest.mock('./portable-root', () => ({
+  ...jest.requireActual('./portable-root'),
+  isPathInsideAppBundle: jest.fn(() => false),
+  isPathInsideInstallFolder: jest.fn(() => false),
+}));
+const inBundle = isPathInsideAppBundle as jest.Mock;
+const inInstallFolder = isPathInsideInstallFolder as jest.Mock;
 
 describe('settings of a 0.1.0 app updated in place', () => {
   let base: string;
@@ -18,6 +26,9 @@ describe('settings of a 0.1.0 app updated in place', () => {
   });
 
   afterEach(() => {
+    inBundle.mockReset().mockReturnValue(false);
+    inInstallFolder.mockReset().mockReturnValue(false);
+    fs.chmodSync(base, 0o755);
     fs.rmSync(base, { recursive: true, force: true });
   });
 
@@ -117,5 +128,65 @@ describe('settings of a 0.1.0 app updated in place', () => {
     expect(warn).toHaveBeenCalled();
     expect(fs.existsSync(path.join(currentRoot, 'desktop-settings.json'))).toBe(false);
     warn.mockRestore();
+  });
+
+  it('takes a workspace inside the app bundle as none and uses the default one beside the app', () => {
+    const workspace = legacyWorkspace();
+    const bundled = path.join(legacyRoot, 'CUBRID Admin.app', 'Contents', 'ws');
+    inBundle.mockImplementation((p: string) => p === bundled);
+    write(legacyRoot, { workspaceRoot: bundled, workspaceSetupComplete: true });
+
+    expect(adoptLegacyDesktopSettings(currentRoot, legacyRoot)?.workspaceRoot).toBe(workspace);
+    expect(read(currentRoot).workspaceRoot).toBe(workspace);
+  });
+
+  it('does not use a workspace in the Windows install folder (an update or uninstall removes it)', () => {
+    const workspace = legacyWorkspace();
+    inInstallFolder.mockImplementation((p: string) => p === workspace);
+    write(legacyRoot, { workspaceSetupComplete: true });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(adoptLegacyDesktopSettings(currentRoot, legacyRoot)).toBeNull();
+    expect(warn.mock.calls[0].join(' ')).toContain('install folder');
+    expect(fs.existsSync(path.join(currentRoot, 'desktop-settings.json'))).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('does not use a 0.1.0 workspace that is a server folder', () => {
+    const workspace = legacyWorkspace();
+    fs.mkdirSync(path.join(workspace, 'cwm-vault'));
+    write(legacyRoot, { workspaceSetupComplete: true });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(adoptLegacyDesktopSettings(currentRoot, legacyRoot)).toBeNull();
+    expect(warn.mock.calls[0].join(' ')).toContain('Server folder');
+    warn.mockRestore();
+  });
+
+  it('says the current settings file is the one that cannot be read, and leaves both files', () => {
+    write(legacyRoot, { workspaceRoot: legacyWorkspace(), workspaceSetupComplete: true });
+    fs.mkdirSync(currentRoot, { recursive: true });
+    fs.writeFileSync(path.join(currentRoot, 'desktop-settings.json'), '{ broken');
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(adoptLegacyDesktopSettings(currentRoot, legacyRoot)).toBeNull();
+    expect(warn.mock.calls[0].join(' ')).toContain('current settings file cannot be read');
+    expect(fs.readFileSync(path.join(currentRoot, 'desktop-settings.json'), 'utf8')).toBe('{ broken');
+    warn.mockRestore();
+  });
+
+  it('only warns when the settings cannot be written in the current place', () => {
+    write(legacyRoot, { workspaceRoot: legacyWorkspace(), workspaceSetupComplete: true });
+    const readOnly = path.join(base, 'read-only');
+    fs.mkdirSync(readOnly);
+    fs.chmodSync(readOnly, 0o555);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(adoptLegacyDesktopSettings(path.join(readOnly, 'CUBRID Admin'), legacyRoot)).toBeNull();
+      expect(warn.mock.calls[0].join(' ')).toContain('not copied to');
+    } finally {
+      fs.chmodSync(readOnly, 0o755);
+      warn.mockRestore();
+    }
   });
 });
