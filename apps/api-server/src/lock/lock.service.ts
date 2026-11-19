@@ -78,10 +78,17 @@ export type LockFs = Pick<typeof nodeFs, 'mkdir' | 'rmdir' | 'rmdirSync' | 'real
 
 type FsCallback<T> = (err: NodeJS.ErrnoException | null, value?: T) => void;
 
+/** The locks a service has taken, by lock directory path. */
+export interface LockRegistry {
+  get(lockPath: string): Pick<FileLock, 'releasing'> | undefined;
+}
+
 /**
- * The fs proper-lockfile gets for one lock. Once our release has started,
- * a stat or utimes error on the lock directory other than ENOENT is
- * reported to the library as ENOENT.
+ * The fs proper-lockfile gets from a service: one object, shared by all its
+ * locks, so the library's mtime-precision cache (a property it sets on the fs
+ * object after a probe) holds for every lock after the first. Once a lock's
+ * release has started, a stat or utimes error on its lock directory other
+ * than ENOENT is reported to the library as ENOENT.
  *
  * Why: the library's mtime-update timer (lockfile.js updateLock) can be in
  * its stat when release runs; release deletes the library's lock entry.
@@ -94,9 +101,9 @@ type FsCallback<T> = (err: NodeJS.ErrnoException | null, value?: T) => void;
  * Reporting ENOENT there sends it down the compromised path instead; the
  * original code is kept on the error for the log.
  */
-export function createLockFs(lock: Pick<FileLock, 'releasing'>, base: LockFs = nodeFs): LockFs {
-  const afterRelease = (err: NodeJS.ErrnoException | null): NodeJS.ErrnoException | null => {
-    if (!err || !lock.releasing || err.code === 'ENOENT') return err;
+export function createLockFs(locks: LockRegistry, base: LockFs = nodeFs): LockFs {
+  const afterRelease = (lockPath: nodeFs.PathLike, err: NodeJS.ErrnoException | null): NodeJS.ErrnoException | null => {
+    if (!err || err.code === 'ENOENT' || !locks.get(String(lockPath))?.releasing) return err;
     const mapped: NodeJS.ErrnoException & { originalCode?: string } = Object.assign(
       new Error(`${err.message} (reported as ENOENT: the lock was being released)`),
       { code: 'ENOENT', originalCode: err.code, syscall: err.syscall, path: err.path }
@@ -109,9 +116,9 @@ export function createLockFs(lock: Pick<FileLock, 'releasing'>, base: LockFs = n
     rmdirSync: base.rmdirSync.bind(base),
     realpath: base.realpath.bind(base),
     stat: ((p: nodeFs.PathLike, cb: FsCallback<nodeFs.Stats>) =>
-      base.stat(p, (err, stat) => cb(afterRelease(err), stat))) as typeof nodeFs.stat,
+      base.stat(p, (err, stat) => cb(afterRelease(p, err), stat))) as typeof nodeFs.stat,
     utimes: ((p: nodeFs.PathLike, atime: nodeFs.TimeLike, mtime: nodeFs.TimeLike, cb: FsCallback<void>) =>
-      base.utimes(p, atime, mtime, (err) => cb(afterRelease(err)))) as typeof nodeFs.utimes,
+      base.utimes(p, atime, mtime, (err) => cb(afterRelease(p, err)))) as typeof nodeFs.utimes,
   };
 }
 
@@ -120,8 +127,26 @@ export class LockService {
   private readonly storageDir = getStoragePath();
   /** A test subclass shortens these (no constructor argument: Nest makes the service without one). */
   protected readonly lockOptions: LockOptions = DEFAULT_LOCK_OPTIONS;
-  /** The fs under the lock library (a test subclass makes its stat fail). */
-  protected readonly lockFs: LockFs = nodeFs;
+  /** The fs under the lock library (a test subclass makes its stat fail or counts its calls). */
+  protected readonly baseFs: LockFs = nodeFs;
+  /**
+   * The latest lock per lock directory path, for `createLockFs`. An entry is
+   * replaced by the next lock on the path, never removed: a stat of a
+   * released lock can still be pending when the next lock on the path is
+   * taken, but by then the directory exists again (a directory whose
+   * deletion is pending cannot be re-created), so that stat succeeds or
+   * reports ENOENT, never the error the mapping is for. The one cost: a
+   * probe of the next lock failing with another error while the previous
+   * lock is still marked releasing is reported as ENOENT; the acquisition
+   * fails either way.
+   */
+  private readonly locksByPath = new Map<string, Pick<FileLock, 'releasing'>>();
+  private sharedLockFs?: LockFs;
+
+  private lockFs(): LockFs {
+    this.sharedLockFs ??= createLockFs(this.locksByPath, this.baseFs);
+    return this.sharedLockFs;
+  }
 
   /**
    * Resolves the absolute path for a given filename within the storage directory.
@@ -151,6 +176,8 @@ export class LockService {
       acquiredAt: 0,
       releasing: false,
       compromised: null,
+      // It cannot catch a compromise between two of the library's checks
+      // (every stale/2 ms): the lock is only known to be lost at the next check.
       assertHeld: () => {
         if (lock.compromised) {
           throw LockError.StaleLock(
@@ -164,7 +191,7 @@ export class LockService {
       stale: this.lockOptions.stale,
       realpath: false,
       retries: this.lockOptions.retries,
-      fs: createLockFs(lock, this.lockFs),
+      fs: this.lockFs(),
       // The library calls this from its mtime-update timer when the lock file is
       // gone (another process took it for stale and removed it, or it raced
       // with our own release) or when the update ran over the stale time. Its
@@ -198,6 +225,8 @@ export class LockService {
       },
     });
     lock.acquiredAt = Date.now();
+    // proper-lockfile's lock directory is `${file}.lock` (no lockfilePath option is given).
+    this.locksByPath.set(`${filePath}.lock`, lock);
     return lock;
   }
 

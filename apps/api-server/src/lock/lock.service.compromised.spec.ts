@@ -45,7 +45,7 @@ describe('createLockFs', () => {
   } as never;
 
   it('passes a stat/utimes error through while the lock is held', (done) => {
-    const lockFs = createLockFs({ releasing: false }, base);
+    const lockFs = createLockFs(new Map([['/x/f.lock', { releasing: false }]]), base);
     lockFs.stat('/x/f.lock', (err) => {
       expect(err).toMatchObject({ code: 'EPERM' });
       lockFs.utimes('/x/f.lock', 1, 1, (err2) => {
@@ -56,7 +56,7 @@ describe('createLockFs', () => {
   });
 
   it('reports a stat/utimes error as ENOENT once the release has started, keeping the original code', (done) => {
-    const lockFs = createLockFs({ releasing: true }, base);
+    const lockFs = createLockFs(new Map([['/x/f.lock', { releasing: true }]]), base);
     lockFs.stat('/x/f.lock', (err) => {
       expect(err).toMatchObject({ code: 'ENOENT', originalCode: 'EPERM', syscall: 'stat', path: '/x/f.lock' });
       lockFs.utimes('/x/f.lock', 1, 1, (err2) => {
@@ -66,10 +66,18 @@ describe('createLockFs', () => {
     });
   });
 
+  it('passes an error through for a path it holds no lock for', (done) => {
+    const lockFs = createLockFs(new Map(), base);
+    lockFs.stat('/x/other.lock', (err) => {
+      expect(err).toMatchObject({ code: 'EPERM' });
+      done();
+    });
+  });
+
   it('leaves ENOENT and success alone', (done) => {
     const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     const okBase = { ...(base as object), stat: jest.fn((_p, cb) => cb(enoent)), utimes: jest.fn((_p, _a, _m, cb) => cb(null)) } as never;
-    const lockFs = createLockFs({ releasing: true }, okBase);
+    const lockFs = createLockFs(new Map([['/x/f.lock', { releasing: true }]]), okBase);
     lockFs.stat('/x/f.lock', (err) => {
       expect(err).toBe(enoent);
       lockFs.utimes('/x/f.lock', 1, 1, (err2) => {
@@ -152,6 +160,26 @@ describe('LockService with a compromised lock', () => {
     await expect(fs.stat(lockDir)).rejects.toMatchObject({ code: 'ENOENT' });
   }, 20000);
 
+  it('probes the mtime precision once: the second lock of a service skips the utimes probe', async () => {
+    let utimesCalls = 0;
+    class CountingLockService extends ShortStaleLockService {
+      protected override readonly baseFs = {
+        mkdir: nodeFs.mkdir,
+        rmdir: nodeFs.rmdir,
+        rmdirSync: nodeFs.rmdirSync,
+        realpath: nodeFs.realpath,
+        stat: nodeFs.stat,
+        utimes: ((...args: Parameters<typeof nodeFs.utimes>) => { utimesCalls += 1; return nodeFs.utimes(...args); }) as typeof nodeFs.utimes,
+      };
+    }
+    service = new CountingLockService();
+    expect(await service.withLock('cache-a.json', async () => 'a')).toBe('a');
+    expect(utimesCalls).toBe(1); // the probe of the first lock
+    expect(await service.withLock('cache-b.json', async () => 'b')).toBe('b');
+    expect(await service.withLock('cache-a.json', async () => 'a2')).toBe('a2');
+    expect(utimesCalls).toBe(1); // no probe for the later locks (released before any update)
+  });
+
   it('returns the result and warns when the lock is compromised only after the work wrote', async () => {
     const filename = 'compromised-after-write.json';
     const lockDir = `${path.join(tmpDir, filename)}.lock`;
@@ -174,7 +202,7 @@ describe('LockService with a compromised lock', () => {
     let statCalls = 0;
     let holdStat = false;
     class SlowStatLockService extends ShortStaleLockService {
-      protected override readonly lockFs = {
+      protected override readonly baseFs = {
         mkdir: nodeFs.mkdir,
         rmdir: nodeFs.rmdir,
         rmdirSync: nodeFs.rmdirSync,
