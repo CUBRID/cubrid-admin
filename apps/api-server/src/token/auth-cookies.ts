@@ -87,8 +87,9 @@ const refreshPath = `/${API_PREFIX}/auth`;
  * serves http (as 0.1.0 allowed) the browser would drop a Secure cookie and
  * the login would not stick. The page's scheme is taken from Origin (Referer
  * when there is none): the browser sets them and a page script cannot.
- * X-Forwarded-Proto is not used: any client can send it, and 'trust proxy'
- * believes every hop. A client that sends an http origin only gets its own
+ * X-Forwarded-Proto is not used: any client can send it, and whether it can
+ * be believed depends on the proxy settings; Origin needs none. A client
+ * that sends an http origin only gets its own
  * cookies without Secure. No header, https, 'null' or anything unreadable
  * keeps Secure. The names have no __Host-/__Secure- prefix, which a browser
  * would refuse without Secure.
