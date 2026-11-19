@@ -138,10 +138,10 @@ export function getLegacyDataRoot(): string | null {
   return path.resolve(legacyRoot) === path.resolve(getDesktopDataRoot()) ? null : legacyRoot;
 }
 
-/** Whether `child` is `parent` or inside it (case-insensitive on Windows, as path.win32.relative is). */
-function isInside(child: string, parent: string): boolean {
-  const relative = path.relative(path.resolve(parent), path.resolve(child));
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+/** Whether `child` is `parent` or inside it, by `paths` (path.win32 compares without case). */
+function isInside(child: string, parent: string, paths: path.PlatformPath): boolean {
+  const relative = paths.relative(paths.resolve(parent), paths.resolve(child));
+  return relative === '' || (!relative.startsWith('..') && !paths.isAbsolute(relative));
 }
 
 /**
@@ -153,7 +153,8 @@ export function isPathInsideInstallFolder(resolvedPath: string): boolean {
   if (process.platform !== 'win32' || !isPackagedRuntime() || process.env.PORTABLE_EXECUTABLE_DIR?.trim()) {
     return false;
   }
-  return isInside(resolvedPath, getExecutableDir());
+  // Windows paths, compared as Windows does: C:\Program Files and c:\program files are one folder.
+  return isInside(resolvedPath, path.win32.dirname(process.execPath), path.win32);
 }
 
 /** macOS `.app` bundle path when running a packaged build; otherwise `null`. */

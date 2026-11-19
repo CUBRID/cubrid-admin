@@ -153,9 +153,9 @@ describe('settings of a 0.1.0 app updated in place', () => {
   });
 
   it('does not use a 0.1.0 workspace that is a server folder', () => {
-    const workspace = legacyWorkspace();
-    fs.mkdirSync(path.join(workspace, 'cwm-vault'));
-    write(legacyRoot, { workspaceSetupComplete: true });
+    const server = path.join(base, 'server');
+    fs.mkdirSync(path.join(server, 'cwm-vault'), { recursive: true });
+    write(legacyRoot, { workspaceRoot: server, workspaceSetupComplete: true });
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     expect(adoptLegacyDesktopSettings(currentRoot, legacyRoot)).toBeNull();

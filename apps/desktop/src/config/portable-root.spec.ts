@@ -288,6 +288,14 @@ describe('desktop data root', () => {
       expect(isPathInsideInstallFolder('/data/cwm-workspace')).toBe(false);
     });
 
+    it('compares Windows paths without case, as Windows does', () => {
+      runAs('win32', 'C:\\Users\\Me\\AppData\\Local\\Programs\\CUBRID Admin\\CUBRID Admin.exe');
+      expect(isPathInsideInstallFolder('c:\\users\\me\\appdata\\local\\programs\\cubrid admin\\cwm-workspace')).toBe(true);
+      expect(isPathInsideInstallFolder('C:\\USERS\\ME\\APPDATA\\LOCAL\\PROGRAMS\\CUBRID ADMIN')).toBe(true);
+      expect(isPathInsideInstallFolder('C:\\Users\\Me\\AppData\\Local\\Programs\\CUBRID Admin2\\ws')).toBe(false);
+      expect(isPathInsideInstallFolder('D:\\Users\\Me\\AppData\\Local\\Programs\\CUBRID Admin\\ws')).toBe(false);
+    });
+
     it('none for a Windows portable exe, macOS, Linux and dev mode', () => {
       runAs('win32', '/temp/2abc/CUBRID Admin.exe', { PORTABLE_EXECUTABLE_DIR: '/tools' });
       expect(isPathInsideInstallFolder('/temp/2abc/cwm-workspace')).toBe(false);

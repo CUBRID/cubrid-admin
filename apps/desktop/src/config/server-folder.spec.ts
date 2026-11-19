@@ -18,46 +18,96 @@ describe('server folder', () => {
     fs.mkdirSync(path.join(root, ...parts.slice(0, -1)), { recursive: true });
     fs.writeFileSync(path.join(root, ...parts), '');
   };
+  const dir = (...parts: string[]) => fs.mkdirSync(path.join(root, ...parts), { recursive: true });
 
-  it('an unpacked server package before its first start (executable, conf/cwm.conf.sample)', () => {
-    touch('cubrid-admin.exe');
-    touch('conf', 'cwm.conf.sample');
-    expect(isServerFolder(root)).toBe(true);
-  });
+  describe('refused', () => {
+    it.each([['cubrid-admin.exe'], ['cubrid-admin-linux'], ['cubrid-admin-linux-el7'], ['cubrid-admin-linux-arm64'], ['cubrid-admin-macos-arm64']])(
+      'an unpacked server package before its first start (%s, conf/cwm.conf.sample)',
+      (exe) => {
+        touch(exe);
+        touch('conf', 'cwm.conf.sample');
+        touch('conf', 'cwm.conf.reference.md');
+        expect(isServerFolder(root)).toBe(true);
+      }
+    );
 
-  it.each([['cubrid-admin.exe'], ['cubrid-admin'], ['cubrid-admin-linux'], ['cubrid-admin-linux-el7'], ['cubrid-admin-macos-arm64'], ['cubrid-admin-service.exe']])(
-    'a folder with the server executable %s',
-    (name) => {
-      touch(name);
+    it('the server zip folder after it has run (cwm-vault/, conf/cwm.conf, data/ as its storage)', () => {
+      touch('cubrid-admin.exe');
+      touch('conf', 'cwm.conf.sample');
+      touch('conf', 'cwm.conf');
+      touch('cwm-vault', 'secrets.json');
+      dir('data');
+      dir('ssl');
       expect(isServerFolder(root)).toBe(true);
-    }
-  );
+    });
 
-  it('a server that has run (cwm-vault/), even with a data/ folder (its storage)', () => {
-    fs.mkdirSync(path.join(root, 'cwm-vault'));
-    fs.mkdirSync(path.join(root, 'data'));
-    expect(isServerFolder(root)).toBe(true);
+    it('an installed server data folder once it has started (conf/, cwm-vault/, ssl/, storage/, logs/)', () => {
+      touch('conf', 'cwm.conf');
+      touch('cwm-vault', 'secrets.json');
+      dir('ssl');
+      dir('storage');
+      dir('logs');
+      expect(isServerFolder(root)).toBe(true);
+    });
+
+    it('the server setup install folder (cubrid-admin.exe, cubrid-admin-service.exe, cwm.conf.sample beside them)', () => {
+      touch('cubrid-admin.exe');
+      touch('cubrid-admin-service.exe');
+      touch('cwm.conf.sample');
+      expect(isServerFolder(root)).toBe(true);
+    });
   });
 
-  it('an installed server data folder before its first start (conf/cwm.conf, no data/)', () => {
-    touch('conf', 'cwm.conf');
-    fs.mkdirSync(path.join(root, 'logs'));
-    expect(isServerFolder(root)).toBe(true);
-  });
+  describe('allowed', () => {
+    it('a desktop workspace, even with its own conf/cwm.conf, ssl/ and logs/', () => {
+      touch('data', 'secrets.json');
+      touch('conf', 'cwm.conf');
+      dir('ssl');
+      dir('logs');
+      expect(isServerFolder(root)).toBe(false);
+    });
 
-  it('not a desktop workspace, even with its own conf/cwm.conf, ssl/ and logs/', () => {
-    touch('data', 'secrets.json');
-    touch('conf', 'cwm.conf');
-    fs.mkdirSync(path.join(root, 'ssl'));
-    fs.mkdirSync(path.join(root, 'logs'));
-    expect(isServerFolder(root)).toBe(false);
-  });
+    it('a desktop workspace with cwm.conf.sample copied into its conf/', () => {
+      touch('data', 'secrets.json');
+      touch('conf', 'cwm.conf.sample');
+      touch('conf', 'cwm.conf');
+      expect(isServerFolder(root)).toBe(false);
+    });
 
-  it('not an empty folder, a missing one, or a folder of other files', () => {
-    expect(isServerFolder(root)).toBe(false);
-    expect(isServerFolder(path.join(root, 'missing'))).toBe(false);
-    touch('notes.txt');
-    touch('cubrid-admin-notes.txt');
-    expect(isServerFolder(root)).toBe(false);
+    it('a desktop workspace that also holds a server executable', () => {
+      touch('data', 'secrets.json');
+      touch('cubrid-admin.exe');
+      touch('conf', 'cwm.conf.sample');
+      expect(isServerFolder(root)).toBe(false);
+    });
+
+    it('a new folder with only conf/cwm.conf made first', () => {
+      touch('conf', 'cwm.conf');
+      expect(isServerFolder(root)).toBe(false);
+    });
+
+    it('a folder holding a clone of the repository named cubrid-admin (~/work)', () => {
+      dir('cubrid-admin', 'apps');
+      touch('cubrid-admin', 'package.json');
+      expect(isServerFolder(root)).toBe(false);
+    });
+
+    it('a Downloads or Desktop folder with a server executable downloaded into it', () => {
+      touch('cubrid-admin.exe');
+      touch('CUBRID-Admin-server-0.2.0.0106-windows-x64.zip');
+      touch('notes.txt');
+      expect(isServerFolder(root)).toBe(false);
+    });
+
+    it('a folder named like a server executable next to the sample', () => {
+      dir('cubrid-admin');
+      touch('conf', 'cwm.conf.sample');
+      expect(isServerFolder(root)).toBe(false);
+    });
+
+    it('an empty folder or a missing one', () => {
+      expect(isServerFolder(root)).toBe(false);
+      expect(isServerFolder(path.join(root, 'missing'))).toBe(false);
+    });
   });
 });

@@ -58,9 +58,10 @@ describe('the workspace used last', () => {
   });
 
   it('offers nothing that is a server folder', () => {
-    const root = workspace();
-    fs.writeFileSync(path.join(root, 'cubrid-admin.exe'), '');
-    rememberLastWorkspace(root, base, note);
+    const server = path.join(base, 'server');
+    fs.mkdirSync(path.join(server, 'cwm-vault'), { recursive: true });
+    fs.mkdirSync(path.join(server, 'data'));
+    rememberLastWorkspace(server, base, note);
     expect(findPreviousWorkspace(note)).toBeNull();
   });
 
