@@ -100,4 +100,54 @@ describe('DesktopWorkspaceSettingsPage', () => {
       expect(byTestId('workspace-continue-btn').disabled).toBe(false);
     });
   });
+
+  describe('previous workspace', () => {
+    const previous = { workspaceRoot: 'C:\\regress\\legacy\\X\\cwm-workspace', settingsFolder: 'C:\\regress\\legacy\\X' };
+    const byTestId = (id) => container.querySelector(`[data-testid="${id}"]`);
+
+    async function render({ setup = true } = {}) {
+      window.desktopBridge.isWorkspaceSetupRequired = vi.fn().mockResolvedValue(setup);
+      window.desktopBridge.getPreviousWorkspace = vi.fn().mockResolvedValue(previous);
+      window.desktopBridge.finishWorkspaceSetup = vi.fn().mockResolvedValue({ ok: true });
+      const store = configureStore({ reducer: { user: userReducer, auth: () => ({}) } });
+      await act(async () => {
+        root.render(<Provider store={store}><MemoryRouter><Page /></MemoryRouter></Provider>);
+      });
+    }
+
+    it('offers the workspace used last first, and uses it only when chosen', async () => {
+      await render();
+      expect(byTestId('previous-workspace-offer').textContent).toContain('Continue with the Previous Workspace');
+      expect(byTestId('previous-workspace-path').textContent).toBe(previous.workspaceRoot);
+      expect(byTestId('workspace-root-input')).toBeNull();
+      expect(window.desktopBridge.finishWorkspaceSetup).not.toHaveBeenCalled();
+
+      await act(async () => byTestId('previous-workspace-use-btn').click());
+      expect(window.desktopBridge.finishWorkspaceSetup).toHaveBeenCalledWith(previous.workspaceRoot);
+    });
+
+    it('declined: the usual first-run form with the default folder, and Continue makes a new workspace there', async () => {
+      await render();
+      await act(async () => byTestId('previous-workspace-new-btn').click());
+      expect(byTestId('previous-workspace-offer')).toBeNull();
+      expect(byTestId('workspace-root-input').value).toBe('/w');
+
+      await act(async () => byTestId('workspace-continue-btn').click());
+      expect(window.desktopBridge.finishWorkspaceSetup).toHaveBeenCalledWith('/w');
+    });
+
+    it('is not offered once a workspace is set up (File > Switch Workspace)', async () => {
+      await render({ setup: false });
+      expect(byTestId('previous-workspace-offer')).toBeNull();
+      expect(byTestId('workspace-save-btn')).not.toBeNull();
+    });
+
+    it('in Korean', async () => {
+      localStorage.setItem(LOCALE_STORAGE_KEY, 'ko');
+      await render();
+      expect(byTestId('previous-workspace-offer').textContent).toContain('이전 워크스페이스 이어 쓰기');
+      expect(byTestId('previous-workspace-use-btn').textContent).toBe('이 워크스페이스 쓰기');
+      expect(byTestId('previous-workspace-new-btn').textContent).toBe('새 워크스페이스 만들기');
+    });
+  });
 });

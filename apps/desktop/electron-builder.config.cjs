@@ -10,8 +10,11 @@ const { productVersion } = require('../../scripts/product-version.cjs');
 
 const { base, commitNum, version } = productVersion();
 
-const BOTH_ARCHS = ['x64', 'arm64'];
-const targets = (...names) => names.map((target) => ({ target, arch: BOTH_ARCHS }));
+// x64 and arm64 for every target. The command line's --x64 / --arm64 do not
+// change this list; CWM_DESKTOP_ARCHS ("x64" or "arm64") does, so the release
+// workflow builds one arch at a time where two at once need too much memory.
+const ARCHS = process.env.CWM_DESKTOP_ARCHS ? process.env.CWM_DESKTOP_ARCHS.split(',').map((arch) => arch.trim()) : ['x64', 'arm64'];
+const targets = (...names) => names.map((target) => ({ target, arch: ARCHS }));
 // Release file names (scripts/archive-packages.mjs collects them into dist/release):
 // The Linux packages carry the full version with release 1, as the server
 // packages do (0.1.0.0001-1), not electron-builder's 0.1.0-0001; fpm takes the
@@ -125,6 +128,12 @@ module.exports = {
     // One installer per arch, not one with both.
     buildUniversalInstaller: false,
     artifactName: fileName('windows', '-setup'),
+    installerIcon: 'icon.ico',
+    uninstallerIcon: 'icon.ico',
+    installerHeaderIcon: 'icon.ico',
+    // 164x314, 24-bit: the left image of the welcome / finish pages.
+    installerSidebar: 'installerSidebar.bmp',
+    uninstallerSidebar: 'installerSidebar.bmp',
   },
   portable: { buildUniversalInstaller: false, artifactName: fileName('windows', '-portable') },
   // Installer: rpm. Portable: AppImage.
@@ -188,9 +197,17 @@ module.exports = {
   // electron-builder names that folder (and the /usr/bin link, chrome-sandbox
   // and AppArmor paths) after the product name, so only the Linux packager's
   // copy changes; the name users see stays "CUBRID Admin".
+  // Windows: the setups and the uninstaller show the full version
+  // (0.1.0.0001), not the semver "version" (0.1.0), in ProductVersion, the
+  // installed apps list (DisplayVersion and name) and the setup's bottom line.
+  // Only the Windows packager's copy changes. (The app exe's ProductVersion
+  // reads 0.1.0.1: electron-builder writes it in numeric form.)
   beforePack: (context) => {
     if (context.electronPlatformName === 'linux') {
       context.packager.appInfo.sanitizedProductName = 'cubrid-admin-desktop';
+    }
+    if (context.electronPlatformName === 'win32') {
+      context.packager.appInfo.version = version;
     }
   },
   afterPack: (context) => {

@@ -11,6 +11,7 @@ function resolveApiBaseUrl(): string {
 const desktopBridge: DesktopBridge = {
   isWorkspaceSetupRequired: () => ipcRenderer.invoke('desktop:is-workspace-setup-required'),
   getWorkspaceStartupError: () => ipcRenderer.invoke('desktop:get-workspace-startup-error'),
+  getPreviousWorkspace: () => ipcRenderer.invoke('desktop:get-previous-workspace'),
   getApiStartStatus: () => ipcRenderer.invoke('desktop:get-api-start-status'),
   onApiStartStatus: (callback) => {
     const subscription = (_event: IpcRendererEvent, status: Parameters<typeof callback>[0]) => callback(status);

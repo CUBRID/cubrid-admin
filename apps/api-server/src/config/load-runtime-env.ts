@@ -174,9 +174,10 @@ function writeSecrets(vaultDir: string, secrets: CwmSecrets): CwmSecrets {
       if (code === 'EEXIST') {
         return readExistingSecrets(target);
       }
-      if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'ENOSYS') {
-        throw err;
-      }
+      // Any other link error means hard links are not usable here: EPERM,
+      // ENOTSUP, ENOSYS, or EISDIR, which Windows reports for FAT32/exFAT (a USB
+      // stick). The copy never replaces a file either, and a folder that really
+      // cannot be written still fails there.
       return copySecretsIntoPlace(temp, target, secrets);
     }
     return secrets;

@@ -6,8 +6,18 @@ import * as path from 'path';
 const USER_DATA = '/Users/me/Library/Application Support/CUBRID Admin';
 const mockApp = { isPackaged: true, getPath: jest.fn((name: string) => (name === 'userData' ? USER_DATA : `/other/${name}`)) };
 jest.mock('electron', () => ({ app: mockApp }));
+// ~/Applications for the 0.1.0 place test (a TS namespace import copies the module object, so no spyOn).
+const realHomedir = jest.requireActual('os').homedir;
+const mockHomedir = jest.fn(() => realHomedir());
+jest.mock('os', () => ({ ...jest.requireActual('os'), homedir: () => mockHomedir() }));
 
-import { getDesktopDataRoot, getPortableFolder, isWritableFolder } from './portable-root';
+import {
+  getDesktopDataRoot,
+  getLegacyDataRoot,
+  getPortableFolder,
+  isPathInsideInstallFolder,
+  isWritableFolder,
+} from './portable-root';
 
 const ENV_KEYS = ['CWM_PORTABLE_APP_ROOT', 'PORTABLE_EXECUTABLE_DIR', 'APPIMAGE'] as const;
 const realPlatform = process.platform;
@@ -196,6 +206,106 @@ describe('desktop data root', () => {
         expect(getPortableFolder()).toBeNull();
         expect(getDesktopDataRoot()).toBe(USER_DATA);
       });
+    });
+  });
+
+  // Where 0.1.0 kept desktop-settings.json: beside the .app or the executable.
+  describe('0.1.0 settings place', () => {
+    let parent: string;
+
+    beforeEach(() => {
+      parent = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-legacy-root-'));
+    });
+
+    afterEach(() => {
+      mockHomedir.mockImplementation(() => realHomedir());
+      fs.chmodSync(parent, 0o755);
+      fs.rmSync(parent, { recursive: true, force: true });
+    });
+
+    it('macOS in Applications: the Applications folder (0.2 uses the user data folder)', () => {
+      mockHomedir.mockImplementation(() => parent); // ~/Applications is then <parent>/Applications
+      const applications = path.join(parent, 'Applications');
+      fs.mkdirSync(applications);
+      runAs('darwin', `${applications}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+      expect(getDesktopDataRoot()).toBe(USER_DATA);
+      expect(getLegacyDataRoot()).toBe(applications);
+    });
+
+    it('macOS in a downloads folder: none, 0.2 keeps its files there too', () => {
+      runAs('darwin', `${parent}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+      expect(getLegacyDataRoot()).toBeNull();
+    });
+
+    it('macOS translocated: none (not the place the user put the app)', () => {
+      const translocated = path.join(parent, 'AppTranslocation', '5F3A9C2E', 'd');
+      fs.mkdirSync(translocated, { recursive: true });
+      runAs('darwin', `${translocated}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+      expect(getLegacyDataRoot()).toBeNull();
+    });
+
+    it('macOS run from a read-only place (the mounted dmg): none', () => {
+      fs.chmodSync(parent, 0o555);
+      runAs('darwin', `${parent}/CUBRID Admin.app/Contents/MacOS/CUBRID Admin`);
+      expect(getLegacyDataRoot()).toBeNull();
+    });
+
+    it('Windows installed (NSIS): the install folder', () => {
+      runAs('win32', '/install/CUBRID Admin/CUBRID Admin.exe');
+      expect(getLegacyDataRoot()).toBe('/install/CUBRID Admin');
+    });
+
+    it('Windows portable exe: none (it runs from a temp folder)', () => {
+      runAs('win32', '/temp/2abc/CUBRID Admin.exe', { PORTABLE_EXECUTABLE_DIR: parent });
+      expect(getLegacyDataRoot()).toBeNull();
+    });
+
+    it('AppImage: none (it runs from its mount folder)', () => {
+      runAs('linux', '/tmp/.mount_CUBRIDxyz/cubrid-admin-desktop', { APPIMAGE: path.join(parent, 'CUBRID-Admin.AppImage') });
+      expect(getLegacyDataRoot()).toBeNull();
+    });
+
+    it('Linux rpm or deb: the install folder', () => {
+      runAs('linux', '/opt/cubrid-admin-desktop/cubrid-admin-desktop');
+      expect(getLegacyDataRoot()).toBe('/opt/cubrid-admin-desktop');
+    });
+
+    it('none with CWM_PORTABLE_APP_ROOT or in dev mode', () => {
+      runAs('win32', '/install/CUBRID Admin/CUBRID Admin.exe', { CWM_PORTABLE_APP_ROOT: '/chosen' });
+      expect(getLegacyDataRoot()).toBeNull();
+      mockApp.isPackaged = false;
+      runAs('darwin', '/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+      expect(getLegacyDataRoot()).toBeNull();
+    });
+  });
+
+  describe('Windows install folder', () => {
+    it('installed (NSIS): the folder and everything under it', () => {
+      runAs('win32', '/install/CUBRID Admin/CUBRID Admin.exe');
+      expect(isPathInsideInstallFolder('/install/CUBRID Admin')).toBe(true);
+      expect(isPathInsideInstallFolder('/install/CUBRID Admin/cwm-workspace')).toBe(true);
+      expect(isPathInsideInstallFolder('/install/CUBRID Admin2/cwm-workspace')).toBe(false);
+      expect(isPathInsideInstallFolder('/data/cwm-workspace')).toBe(false);
+    });
+
+    it('compares Windows paths without case, as Windows does', () => {
+      runAs('win32', 'C:\\Users\\Me\\AppData\\Local\\Programs\\CUBRID Admin\\CUBRID Admin.exe');
+      expect(isPathInsideInstallFolder('c:\\users\\me\\appdata\\local\\programs\\cubrid admin\\cwm-workspace')).toBe(true);
+      expect(isPathInsideInstallFolder('C:\\USERS\\ME\\APPDATA\\LOCAL\\PROGRAMS\\CUBRID ADMIN')).toBe(true);
+      expect(isPathInsideInstallFolder('C:\\Users\\Me\\AppData\\Local\\Programs\\CUBRID Admin2\\ws')).toBe(false);
+      expect(isPathInsideInstallFolder('D:\\Users\\Me\\AppData\\Local\\Programs\\CUBRID Admin\\ws')).toBe(false);
+    });
+
+    it('none for a Windows portable exe, macOS, Linux and dev mode', () => {
+      runAs('win32', '/temp/2abc/CUBRID Admin.exe', { PORTABLE_EXECUTABLE_DIR: '/tools' });
+      expect(isPathInsideInstallFolder('/temp/2abc/cwm-workspace')).toBe(false);
+      runAs('linux', '/opt/cubrid-admin-desktop/cubrid-admin-desktop');
+      expect(isPathInsideInstallFolder('/opt/cubrid-admin-desktop/cwm-workspace')).toBe(false);
+      runAs('darwin', '/Applications/CUBRID Admin.app/Contents/MacOS/CUBRID Admin');
+      expect(isPathInsideInstallFolder('/Applications/cwm-workspace')).toBe(false);
+      mockApp.isPackaged = false;
+      runAs('win32', '/install/CUBRID Admin/CUBRID Admin.exe');
+      expect(isPathInsideInstallFolder('/install/CUBRID Admin/cwm-workspace')).toBe(false);
     });
   });
 });

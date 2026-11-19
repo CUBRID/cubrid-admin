@@ -1,5 +1,6 @@
 import { setAppProtocolApiSocket } from '../protocol/register-app-protocol';
 import { loadOrCreateDesktopSecrets } from '../config/secrets';
+import { rememberLastWorkspace } from '../config/last-workspace';
 import { acquireWorkspaceLock, releaseWorkspaceLock } from '../workspace/instance-lock';
 import { setWorkspacePathsInUse } from '../workspace/paths';
 import { WorkspaceError } from '../workspace/workspace-check';
@@ -90,6 +91,8 @@ export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiPr
   apiProcess = handle;
   apiPaths = paths;
   setWorkspacePathsInUse(paths);
+  // For a copy of the app started elsewhere later (see last-workspace.ts).
+  rememberLastWorkspace(paths.workspaceRoot);
   return handle;
 }
 
