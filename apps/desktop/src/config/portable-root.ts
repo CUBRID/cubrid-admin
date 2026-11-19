@@ -114,6 +114,22 @@ export function getDesktopDataRoot(): string {
   return getPortableFolder() ?? app.getPath('userData');
 }
 
+/**
+ * Where 0.1.0 kept `desktop-settings.json` and the default `cwm-workspace/`:
+ * the folder that contains the .app (macOS) or the executable. `null` when that
+ * is where the settings are now (a portable build), with CWM_PORTABLE_APP_ROOT,
+ * or in dev mode.
+ */
+export function getLegacyDataRoot(): string | null {
+  if (process.env.CWM_PORTABLE_APP_ROOT?.trim() || !isPackagedRuntime()) {
+    return null;
+  }
+
+  const bundlePath = getAppBundlePath();
+  const legacyRoot = bundlePath ? path.dirname(bundlePath) : getExecutableDir();
+  return path.resolve(legacyRoot) === path.resolve(getDesktopDataRoot()) ? null : legacyRoot;
+}
+
 /** macOS `.app` bundle path when running a packaged build; otherwise `null`. */
 export function getAppBundlePath(): string | null {
   if (!isPackagedRuntime() || process.platform !== 'darwin') {

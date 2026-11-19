@@ -3,6 +3,7 @@ import { isDesktopApiQuitting, startApiForWorkspace, stopDesktopApiOnQuit } from
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
 import { getDesktopDataRoot } from './config/portable-root';
+import { adoptLegacyDesktopSettings } from './config/legacy-settings';
 import { registerDesktopIpcHandlers, setWorkspaceStartupError } from './ipc/handlers';
 import { getMenuLanguage, installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
@@ -89,6 +90,11 @@ async function bootstrap(): Promise<void> {
   registerDesktopIpcHandlers();
   installDownloadDialogDefaults(session.defaultSession, () => app.getPath('documents'));
 
+  // Before anything reads the settings: a 0.1.0 app updated in place keeps its workspace.
+  const adopted = adoptLegacyDesktopSettings();
+  if (adopted) {
+    console.log(`[desktop] settings from ${adopted.from} copied to ${adopted.to}; workspace ${adopted.workspaceRoot}`);
+  }
   console.log('[desktop] settings folder:', getDesktopDataRoot());
   console.log('[desktop] settings file:', getDesktopSettingsPath());
   console.log('[desktop] default workspace:', getDefaultWorkspaceRoot());
