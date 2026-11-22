@@ -384,7 +384,7 @@ const readStorageLease = () => {
 };
 
 async function withStorageLock(run) {
-  let lease = null;
+  let lease;
   try {
     for (;;) {
       const held = readStorageLease();
@@ -844,9 +844,9 @@ apiClient.interceptors.response.use(
         originalRequest._retry = true;
 
         // The check when the app opens (checkSession) ends nothing itself: a
-        // refresh the server refused (401) is its answer "signed out", one
-        // that only failed (no answer, 503 busy) is no answer, and the session
-        // kept from the last visit stays.
+        // refresh the server refused (401) is its answer "signed out" (it
+        // signs out then), one that only failed (no answer, 503 busy) is no
+        // answer, and the session kept from the last visit stays.
         const sessionCheck = Boolean(originalRequest.__sessionCheck);
         const refusedBy = (refreshErr) => (
           sessionCheck && refreshErr?.response?.status !== 401 ? refreshErr ?? error : error
@@ -870,12 +870,14 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } catch (refreshErr) {
           notifyAccessTokenRefreshFailed(refreshErr);
-          if (sessionCheck) return Promise.reject(refusedBy(refreshErr));
           // "Try again shortly" (429, or 503 while another refresh of the same
           // token runs) says nothing about the session: it stays, and the
-          // next request refreshes again.
-          if (!isRetryLaterStatus(refreshErr?.response?.status)) await handleSystemSessionExpired();
-          return Promise.reject(error);
+          // next request refreshes again. The check when the app opens ends
+          // nothing itself (above).
+          if (!sessionCheck && !isRetryLaterStatus(refreshErr?.response?.status)) {
+            await handleSystemSessionExpired();
+          }
+          return Promise.reject(refusedBy(refreshErr));
         } finally {
           isRefreshingAccessToken = false;
         }
