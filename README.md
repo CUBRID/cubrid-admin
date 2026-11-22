@@ -33,7 +33,7 @@ npm install
 ### 방법 1 — 프론트 + API 각각 실행
 
 ```bash
-npm run dev:web-manager   # React (Vite HMR, http://localhost:4200)
+npm run dev:web-manager   # React (Vite HMR, http://localhost:5173)
 npm run dev:api-server    # NestJS (watch mode, https://localhost:8080)
 ```
 
@@ -56,7 +56,8 @@ NestJS API(:8080)와 HTTPS 프록시(:443)를 함께 실행합니다.
 
 ### 로그인 쿠키 관련 주의
 
-- 로그인 토큰은 Secure 쿠키라서 `localhost`가 아닌 주소(LAN IP 등)에서 http로 Vite에 접속하면 로그인되지 않습니다. 이때는 방법 2의 HTTPS 프록시로 접속하세요.
+- http로 연 화면(LAN IP로 Vite에 접속, http 리버스 프록시 등)에서도 로그인됩니다. 이때 로그인 쿠키에는 Secure가 붙지 않습니다.
+- 로그인 쿠키는 호스트 이름 단위입니다. 같은 이름에서 포트만 다르면 로그인이 이어지고, `localhost`와 LAN IP처럼 이름이 다르면 따로 로그인해야 합니다.
 - 웹 화면과 API를 서로 다른 호스트(출처)에 두는 구성은 지원하지 않습니다. 같은 서버가 웹 화면을 내려 주거나, 프록시로 같은 출처에 두세요.
 
 ---
