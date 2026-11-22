@@ -298,3 +298,57 @@ it('keeps the account in the shared session across a refresh, and a login stores
   store.dispatch(loginSuccess({ expiresIn: 3600, user: { id: 'bob' } }));
   expect(JSON.parse(localStorage.getItem(KEY))).toEqual({ expiresAt: Date.now() + 3600 * 1000, expiresIn: 3600, user: 'bob' });
 });
+
+// Web Locks exist only in a secure context; an http page (a reverse proxy, a
+// LAN address: the cookies come without Secure) has none, and tabs take turns
+// through a lease in localStorage.
+describe('without Web Locks (an http page)', () => {
+  const LOCK = 'cwm-session-refresh-lock';
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    // The server takes a moment to answer, so the refreshes overlap.
+    const answer = server.post;
+    server.post = vi.fn(async (...args) => {
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      return answer(...args);
+    });
+  });
+
+  it('two tabs whose timers fire at the same moment call the server once and both stay signed in', async () => {
+    signedIn(10 * 60 * 1000);
+    await openTab();
+    await openTab();
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
+    expect(server.calls).toEqual(['r1']);
+    expect(server.revoked).toBe(false);
+    expect(server.jar.refresh).toBe('r2');
+    expect(JSON.parse(localStorage.getItem(KEY)).expiresAt).toBeGreaterThan(Date.now() + HOUR);
+    expect(localStorage.getItem(LOCK)).toBeNull();
+  });
+
+  it('three tabs waking up with the same expired session call the server once and do not revoke it', async () => {
+    signedIn(-HOUR);
+    const tabs = [await openTab(), await openTab(), await openTab()];
+
+    const all = Promise.all(tabs.map((tab, i) => tab.default.get(`/${i}`)));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await all).toEqual([{ ok: true }, { ok: true }, { ok: true }]);
+    expect(server.calls).toEqual(['r1']);
+    expect(server.revoked).toBe(false);
+    expect(localStorage.getItem(LOCK)).toBeNull();
+  });
+
+  it('does not wait for good on a lease left by a tab that was closed', async () => {
+    signedIn(-HOUR);
+    localStorage.setItem(LOCK, JSON.stringify({ owner: 'closed-tab', until: Date.now() + 20_000 }));
+    const tab = await openTab();
+
+    const answer = tab.default.get('/a');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(server.calls).toEqual([]);
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(await answer).toEqual({ ok: true });
+    expect(server.calls).toEqual(['r1']);
+  });
+});

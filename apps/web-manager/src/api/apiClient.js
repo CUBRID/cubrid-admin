@@ -330,13 +330,63 @@ export const setAppSession = (session) => {
   scheduleSessionRefresh(session);
 };
 
-// One tab at a time across the browser. Web Locks exist in every secure
-// context (https, or localhost), which the Secure cookies need anyway; a
-// browser without them refreshes in this tab alone.
+// Web Locks exist only in a secure context (https, or localhost). A server
+// opened over plain http on another address has none, so there tabs take
+// turns through a lease in localStorage instead: a tab writes its own lease,
+// waits a moment and reads it back; only the tab whose lease is still there
+// refreshes, and the others wait for it to finish and then take the session
+// it stored. A lease left by a closed tab ends on its own.
+const STORAGE_LOCK_KEY = 'cwm-session-refresh-lock';
+const STORAGE_LOCK_LEASE_MS = ACCESS_TOKEN_REFRESH_TIMEOUT_MS + 5000;
+export const STORAGE_LOCK_SETTLE_MS = 100;
+const STORAGE_LOCK_POLL_MS = 100;
+const tabLockId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const readStorageLease = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY));
+  } catch {
+    return null;
+  }
+};
+
+async function withStorageLock(run) {
+  let lease = null;
+  try {
+    for (;;) {
+      const held = readStorageLease();
+      if (!held || !(held.until > Date.now())) {
+        lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
+        localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
+        await sleep(STORAGE_LOCK_SETTLE_MS);
+        // Two tabs that wrote at once: the later write is the one both read back.
+        if (readStorageLease()?.owner === tabLockId) break;
+        lease = null;
+      } else {
+        await sleep(STORAGE_LOCK_POLL_MS);
+      }
+    }
+  } catch {
+    // Storage unusable: refresh as this tab alone.
+    lease = null;
+  }
+  try {
+    return await run();
+  } finally {
+    try {
+      if (lease && readStorageLease()?.owner === tabLockId) localStorage.removeItem(STORAGE_LOCK_KEY);
+    } catch { /* storage unusable */ }
+  }
+}
+
+// One tab at a time across the browser. Web Locks exist only in a secure
+// context (https, or localhost); an http page (behind a reverse proxy or on
+// a LAN address, where the cookies come without Secure) takes turns through
+// the localStorage lease above.
 const withSessionRefreshLock = (run) => (
   typeof navigator !== 'undefined' && navigator.locks?.request
     ? navigator.locks.request('cwm-session-refresh', run)
-    : run()
+    : withStorageLock(run)
 );
 
 const accountOf = (session) => (typeof session?.user === 'string' && session.user ? session.user : null);
