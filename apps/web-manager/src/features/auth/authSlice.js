@@ -44,11 +44,33 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+/**
+ * Asks the server, with the cookies, whether this browser is signed in: once
+ * when the app opens in a browser (the desktop app has no app login). The
+ * cookies are shared by every address of the host, the session kept in
+ * localStorage is not: a second address of the same host (proxy, other port)
+ * has none, and a tab left on the login page has an old view of it. A 401
+ * (after the refresh the client tries) means signed out; no answer at all
+ * (server down) keeps what the stored session says.
+ */
+export const checkSession = createAsyncThunk(
+  'auth/checkSession',
+  async (_, { rejectWithValue }) => {
+    try {
+      return await authApi.getUserInfo();
+    } catch (err) {
+      return rejectWithValue({ status: err?.response?.status ?? null });
+    }
+  }
+);
+
 // The tokens are httpOnly cookies the page cannot see; a session kept from
-// the last visit counts as signed in until the server says otherwise.
+// the last visit counts as signed in until checkSession has the server's answer.
 const initialState = {
   // The desktop app has no app login (isDesktopApp).
   isAuthenticated: isDesktopApp() || hasStoredSession(),
+  // In a browser the screens wait for checkSession; the desktop app needs no check.
+  sessionChecked: isDesktopApp(),
   user: null,
   loading: false,
   error: null,
@@ -91,6 +113,8 @@ const authSlice = createSlice({
       state.error = action.payload;
     },
     logout: (state) => {
+      // The root reducer resets every slice on logout: the answer is known (signed out).
+      state.sessionChecked = true;
       state.isAuthenticated = false;
       state.user = null;
       state.error = null;
@@ -102,6 +126,19 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(checkSession.fulfilled, (state, action) => {
+        state.sessionChecked = true;
+        state.isAuthenticated = true;
+        state.user = action.payload ?? state.user;
+      })
+      .addCase(checkSession.rejected, (state, action) => {
+        state.sessionChecked = true;
+        const status = action.payload?.status;
+        if (status === 401 || status === 403) {
+          state.isAuthenticated = false;
+          state.user = null;
+        }
+      })
       .addCase(fetchUser.pending, (state) => {
         state.loading = true;
       })
