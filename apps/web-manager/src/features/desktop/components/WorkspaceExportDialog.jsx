@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useCM } from '../../../constants/useCM';
 import { desktopErrorText } from '../desktopErrorText';
 import WorkspacePasswordDialog from './WorkspacePasswordDialog';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // As the main process requires (workspace-archive MIN_EXPORT_PASSWORD_LENGTH).
 export const MIN_EXPORT_PASSWORD_LENGTH = 8;
@@ -22,7 +23,7 @@ export default function WorkspaceExportDialog({ isOpen, onClose, onExported }) {
   };
 
   // A dialog opened again starts without the last one's error.
-  useEffect(() => {
+  useResetEffect(() => {
     if (isOpen) setError('');
   }, [isOpen]);
 
