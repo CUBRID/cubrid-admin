@@ -360,7 +360,15 @@ async function withStorageLock(run) {
         localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
         await sleep(STORAGE_LOCK_SETTLE_MS);
         // Two tabs that wrote at once: the later write is the one both read back.
-        if (readStorageLease()?.owner === tabLockId) break;
+        // A hidden tab's timers can run late, past its own lease, which another
+        // tab may then already take: an expired one is taken again from the start.
+        const back = readStorageLease();
+        if (back?.owner === tabLockId && back.until > Date.now()) {
+          // The whole lease for the refresh, however long the wait above took.
+          lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
+          localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
+          break;
+        }
         lease = null;
       } else {
         await sleep(STORAGE_LOCK_POLL_MS);
@@ -403,6 +411,28 @@ const otherAccount = (session) => {
   const theirs = accountOf(session);
   return Boolean(mine && theirs && mine !== theirs);
 };
+
+const SERVER_SESSION_SAME_MS = 5000;
+
+/**
+ * Takes the session the server says the cookies hold (GET /auth/session:
+ * { expiresIn, expiresLeft, user }) when this tab keeps none (another port of
+ * the same host name shares the cookies, not localStorage), another account's,
+ * or an older expiry; with it come the refresh before expiry and following
+ * the other tabs' logout and account changes.
+ */
+export function takeServerSession(answer) {
+  if (!sessionRefreshEnabled()) return;
+  const expiresIn = Number(answer?.expiresIn);
+  const expiresLeft = Number(answer?.expiresLeft);
+  if (!(expiresIn > 0) || !(expiresLeft > 0)) return;
+  const user = typeof answer?.user === 'string' && answer.user ? answer.user : null;
+  const session = { expiresAt: Date.now() + expiresLeft * 1000, expiresIn, ...(user ? { user } : {}) };
+  // The same session (the expiry differs only by the request's round trip).
+  if (knownSession && accountOf(knownSession) === user
+    && Math.abs(knownSession.expiresAt - session.expiresAt) < SERVER_SESSION_SAME_MS) return;
+  setAppSession(session);
+}
 
 // Another tab's refresh (or login) got new cookies: this tab already sends
 // them; it only takes the new expiry, unless they are another account's.
@@ -775,14 +805,23 @@ apiClient.interceptors.response.use(
       if (!isAuthRefreshRequest && !isAuthLoginRequest && !isAuthLogoutRequest) {
         originalRequest._retry = true;
 
+        // The check when the app opens (checkSession) ends nothing itself: a
+        // refresh the server refused (401) is its answer "signed out", one
+        // that only failed (no answer, 503 busy) is no answer, and the session
+        // kept from the last visit stays.
+        const sessionCheck = Boolean(originalRequest.__sessionCheck);
+        const refusedBy = (refreshErr) => (
+          sessionCheck && refreshErr?.response?.status !== 401 ? refreshErr ?? error : error
+        );
+
         if (isRefreshingAccessToken) {
           try {
             await new Promise((resolve, reject) => {
               accessTokenRefreshWaiters.push({ resolve, reject });
             });
             return apiClient(originalRequest);
-          } catch {
-            return Promise.reject(error);
+          } catch (refreshErr) {
+            return Promise.reject(refusedBy(refreshErr));
           }
         }
 
@@ -793,6 +832,7 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } catch (refreshErr) {
           notifyAccessTokenRefreshFailed(refreshErr);
+          if (sessionCheck) return Promise.reject(refusedBy(refreshErr));
           await handleSystemSessionExpired();
           return Promise.reject(error);
         } finally {
