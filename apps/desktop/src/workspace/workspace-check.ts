@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
-import { isPathInsideAppBundle } from '../config/portable-root';
+import { isPathInsideAppBundle, isPathInsideInstallFolder } from '../config/portable-root';
+import { isServerFolder } from '../config/server-folder';
 import { isWorkspaceLockedByOther } from './instance-lock';
 import { assertWorkspaceWritable, resolveWorkspacePaths, type WorkspacePaths } from './workspace-paths';
 
@@ -22,9 +23,9 @@ const reasonOf = (error: unknown) => (error instanceof Error ? error.message : S
 
 /**
  * Throws a WorkspaceError unless `root` can hold a workspace: not inside the
- * app bundle, readable and writable, its data/ and ssl/ folders can be made,
- * the server's socket fits the OS limit and can be created there, and no
- * other running app uses it.
+ * app bundle or the Windows install folder, not a server folder, readable and
+ * writable, its data/ and ssl/ folders can be made, the server's socket fits
+ * the OS limit and can be created there, and no other running app uses it.
  */
 export async function checkWorkspaceRoot(root: string): Promise<WorkspacePaths> {
   if (!root?.trim()) {
@@ -33,6 +34,14 @@ export async function checkWorkspaceRoot(root: string): Promise<WorkspacePaths> 
   const paths = resolveWorkspacePaths(root.trim());
   if (isPathInsideAppBundle(paths.workspaceRoot)) {
     throw new WorkspaceError('WORKSPACE_IN_APP_BUNDLE');
+  }
+  // The installer's update and uninstall remove its folder with everything in it.
+  if (isPathInsideInstallFolder(paths.workspaceRoot)) {
+    throw new WorkspaceError('WORKSPACE_IN_INSTALL_FOLDER');
+  }
+  // Its conf/cwm.conf, ssl/ and logs/ would be shared with the server.
+  if (isServerFolder(paths.workspaceRoot)) {
+    throw new WorkspaceError('WORKSPACE_IS_SERVER_FOLDER');
   }
   try {
     assertWorkspaceWritable(paths.workspaceRoot);

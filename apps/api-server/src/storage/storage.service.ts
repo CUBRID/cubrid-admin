@@ -148,7 +148,8 @@ export class StorageService {
      * @throws StorageError if the file cannot be written or the lock cannot be acquired/released.
      */
     async write(filename: string, data: string): Promise<void> {
-        return this.lockService.withLock(filename, async () => {
+        return this.lockService.withLock(filename, async (lock) => {
+            lock.assertHeld();
             return this.writeUnsafe(filename, data);
         });
     }
@@ -180,7 +181,8 @@ export class StorageService {
      * @throws StorageError if the file already exists or cannot be created, or the lock fails.
      */
     async create(filename: string): Promise<string> {
-        return this.lockService.withLock(filename, async () => {
+        return this.lockService.withLock(filename, async (lock) => {
+            lock.assertHeld();
             await this.createUnsafe(filename);
             return filename;
         });
@@ -215,7 +217,8 @@ export class StorageService {
      * @throws StorageError if the file already exists or cannot be created/written, or the lock fails.
      */
     async createAndWrite(filename: string, data: string): Promise<string> {
-        return this.lockService.withLock(filename, async () => {
+        return this.lockService.withLock(filename, async (lock) => {
+            lock.assertHeld();
             await this.createAndWriteUnsafe(filename, data);
             return filename;
         });
@@ -247,7 +250,8 @@ export class StorageService {
      * @throws StorageError if the file cannot be deleted or the lock fails.
      */
     async delete(filename: string): Promise<void> {
-        return this.lockService.withLock(filename, async () => {
+        return this.lockService.withLock(filename, async (lock) => {
+            lock.assertHeld();
             return this.deleteUnsafe(filename);
         });
     }

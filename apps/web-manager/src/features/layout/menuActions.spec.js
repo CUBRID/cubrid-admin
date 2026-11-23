@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./layoutSlice', () => ({
   openTab: (payload) => ({ type: 'layout/openTab', payload }),
   showStatusModal: (payload) => ({ type: 'layout/showStatusModal', payload }),
-  askWorkspaceSwitch: () => ({ type: 'layout/askWorkspaceSwitch' }),
+  askWorkspaceSwitch: (payload) => ({ type: 'layout/askWorkspaceSwitch', payload }),
+  openWorkspaceExport: () => ({ type: 'layout/openWorkspaceExport' }),
 }));
 vi.mock('./appBarSlice', () => ({
   setAboutCubrid: (payload) => ({ type: 'appBar/setAboutCubrid', payload }),
@@ -150,3 +151,34 @@ describe('switch workspace guard', () => {
   });
 });
 
+describe('export and import workspace', () => {
+  const runWith = (id, extra) => {
+    const dispatch = vi.fn();
+    const navigate = vi.fn();
+    runMenuAction(id, { dispatch, CM, selectedHostUid: 'h1', navigate, dirtyTabs: [], anyModalOpen: false, ...extra });
+    return { dispatch, navigate };
+  };
+
+  it('exports over the dashboard, unsaved changes and all', () => {
+    const { navigate, dispatch } = runWith(MENU_ACTIONS.exportWorkspace, { dirtyTabs: ['edit_config:h1:cubridconf'] });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'layout/openWorkspaceExport' });
+  });
+
+  it('imports through the workspace page, asking first while a tab has unsaved changes', () => {
+    expect(runWith(MENU_ACTIONS.importWorkspace).navigate).toHaveBeenCalledWith('/desktop/workspace?do=import');
+    const { navigate, dispatch } = runWith(MENU_ACTIONS.importWorkspace, { dirtyTabs: ['edit_config:h1:cubridconf'] });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'layout/askWorkspaceSwitch', payload: 'import' });
+  });
+
+  it('does neither while a modal is open, and both are on only with the dashboard', () => {
+    for (const id of [MENU_ACTIONS.exportWorkspace, MENU_ACTIONS.importWorkspace]) {
+      const { navigate, dispatch } = runWith(id, { anyModalOpen: true });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(getMenuActionEnabled({ selectedHostUid: null })[id]).toBe(true);
+      expect(NO_DASHBOARD_MENU_ACTIONS[id]).toBe(false);
+    }
+  });
+});

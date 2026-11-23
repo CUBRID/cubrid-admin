@@ -8,7 +8,7 @@ import { AuthError } from '@error/auth/auth-error';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { authCookieNames, resetAuthCookieNamesForTest } from '@token/auth-cookies';
+import { authCookieNames, cookieSecureFor, resetAuthCookieNamesForTest } from '@token/auth-cookies';
 
 // The cookie names come from an id kept in the storage; a temporary one here.
 const mockStorage = fs.mkdtempSync(path.join(os.tmpdir(), 'cwm-auth-cookies-'));
@@ -50,7 +50,7 @@ describe('AuthController', () => {
 
   it('sets both tokens as httpOnly, Secure, SameSite=Strict cookies and keeps them out of the body', async () => {
     const res = fakeResponse();
-    const body = await controller.login({ id: 'u', password: 'p' } as never, res as never);
+    const body = await controller.login({ id: 'u', password: 'p' } as never, res as never, { headers: {} } as never);
 
     expect(body).toEqual({ expiresIn: 86400 });
     expect(res.cookie).toHaveBeenCalledWith(
@@ -126,5 +126,55 @@ describe('AuthController', () => {
     const res = fakeResponse();
     await expect(controller.logout({ cookies: {} } as never, res as never)).rejects.toThrow('disk');
     expect(res.clearCookie).toHaveBeenCalledTimes(2);
+  });
+
+  it('says how long the session of the access cookie lasts, how much is left and whose it is', () => {
+    const now = 1_790_000_000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now * 1000);
+    const req = { user: { sub: 'alice', iat: now - 3600, exp: now - 3600 + 86400 } };
+    expect(controller.session(req as never)).toEqual({ expiresIn: 86400, expiresLeft: 86400 - 3600, user: 'alice' });
+    clock.mockRestore();
+  });
+
+  describe('behind an http reverse proxy', () => {
+    const fromPage = (headers: Record<string, string>, cookies: Record<string, string> = {}) => ({ headers, cookies });
+    const secureOf = (mock: jest.Mock) => mock.mock.calls.map((call) => call[2]?.secure ?? call[1]?.secure);
+
+    it('drops Secure only when the browser sends an http page origin', () => {
+      expect(cookieSecureFor(fromPage({ origin: 'http://cwm.example' }) as never)).toBe(false);
+      expect(cookieSecureFor(fromPage({ referer: 'http://cwm.example/login' }) as never)).toBe(false);
+      expect(cookieSecureFor(fromPage({ origin: 'https://cwm.example' }) as never)).toBe(true);
+      // Origin wins over Referer.
+      expect(cookieSecureFor(fromPage({ origin: 'https://cwm.example', referer: 'http://cwm.example/' }) as never)).toBe(true);
+      // No header, 'null' (sandboxed or opaque) or something unreadable keeps Secure.
+      expect(cookieSecureFor(fromPage({}) as never)).toBe(true);
+      expect(cookieSecureFor(fromPage({ origin: 'null' }) as never)).toBe(true);
+      expect(cookieSecureFor(fromPage({ origin: 'not a url' }) as never)).toBe(true);
+      // A proxy header from the client is not believed.
+      expect(cookieSecureFor(fromPage({ 'x-forwarded-proto': 'http' }) as never)).toBe(true);
+    });
+
+    it('logs in, refreshes and logs out with the cookies not Secure for an http page, the rest unchanged', async () => {
+      const http = { origin: 'http://cwm.example' };
+      const login = fakeResponse();
+      await controller.login({ id: 'u', password: 'p' } as never, login as never, fromPage(http) as never);
+      expect(secureOf(login.cookie)).toEqual([false, false]);
+      expect(login.cookie).toHaveBeenCalledWith(ACCESS_COOKIE, 'access-jwt', expect.objectContaining({ httpOnly: true, sameSite: 'strict', path: '/api' }));
+
+      const refresh = fakeResponse();
+      await controller.refresh(fromPage(http, { [REFRESH_COOKIE]: 'old' }) as never, refresh as never);
+      expect(secureOf(refresh.cookie)).toEqual([false, false]);
+
+      // Cleared with the same flags they were set with, or the browser would keep them.
+      const logout = fakeResponse();
+      await controller.logout(fromPage(http, { [ACCESS_COOKIE]: 'a', [REFRESH_COOKIE]: 'r' }) as never, logout as never);
+      expect(secureOf(logout.clearCookie)).toEqual([false, false]);
+    });
+
+    it('keeps Secure for an https page', async () => {
+      const res = fakeResponse();
+      await controller.login({ id: 'u', password: 'p' } as never, res as never, fromPage({ origin: 'https://cwm.example' }) as never);
+      expect(secureOf(res.cookie)).toEqual([true, true]);
+    });
   });
 });

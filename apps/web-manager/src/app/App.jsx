@@ -56,6 +56,7 @@ import DeleteHostModal from '../features/host/components/DeleteHostModal';
 import EditHostModal from '../features/host/components/EditHostModal';
 import ServerVersionModal from '../features/host/components/ServerVersionModal';
 import LoginPage from '../features/auth/components/LoginPage';
+import { LoginRoute, ProtectedRoute, RootRedirect, SessionGate } from '../features/auth/components/AuthRoutes';
 import DesktopWorkspaceSettingsPage from '../features/desktop/components/DesktopWorkspaceSettingsPage';
 import { useDesktopMenuLanguage } from '../features/desktop/hooks/useDesktopMenuLanguage';
 import { isDesktopApp } from '../features/desktop/isDesktopApp';
@@ -64,6 +65,7 @@ import { useLoggedOutDbCleanup } from '../features/layout/useLoggedOutDbCleanup'
 import RegisterPage from '../features/auth/components/RegisterPage';
 import StatusModal from '../components/common/StatusModal';
 import WorkspaceSwitchConfirm from '../features/desktop/components/WorkspaceSwitchConfirm';
+import MenuWorkspaceExport from '../features/desktop/components/MenuWorkspaceExport';
 import AboutModal from '../features/layout/components/AboutModal';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import UpdateCheckModal from '../features/layout/components/UpdateCheckModal';
@@ -522,6 +524,7 @@ function DashboardLayout() {
         <AddVolumeModal />
         <StatusModal />
         <WorkspaceSwitchConfirm />
+        <MenuWorkspaceExport />
 
         <LoadingOverlay 
           isVisible={isServiceOperating || dbActionLoading || brokerActionLoading} 
@@ -535,16 +538,6 @@ function DashboardLayout() {
       </div>
     </MonitoringProvider>
   );
-}
-
-function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useSelector((state) => state.auth, shallowEqual);
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
-}
-
-function RootRedirect() {
-  const { isAuthenticated } = useSelector((state) => state.auth, shallowEqual);
-  return <Navigate to={isAuthenticated ? '/home' : '/login'} replace />;
 }
 
 function App() {
@@ -598,10 +591,11 @@ function App() {
 
   return (
     <>
+      <SessionGate>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         {/* The desktop app has no app login: its server acts as the desktop user. */}
-        <Route path="/login" element={isDesktopApp() ? <Navigate to="/home" replace /> : <LoginPage />} />
+        <Route path="/login" element={isDesktopApp() ? <Navigate to="/home" replace /> : <LoginRoute><LoginPage /></LoginRoute>} />
         <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
         <Route path="/register" element={isDesktopApp() ? <Navigate to="/home" replace /> : <RegisterPage />} />
         <Route
@@ -613,6 +607,7 @@ function App() {
           }
         />
       </Routes>
+      </SessionGate>
       {/* Outside the routes so the desktop menu's About and update check also work on /login. */}
       <AboutModal />
       <UpdateCheckModal />

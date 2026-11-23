@@ -18,6 +18,11 @@ export const authApi = {
     return apiClient.get('/user');
   },
 
+  // The session the cookies hold: { expiresIn, expiresLeft, user }.
+  getSession: (config) => {
+    return apiClient.get('/auth/session', config);
+  },
+
   updatePassword: (oldPassword, newPassword) => {
     return apiClient.post('/user/credential', { oldPassword, newPassword });
   },

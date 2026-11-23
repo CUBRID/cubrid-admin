@@ -8,6 +8,11 @@ const setZoomLevel = jest.fn();
 
 jest.mock('electron', () => ({
   app: { getPath: jest.fn(() => '/tmp'), isPackaged: false },
+  BrowserWindow: class BrowserWindow {
+    static getFocusedWindow(): null {
+      return null;
+    }
+  },
   Menu: { buildFromTemplate: jest.fn((template) => template), setApplicationMenu: jest.fn() },
   shell: { openExternal: jest.fn(), openPath: jest.fn(), showItemInFolder: jest.fn() },
 }));
@@ -50,6 +55,8 @@ it('mirrors the header menu in English and Korean', () => {
     'Export Host',
     'Import Host',
     'Switch Workspace…',
+    'Export Workspace…',
+    'Import Workspace…',
     'Quit',
   ]);
   expect(labels(top(en, 'Host Service Management'))).toEqual([
@@ -76,17 +83,21 @@ it('mirrors the header menu in English and Korean', () => {
     '호스트 내보내기',
     '호스트 가져오기',
     '워크스페이스 전환…',
+    '워크스페이스 내보내기…',
+    '워크스페이스 가져오기…',
     '종료',
   ]);
   expect(labels(top(ko, '도움말'))).toContain('설정 파일 위치 열기');
 });
 
-it('ends File with Switch Workspace and Quit on every platform, macOS keeping Quit in its app menu too', () => {
+it('ends File with the workspace items and Quit on every platform, macOS keeping Quit in its app menu too', () => {
   for (const isMac of [false, true]) {
     const file = top(buildApplicationMenuTemplate('en', isMac, allEnabled), 'File');
-    expect(file.slice(-4).map((item) => item.type ?? item.label)).toEqual([
+    expect(file.slice(-6).map((item) => item.type ?? item.label)).toEqual([
       'separator',
       'Switch Workspace…',
+      'Export Workspace…',
+      'Import Workspace…',
       'separator',
       'Quit',
     ]);
@@ -120,26 +131,30 @@ it('uses the same action ids as the renderer (MENU_ACTIONS in menuActions.js)', 
   expect([...rendererIds].sort()).toEqual([...MENU_ACTION_IDS].sort());
 });
 
-it('keeps the Edit roles, shows only the OS editing items, and binds no accelerator of its own', () => {
+it('keeps the Edit roles but Redo, shows only the OS editing items, and binds no accelerator of its own but Redo\'s', () => {
   const template = buildApplicationMenuTemplate('en', true, allEnabled);
   const edit = top(template, 'Edit');
-  expect(edit.map((item) => item.role).filter(Boolean)).toEqual([
-    'undo',
-    'redo',
-    'cut',
-    'copy',
-    'paste',
-    'selectAll',
-  ]);
+  expect(edit.map((item) => item.role).filter(Boolean)).toEqual(['undo', 'cut', 'copy', 'paste', 'selectAll']);
   // Select All stays for its shortcut (Cmd+A in a text field on macOS) but is not shown.
   expect(labels(edit.filter((item) => item.visible !== false))).toEqual(['Undo', 'Redo', 'Cut', 'Copy', 'Paste']);
   const items = flatten(template);
   // Shown accelerators only (registerAccelerator: false): the keys are handled
   // before the menu. None takes CmdOrCtrl+W.
-  const shown = items.filter((item) => 'accelerator' in item);
+  const shown = items.filter((item) => 'accelerator' in item && item.label !== 'Redo');
   expect(shown.map((item) => item.accelerator)).toEqual(['CmdOrCtrl+R', 'CmdOrCtrl+0', 'CmdOrCtrl+=', 'CmdOrCtrl+-']);
   expect(shown.every((item) => item.registerAccelerator === false)).toBe(true);
   expect(items.some((item) => item.role === 'close')).toBe(false);
+});
+
+it('Redo: the key the redo role had (registered, so text fields keep it), and a click sends the redo to the page', () => {
+  const template = buildApplicationMenuTemplate('en', true, allEnabled);
+  const redo = top(template, 'Edit').find((item) => item.label === 'Redo') as Item;
+  expect(redo.role).toBeUndefined();
+  expect(redo.accelerator).toBe(process.platform === 'win32' ? 'Control+Y' : 'Shift+CommandOrControl+Z');
+  expect(redo.registerAccelerator).toBeUndefined();
+  send.mockClear();
+  (redo.click as () => void)();
+  expect(send).toHaveBeenCalledWith('desktop:edit-redo');
 });
 
 it('keeps only full screen and zoom in View, and no Window menu', () => {

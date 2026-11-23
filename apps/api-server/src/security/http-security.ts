@@ -11,6 +11,11 @@ import type { RequestHandler } from 'express';
  *   <style> elements and style attributes at run time.
  * - img-src/font-src data: and img-src blob:: images and fonts the CSS and
  *   the editor embed as data: URLs, and images the screens build in memory.
+ *
+ * No upgrade-insecure-requests: behind a reverse proxy that serves http (as
+ * 0.1.0 allowed), it would send the page's files and API calls to https on
+ * port 443 and the screen would stay blank. The server itself always listens
+ * on https, so a direct visit is unchanged.
  */
 export const CONTENT_SECURITY_POLICY: Record<string, string[]> = {
   'default-src': ["'self'"],
@@ -26,7 +31,6 @@ export const CONTENT_SECURITY_POLICY: Record<string, string[]> = {
   'base-uri': ["'self'"],
   'form-action': ["'self'"],
   'frame-ancestors': ["'self'"],
-  'upgrade-insecure-requests': [],
 };
 
 export type HttpSecurityOptions = {

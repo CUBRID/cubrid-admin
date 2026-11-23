@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { Text } from '@codemirror/state';
+import { EditorState, Text } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { acceptCompletion, autocompletion, completionStatus, startCompletion } from '@codemirror/autocomplete';
 import { getCM } from '../../../constants/useCM';
 import { confContextAt, confKeyAt } from './confContext';
 import { confParams, describeGuard, paramHintDom, paramHintLines } from './confParams';
 import { confDiagnostics } from './confLint';
+import { confCompletionSource } from './confComplete';
+import { confLanguage } from './confLanguage';
 
 const KO = getCM('ko');
 const EN = getCM('en');
@@ -107,5 +111,65 @@ describe('confDiagnostics', () => {
 
   it('marks nothing before the host schema is read', () => {
     expect(confDiagnostics(KO, doc('[common]\nno_such=1'), 'cubridconf', undefined)).toEqual([]);
+  });
+});
+
+// Completion is off in the editor (EDITOR_ASSIST); here it is turned on directly.
+describe('confCompletionSource', () => {
+  const completionSchemas = {
+    database: [
+      { key: 'cubrid_port_id', category: 'common', guard: { kind: 'int', min: 1, max: 65535 }, default: '1523', scope: 'BOTH' },
+      { key: 'max_clients', category: 'connection', guard: { kind: 'int', min: 10, max: 10000 }, default: '100', scope: 'SERVER' },
+      { key: 'auto_restart_server', category: 'general', guard: { kind: 'boolean' }, default: 'yes', scope: 'SERVER' },
+    ],
+    broker: [],
+    cm: [],
+    knownKeys: { strict: true, catalogVersion: '11.4.5', database: ['cubrid_port_id', 'max_clients', 'auto_restart_server'], broker: [], databaseGuards: {}, databaseScopes: {}, databaseDeprecated: [] },
+  };
+  const source = confCompletionSource(() => ({ CM: EN, kind: 'cubridconf', paramSchemas: completionSchemas }));
+
+  // Puts the cursor at `|`, opens the list as Ctrl+Space does, takes the first entry, returns the text.
+  async function complete(withCursor) {
+    const cursor = withCursor.indexOf('|');
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: withCursor.replace('|', ''),
+        selection: { anchor: cursor },
+        extensions: [confLanguage, autocompletion({ override: [source], interactionDelay: 0 })],
+      }),
+    });
+    try {
+      startCompletion(view);
+      for (let i = 0; i < 50 && completionStatus(view.state) !== 'active'; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(completionStatus(view.state)).toBe('active');
+      expect(acceptCompletion(view)).toBe(true);
+      return view.state.doc.toString();
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  }
+
+  it('replaces the whole value, also the part after the cursor', async () => {
+    expect(await complete('[common]\nauto_restart_server=ye|s\n')).toBe('[common]\nauto_restart_server=yes\n');
+  });
+
+  it('puts only the name before an = that is already there', async () => {
+    expect(await complete('[common]\ncubrid_po|=1523\n')).toBe('[common]\ncubrid_port_id=1523\n');
+    expect(await complete('[common]\nmax_cli|=100\n')).toBe('[common]\nmax_clients=100\n');
+    expect(await complete('[common]\nmax_cli| = 100\n')).toBe('[common]\nmax_clients = 100\n');
+  });
+
+  it('replaces the rest of a key name after the cursor', async () => {
+    expect(await complete('[common]\nmax_cli|nt=100\n')).toBe('[common]\nmax_clients=100\n');
+    expect(await complete('[common]\nmax_cli|nt\n')).toBe('[common]\nmax_clients=\n');
+  });
+
+  it('adds = after a new key, and replaces the whole section name', async () => {
+    expect(await complete('[common]\nmax_cli|\n')).toBe('[common]\nmax_clients=\n');
+    expect(await complete('[com|mon]\n')).toBe('[common]\n');
   });
 });

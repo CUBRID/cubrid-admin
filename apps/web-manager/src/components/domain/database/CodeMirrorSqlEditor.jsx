@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
+import { indentUnit } from '@codemirror/language';
 import { EditorView, drawSelection, highlightActiveLine, keymap, placeholder as placeholderText } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
-import { sqlHighlighting, sqlLanguage } from './sqlLanguage';
+import { sqlCompletionSource, sqlHighlighting, sqlLanguage } from './sqlLanguage';
 import { useCM } from '../../../constants/useCM';
+import { EDITOR_ASSIST } from '../../../constants/editorAssist';
 import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
+import { editMenuRedo } from '../editMenuRedo';
+import { SQL_INDENT_SIZE, outdentClosingBracket, sqlEnterKeymap, sqlTabKeymap } from './sqlTab';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -75,8 +79,9 @@ const isDark = () => document.documentElement.classList.contains('dark');
 
 /**
  * The SQL input of the query plan dialogs (CodeMirror 6): SQL keyword colors,
- * keyword completion (Ctrl+Space, or while typing), find (Ctrl/Cmd+F), undo,
- * light/dark colors following the app. Loaded through SqlCodeEditor.
+ * find (Ctrl/Cmd+F), undo, light/dark colors following the app. With
+ * EDITOR_ASSIST (off for now) also keyword completion (Ctrl+Space, or while
+ * typing). Loaded through SqlCodeEditor.
  */
 export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly = false, testId, placeholder }) {
   const CM = useCM();
@@ -104,9 +109,18 @@ export default function CodeMirrorSqlEditor({ value, onChange, height, readOnly 
         closeBrackets(),
         sqlLanguage,
         sqlHighlighting,
-        autocompletion({ icons: false }),
-        EditorView.lineWrapping,
-        keymap.of([...closeBracketsKeymap, ...completionKeymap, ...searchKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap]),
+        ...(EDITOR_ASSIST ? [autocompletion({ override: [sqlCompletionSource], icons: false })] : []),
+        // No wrapping: long lines scroll sideways, as in Monaco before (wordWrap off).
+        keymap.of([
+          ...closeBracketsKeymap, ...(EDITOR_ASSIST ? completionKeymap : []),
+          // Tab and Enter as in Monaco before (sqlTab.js): spaces to the next tab stop
+          // at the cursor; the new line keeps the indentation, one level more after (.
+          ...searchKeymap, ...historyKeymap, ...sqlTabKeymap, ...sqlEnterKeymap, ...defaultKeymap,
+        ]),
+        indentUnit.of(' '.repeat(SQL_INDENT_SIZE)),
+        // ) or ] on a line of spaces goes to the indentation of its opening line, as in Monaco.
+        EditorView.inputHandler.of(outdentClosingBracket),
+        editMenuRedo,
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),

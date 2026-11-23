@@ -5,6 +5,10 @@ import { PasswordService } from '@security/password/password.service';
 import { StorageService } from '@storage/storage.service';
 import { LockService } from '@lock/lock.service';
 import { User, UserDTO } from '@type/index';
+import { LockError, LockErrorCode } from '@error/lock/lock-error';
+
+// The lock a work function gets from withLock; its writes check it is still held.
+const HELD_LOCK = { assertHeld: () => undefined } as any;
 
 // Mock dependencies
 jest.mock('@lock/lock.service');
@@ -92,8 +96,8 @@ describe('UserRepositoryService', () => {
     encryptionService.encryptValue.mockReturnValue(mockEncryptedData);
     encryptionService.decryptValue.mockReturnValue(mockDecryptedData);
     passwordService.getHashedValue.mockResolvedValue(mockHashedPassword);
-    lockService.withLock.mockImplementation(async (filename: string, work: () => Promise<any>) => {
-      return work();
+    lockService.withLock.mockImplementation(async (filename: string, work: (lock: unknown) => Promise<any>) => {
+      return work(HELD_LOCK);
     });
   });
 
@@ -208,12 +212,12 @@ describe('UserRepositoryService', () => {
       encryptionService.encryptValue.mockReturnValue(mockEncryptedData);
       storageService.writeUnsafe.mockResolvedValue(undefined);
 
-      let capturedWorker: (() => Promise<any>) | null = null;
+      let capturedWorker: ((lock: unknown) => Promise<any>) | null = null;
       lockService.withLock.mockImplementation(
-        async (filename: string, work: () => Promise<any>) => {
+        async (filename: string, work: (lock: unknown) => Promise<any>) => {
           expect(filename).toBe(mockHashedId);
           capturedWorker = work;
-          return work();
+          return work(HELD_LOCK);
         }
       );
 
@@ -240,8 +244,8 @@ describe('UserRepositoryService', () => {
       storageService.readUnsafe.mockRejectedValue(new Error('Read failed'));
 
       lockService.withLock.mockImplementation(
-        async (filename: string, work: () => Promise<any>) => {
-          return work();
+        async (filename: string, work: (lock: unknown) => Promise<any>) => {
+          return work(HELD_LOCK);
         }
       );
 
@@ -258,8 +262,8 @@ describe('UserRepositoryService', () => {
       encryptionService.decryptValue.mockReturnValue(JSON.stringify(mockUser));
 
       lockService.withLock.mockImplementation(
-        async (filename: string, work: () => Promise<any>) => {
-          return work();
+        async (filename: string, work: (lock: unknown) => Promise<any>) => {
+          return work(HELD_LOCK);
         }
       );
 
@@ -269,6 +273,24 @@ describe('UserRepositoryService', () => {
 
       expect(encryptionService.getHashedValue).toHaveBeenCalledWith(mockUserId);
       expect(lockService.withLock).toHaveBeenCalledWith(mockHashedId, expect.any(Function));
+    });
+  });
+
+  describe('atomicUpdateUser with a lock compromised before the write', () => {
+    it('reads and modifies, but writes nothing and fails with the stale-lock error', async () => {
+      const brokenLock = {
+        assertHeld: () => { throw LockError.StaleLock({ filePath: 'x', reason: 'Lock compromised' }); },
+      } as any;
+      storageService.readUnsafe.mockResolvedValue('encrypted');
+      encryptionService.decryptValue.mockReturnValue(JSON.stringify({ id: 'user-1' }));
+      lockService.withLock.mockImplementation(async (_filename: string, work: (lock: unknown) => Promise<any>) => work(brokenLock));
+      const modifier = jest.fn(async (user: any) => ({ ...user, touched: true }));
+
+      const caught = await service.atomicUpdateUser('user-1', modifier).catch((e) => e);
+      expect(caught).toBeInstanceOf(LockError);
+      expect(caught.code).toBe(LockErrorCode.STALE_LOCK);
+      expect(modifier).toHaveBeenCalled();
+      expect(storageService.writeUnsafe).not.toHaveBeenCalled();
     });
   });
 });
