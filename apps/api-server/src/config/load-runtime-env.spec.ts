@@ -186,6 +186,28 @@ describe('loadRuntimeEnv', () => {
           }) as typeof fs.linkSync);
         afterEach(() => jest.restoreAllMocks());
 
+        it.each(['EISDIR', 'ESOMETHINGNEW'])('copies it into place when the link fails with %s (FAT32/exFAT on Windows gives EISDIR)', (code) => {
+          jest.spyOn(nodeFs, 'linkSync').mockImplementation((() => {
+            throw Object.assign(new Error(`${code}: link failed`), { code });
+          }) as typeof fs.linkSync);
+          loadRuntimeEnv();
+          expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual({ seed: process.env.SEED, salt: process.env.SALT });
+          expect(fs.readdirSync(path.dirname(secretsPath()))).toEqual(['secrets.json']);
+        });
+
+        it('still re-reads, and never copies over, a secrets.json another start linked first (EEXIST)', () => {
+          const other = { seed: 'linked-first-seed', salt: 'linked-first-salt' };
+          jest.spyOn(nodeFs, 'linkSync').mockImplementation(((_existing: fs.PathLike, created: fs.PathLike) => {
+            nodeFs.writeFileSync(created, JSON.stringify(other));
+            throw Object.assign(new Error('EEXIST: file already exists, link'), { code: 'EEXIST' });
+          }) as typeof fs.linkSync);
+          const copy = jest.spyOn(nodeFs, 'copyFileSync');
+          loadRuntimeEnv();
+          expect(copy).not.toHaveBeenCalled();
+          expect(process.env.SEED).toBe(other.seed);
+          expect(JSON.parse(fs.readFileSync(secretsPath(), 'utf8'))).toEqual(other);
+        });
+
         it('copies it into place', () => {
           noLinks();
           loadRuntimeEnv();

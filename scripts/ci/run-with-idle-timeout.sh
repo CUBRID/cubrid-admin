@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Runs a command and stops it when it prints nothing and uses no CPU for
 # <idle-seconds>: prints the processes still running (so a stuck packaging step
-# shows what it waits on), then stops the command's process group. A quiet
-# command whose processes keep using CPU (rpm compression) is still working and
-# is left to run; the step's timeout-minutes is the upper limit. With --done-check <cmd>, a command
-# whose work is complete (the check passes) and that has been quiet for 60 s, or
+# shows what it waits on) and the memory state, then stops the command's
+# process group. A quiet command whose processes keep using CPU (rpm
+# compression) is still working and is left to run (its running processes and
+# the memory state are printed every <idle-seconds>); the step's
+# timeout-minutes is the upper limit. With --done-check <cmd>, a command whose
+# work is complete (the check passes) and that has been quiet for 60 s, or
 # hit the idle limit, ends successfully after this clean-up; otherwise it fails.
 #   scripts/ci/run-with-idle-timeout.sh <idle-seconds> [--done-check <cmd>] <command> [args...]
 set -u
@@ -20,9 +22,21 @@ log=$(mktemp)
 set -m # the command gets its own process group
 "$@" > >(tee -a "$log") 2>&1 &
 pid=$!
+# Free memory and swap: a runner short of memory pages and runs slowly.
+memory_state() {
+  echo "Memory:"
+  if [ "$(uname)" = Darwin ]; then
+    memory_pressure | tail -n 1
+    sysctl vm.swapusage
+    vm_stat | grep -E "Pages (free|active|inactive|wired down|occupied by compressor)|Swap(ins|outs)"
+  else
+    free -m
+  fi
+}
 finish() {
-  echo "Processes in its group (pgid $pid):"
-  ps -axo pid,ppid,pgid,etime,stat,command | awk -v g="$pid" 'NR == 1 || $3 == g' | cut -c1-250
+  memory_state
+  echo "Processes in its group (pgid $pid), RSS in KB:"
+  ps -axo pid,ppid,pgid,etime,stat,rss,command | awk -v g="$pid" 'NR == 1 || $3 == g' | cut -c1-250
   echo "Packaging tools still running anywhere:"
   ps -axo pid,ppid,pgid,etime,stat,command | grep -E "hdiutil|diskimages|dmgbuild|python|makensis|fpm|ruby|rpmbuild|xz|zstd|[ /]ar |dpkg|7za|electron-builder|app-builder" | grep -v grep | cut -c1-250
   [ "$(uname)" = Darwin ] && "$here/clean-disk-images.sh"
@@ -47,7 +61,8 @@ while kill -0 "$pid" 2>/dev/null; do
   quiet_out=$(( now - last ))
   if [ "$quiet_out" -ge "$idle" ] && [ "$busy_at" -eq "$now" ] && [ $(( now - noted_at )) -ge "$idle" ]; then
     echo "No output for ${quiet_out} s, but the command is using CPU (${cpu} s so far): still working, waiting."
-    ps -axo pid,pgid,etime,stat,time,command | awk -v g="$pid" '$2 == g && $4 ~ /^R/' | cut -c1-200
+    ps -axo pid,pgid,etime,stat,time,rss,command | awk -v g="$pid" '$2 == g && $4 ~ /^R/' | cut -c1-200
+    memory_state
     noted_at=$now
   fi
   # Quiet = no output and no CPU use.

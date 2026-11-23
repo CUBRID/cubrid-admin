@@ -18,6 +18,8 @@ export type DesktopBridge = {
   isWorkspaceSetupRequired: () => Promise<boolean>;
   /** Why the server could not start on the configured workspace at launch (a WORKSPACE_* code), or null. */
   getWorkspaceStartupError: () => Promise<string | null>;
+  /** The workspace used last by any copy of the app, offered while a workspace has to be chosen. */
+  getPreviousWorkspace: () => Promise<{ workspaceRoot: string; settingsFolder: string } | null>;
   /** The server start in progress (api/start-status.ts), and its changes. */
   getApiStartStatus: () => Promise<ApiStartStatus>;
   onApiStartStatus: (callback: (status: ApiStartStatus) => void) => () => void;
