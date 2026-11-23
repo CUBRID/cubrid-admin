@@ -55,6 +55,39 @@ function resolveSslDir(): string {
   return path.join(serverHome(path.resolve(__dirname, '..', '..')), 'ssl');
 }
 
+type SslPaths = { sslDir: string; keyPath: string; certPath: string };
+
+/**
+ * In the server's own folder (`ownDir`: made by it, or the default ssl/ next to
+ * the program) the key is owner-only (0600) and the folder too (0700).
+ * CWM_SSL_DIR may name a folder others use (e.g. a key shared with nginx as
+ * 0640), so there an existing folder keeps its mode and the key only loses
+ * what every other account may do (0644 -> 0640). The certificate is public
+ * and never changed, so never widened. A symbolic link is left as it is (a key
+ * linked from elsewhere, e.g. letsencrypt's root:ssl-cert 0640, is shared on
+ * purpose). A change that cannot be made is logged and the server starts
+ * anyway. Windows has no such modes: nothing is done there.
+ */
+export function restrictSslFiles(
+  { sslDir, keyPath }: SslPaths,
+  { ownDir, platform = process.platform, warn = console.warn }: { ownDir: boolean; platform?: NodeJS.Platform; warn?: (message: string) => void }
+): void {
+  if (platform === 'win32') return;
+  const targets: Array<[string, (mode: number) => number]> = [[keyPath, (mode) => (ownDir ? 0o600 : mode & ~0o007)]];
+  if (ownDir) targets.push([sslDir, () => 0o700]);
+  for (const [target, wanted] of targets) {
+    let mode: number | undefined;
+    try {
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) continue;
+      mode = wanted(stat.mode & 0o777);
+      if ((stat.mode & 0o777) !== mode) fs.chmodSync(target, mode);
+    } catch (error) {
+      warn(`[ssl] could not set ${target} to ${mode === undefined ? 'a narrower mode' : mode.toString(8)}: ${(error as Error).message}`);
+    }
+  }
+}
+
 export function getOrCreateSSLCert(): HttpsKeyCert {
   const sslDir = resolveSslDir();
   const certPath = path.join(sslDir, 'cert.pem');
@@ -107,25 +140,56 @@ export function getOrCreateSSLCert(): HttpsKeyCert {
     },
   ];
 
+  const configuredDir = Boolean(process.env.CWM_SSL_DIR?.trim());
+  let madeDir = false;
   if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
-    if (!fs.existsSync(sslDir)) fs.mkdirSync(sslDir);
-    const pems = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
-      days: 365,
-      algorithm: 'sha256',
-      keySize: 2048,
-      extensions: certExtensions,
-    });
-    fs.writeFileSync(certPath, pems.cert);
-    fs.writeFileSync(keyPath, pems.private);
-    console.log('SSL created with IPs:', serverIPs);
+    // existsSync is also false when ssl/ may not be searched (made by another account): the write then fails.
+    try {
+      if (!fs.existsSync(sslDir)) {
+        // Missing parents with the usual mode; only ssl/ itself owner-only.
+        fs.mkdirSync(path.dirname(sslDir), { recursive: true });
+        fs.mkdirSync(sslDir, { mode: 0o700 });
+        madeDir = true;
+      }
+      const pems = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
+        days: 365,
+        algorithm: 'sha256',
+        keySize: 2048,
+        extensions: certExtensions,
+      });
+      fs.writeFileSync(certPath, pems.cert, { mode: 0o644 });
+      fs.writeFileSync(keyPath, pems.private, { mode: 0o600 });
+      console.log('SSL created with IPs:', serverIPs);
+    } catch (error) {
+      explainAccessError(error, sslDir, sslDir);
+      throw error;
+    }
   } else {
     // Check if certificate needs to be regenerated with new IPs
     // For now, we'll just log - in production you might want to check cert validity
     console.log('Using existing SSL certificate');
   }
 
-  return {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
-  };
+  // Also files made before, with the default modes (a world-readable key).
+  restrictSslFiles({ sslDir, keyPath, certPath }, { ownDir: madeDir || !configuredDir });
+
+  return { key: readSslFile(keyPath), cert: readSslFile(certPath) };
+}
+
+/** One this account may not use (made by another, e.g. root): says which folder to check. */
+function explainAccessError(error: unknown, target: string, dir: string): void {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'EACCES' || code === 'EPERM') {
+    console.error(`[ssl] cannot use ${target}: check the owner and permissions of ${dir} (it may have been made by another account, e.g. root).`);
+  }
+}
+
+/** Reads a PEM; one this account may not read says what to check. */
+function readSslFile(filePath: string): Buffer {
+  try {
+    return fs.readFileSync(filePath);
+  } catch (error) {
+    explainAccessError(error, filePath, path.dirname(filePath));
+    throw error;
+  }
 }
