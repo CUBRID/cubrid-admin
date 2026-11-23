@@ -112,17 +112,16 @@ test.describe('Feature: Host Group Deletion', () => {
       const hostRow = page.locator('#host-section').locator(`[title="${address}:8001"]`);
       await action('Verify host ' + address + ':8001 is visible in list', () => expect(hostRow).toBeVisible({ timeout: 10000 }), 'Host row was not found in host section.');
       const hostTestId = await hostRow.getAttribute('data-testid');
-      const token = await page.evaluate(() => localStorage.getItem('token'));
       const hostUid = hostTestId.replace('host-item-', '');
 
-      const moveResult = await action('Move host into group via API', () => page.evaluate(async ({ hostUid, groupId, token }) => {
+      const moveResult = await action('Move host into group via API', () => page.evaluate(async ({ hostUid, groupId }) => {
         const res = await fetch(`/api/host/${hostUid}/move`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', 'X-CWM-Request': '1' },
           body: JSON.stringify({ targetGroupId: groupId }),
         });
         return { status: res.status, body: await res.text() };
-      }, { hostUid, groupId, token }), 'Failed to move host into target group via API.');
+      }, { hostUid, groupId }), 'Failed to move host into target group via API.');
       await action('Verify move host API status is success', () => expect(moveResult.status).toBeLessThan(300), 'API move host request failed.');
 
       await action('Reload page to refresh host tree', () => page.reload(), 'Could not reload page.');

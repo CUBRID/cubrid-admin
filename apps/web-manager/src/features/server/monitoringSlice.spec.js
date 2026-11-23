@@ -15,7 +15,7 @@ vi.mock('../broker/brokerSlice', () => ({ readSharedBrokerList: vi.fn() }));
 import monitoringApi from './monitoringApi';
 import { readSharedBrokerList } from '../broker/brokerSlice';
 import reducer, { fetchMonitoringData, fetchHaHeartbeatOnly, fetchHaNodesOnly } from './monitoringSlice';
-import apiClient from '../../api/apiClient';
+import { setAppSession } from '../../api/apiClient';
 
 const HOST = 'h1';
 const makeStore = () => configureStore({
@@ -33,11 +33,10 @@ const hostStat = (user, idle) => ({
 const brokerList = (tran, query) => [{ broker: [{ name: 'query_editor', tran: String(tran), query: String(query) }] }];
 
 let now;
-let session = 0;
 beforeEach(() => {
   vi.resetAllMocks();
   // Reads are shared per login session; a new one per test keeps them apart.
-  apiClient.defaults.headers.common.Authorization = `Bearer test-${++session}`;
+  setAppSession(null);
   now = vi.spyOn(Date, 'now');
   monitoringApi.getSysDiskInfo.mockResolvedValue({ disk_info: [{ name: '/', total_size: '1000', free_size: '400' }] });
 });

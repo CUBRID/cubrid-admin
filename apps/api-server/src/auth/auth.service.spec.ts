@@ -25,9 +25,12 @@ describe('AuthService', () => {
       rollbackConsume: jest.fn().mockResolvedValue(undefined),
       revoke: jest.fn().mockResolvedValue(undefined),
       revokeFamily: jest.fn().mockResolvedValue(undefined),
+      familyOf: jest.fn().mockResolvedValue(null),
     } as any;
     tokenBlacklistService = {
       add: jest.fn().mockResolvedValue(undefined),
+      revokeFamily: jest.fn().mockResolvedValue(undefined),
+      isFamilyRevoked: jest.fn().mockResolvedValue(false),
     } as any;
     usersRepo = {
       loadUserById: jest.fn().mockResolvedValue({ id: 'user1', password: 'hash' }),
@@ -86,13 +89,20 @@ describe('AuthService', () => {
     const result = await service.refresh('old-refresh');
 
     expect(refreshTokenService.create).toHaveBeenCalledWith('user1', 'family-1');
-    expect(refreshTokenService.commitConsume).toHaveBeenCalled();
+    // The new token is recorded as its successor, for the reuse grace.
+    expect(refreshTokenService.commitConsume).toHaveBeenCalledWith(expect.objectContaining({ tokenHash: 'hash' }), 'new-refresh');
     expect(result.refreshToken).toBe('new-refresh');
   });
 
   it('rejects invalid refresh token', async () => {
     refreshTokenService.consumeForRotation.mockResolvedValue({ kind: 'invalid' });
     await expect(service.refresh('bad')).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('keeps the family and refuses with 503 (retry) while the same token is still rotating', async () => {
+    refreshTokenService.consumeForRotation.mockResolvedValue({ kind: 'busy' });
+    await expect(service.refresh('in-flight')).rejects.toMatchObject({ kind: 'AUTH', code: 'REFRESH_IN_PROGRESS' });
+    expect(refreshTokenService.revokeFamily).not.toHaveBeenCalled();
   });
 
   it('revokes family when refresh token is reused', async () => {
@@ -102,15 +112,63 @@ describe('AuthService', () => {
     });
     await expect(service.refresh('reused-token')).rejects.toBeInstanceOf(AuthError);
     expect(refreshTokenService.revokeFamily).toHaveBeenCalledWith('family-1');
+    // Its access tokens too.
+    expect(tokenBlacklistService.revokeFamily).toHaveBeenCalledWith('family-1', 14 * 86400 * 1000);
+  });
+
+  it('puts the refresh family into the access token (fam)', async () => {
+    await service.login({ id: 'user1', password: 'pw' });
+    expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ fam: 'family-1' }), expect.anything());
+  });
+
+  it('logs out the whole family, from a refresh token already rotated', async () => {
+    jwt.verifyAsync = jest.fn().mockResolvedValue({ jti: 'jti-2', exp: 1_700_000_000, type: 'access', fam: 'family-1' });
+    refreshTokenService.familyOf.mockResolvedValue('family-1');
+
+    await service.logout('access-2', 'rotated-refresh-2');
+
+    expect(refreshTokenService.familyOf).toHaveBeenCalledWith('rotated-refresh-2');
+    expect(refreshTokenService.revokeFamily).toHaveBeenCalledWith('family-1');
+    expect(tokenBlacklistService.revokeFamily).toHaveBeenCalledWith('family-1', 14 * 86400 * 1000);
+    expect(tokenBlacklistService.add).toHaveBeenCalledWith('jti-2', new Date(1_700_000_000 * 1000));
+  });
+
+  it('gives no new pair for a token rotating while its family was revoked', async () => {
+    refreshTokenService.consumeForRotation.mockResolvedValue({
+      kind: 'ok',
+      session: { token: 't', tokenHash: 'h', lockPath: '/tmp/l', record: { userId: 'user1', familyId: 'family-1', expiresAt: '', createdAt: '' } },
+    });
+    tokenBlacklistService.isFamilyRevoked.mockResolvedValue(true);
+    await expect(service.refresh('t')).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(refreshTokenService.create).not.toHaveBeenCalled();
   });
 
   it('blacklists access token and revokes refresh on logout', async () => {
-    await service.logout('jti-1', 1_700_000_000, 'refresh-1');
+    jwt.verifyAsync = jest
+      .fn()
+      .mockResolvedValue({ jti: 'jti-1', exp: 1_700_000_000, type: 'access' });
 
+    await service.logout('access-cookie', 'refresh-1');
+
+    expect(jwt.verifyAsync).toHaveBeenCalledWith('access-cookie');
     expect(tokenBlacklistService.add).toHaveBeenCalledWith(
       'jti-1',
       new Date(1_700_000_000 * 1000)
     );
     expect(refreshTokenService.revoke).toHaveBeenCalledWith('refresh-1');
+  });
+
+  it('still revokes the refresh token when the access token has expired', async () => {
+    jwt.verifyAsync = jest.fn().mockRejectedValue(new Error('jwt expired'));
+
+    await service.logout('expired-access', 'refresh-1');
+
+    expect(tokenBlacklistService.add).not.toHaveBeenCalled();
+    expect(refreshTokenService.revoke).toHaveBeenCalledWith('refresh-1');
+  });
+
+  it('logs out with no cookies at all', async () => {
+    await expect(service.logout(undefined, undefined)).resolves.toBeUndefined();
+    expect(refreshTokenService.revoke).not.toHaveBeenCalled();
   });
 });
