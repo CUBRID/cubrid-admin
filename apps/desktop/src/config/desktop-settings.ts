@@ -46,6 +46,11 @@ export function loadDesktopSettings(): DesktopSettings {
     return {};
   }
 
+  return normalizeLoadedSettings(readDesktopSettingsFile(filePath));
+}
+
+/** A desktop-settings.json as written, with its field types checked; throws on a bad file. */
+export function readDesktopSettingsFile(filePath: string): DesktopSettings {
   const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as DesktopSettings;
   if (parsed.workspaceRoot != null && typeof parsed.workspaceRoot !== 'string') {
     throw new Error(`Invalid desktop settings file: ${filePath}`);
@@ -68,7 +73,7 @@ export function loadDesktopSettings(): DesktopSettings {
     }
   }
 
-  return normalizeLoadedSettings(parsed);
+  return parsed;
 }
 
 export function needsWorkspaceSetup(): boolean {

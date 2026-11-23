@@ -16,6 +16,7 @@ import { getDesktopDataRoot } from '../config/portable-root';
 import { getProductVersion } from '../product-version';
 import { getMenuLanguage, installApplicationMenu, setApplicationMenuState } from '../menu/application-menu';
 import { getWorkspacePaths, refreshWorkspacePaths } from '../workspace/paths';
+import { getPreviousWorkspaceOffer } from '../config/legacy-settings';
 import { checkWorkspaceRoot, WorkspaceError } from '../workspace/workspace-check';
 import { getDefaultWorkspaceRoot, isSameWorkspaceFolder, resolveWorkspacePaths } from '../workspace/workspace-paths';
 import { notifyWorkspaceSetupComplete } from '../workspace/workspace-setup';
@@ -217,6 +218,9 @@ export function registerDesktopIpcHandlers(): void {
     notifyWorkspaceSetupComplete();
     return { ok: true };
   });
+
+  // The workspace used last by any copy of the app, offered while a workspace has to be chosen.
+  ipcMain.handle('desktop:get-previous-workspace', () => getPreviousWorkspaceOffer());
 
   ipcMain.handle('desktop:get-app-version', () => getProductVersion());
 
