@@ -4,15 +4,18 @@ import {
   EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, hoverTooltip, keymap, lineNumbers,
   placeholder as placeholderText,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, insertNewline } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { forceLinting, linter, lintGutter, lintKeymap } from '@codemirror/lint';
 import { useCM } from '../../../constants/useCM';
 import { confHighlighting, confLanguage } from './confLanguage';
 import { confContextAt, confKeyAt } from './confContext';
-import { confParams, confSectionNames, describeGuard, paramHintDom } from './confParams';
+import { paramHintDom } from './confParams';
+import { confCompletionSource, paramsFor } from './confComplete';
 import { confDiagnostics } from './confLint';
+import { EDITOR_ASSIST } from '../../../constants/editorAssist';
+import { editMenuRedo } from '../../../components/domain/editMenuRedo';
 
 const MONO = 'var(--font-mono)';
 const SANS = 'var(--font-sans)';
@@ -90,20 +93,12 @@ const darkTheme = EditorView.theme(withBase({
 
 const isDark = () => document.documentElement.classList.contains('dark');
 
-// Parameter lists are built once per file kind and schema payload.
-const paramCache = new WeakMap();
-function paramsFor(kind, paramSchemas) {
-  if (!paramSchemas) return confParams(kind, null);
-  let byKind = paramCache.get(paramSchemas);
-  if (!byKind) paramCache.set(paramSchemas, (byKind = {}));
-  return (byKind[kind] ??= confParams(kind, paramSchemas));
-}
-
 /**
  * The conf file editor (CodeMirror 6): section/key/value colors, line
- * numbers, find (Ctrl/Cmd+F), undo, parameter name and value completion,
- * a hint on hover, and underlines for what the server would refuse or warn
- * about on save. It never blocks typing or saving.
+ * numbers, find (Ctrl/Cmd+F), undo. With EDITOR_ASSIST (off for now) also
+ * parameter name and value completion, a hint on hover, and underlines for
+ * what the server would refuse or warn about on save. It never blocks typing
+ * or saving.
  *
  * @param {'cubridconf'|'brokerconf'|'cmconf'} kind
  * @param paramSchemas the host's getEnv paramSchemas (undefined until read)
@@ -123,31 +118,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
 
   useEffect(() => {
     const ctx = () => latest.current;
-    const complete = (context) => {
-      const { CM: L, kind: k, paramSchemas: schemas } = ctx();
-      const where = confContextAt(context.state.doc, context.pos);
-      if (where.place === 'comment') return null;
-      if (!context.explicit && !where.text && where.place !== 'heading') return null;
-      const params = paramsFor(k, schemas);
-      let options = [];
-      if (where.place === 'heading') {
-        options = confSectionNames(k).map((label) => ({ label, type: 'namespace' }));
-      } else if (where.place === 'key') {
-        options = params.forSection(where.section).map((param) => ({
-          label: param.name,
-          type: 'property',
-          detail: describeGuard(L, param.guard),
-          // A function here must return a DOM node, not a string.
-          info: () => paramHintDom(L, param, false),
-          apply: `${param.name}=`,
-        }));
-      } else {
-        const guard = params.get(where.key, where.section)?.guard;
-        const words = guard?.kind === 'enum' ? guard.options : guard?.kind === 'boolean' ? ['yes', 'no'] : [];
-        options = words.map((label) => ({ label, type: 'enum' }));
-      }
-      return options.length ? { from: where.from, options, validFor: /^[\w@%.:-]*$/ } : null;
-    };
+    const complete = confCompletionSource(ctx);
     const hint = hoverTooltip((view, pos) => {
       const hit = confKeyAt(view.state.doc, pos);
       if (!hit) return null;
@@ -176,12 +147,24 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
         highlightSelectionMatches(),
         confLanguage,
         confHighlighting,
-        autocompletion({ override: [complete], icons: false }),
-        hint,
-        // Debounced, so a large file is not re-checked on every key.
-        linter((v) => confDiagnostics(ctx().CM, v.state.doc, ctx().kind, ctx().paramSchemas), { delay: 500 }),
-        lintGutter(),
-        keymap.of([...completionKeymap, ...searchKeymap, ...historyKeymap, ...lintKeymap, indentWithTab, ...defaultKeymap]),
+        ...(EDITOR_ASSIST ? [
+          autocompletion({ override: [complete], icons: false }),
+          hint,
+          // Debounced, so a large file is not re-checked on every key.
+          linter((v) => confDiagnostics(ctx().CM, v.state.doc, ctx().kind, ctx().paramSchemas), { delay: 500 }),
+          lintGutter(),
+        ] : []),
+        keymap.of([
+          ...(EDITOR_ASSIST ? [...completionKeymap, ...lintKeymap] : []),
+          // No Tab key: Tab and Shift+Tab move the focus, as in the textarea before.
+          // Enter only breaks the line at the cursor, as in the textarea: no indent
+          // copied, the spaces around the cursor and blank lines left as they are.
+          { key: 'Enter', run: insertNewline },
+          ...searchKeymap, ...historyKeymap, ...defaultKeymap,
+        ]),
+        // Long lines wrap, as in the textarea (pre-wrap) before.
+        EditorView.lineWrapping,
+        editMenuRedo,
         hintText.of(placeholderText(ctx().placeholder ?? '')),
         ro.of(EditorState.readOnly.of(ctx().readOnly)),
         theme.of(isDark() ? darkTheme : lightTheme),
@@ -230,7 +213,7 @@ export default function ConfEditor({ value, onChange, readOnly = false, kind, pa
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({ effects: compartments.current.phrases.reconfigure(EditorState.phrases.of(CM.codeMirrorPhrases ?? {})) });
-    forceLinting(view);
+    if (EDITOR_ASSIST) forceLinting(view);
   }, [CM, kind, paramSchemas]);
 
   return <div ref={hostRef} data-testid={testId ? `${testId}-editor` : undefined} className="absolute inset-0" />;

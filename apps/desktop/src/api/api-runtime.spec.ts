@@ -4,7 +4,8 @@ jest.mock('../workspace/instance-lock', () => ({ acquireWorkspaceLock: jest.fn()
 jest.mock('../workspace/paths', () => ({ setWorkspacePathsInUse: jest.fn() }));
 jest.mock('../workspace/workspace-paths', () => ({ ensureWorkspaceDirectories: jest.fn() }));
 jest.mock('./api-process', () => ({ startApiServer: jest.fn(), stopApiServer: jest.fn() }));
-jest.mock('./wait-for-api', () => ({ waitForApiReady: jest.fn() }));
+jest.mock('./wait-for-api', () => ({ waitForApiReady: jest.fn(), ApiStartStoppedError: class ApiStartStoppedError extends Error {} }));
+jest.mock('../config/last-workspace', () => ({ rememberLastWorkspace: jest.fn() }));
 
 import type { WorkspacePaths } from '../workspace/workspace-paths';
 
@@ -50,6 +51,24 @@ describe('api-runtime on quit', () => {
       }));
     runtime = require('./api-runtime');
     /* eslint-enable @typescript-eslint/no-var-requires */
+  });
+
+  it('notes the workspace once its server is ready, and not when the start fails', async () => {
+    const { rememberLastWorkspace } = require('../config/last-workspace');
+    const ok = runtime.startApiForWorkspace(paths('ws'));
+    await Promise.resolve();
+    expect(rememberLastWorkspace).not.toHaveBeenCalled();
+    ready.get('/ws/s.sock')?.();
+    await ok;
+    expect(rememberLastWorkspace).toHaveBeenCalledWith('/ws');
+
+    await runtime.stopDesktopApi();
+    (rememberLastWorkspace as jest.Mock).mockClear();
+    const failing = runtime.startApiForWorkspace(paths('bad'));
+    await Promise.resolve();
+    servers[servers.length - 1].exit(1);
+    await expect(failing).rejects.toThrow('WORKSPACE_API_START_FAILED');
+    expect(rememberLastWorkspace).not.toHaveBeenCalled();
   });
 
   it('stops a server that is still starting (first launch) and starts none after the quit', async () => {

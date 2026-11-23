@@ -277,8 +277,8 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
+    # The API server serves under /api (its global prefix): pass the path as is.
     location /api/ {
-        rewrite ^/api/(.*) /\$1 break;
         proxy_pass https://127.0.0.1:${CWM_API_PORT};
         proxy_ssl_verify off;
         proxy_http_version 1.1;

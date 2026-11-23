@@ -42,6 +42,8 @@ const LINUX = [
   { exe: 'cubrid-admin-linux-el7', rpmArch: 'x86_64', platform: 'linux-x64-el7' },
 ];
 const LINUX_FILES = path.join(PACKAGING, 'linux');
+// The Windows setup's icon and left image: the same files as the desktop setup.
+const BRANDING = path.join(ROOT, 'apps', 'desktop', 'build-resources');
 
 const WINSW = {
   url: 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe',
@@ -200,6 +202,8 @@ async function buildWindowsSetup(version) {
       `-DVERSION4=${numeric}`,
       `-DYEAR=${new Date().getFullYear()}`,
       `-DSRCDIR=${files}`,
+      `-DICON=${path.join(BRANDING, 'icon.ico')}`,
+      `-DSIDEBAR=${path.join(BRANDING, 'installerSidebar.bmp')}`,
       `-DOUTFILE=${path.join(OUT, file)}`,
       path.join(PACKAGING, 'windows', 'installer.nsi'),
     ],

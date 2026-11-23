@@ -10,6 +10,9 @@ export const hostActions = {
   // The host's CMS could not be reached (stopped, its port changed, the host
   // down): the same reconnect window, saying so.
   hostUnreachable: (hostUid) => ({ type: 'host/hostUnreachable', payload: hostUid }),
+  // Its CMS did not answer a request / answered one again (status dot).
+  hostNotResponding: (hostUid) => ({ type: 'host/hostNotResponding', payload: hostUid }),
+  hostResponding: (hostUid) => ({ type: 'host/hostResponding', payload: hostUid }),
   loginToHost: null,
   clearReconnectingHost: null,
 };
@@ -81,6 +84,7 @@ export const clearReconnectingHost = (hostUid) => {
 // host in the reconnect queue, so nothing keeps asking.
 const CMS_NO_RESPONSE_TYPE = '/errors/cms/no_response';
 const CMS_TLS_ERROR_TYPE = '/errors/cms/tls_error';
+const CMS_REQUEST_FAILED_TYPE = '/errors/cms/request_failed';
 const CMS_UNREACHABLE_REASONS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN']);
 const CMS_SLOW_REASONS = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET']);
 const CMS_LONG_REQUEST_PATHS = ['/log/', '/cms-auth/'];
@@ -88,6 +92,35 @@ export const CMS_NO_RESPONSE_MAX_TIMEOUTS = 3;
 export const CMS_NO_RESPONSE_SAME_MOMENT_MS = 10000;
 const CMS_NO_RESPONSE_WINDOW_MS = 5 * 60 * 1000;
 const hostNoResponseFailures = new Map(); // hostUid -> { count, firstAt, lastAt }
+
+// Host-scoped paths whose answer says nothing about the host's saved CMS:
+// the server answers them without CMS (the host record, a database logout),
+// or they may go elsewhere (cms-auth: Edit Host's connection test can use
+// another address). Neither clears "Not responding".
+const reachesCms = (requestUrl) => {
+  const path = (requestUrl || '').replace(/^https?:\/\/[^/]+/i, '').replace(/^\/?api\//i, '').replace(/^\//, '');
+  return !path.startsWith('host/') && !path.includes('/logout/') && !path.includes('/cms-auth/');
+};
+
+// The "Not responding" dot (hostSlice.hostNotResponding): set by a request
+// CMS did not answer that did not open the reconnect window, cleared by the
+// next one it answers. Only reads the store and dispatches when the flag
+// changes; never sends a request.
+let storeModule = null;
+const setHostNotResponding = async (hostUid, notResponding) => {
+  try {
+    // One import for all responses (this runs on every host response).
+    storeModule ??= import('../app/store');
+    const { store } = await storeModule;
+    const host = store.getState().host;
+    if (Boolean(host?.hostNotResponding?.[hostUid]) === notResponding) return;
+    if (notResponding && !host?.authorizedHosts?.includes(hostUid)) return;
+    store.dispatch(notResponding ? hostActions.hostNotResponding(hostUid) : hostActions.hostResponding(hostUid));
+  } catch (e) {
+    storeModule = null;
+    console.error('Failed to update the host response state:', e);
+  }
+};
 
 const isHostUnreachableError = (hostUid, requestUrl, apiData) => {
   const type = apiData?.data?.type || apiData?.type || '';
@@ -330,13 +363,71 @@ export const setAppSession = (session) => {
   scheduleSessionRefresh(session);
 };
 
-// One tab at a time across the browser. Web Locks exist in every secure
-// context (https, or localhost), which the Secure cookies need anyway; a
-// browser without them refreshes in this tab alone.
+// Web Locks exist only in a secure context (https, or localhost). A server
+// opened over plain http on another address has none, so there tabs take
+// turns through a lease in localStorage instead: a tab writes its own lease,
+// waits a moment and reads it back; only the tab whose lease is still there
+// refreshes, and the others wait for it to finish and then take the session
+// it stored. A lease left by a closed tab ends on its own.
+const STORAGE_LOCK_KEY = 'cwm-session-refresh-lock';
+const STORAGE_LOCK_LEASE_MS = ACCESS_TOKEN_REFRESH_TIMEOUT_MS + 5000;
+export const STORAGE_LOCK_SETTLE_MS = 100;
+const STORAGE_LOCK_POLL_MS = 100;
+const tabLockId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const readStorageLease = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY));
+  } catch {
+    return null;
+  }
+};
+
+async function withStorageLock(run) {
+  let lease = null;
+  try {
+    for (;;) {
+      const held = readStorageLease();
+      if (!held || !(held.until > Date.now())) {
+        lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
+        localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
+        await sleep(STORAGE_LOCK_SETTLE_MS);
+        // Two tabs that wrote at once: the later write is the one both read back.
+        // A hidden tab's timers can run late, past its own lease, which another
+        // tab may then already take: an expired one is taken again from the start.
+        const back = readStorageLease();
+        if (back?.owner === tabLockId && back.until > Date.now()) {
+          // The whole lease for the refresh, however long the wait above took.
+          lease = { owner: tabLockId, until: Date.now() + STORAGE_LOCK_LEASE_MS };
+          localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify(lease));
+          break;
+        }
+        lease = null;
+      } else {
+        await sleep(STORAGE_LOCK_POLL_MS);
+      }
+    }
+  } catch {
+    // Storage unusable: refresh as this tab alone.
+    lease = null;
+  }
+  try {
+    return await run();
+  } finally {
+    try {
+      if (lease && readStorageLease()?.owner === tabLockId) localStorage.removeItem(STORAGE_LOCK_KEY);
+    } catch { /* storage unusable */ }
+  }
+}
+
+// One tab at a time across the browser. Web Locks exist only in a secure
+// context (https, or localhost); an http page (behind a reverse proxy or on
+// a LAN address, where the cookies come without Secure) takes turns through
+// the localStorage lease above.
 const withSessionRefreshLock = (run) => (
   typeof navigator !== 'undefined' && navigator.locks?.request
     ? navigator.locks.request('cwm-session-refresh', run)
-    : run()
+    : withStorageLock(run)
 );
 
 const accountOf = (session) => (typeof session?.user === 'string' && session.user ? session.user : null);
@@ -353,6 +444,28 @@ const otherAccount = (session) => {
   const theirs = accountOf(session);
   return Boolean(mine && theirs && mine !== theirs);
 };
+
+const SERVER_SESSION_SAME_MS = 5000;
+
+/**
+ * Takes the session the server says the cookies hold (GET /auth/session:
+ * { expiresIn, expiresLeft, user }) when this tab keeps none (another port of
+ * the same host name shares the cookies, not localStorage), another account's,
+ * or an older expiry; with it come the refresh before expiry and following
+ * the other tabs' logout and account changes.
+ */
+export function takeServerSession(answer) {
+  if (!sessionRefreshEnabled()) return;
+  const expiresIn = Number(answer?.expiresIn);
+  const expiresLeft = Number(answer?.expiresLeft);
+  if (!(expiresIn > 0) || !(expiresLeft > 0)) return;
+  const user = typeof answer?.user === 'string' && answer.user ? answer.user : null;
+  const session = { expiresAt: Date.now() + expiresLeft * 1000, expiresIn, ...(user ? { user } : {}) };
+  // The same session (the expiry differs only by the request's round trip).
+  if (knownSession && accountOf(knownSession) === user
+    && Math.abs(knownSession.expiresAt - session.expiresAt) < SERVER_SESSION_SAME_MS) return;
+  setAppSession(session);
+}
 
 // Another tab's refresh (or login) got new cookies: this tab already sends
 // them; it only takes the new expiry, unless they are another account's.
@@ -542,6 +655,8 @@ apiClient.interceptors.response.use(
     if (successHostUid) {
       hostAutoReloginFailures.delete(successHostUid);
       hostNoResponseFailures.delete(successHostUid);
+      // 202: the server took a job without asking CMS yet (CmsJobService).
+      if (response.status !== 202 && reachesCms(response.config?.url)) void setHostNotResponding(successHostUid, false);
     }
 
     const rawData = response.data;
@@ -728,14 +843,23 @@ apiClient.interceptors.response.use(
       if (!isAuthRefreshRequest && !isAuthLoginRequest && !isAuthLogoutRequest) {
         originalRequest._retry = true;
 
+        // The check when the app opens (checkSession) ends nothing itself: a
+        // refresh the server refused (401) is its answer "signed out", one
+        // that only failed (no answer, 503 busy) is no answer, and the session
+        // kept from the last visit stays.
+        const sessionCheck = Boolean(originalRequest.__sessionCheck);
+        const refusedBy = (refreshErr) => (
+          sessionCheck && refreshErr?.response?.status !== 401 ? refreshErr ?? error : error
+        );
+
         if (isRefreshingAccessToken) {
           try {
             await new Promise((resolve, reject) => {
               accessTokenRefreshWaiters.push({ resolve, reject });
             });
             return apiClient(originalRequest);
-          } catch {
-            return Promise.reject(error);
+          } catch (refreshErr) {
+            return Promise.reject(refusedBy(refreshErr));
           }
         }
 
@@ -746,6 +870,7 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } catch (refreshErr) {
           notifyAccessTokenRefreshFailed(refreshErr);
+          if (sessionCheck) return Promise.reject(refusedBy(refreshErr));
           // "Try again shortly" (429, or 503 while another refresh of the same
           // token runs) says nothing about the session: it stays, and the
           // next request refreshes again.
@@ -772,7 +897,20 @@ apiClient.interceptors.response.use(
     // with its last values on screen. A host login reports its own failure.
     if (!requestUrl.includes('/cms-auth/login')) {
       const hostUid = getHostUidFromUrl(requestUrl);
-      if (hostUid && !reconnectingHosts.has(hostUid) && isHostUnreachableError(hostUid, requestUrl, apiData)) {
+      const unreachable = Boolean(hostUid) && !reconnectingHosts.has(hostUid) && isHostUnreachableError(hostUid, requestUrl, apiData);
+      // CMS did not answer, but not (yet) enough to open the reconnect
+      // window: the host is shown as not responding until it answers again.
+      // A long read (log) that timed out is not counted, as above.
+      const errorType = apiData?.data?.type || apiData?.type;
+      if (hostUid && !unreachable && !reconnectingHosts.has(hostUid) &&
+          [CMS_NO_RESPONSE_TYPE, CMS_TLS_ERROR_TYPE].includes(errorType) &&
+          !CMS_LONG_REQUEST_PATHS.some((part) => requestUrl.includes(part))) {
+        await setHostNotResponding(hostUid, true);
+      } else if (hostUid && errorType === CMS_REQUEST_FAILED_TYPE && reachesCms(requestUrl)) {
+        // CMS answered with status:fail: it responds again.
+        await setHostNotResponding(hostUid, false);
+      }
+      if (unreachable) {
         try {
           const { store } = await import('../app/store');
           if (store.getState().host?.authorizedHosts?.includes(hostUid)) {

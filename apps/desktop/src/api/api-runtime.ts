@@ -1,5 +1,6 @@
 import { setAppProtocolApiSocket } from '../protocol/register-app-protocol';
 import { loadOrCreateDesktopSecrets } from '../config/secrets';
+import { rememberLastWorkspace } from '../config/last-workspace';
 import { acquireWorkspaceLock, releaseWorkspaceLock } from '../workspace/instance-lock';
 import { setWorkspacePathsInUse } from '../workspace/paths';
 import { WorkspaceError } from '../workspace/workspace-check';
@@ -24,6 +25,11 @@ let quitting = false;
 
 export function getApiProcess(): ApiProcessHandle | null {
   return apiProcess;
+}
+
+/** Whether a server start is in progress (spawned, not answering yet). */
+export function isDesktopApiStarting(): boolean {
+  return startingProcess !== null;
 }
 
 /** The workspace the running server uses, or null when none runs. */
@@ -90,6 +96,8 @@ export async function startApiForWorkspace(paths: WorkspacePaths): Promise<ApiPr
   apiProcess = handle;
   apiPaths = paths;
   setWorkspacePathsInUse(paths);
+  // For a copy of the app started elsewhere later (see last-workspace.ts).
+  rememberLastWorkspace(paths.workspaceRoot);
   return handle;
 }
 

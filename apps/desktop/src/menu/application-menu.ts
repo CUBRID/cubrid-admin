@@ -1,9 +1,10 @@
-import { Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { BrowserWindow, Menu, shell, type BaseWindow, type MenuItemConstructorOptions } from 'electron';
 import * as fs from 'fs';
 import { getDesktopSettingsPath } from '../config/desktop-settings';
 import { getDesktopDataRoot } from '../config/portable-root';
 import { getMainWindow } from '../window/window-registry';
 import { applyZoom, type ZoomAction } from '../window/zoom';
+import { EDIT_REDO_CHANNEL, redoAccelerator } from '../window/edit-redo';
 
 export const PRODUCT_NAME = 'CUBRID Admin';
 
@@ -20,6 +21,8 @@ export const MENU_ACTION_IDS = [
   'export-hosts',
   'import-hosts',
   'switch-workspace',
+  'export-workspace',
+  'import-workspace',
   'service-dashboard',
   'cms-account-management',
   'edit-cubrid-config',
@@ -43,6 +46,8 @@ export const MENU_LABELS = {
     exportHost: 'Export Host',
     importHost: 'Import Host',
     switchWorkspace: 'Switch Workspace…',
+    exportWorkspace: 'Export Workspace…',
+    importWorkspace: 'Import Workspace…',
     quit: 'Quit',
     hostServiceManagement: 'Host Service Management',
     serviceDashboard: 'Service Dashboard',
@@ -95,6 +100,8 @@ export const MENU_LABELS = {
     exportHost: '호스트 내보내기',
     importHost: '호스트 가져오기',
     switchWorkspace: '워크스페이스 전환…',
+    exportWorkspace: '워크스페이스 내보내기…',
+    importWorkspace: '워크스페이스 가져오기…',
     quit: '종료',
     hostServiceManagement: '호스트 서비스 관리',
     serviceDashboard: '서비스 대시보드',
@@ -175,6 +182,14 @@ function sendRefreshView(): void {
   }
 }
 
+/** Edit > Redo: to the window the menu acts on (the focused one), see window/edit-redo.ts. */
+function sendEditRedo(_item: unknown, target?: BaseWindow): void {
+  const window = target instanceof BrowserWindow ? target : (BrowserWindow.getFocusedWindow() ?? getMainWindow());
+  if (window && !window.isDestroyed()) {
+    window.webContents.send(EDIT_REDO_CHANNEL);
+  }
+}
+
 function sendMenuAction(id: MenuActionId): void {
   const window = getMainWindow();
   if (window && !window.isDestroyed()) {
@@ -252,6 +267,8 @@ export function buildApplicationMenuTemplate(
         action('import-hosts', L.importHost),
         { type: 'separator' },
         action('switch-workspace', L.switchWorkspace),
+        action('export-workspace', L.exportWorkspace),
+        action('import-workspace', L.importWorkspace),
         { type: 'separator' },
         // On every platform; macOS also keeps it in the app-name menu.
         { role: 'quit', label: L.quit },
@@ -279,7 +296,8 @@ export function buildApplicationMenuTemplate(
       label: L.edit,
       submenu: [
         { role: 'undo', label: L.undo },
-        { role: 'redo', label: L.redo },
+        // Not the redo role: it cannot redo in the editors (window/edit-redo.ts).
+        { label: L.redo, accelerator: redoAccelerator(), click: sendEditRedo },
         { type: 'separator' },
         { role: 'cut', label: L.cut },
         { role: 'copy', label: L.copy },

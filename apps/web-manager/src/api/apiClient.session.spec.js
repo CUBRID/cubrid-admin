@@ -298,3 +298,120 @@ it('keeps the account in the shared session across a refresh, and a login stores
   store.dispatch(loginSuccess({ expiresIn: 3600, user: { id: 'bob' } }));
   expect(JSON.parse(localStorage.getItem(KEY))).toEqual({ expiresAt: Date.now() + 3600 * 1000, expiresIn: 3600, user: 'bob' });
 });
+
+// The check when the app opens (checkSession) ends nothing itself; the
+// other requests keep ending the session when the refresh fails.
+describe('the session check when the app opens', () => {
+  // The mocked store outlives vi.resetModules: start each test signed in.
+  const signedInStore = async () => {
+    const { store } = await import('../app/store');
+    store.dispatch({ type: 'auth/sessionRefreshed' });
+    expect(store.getState().auth.isAuthenticated).toBe(true);
+    return store;
+  };
+  const busy = () => vi.fn(async () => { throw Object.assign(new Error('busy'), { response: { status: 503 } }); });
+
+  it('keeps the session when the refresh only fails (a busy server), and other requests still end it', async () => {
+    signedIn(-HOUR, DAY / 1000, 'alice');
+    const tab = await openTab();
+    const store = await signedInStore();
+    server.post = busy();
+    await expect(tab.default.get('/auth/session', { __sessionCheck: true })).rejects.toMatchObject({ response: { status: 503 } });
+    expect(store.getState().auth.isAuthenticated).toBe(true);
+    expect(localStorage.getItem(KEY)).not.toBeNull();
+
+    await expect(tab.default.get('/x')).rejects.toMatchObject({ response: { status: 401 } });
+    expect(store.getState().auth.isAuthenticated).toBe(false);
+  });
+
+  it('answers 401 when the server refuses the refresh, and leaves the logout to the check', async () => {
+    signedIn(-HOUR, DAY / 1000, 'alice');
+    server.jar.refresh = null;
+    const tab = await openTab();
+    const store = await signedInStore();
+    await expect(tab.default.get('/auth/session', { __sessionCheck: true })).rejects.toMatchObject({ response: { status: 401 } });
+    expect(store.getState().auth.isAuthenticated).toBe(true);
+  });
+
+  it('takes the session the server names when this tab keeps none, and then refreshes before it expires', async () => {
+    server.jar = { access: Date.now() + 10 * 60 * 1000, refresh: 'r1' };
+    const tab = await openTab();
+    tab.takeServerSession({ expiresIn: DAY / 1000, expiresLeft: 10 * 60, user: 'alice' });
+    expect(JSON.parse(localStorage.getItem(KEY))).toEqual({ expiresAt: Date.now() + 10 * 60 * 1000, expiresIn: DAY / 1000, user: 'alice' });
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 1000);
+    expect(server.calls).toEqual(['r1']);
+    expect(JSON.parse(localStorage.getItem(KEY))).toEqual(expect.objectContaining({ user: 'alice' }));
+  });
+});
+
+// Web Locks exist only in a secure context; an http page (a reverse proxy, a
+// LAN address: the cookies come without Secure) has none, and tabs take turns
+// through a lease in localStorage.
+describe('without Web Locks (an http page)', () => {
+  const LOCK = 'cwm-session-refresh-lock';
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true });
+    // The server takes a moment to answer, so the refreshes overlap.
+    const answer = server.post;
+    server.post = vi.fn(async (...args) => {
+      await new Promise((resolve) => { setTimeout(resolve, 300); });
+      return answer(...args);
+    });
+  });
+
+  it('two tabs whose timers fire at the same moment call the server once and both stay signed in', async () => {
+    signedIn(10 * 60 * 1000);
+    await openTab();
+    await openTab();
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
+    expect(server.calls).toEqual(['r1']);
+    expect(server.revoked).toBe(false);
+    expect(server.jar.refresh).toBe('r2');
+    expect(JSON.parse(localStorage.getItem(KEY)).expiresAt).toBeGreaterThan(Date.now() + HOUR);
+    expect(localStorage.getItem(LOCK)).toBeNull();
+  });
+
+  it('three tabs waking up with the same expired session call the server once and do not revoke it', async () => {
+    signedIn(-HOUR);
+    const tabs = [await openTab(), await openTab(), await openTab()];
+
+    const all = Promise.all(tabs.map((tab, i) => tab.default.get(`/${i}`)));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await all).toEqual([{ ok: true }, { ok: true }, { ok: true }]);
+    expect(server.calls).toEqual(['r1']);
+    expect(server.revoked).toBe(false);
+    expect(localStorage.getItem(LOCK)).toBeNull();
+  });
+
+  it('takes its lease again when it reads it back already run out (a hidden tab, its timers held back)', async () => {
+    signedIn(-HOUR);
+    const hidden = await openTab();
+    const other = await openTab();
+
+    const first = hidden.default.get('/a');
+    await vi.advanceTimersByTimeAsync(0); // the lease is written; reading it back waits
+    expect(localStorage.getItem(LOCK)).not.toBeNull();
+    vi.setSystemTime(Date.now() + 21_000); // its timer fires late, past the lease
+    await vi.advanceTimersByTimeAsync(100);
+    const second = other.default.get('/b'); // and another tab wants the lock then
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await Promise.all([first, second])).toEqual([{ ok: true }, { ok: true }]);
+    expect(server.calls).toEqual(['r1']);
+    expect(server.revoked).toBe(false);
+    expect(localStorage.getItem(LOCK)).toBeNull();
+  });
+
+  it('does not wait for good on a lease left by a tab that was closed', async () => {
+    signedIn(-HOUR);
+    localStorage.setItem(LOCK, JSON.stringify({ owner: 'closed-tab', until: Date.now() + 20_000 }));
+    const tab = await openTab();
+
+    const answer = tab.default.get('/a');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(server.calls).toEqual([]);
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(await answer).toEqual({ ok: true });
+    expect(server.calls).toEqual(['r1']);
+  });
+});

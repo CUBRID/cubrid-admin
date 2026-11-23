@@ -128,6 +128,14 @@ describe('AuthController', () => {
     expect(res.clearCookie).toHaveBeenCalledTimes(2);
   });
 
+  it('says how long the session of the access cookie lasts, how much is left and whose it is', () => {
+    const now = 1_790_000_000;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now * 1000);
+    const req = { user: { sub: 'alice', iat: now - 3600, exp: now - 3600 + 86400 } };
+    expect(controller.session(req as never)).toEqual({ expiresIn: 86400, expiresLeft: 86400 - 3600, user: 'alice' });
+    clock.mockRestore();
+  });
+
   describe('behind an http reverse proxy', () => {
     const fromPage = (headers: Record<string, string>, cookies: Record<string, string> = {}) => ({ headers, cookies });
     const secureOf = (mock: jest.Mock) => mock.mock.calls.map((call) => call[2]?.secure ?? call[1]?.secure);
