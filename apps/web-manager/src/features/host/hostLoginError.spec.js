@@ -4,12 +4,16 @@ import { configureStore } from '@reduxjs/toolkit';
 // apiClient (imported through hostSlice) reads localStorage at load time.
 vi.hoisted(() => {
   const store = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, String(v)),
-    removeItem: (k) => store.delete(k),
-    clear: () => store.clear(),
-  };
+  // Defined, not assigned: jsdom's localStorage is a getter-only property.
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+      clear: () => store.clear(),
+    },
+  });
 });
 
 vi.mock('./hostApi', () => ({ hostApi: { loginToHost: vi.fn() } }));

@@ -85,6 +85,10 @@ describe('LockService', () => {
       const fileLock = {
         filePath: 'path/to/file',
         release: mockRelease,
+        acquiredAt: Date.now(),
+        releasing: false,
+        compromised: null,
+        assertHeld: () => undefined,
       };
 
       await service.release(fileLock);
@@ -98,6 +102,10 @@ describe('LockService', () => {
       const fileLock = {
         filePath: 'path/to/file',
         release: mockRelease,
+        acquiredAt: Date.now(),
+        releasing: false,
+        compromised: null,
+        assertHeld: () => undefined,
       };
 
       await expect(service.release(fileLock)).rejects.toThrow();

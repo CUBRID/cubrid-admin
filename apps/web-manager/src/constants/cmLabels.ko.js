@@ -661,6 +661,7 @@ export const CM_KO = {
   createAccount: '계정 만들기',
   registrationFailed: '등록에 실패했습니다. 다시 시도하세요.',
   loginFailedMsg: '로그인에 실패했습니다. 아이디와 비밀번호를 확인하세요.',
+  tooManyAttemptsMsg: (seconds) => (seconds ? `시도가 너무 많습니다. ${seconds}초 뒤에 다시 시도하세요.` : '시도가 너무 많습니다. 잠시 뒤 다시 시도하세요.'),
   minChars3: '3자 이상',
 
   brokerProperties: '브로커 속성',
@@ -1959,6 +1960,7 @@ export const CM_KO = {
     'auth/invalid_credentials': '아이디 또는 비밀번호가 올바르지 않습니다.',
     'auth/invalid_token': '인증이 만료되었거나 올바르지 않습니다. 다시 로그인하세요.',
     'auth/permission_denied': '이 작업을 할 권한이 없습니다.',
+    'http/too_many_requests': '시도가 너무 많습니다. 잠시 뒤 다시 시도하세요.',
     'user/user_not_found': '사용자를 찾을 수 없습니다.',
     'user/user_already_exists': '이미 있는 사용자입니다.',
     'user/data_update_failed': '사용자 데이터를 처리하지 못했습니다.',

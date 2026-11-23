@@ -19,7 +19,8 @@ function loadWorkspaceEnv() {
     return null;
   }
 
-  loadEnv({ path: envFilePath, override: false });
+  // quiet: dotenv 17+ otherwise logs every file it loads.
+  loadEnv({ path: envFilePath, override: false, quiet: true });
   return envFilePath;
 }
 

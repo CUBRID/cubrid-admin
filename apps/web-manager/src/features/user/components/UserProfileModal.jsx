@@ -8,6 +8,7 @@ import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
+import { tooManyAttemptsText } from '../../../infrastructure/errors/serverErrorText';
 
 export default function UserProfileModal({ isOpen, onClose }) {
   const CM = useCM();
@@ -67,7 +68,11 @@ export default function UserProfileModal({ isOpen, onClose }) {
       // lands at err.response.data.data.code, not err.response.data.code —
       // apiClient's response interceptor only promotes a message, not code.
       const code = err.response?.data?.data?.code;
-      if (code === 'OLD_PASSWORD_MISMATCH') {
+      const tooMany = tooManyAttemptsText(err, CM);
+      if (tooMany) {
+        // The password-change rate limit says how long to wait.
+        setError(tooMany);
+      } else if (code === 'OLD_PASSWORD_MISMATCH') {
         setError(CM.currentPasswordIncorrectMsg);
       } else if (code === 'BAD_NEW_PASSWORD') {
         setError(CM.weakNewPasswordMsg);

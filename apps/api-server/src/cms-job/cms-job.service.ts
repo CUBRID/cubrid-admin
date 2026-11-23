@@ -245,7 +245,8 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
 
   private async runJobCleanup(reason: string): Promise<void> {
     try {
-      const removed = await this.store.purgeExpiredJobs();
+      const removed = await this.store.purgeExpiredJobs(undefined, undefined,
+        (fn) => this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, fn));
       if (removed > 0) {
         this.logger.log(`Purged ${removed} CMS job file(s) (${reason})`);
       }
@@ -276,7 +277,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
       throw DatabaseError.DatabaseActionInProgress({ hostUid, dbname: busy.dbname });
     }
 
-    await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async () => {
+    await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async (lock) => {
       const ops = await this.store.readGlobalOperations();
       const existing = ops[operationKey];
       if (existing) {
@@ -299,6 +300,7 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
         }
       }
       ops[operationKey] = { jobId, userKey: uKey };
+      lock.assertHeld();
       await this.store.writeGlobalOperations(ops);
     });
 
@@ -600,13 +602,23 @@ export class CmsJobService implements OnModuleInit, OnModuleDestroy {
     } finally {
       job.finishedAt = new Date().toISOString();
       await this.store.saveJob(uKey, job);
-      await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async () => {
-        const ops = await this.store.readGlobalOperations();
-        if (ops[operationKey]?.jobId === jobId) {
-          delete ops[operationKey];
-          await this.store.writeGlobalOperations(ops);
-        }
-      });
+      try {
+        await this.lockService.withLock(CmsJobService.GLOBAL_OPS_LOCK_FILE, async (lock) => {
+          const ops = await this.store.readGlobalOperations();
+          if (ops[operationKey]?.jobId === jobId) {
+            delete ops[operationKey];
+            lock.assertHeld();
+            await this.store.writeGlobalOperations(ops);
+          }
+        });
+      } catch (err) {
+        // The job itself is finished and saved. Its operation lock entry
+        // stays (e.g. the file lock was compromised before the write) and is
+        // cleared as stale by the next job on this database.
+        this.logger.warn(
+          `Job ${jobId}: its operation lock entry was not cleared (${err instanceof Error ? err.message : err}); it is cleared as stale later`
+        );
+      }
     }
   }
 

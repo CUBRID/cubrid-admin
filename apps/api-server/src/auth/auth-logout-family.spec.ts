@@ -5,7 +5,8 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthError } from '@error/auth/auth-error';
 import { RefreshTokenService } from '@token/refresh-token.service';
 import { TokenBlacklistService } from '@token/token-blacklist.service';
-import { JwtStrategy } from '@token/jwt-strategy';
+import { JwtAuthGuard } from '@token/jwt-auth.guard';
+import { Reflector } from '@nestjs/core';
 import { AuthService } from './auth.service';
 
 // Real token stores in a temporary folder.
@@ -26,8 +27,9 @@ describe('logout ends every token of the session (refresh family)', () => {
     refreshTokens,
     blacklist
   );
-  const strategy = new JwtStrategy(config as never, blacklist);
-  const accessOk = async (token: string) => strategy.validate(await jwt.verifyAsync(token));
+  // The guard's check of an access token (the cookie it reads, already taken out).
+  const guard = new JwtAuthGuard(new Reflector(), jwt, blacklist) as unknown as { verify: (token: string) => Promise<unknown> };
+  const accessOk = (token: string) => guard.verify(token);
 
   it('after a logout with a rotated token: the newest access 401, its refresh 401, the rotated one 401', async () => {
     const t1 = await service.login({ id: 'user1', password: 'pw' });

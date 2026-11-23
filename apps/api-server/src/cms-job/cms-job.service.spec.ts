@@ -8,6 +8,9 @@ jest.mock('@common', () => ({
 
 import { pollCmsAsyncJob } from '@common';
 
+// The lock a work function gets from withLock; its writes check it is still held.
+const HELD_LOCK = { assertHeld: () => undefined } as any;
+
 const renameJob = (patch: Partial<CmsJobRecord> = {}): CmsJobRecord => ({
   jobId: 'job-1', userId: 'user-1', hostUid: 'host-1', dbname: 'olddb',
   type: 'rename', status: 'running', createdAt: '2026-10-26T01:00:00Z', cmsUuid: 'uuid-1',
@@ -36,7 +39,7 @@ describe('CmsJobService rename alias-cache cleanup', () => {
       updateAutoStartAfterRename: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
-    const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
+    const lockService = { withLock: jest.fn((_file: string, fn: (lock: unknown) => Promise<unknown>) => fn(HELD_LOCK)) };
     const hostService = { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) };
 
     service = new CmsJobService(
@@ -210,7 +213,7 @@ describe('CmsJobService delete job', () => {
       forgetDeletedDatabase: jest.fn().mockResolvedValue([]),
     };
     cmsClient = { postAuthenticated: jest.fn().mockResolvedValue({ status: 'success' }) };
-    const lockService = { withLock: jest.fn((_file: string, fn: () => Promise<unknown>) => fn()) };
+    const lockService = { withLock: jest.fn((_file: string, fn: (lock: unknown) => Promise<unknown>) => fn(HELD_LOCK)) };
     const hostService = { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) };
 
     service = new CmsJobService(
@@ -236,6 +239,25 @@ describe('CmsJobService delete job', () => {
     );
     expect(job.status).toBe('succeeded');
     expect(lifecycleService.forgetDeletedDatabase).toHaveBeenCalledWith('user-1', 'host-1', 'gonedb');
+  });
+
+  it('ends the job and only warns when the operation lock cannot be cleared under a compromised file lock', async () => {
+    const job = deleteJob();
+    store.getJob.mockResolvedValue(job);
+    store.readGlobalOperations.mockResolvedValue({ 'op-key': { jobId: 'job-2', userKey: 'ukey' } });
+    const brokenLock = { assertHeld: () => { throw new Error('Lock compromised'); } };
+    (service as any).lockService.withLock.mockImplementation((_f: string, fn: (lock: unknown) => Promise<unknown>) => fn(brokenLock));
+    const warn = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
+
+    await expect((service as any).runJob('ukey', 'job-2', 'op-key')).resolves.toBeUndefined();
+
+    expect(job.status).toBe('succeeded');
+    expect(store.saveJob).toHaveBeenCalledWith('ukey', expect.objectContaining({ jobId: 'job-2', status: 'succeeded' }));
+    // Nothing was written under the compromised lock, and the job is not reported as crashed.
+    expect(store.writeGlobalOperations).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/Job job-2: its operation lock entry was not cleared \(Lock compromised\)/));
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('shows what the cleanup after a delete could not do as job warnings, the job still succeeded', async () => {
@@ -338,7 +360,7 @@ describe('CmsJobService: a create job running when the server restarted', () => 
     lifecycleService = { resumeCreateDatabase: jest.fn() };
     service = new CmsJobService(
       store as any,
-      { withLock: jest.fn((_f: string, fn: () => Promise<unknown>) => fn()) } as any,
+      { withLock: jest.fn((_f: string, fn: (lock: unknown) => Promise<unknown>) => fn(HELD_LOCK)) } as any,
       {} as any,
       { findHostInternal: jest.fn().mockResolvedValue({ address: 'h', port: 8001, token: 't' }) } as any,
       managementService as any,

@@ -71,7 +71,10 @@ function listFiles(dir) {
 export function findOutsideUrls(dir) {
   const found = [];
   for (const file of listFiles(dir)) {
-    const text = fs.readFileSync(file, 'utf8');
+    const raw = fs.readFileSync(file, 'utf8');
+    // A CSS comment loads nothing (the CSS minifier keeps license comments
+    // such as /*! tailwindcss | https://tailwindcss.com */).
+    const text = file.endsWith('.css') ? raw.replace(/\/\*[\s\S]*?\*\//g, '') : raw;
     for (const match of text.matchAll(URL_PATTERN)) {
       if (!isAllowed(match[0], file)) {
         found.push({ file: path.relative(dir, file), url: match[0] });

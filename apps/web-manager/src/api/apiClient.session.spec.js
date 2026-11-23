@@ -309,19 +309,37 @@ describe('the session check when the app opens', () => {
     expect(store.getState().auth.isAuthenticated).toBe(true);
     return store;
   };
-  const busy = () => vi.fn(async () => { throw Object.assign(new Error('busy'), { response: { status: 503 } }); });
+  const failing = (failure) => vi.fn(async () => { throw failure; });
+  // The refresh got no answer in time (a sleep, a dropped connection).
+  const noAnswer = () => Object.assign(new Error('timeout of 15000ms exceeded'), { code: 'ECONNABORTED' });
+  const busy = () => Object.assign(new Error('busy'), { response: { status: 503 } });
 
-  it('keeps the session when the refresh only fails (a busy server), and other requests still end it', async () => {
+  it.each([
+    ['gets no answer', noAnswer],
+    ['gets 503 from a busy server', busy],
+  ])('keeps the session when the refresh %s', async (_case, failure) => {
     signedIn(-HOUR, DAY / 1000, 'alice');
     const tab = await openTab();
     const store = await signedInStore();
-    server.post = busy();
-    await expect(tab.default.get('/auth/session', { __sessionCheck: true })).rejects.toMatchObject({ response: { status: 503 } });
+    const err = failure();
+    server.post = failing(err);
+    await expect(tab.default.get('/auth/session', { __sessionCheck: true })).rejects.toBe(err);
     expect(store.getState().auth.isAuthenticated).toBe(true);
     expect(localStorage.getItem(KEY)).not.toBeNull();
+  });
 
+  // The other requests as before: a refresh that says "try again shortly"
+  // keeps the session, one with no answer ends it.
+  it.each([
+    ['gets 503 from a busy server', busy, true],
+    ['gets no answer', noAnswer, false],
+  ])('for another request, when the refresh %s, the session stays: %s', async (_case, failure, stays) => {
+    signedIn(-HOUR, DAY / 1000, 'alice');
+    const tab = await openTab();
+    const store = await signedInStore();
+    server.post = failing(failure());
     await expect(tab.default.get('/x')).rejects.toMatchObject({ response: { status: 401 } });
-    expect(store.getState().auth.isAuthenticated).toBe(false);
+    expect(store.getState().auth.isAuthenticated).toBe(stays);
   });
 
   it('answers 401 when the server refuses the refresh, and leaves the logout to the check', async () => {

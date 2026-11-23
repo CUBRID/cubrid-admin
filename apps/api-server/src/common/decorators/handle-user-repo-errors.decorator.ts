@@ -51,8 +51,11 @@ export function HandleUserRepoErrors() {
               throw UserError.LockOperationFailed({ resourceId: contextId, reason: err.code }, err);
             case LockErrorCode.LOCK_ALREADY_HELD:
               throw UserError.ResourceLocked({ resourceId: contextId }, err);
-            case LockErrorCode.PERMISSION_DENIED:
             case LockErrorCode.STALE_LOCK:
+              // The lock was lost while the request ran: the client gets the
+              // lock's own answer (410, "try again"), not a user error (500).
+              throw err;
+            case LockErrorCode.PERMISSION_DENIED:
             case LockErrorCode.UNKNOWN:
             default:
               throw UserError.LockOperationFailed({ resourceId: contextId, reason: err.code }, err);

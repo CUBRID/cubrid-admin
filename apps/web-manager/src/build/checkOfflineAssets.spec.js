@@ -23,6 +23,11 @@ describe('check:offline (apps/web-manager/scripts/check-offline-assets.mjs)', ()
     expect(findOutsideUrls(dir)).toEqual([]);
   });
 
+  it('ignores a URL in a CSS comment, but not a url() next to it', () => {
+    write('assets/index.css', '/*! tailwindcss v4 | MIT License | https://tailwindcss.com */\n.a{background:url(https://cdn.example.com/a.png)}');
+    expect(findOutsideUrls(dir)).toEqual([{ file: 'assets/index.css', url: 'https://cdn.example.com/a.png' }]);
+  });
+
   it('catches a CDN script tag in the HTML', () => {
     write('index.html', '<html><head><script src="https://cdn.jsdelivr.net/npm/some-lib@1/dist/lib.min.js"></script></head></html>');
     expect(findOutsideUrls(dir)).toEqual([{ file: 'index.html', url: 'https://cdn.jsdelivr.net/npm/some-lib@1/dist/lib.min.js' }]);

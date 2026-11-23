@@ -7,8 +7,7 @@
     "target": "ES2022",
     "importHelpers": false,
     "declaration": true,
-    "types": ["node"],
-    "baseUrl": "."
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["jest.config.cts", "src/**/*.spec.ts", "src/**/*.test.ts"]

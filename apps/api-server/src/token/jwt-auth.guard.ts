@@ -1,9 +1,10 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JsonWebTokenError, TokenExpiredError } from '@nestjs/jwt';
+import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import { AuthError } from '@error/auth/auth-error';
-import { CSRF_HEADER } from './auth-cookies';
+import { CSRF_HEADER, readAccessCookie } from './auth-cookies';
+import { TokenBlacklistService } from './token-blacklist.service';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -17,40 +18,64 @@ export function hasCsrfHeader(request: { method?: string; headers?: Record<strin
   return request.headers?.[CSRF_HEADER] === '1';
 }
 
+type AccessTokenPayload = { sub?: string; jti?: string; type?: string; exp?: number; fam?: string };
+
+/**
+ * The global guard in server mode (selectAppGuard). Every route needs the
+ * access JWT from the httpOnly cookie, unless it is marked @Public: a valid
+ * signature, not expired, an access token, not revoked at logout (itself or
+ * its whole refresh family). The payload becomes request.user.
+ */
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {
-  constructor(private reflector: Reflector) {
-    super();
-  }
-  canActivate(context: ExecutionContext) {
-    if (!hasCsrfHeader(context.switchToHttp().getRequest())) {
+export class JwtAuthGuard implements CanActivate {
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly jwt: JwtService,
+    private readonly tokenBlacklist: TokenBlacklistService
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request & { user?: AccessTokenPayload }>();
+    if (!hasCsrfHeader(request)) {
       throw AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' });
     }
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
       context.getClass(),
     ]);
-    return isPublic ? true : super.canActivate(context);
-  }
-  handleRequest<TUser = any>(
-    err: any,
-    user: any,
-    info: any,
-    context: ExecutionContext,
-    status?: any
-  ): TUser {
-    if (!user) {
-      throw AuthError.InvalidToken(
-        { userId: 'unknown' },
-        new Error('User not found or invalid token')
-      );
-    }
+    if (isPublic) return true;
 
-    if (info instanceof TokenExpiredError || info instanceof JsonWebTokenError) {
-      throw AuthError.InvalidToken({ userId: user?.sub || 'unknown' }, info);
-    } else if (err instanceof Error) {
-      throw AuthError.InternalError({ userId: user?.sub || 'unknown' }, err);
+    request.user = await this.verify(readAccessCookie(request));
+    return true;
+  }
+
+  // Every way in which the token fails gives the same answer to the client
+  // (as with the passport strategy this replaces); the cause stays on the error.
+  private async verify(token: string | undefined): Promise<AccessTokenPayload> {
+    if (!token) {
+      throw AuthError.InvalidToken({ userId: 'unknown' }, new Error('No access token'));
     }
-    return super.handleRequest(err, user, info, context, status);
+    let payload: AccessTokenPayload;
+    try {
+      payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
+    } catch (err) {
+      throw AuthError.InvalidToken({ userId: 'unknown' }, err as Error);
+    }
+    if (payload.type !== 'access') {
+      throw AuthError.InvalidToken({ userId: 'unknown' }, new Error('Not an access token'));
+    }
+    let revoked = false;
+    try {
+      revoked =
+        (Boolean(payload.jti) && (await this.tokenBlacklist.isBlacklisted(payload.jti as string))) ||
+        // Its session was logged out, or its refresh token was reused.
+        (await this.tokenBlacklist.isFamilyRevoked(payload.fam));
+    } catch (err) {
+      throw AuthError.InvalidToken({ userId: 'unknown' }, err as Error);
+    }
+    if (revoked) {
+      throw AuthError.InvalidToken({ userId: 'unknown' }, new Error('Access token revoked'));
+    }
+    return payload;
   }
 }

@@ -57,3 +57,16 @@ it('releases the requests waiting on a refresh that fails, and the next 401 refr
   await apiClient.get('/c').catch(() => undefined);
   expect(postSpy).toHaveBeenCalledTimes(2);
 });
+
+it.each([429, 503])('keeps the session when the refresh answers %i (try again shortly)', async (status) => {
+  postSpy.mockRejectedValueOnce(Object.assign(new Error(String(status)), { response: { status } }));
+  await apiClient.get('/user').catch(() => undefined);
+  expect(postSpy).toHaveBeenCalledTimes(1);
+  expect(dispatched.map((a) => a.type)).not.toContain('auth/logout');
+});
+
+it('ends the session when the refresh answers 401', async () => {
+  postSpy.mockRejectedValueOnce(Object.assign(new Error('401'), { response: { status: 401 } }));
+  await apiClient.get('/user').catch(() => undefined);
+  expect(dispatched.map((a) => a.type)).toContain('auth/logout');
+});

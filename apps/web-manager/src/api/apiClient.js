@@ -384,7 +384,7 @@ const readStorageLease = () => {
 };
 
 async function withStorageLock(run) {
-  let lease = null;
+  let lease;
   try {
     for (;;) {
       const held = readStorageLease();
@@ -592,6 +592,9 @@ if (sessionRefreshEnabled()) {
     scheduleSessionRefresh(initialSession);
   }
 }
+
+/** An answer that means "try again shortly", not "the session is over". */
+const isRetryLaterStatus = (status) => status === 429 || status === 503;
 
 async function handleSystemSessionExpired() {
   // The desktop app has no app login to go back to.
@@ -841,9 +844,9 @@ apiClient.interceptors.response.use(
         originalRequest._retry = true;
 
         // The check when the app opens (checkSession) ends nothing itself: a
-        // refresh the server refused (401) is its answer "signed out", one
-        // that only failed (no answer, 503 busy) is no answer, and the session
-        // kept from the last visit stays.
+        // refresh the server refused (401) is its answer "signed out" (it
+        // signs out then), one that only failed (no answer, 503 busy) is no
+        // answer, and the session kept from the last visit stays.
         const sessionCheck = Boolean(originalRequest.__sessionCheck);
         const refusedBy = (refreshErr) => (
           sessionCheck && refreshErr?.response?.status !== 401 ? refreshErr ?? error : error
@@ -867,9 +870,14 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } catch (refreshErr) {
           notifyAccessTokenRefreshFailed(refreshErr);
-          if (sessionCheck) return Promise.reject(refusedBy(refreshErr));
-          await handleSystemSessionExpired();
-          return Promise.reject(error);
+          // "Try again shortly" (429, or 503 while another refresh of the same
+          // token runs) says nothing about the session: it stays, and the
+          // next request refreshes again. The check when the app opens ends
+          // nothing itself (above).
+          if (!sessionCheck && !isRetryLaterStatus(refreshErr?.response?.status)) {
+            await handleSystemSessionExpired();
+          }
+          return Promise.reject(refusedBy(refreshErr));
         } finally {
           isRefreshingAccessToken = false;
         }

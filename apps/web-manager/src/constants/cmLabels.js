@@ -616,6 +616,8 @@ export const CM = {
   createAccount: 'Create Account',
   registrationFailed: 'Registration failed. Please try again.',
   loginFailedMsg: 'Login failed. Check your ID and password.',
+  // The login rate limit (429); `seconds` from Retry-After when the server sent it.
+  tooManyAttemptsMsg: (seconds) => (seconds ? `Too many attempts. Try again in ${seconds} seconds.` : 'Too many attempts. Try again shortly.'),
   minChars3: 'At least 3 characters',
 
   // Broker UI

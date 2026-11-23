@@ -339,7 +339,8 @@ function loadRuntimeEnvFiles(): void {
   }
   const envFilePath = candidates.find((p) => fs.existsSync(p)) ?? null;
   if (envFilePath) {
-    loadEnv({ path: envFilePath, override: false });
+    // quiet: dotenv 17+ otherwise logs every file it loads.
+    loadEnv({ path: envFilePath, override: false, quiet: true });
   }
 
   // 2. cwm.conf — user-editable settings (throws on parse error): CWM_CONF_PATH

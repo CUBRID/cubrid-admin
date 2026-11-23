@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { EncryptionService } from './encryption/encryption.service';
 import { ConfigModule } from '@config/config.module';
 import { PasswordService } from './password/password.service';
-import { PassportModule } from '@nestjs/passport';
 
 /**
  * Module for managing security-related functionalities.
@@ -11,7 +10,7 @@ import { PassportModule } from '@nestjs/passport';
  * @since 1.0.0
  */
 @Module({
-  imports: [ConfigModule, PassportModule],
+  imports: [ConfigModule],
   exports: [EncryptionService, PasswordService],
   providers: [EncryptionService, PasswordService],
 })
