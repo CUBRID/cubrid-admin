@@ -69,7 +69,6 @@ test.describe('Feature: Database Query Plan Automation', () => {
       if (request.postDataJSON()?.plan?.query_id !== ownedPlanId) return;
       cleanupTarget = {
         url: request.url().replace(/\/append$/, '/remove'),
-        authorization: request.headers().authorization,
         queryId: ownedPlanId,
       };
     });
@@ -93,10 +92,10 @@ test.describe('Feature: Database Query Plan Automation', () => {
     await action('Clean up this test query plan even after assertion failure', async () => {
       // Same-origin fetch works for both web and Electron's app:// API proxy.
       // The server's plan mutex also orders this after an outstanding update.
-      const result = await page.evaluate(async ({ url, authorization, queryId }) => {
+      const result = await page.evaluate(async ({ url, queryId }) => {
         const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: authorization },
+          headers: { 'Content-Type': 'application/json', 'X-CWM-Request': '1' },
           body: JSON.stringify({ query_id: queryId }),
           signal: AbortSignal.timeout(65000),
         });

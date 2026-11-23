@@ -4,7 +4,7 @@ import { isAmbiguousFailure } from '../../api/isAmbiguousFailure';
 import { createRateTracker } from './rateTracker';
 import { brokerStateOf } from './brokerState';
 import { fetchBrokerStatusMap } from './fetchBrokerStatusMap';
-import apiClient from '../../api/apiClient';
+import { appSessionKey } from '../../api/apiClient';
 import { createSharedReads } from '../../infrastructure/utils/singleFlight';
 import { dbKey } from '../database/dbKey';
 import { hostKey, deleteHostKeys } from '../host/hostKey';
@@ -22,7 +22,7 @@ const brokerListReads = createSharedReads();
 
 // Do not share a read across login sessions.
 const brokerListKey = (hostUid, skipStatusEnrichment) =>
-  JSON.stringify([apiClient.defaults.headers.common.Authorization, hostUid, skipStatusEnrichment]);
+  JSON.stringify([appSessionKey(), hostUid, skipStatusEnrichment]);
 
 // Resolves to { brokers, statusByName }: the list, and the bulk status
 // (broker name -> getbrokerstatus entry) it was enriched with, empty when

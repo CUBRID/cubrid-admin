@@ -1,6 +1,6 @@
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { setSelectedBroker, setSelectedBrokerSubItem, fetchBrokerLogs } from '../../../broker/brokerSlice';
-import { brokerDotStatus, brokerStateOf } from '../../../broker/brokerState';
+import { brokerAccessModeOf, brokerDotStatus, brokerStateOf } from '../../../broker/brokerState';
 import { openTab } from '../../layoutSlice';
 import { hostKey } from '../../../host/hostKey';
 import { useShownBrokers } from '../../../broker/brokerRestartState';
@@ -75,7 +75,7 @@ export default function BrokerTree({ hostUid, onContextMenu, onSqlLogContextMenu
           <TreeNode
             key={broker.name}
             id={broker.name}
-            label={`${broker.name} (${broker.port})`}
+            label={brokerAccessModeOf(broker) ? `${broker.name} (${broker.port}, ${brokerAccessModeOf(broker)})` : `${broker.name} (${broker.port})`}
             icon="hub"
             level={1}
             status={brokerDotStatus(broker)}

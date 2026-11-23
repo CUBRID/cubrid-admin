@@ -6,6 +6,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as express from 'express';
+import cookieParser from 'cookie-parser';
+import { API_PREFIX, CSRF_HEADER, authCookieNames } from '@token/auth-cookies';
 import { getHttpsOptions, logStartupBanner, createWinstonLogger, startLogConfigWatcher } from '@util';
 import { embeddedPublicFiles } from './util/standalone-executable';
 import { GlobalExceptionFilter } from '@error/global-filter';
@@ -39,13 +41,15 @@ async function bootstrap() {
   const desktopMode = configService.isDesktopMode();
 
   if (allowedOrigins.includes('*')) {
-    // Development mode: allow all origins.
-    console.log('[main.ts] Enabling CORS for all origins (dev).');
+    // Any origin may call, but never with the login cookies: echoing the
+    // origin back with credentials would let any page (another port of the
+    // same site included) send the cookies and read the answer.
+    console.log('[main.ts] Enabling CORS for all origins, without credentials.');
     app.enableCors({
-      origin: true,
+      origin: '*',
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-      credentials: true,
+      allowedHeaders: ['Content-Type', 'Accept', CSRF_HEADER],
+      credentials: false,
     });
   } else if (allowedOrigins.length > 0) {
     // Production with explicit whitelist: only listed origins allowed cross-origin.
@@ -64,7 +68,7 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS'));
       },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      allowedHeaders: ['Content-Type', 'Accept', CSRF_HEADER],
       credentials: true,
     });
   }
@@ -75,7 +79,12 @@ async function bootstrap() {
 
   // Desktop mode uses UDS + Electron proxy that strips /api — no prefix needed.
   if (!desktopMode) {
-    app.setGlobalPrefix('api');
+    app.setGlobalPrefix(API_PREFIX);
+    // The app session's tokens arrive as cookies (auth-cookies.ts), named
+    // after this installation's id: made or read now, so a storage that
+    // cannot hold it stops the start instead of the first login.
+    app.use(cookieParser());
+    authCookieNames();
   }
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor(), new SuccessResponseInterceptor());

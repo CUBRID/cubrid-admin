@@ -33,7 +33,7 @@ npm install
 ### 방법 1 — 프론트 + API 각각 실행
 
 ```bash
-npm run dev:web-manager   # React (Vite HMR, http://localhost:4200)
+npm run dev:web-manager   # React (Vite HMR, http://localhost:5173)
 npm run dev:api-server    # NestJS (watch mode, https://localhost:8080)
 ```
 
@@ -53,6 +53,12 @@ npm run dev:stack
 
 NestJS API(:8080)와 HTTPS 프록시(:443)를 함께 실행합니다.
 같은 자체 서명 인증서를 공유하므로 브라우저에서 한 번만 신뢰하면 됩니다.
+
+### 로그인 쿠키 관련 주의
+
+- http로 연 화면(LAN IP로 Vite에 접속, http 리버스 프록시 등)에서도 로그인됩니다. 이때 로그인 쿠키에는 Secure가 붙지 않습니다.
+- 로그인 쿠키는 호스트 이름 단위입니다. 같은 이름에서 포트만 다르면 로그인이 이어지고, `localhost`와 LAN IP처럼 이름이 다르면 따로 로그인해야 합니다.
+- 웹 화면과 API를 서로 다른 호스트(출처)에 두는 구성은 지원하지 않습니다. 같은 서버가 웹 화면을 내려 주거나, 프록시로 같은 출처에 두세요.
 
 ---
 
@@ -128,7 +134,7 @@ dist/executables/
 | `PORT` | 서버 포트 | `8080` |
 | `ENVIRONMENT` | `production` / `development` | `production` |
 | `STORAGE_PATH` | 데이터 저장 경로 | `./storage` |
-| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분, 없으면 전체 허용) | — |
+| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분). 없으면 같은 출처만 허용. `*`이면 모든 출처를 허용하지만 로그인 쿠키는 싣지 않음 | — |
 | `LISTEN_HOST` | 바인드할 네트워크 인터페이스 (예: `127.0.0.1`로 로컬 전용 제한) | 전체 인터페이스 |
 | `SSL_CERT_PATH` | 공인 인증서 경로 (없으면 자체 서명 인증서 자동 생성) | — |
 | `SSL_KEY_PATH` | 공인 인증서 키 경로 (`SSL_CERT_PATH`와 함께 설정 필요) | — |
@@ -258,6 +264,6 @@ E2E 환경과 실제 CMS 테스트 규칙은 [`e2e/README.md`](e2e/README.md)를
 | `STORAGE_PATH` | 데이터 저장 경로 | — |
 | `SSL_CERT_PATH` | SSL 인증서 경로 (없으면 자동 생성) | — |
 | `SSL_KEY_PATH` | SSL 키 경로 | — |
-| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분) | — |
+| `ALLOWED_ORIGINS` | CORS 허용 도메인 (쉼표 구분, `ENVIRONMENT`가 `production`이 아니면 무시하고 `*`) | — |
 | `CWM_DESKTOP` | Electron 모드 (`1`) | — |
 | `CWM_UPDATE_CHECK_REPO` | 업데이트 확인 시 조회할 GitHub 리포 (`owner/repo`, 형식이 틀리면 무시) | — (기본: `CUBRID/cubrid-admin`) |

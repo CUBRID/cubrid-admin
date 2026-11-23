@@ -10,11 +10,16 @@ vi.hoisted(() => {
   window.matchMedia ??= () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
 import WorkspaceSwitchConfirm from './WorkspaceSwitchConfirm';
+import { useLocation } from 'react-router-dom';
+
+function SearchShown() {
+  return <span>{useLocation().search}</span>;
+}
 
 // Same action types as layoutSlice, for the two actions the dialog dispatches.
 const layout = createSlice({
   name: 'layout',
-  initialState: { workspaceSwitchConfirmOpen: true, dirtyTabs: ['edit_config:h1:cubridconf'] },
+  initialState: { workspaceSwitchConfirmOpen: true, workspaceSwitchIntent: null, dirtyTabs: ['edit_config:h1:cubridconf'] },
   reducers: {
     closeWorkspaceSwitchConfirm: (s) => { s.workspaceSwitchConfirmOpen = false; },
     clearDirtyTabs: (s) => { s.dirtyTabs = []; },
@@ -35,8 +40,9 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = async () => {
+const render = async (intent = null) => {
   const store = configureStore({
+    preloadedState: { layout: { ...layout.getInitialState(), workspaceSwitchIntent: intent } },
     reducer: { layout: layout.reducer, user: (s = { preferences: { uiLocale: 'en' } }) => s },
   });
   await act(async () => root.render(
@@ -44,7 +50,7 @@ const render = async () => {
       <MemoryRouter initialEntries={['/home']}>
         <Routes>
           <Route path="/home" element={<div>DASHBOARD<WorkspaceSwitchConfirm /></div>} />
-          <Route path="/desktop/workspace" element={<div>WORKSPACE PAGE</div>} />
+          <Route path="/desktop/workspace" element={<div>WORKSPACE PAGE<SearchShown /></div>} />
         </Routes>
       </MemoryRouter>
     </Provider>
@@ -65,4 +71,10 @@ it('drops the unsaved marks and opens the workspace page when confirmed', async 
   await act(async () => button('confirm').click());
   expect(container.textContent).toContain('WORKSPACE PAGE');
   expect(store.getState().layout.dirtyTabs).toEqual([]);
+});
+
+it('opens the workspace page to import when File > Import Workspace asked', async () => {
+  await render('import');
+  await act(async () => button('confirm').click());
+  expect(container.textContent).toContain('WORKSPACE PAGE?do=import');
 });

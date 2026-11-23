@@ -1,4 +1,6 @@
 {
+  "name": "cubrid-admin",
+  "private": true,
   "version": "0.2.0",
   "commitNumAfter": "2026-11-11T11:08:00+09:00",
   "dependencies": {
@@ -24,6 +26,7 @@
     "bcryptjs": "^3.0.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
     "http-proxy-middleware": "^3.0.10",
@@ -62,6 +65,7 @@
     "@swc-node/register": "~1.12.1",
     "@swc/core": "~1.16.22",
     "@tailwindcss/vite": "^4.3.5",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "20.19.43",

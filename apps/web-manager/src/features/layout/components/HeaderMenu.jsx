@@ -74,6 +74,16 @@ export default function HeaderMenu({ folded = false }) {
             label={CM.switchWorkspace}
             {...action(MENU_ACTIONS.switchWorkspace)}
           />
+          <MenuItem
+            icon="upload_file"
+            label={CM.exportWorkspace}
+            {...action(MENU_ACTIONS.exportWorkspace)}
+          />
+          <MenuItem
+            icon="drive_folder_upload"
+            label={CM.importWorkspace}
+            {...action(MENU_ACTIONS.importWorkspace)}
+          />
           <MenuDivider />
           <MenuItem
             icon="logout"

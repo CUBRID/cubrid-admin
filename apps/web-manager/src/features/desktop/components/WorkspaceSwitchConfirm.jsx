@@ -15,6 +15,7 @@ export default function WorkspaceSwitchConfirm() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const isOpen = useSelector((state) => state.layout.workspaceSwitchConfirmOpen);
+  const intent = useSelector((state) => state.layout.workspaceSwitchIntent);
 
   return (
     <ConfirmDialog
@@ -27,7 +28,7 @@ export default function WorkspaceSwitchConfirm() {
       onConfirm={() => {
         dispatch(closeWorkspaceSwitchConfirm());
         dispatch(clearDirtyTabs());
-        navigate(DESKTOP_WORKSPACE_PATH);
+        navigate(intent ? `${DESKTOP_WORKSPACE_PATH}?do=${intent}` : DESKTOP_WORKSPACE_PATH);
       }}
       testId="workspace-switch-unsaved"
     />
