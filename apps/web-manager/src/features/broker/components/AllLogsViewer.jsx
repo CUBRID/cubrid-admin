@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { fetchBrokerLogs, fetchDatabaseLogs, fetchLogContent } from '../brokerSlice';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -206,12 +206,12 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
     return isDb ? raw : raw.filter(l => l.path.toLowerCase().endsWith('.log'));
   }, [logsList, isDb]);
 
-  const handleFetchLogsList = () => {
+  const handleFetchLogsList = useCallback(() => {
     if (!canFetchList) return Promise.resolve();
-    return isDb 
+    return isDb
       ? dispatch(fetchDatabaseLogs({ hostUid, dbname: targetName }))
       : dispatch(fetchBrokerLogs({ hostUid, brokerName: targetName }));
-  };
+  }, [canFetchList, isDb, dispatch, hostUid, targetName]);
 
   // Load the list once while it isn't available. A failed fetch leaves it
   // unset, so without the ref it would be asked for again the moment it
@@ -226,7 +226,7 @@ function AllLogsViewer({ type = 'broker', hostUid, targetName }) {
     if (!canFetchList || logsLoading || requestedListRef.current === key) return;
     requestedListRef.current = key;
     handleFetchLogsList();
-  }, [dispatch, hostUid, targetName, logsList, logsLoading, isDb, canFetchList]);
+  }, [hostUid, targetName, logsList, logsLoading, canFetchList, handleFetchLogsList]);
 
   // Expand all logs once they are available on the initial mount
   useEffect(() => {

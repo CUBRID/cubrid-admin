@@ -56,6 +56,29 @@ describe('DesktopWorkspaceSettingsPage', () => {
     expect(window.desktopBridge.setMenuLanguage).toHaveBeenLastCalledWith('ko');
   });
 
+  it('keeps the folder being typed and the error shown when the language changes, without reading the settings again', async () => {
+    window.desktopBridge.finishWorkspaceSetup = vi.fn().mockRejectedValue(new Error('boom'));
+    const store = configureStore({ reducer: { user: userReducer, auth: () => ({}) } });
+    await act(async () => {
+      root.render(<Provider store={store}><MemoryRouter><Page /></MemoryRouter></Provider>);
+    });
+    const input = () => container.querySelector('[data-testid="workspace-root-input"]');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input(), '/typed/ws');
+      input().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => container.querySelector('[data-testid="workspace-continue-btn"]').click());
+    expect(container.textContent).toContain('boom');
+
+    const kr = [...container.querySelectorAll('button')].find((b) => b.textContent === 'KR');
+    await act(async () => kr.click());
+
+    expect(container.querySelector('[data-testid="workspace-setup-title"]').textContent).toBe('워크스페이스 선택');
+    expect(input().value).toBe('/typed/ws');
+    expect(container.textContent).toContain('boom');
+    expect(window.desktopBridge.getWorkspaceInfo).toHaveBeenCalledTimes(1);
+  });
+
   describe('server start', () => {
     let emit;
 

@@ -1,4 +1,4 @@
-import React, { act, useState } from 'react';
+import React, { act, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
@@ -47,7 +47,7 @@ afterEach(async () => {
 
 function Harness() {
   const [selected, setSelected] = useState(() => new Set());
-  selection = selected;
+  useEffect(() => { selection = selected; });
   return (
     <BrokerTree
       hostUid="h1"

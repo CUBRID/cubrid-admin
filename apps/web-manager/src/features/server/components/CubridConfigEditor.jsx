@@ -12,6 +12,7 @@ import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
 import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 import EditorLoadBoundary from '../../../components/domain/EditorLoadBoundary';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // The editor (CodeMirror) is loaded only when a conf file is opened.
 const ConfEditor = lazy(() => import('../confEditor/ConfEditor'));
@@ -45,6 +46,8 @@ export default function CubridConfigEditor({ hostUid, confname }) {
     if (isAuthorized && hostEnv === undefined) dispatch(fetchHostEnv(hostUid));
   }, [isAuthorized, hostEnv, hostUid, dispatch]);
 
+  // The labels as they are when a read ends (a locale switch is no reason to read again).
+  const cmRef = useLatestRef(CM);
   const fetchConfig = useCallback(async () => {
     if (!hostUid || !confname) return;
     const version = ++loadVersion.current;
@@ -57,7 +60,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
         () => hostApi.getHostConfig(hostUid, confname));
       if (version !== loadVersion.current) return;
       const lines = response?.conflist?.[0]?.confdata;
-      if (!Array.isArray(lines)) throw new Error(CM.configResponseEmptyMsg);
+      if (!Array.isArray(lines)) throw new Error(cmRef.current.configResponseEmptyMsg);
       const joined = lines.join('\n');
       originalContentRef.current = joined;
       setContent(joined);
@@ -68,25 +71,31 @@ export default function CubridConfigEditor({ hostUid, confname }) {
       if (version !== loadVersion.current) return;
       dispatch(showStatusModal({
         type: 'error',
-        title: CM.fetchFailed,
-        message: CM.configFetchErrorMsg,
-        guidance: CM.databasePropertyGuidance,
+        title: cmRef.current.fetchFailed,
+        message: cmRef.current.configFetchErrorMsg,
+        guidance: cmRef.current.databasePropertyGuidance,
         detail: err?.response?.data?.note || err?.message,
       }));
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
-  }, [hostUid, confname, dispatch, tabId]);
+  }, [hostUid, confname, dispatch, tabId, cmRef]);
 
   useEffect(() => {
-    fetchConfig();
-    return () => { ++loadVersion.current; };
+    const read = async () => { await fetchConfig(); };
+    void read();
+    // The counter of this editor's reads, bumped on unmount so a late answer is dropped.
+    const loadVersions = loadVersion;
+    return () => { ++loadVersions.current; };
   }, [fetchConfig]);
 
   useEffect(() => {
     if (refreshCounter <= lastRefreshCounterRef.current) return;
     lastRefreshCounterRef.current = refreshCounter;
-    if (refreshTabId === tabId) fetchConfig();
+    if (refreshTabId === tabId) {
+      const read = async () => { await fetchConfig(); };
+      void read();
+    }
   }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
   const handleSourceChange = (val) => {

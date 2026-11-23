@@ -20,6 +20,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const LEVEL_PRESETS_DEF = [
   { value: '0', title: 'Full (L0)', descKey: 'levelFullShortDesc', icon: 'auto_awesome_motion' },
@@ -82,11 +83,15 @@ export default function EditBackupPlanModal() {
   const isHaDb = (haDbNamesByHost?.[selectedHostUid] || []).includes(selectedDatabase);
   const offlineDisabled = isHaDb;
 
+  useResetEffect(() => {
+    if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
+      setFormLoaded(false);
+      setSavedOnline(false);
+    }
+  }, [isEditBackupPlanModalOpen, selectedDatabase, selectedHostUid, selectedBackupId]);
   useEffect(() => {
     if (isEditBackupPlanModalOpen && selectedDatabase && selectedHostUid) {
       resetAction();
-      setFormLoaded(false);
-      setSavedOnline(false);
       dispatch(fetchBackupSchedule({ hostUid: selectedHostUid, dbname: selectedDatabase }))
         .unwrap()
         .then((data) => {
@@ -157,7 +162,7 @@ export default function EditBackupPlanModal() {
   };
 
   const setBulkDays = (type) => {
-    let days = [];
+    let days;
     switch(type) {
       case 'all': days = Array.from({length: 31}, (_, i) => i + 1); break;
       case 'clear': days = []; break;

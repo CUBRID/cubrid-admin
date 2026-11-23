@@ -16,6 +16,7 @@ import { Input } from '../../../components/ds/forms/Input';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { SectionHeader } from '../../../components/ds/foundation/SectionHeader';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function SuggestedHaNodesModal() {
   const CM = useCM();
@@ -49,7 +50,7 @@ export default function SuggestedHaNodesModal() {
     }
   }, [dispatch, filteredNodes.length, isDiscoveryModalOpen]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     setNewGroupName('');
     setCreateGroupError('');
     setCreatedGroupName('');

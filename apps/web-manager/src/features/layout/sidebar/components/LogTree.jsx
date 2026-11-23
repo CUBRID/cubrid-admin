@@ -10,6 +10,7 @@ import { Skeleton } from '../../../../components/ds/layout/Skeleton';
 import { Typography } from '../../../../components/ds/foundation/Typography';
 import { Icon } from '../../../../components/ds/foundation/Icon';
 import { useCM } from '../../../../constants/useCM';
+import { useLatestRef } from '../../../../infrastructure/hooks/useLatestRef';
 
 export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootContextMenu, onBrokerErrorLogContextMenu, onAdminLogContextMenu, onManagerLogContextMenu, onServerLogRootContextMenu }) {
   const CM = useCM();
@@ -65,15 +66,18 @@ export default function LogTree({ hostUid, onDbLogContextMenu, onBrokerLogRootCo
   const openedDbs = useRef(new Set());
   const prevLoggedIn = useRef(loggedInDatabases);
   const hostConnected = authorizedHosts.includes(hostUid) && !reconnectQueue.includes(hostUid);
+  // Only a login change triggers this; the lists are read for the check, as
+  // they are then, so a list arriving (or a failed read) runs nothing here.
+  const logListsRef = useLatestRef({ dbLogsByDb, dbLogsLoadingByDb });
   useEffect(() => {
     const prev = prevLoggedIn.current;
     prevLoggedIn.current = loggedInDatabases;
     if (!hostConnected) return;
+    const { dbLogsByDb: logs, dbLogsLoadingByDb: loading } = logListsRef.current;
     loggedInDatabases
-      .filter((key) => !prev.includes(key) && openedDbs.current.has(key) && !dbLogsByDb[key] && !dbLogsLoadingByDb[key])
+      .filter((key) => !prev.includes(key) && openedDbs.current.has(key) && !logs[key] && !loading[key])
       .forEach((key) => dispatch(fetchDatabaseLogs({ hostUid, dbname: key.slice(key.lastIndexOf(':') + 1) })));
-    // Only a login change triggers this; the lists are read for the check.
-  }, [dispatch, hostUid, hostConnected, loggedInDatabases]);
+  }, [dispatch, hostUid, hostConnected, loggedInDatabases, logListsRef]);
 
   return (
     <div className="space-y-0.5 px-2 py-2">

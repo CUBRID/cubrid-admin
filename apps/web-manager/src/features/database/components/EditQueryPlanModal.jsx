@@ -20,6 +20,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function EditQueryPlanModal() {
   const CM = useCM();
@@ -57,21 +58,27 @@ export default function EditQueryPlanModal() {
     }
   }, [isEditQueryPlanModalOpen, resetAction]);
 
-  // Initialization
+  // Initialization: a plan not loaded yet is read.
   useEffect(() => {
     if (isEditQueryPlanModalOpen && selectedDatabase && selectedQueryPlanId && !isLoading && !isSuccess && !isError) {
       const plans = queryPlans[dbKey(selectedHostUid, selectedDatabase)] || [];
       const plan = plans.find(p => p.query_id === selectedQueryPlanId);
-      
       if (!plan) {
         dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: selectedDatabase }));
       }
+    }
+  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid, dispatch]);
+  // The form follows the plan shown.
+  useResetEffect(() => {
+    if (isEditQueryPlanModalOpen && selectedDatabase && selectedQueryPlanId && !isLoading && !isSuccess && !isError) {
+      const plans = queryPlans[dbKey(selectedHostUid, selectedDatabase)] || [];
+      const plan = plans.find(p => p.query_id === selectedQueryPlanId);
       
       if (plan) {
         const ABBR_TO_NUM = { MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6, SUN: 7 };
         const periodType = plan.period || 'DAY';
         const detailStr = plan.detail || '';
-        let time = '12:00';
+        let time;
         let periodDetail = [];
 
         if (periodType === 'DAY') {
@@ -109,7 +116,8 @@ export default function EditQueryPlanModal() {
         });
       }
     }
-  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid, dispatch]);
+  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid]);
+
 
   if (!isEditQueryPlanModalOpen) return null;
 
@@ -151,7 +159,7 @@ export default function EditQueryPlanModal() {
     startAction();
 
     const WEEK_ABBRS = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT', 7: 'SUN' };
-    let detail = '';
+    let detail;
     if (formData.periodType === 'DAY') {
       detail = `EVERYDAY ${formData.backupTime}`;
     } else if (formData.periodType === 'DATE') {

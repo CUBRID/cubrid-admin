@@ -25,6 +25,8 @@ import { ModalStatusLoading,
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -66,7 +68,9 @@ export default function DeleteDatabaseModal() {
   const [dbId, setDbId] = useState('dba');
   const [password, setPassword] = useState('');
 
-  useEffect(() => {
+  // Only when the modal opens: a successful delete clears selectedDatabase,
+  // and re-running this then would reset the success view to the form.
+  useResetEffect(({ selectedDatabase, selectedHostUid }) => {
     if (isDeleteDBModalOpen && selectedDatabase && selectedHostUid) {
       setStep(1);
       setDbId('dba');
@@ -75,9 +79,17 @@ export default function DeleteDatabaseModal() {
       setJobStatus(null);
       setDeletingDb('');
       setWarnings([]);
-      resetAction();
       setFetchingVolumes(true);
-      databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
+    }
+  }, [isDeleteDBModalOpen], { selectedDatabase, selectedHostUid });
+  // The database and host as they are when the modal opens: a successful
+  // delete clears selectedDatabase, and this must not run again then.
+  const atOpen = useLatestRef({ selectedDatabase, selectedHostUid });
+  useEffect(() => {
+    const { selectedDatabase: dbname, selectedHostUid: hostUid } = atOpen.current;
+    if (isDeleteDBModalOpen && dbname && hostUid) {
+      resetAction();
+      databaseApi.getVolumeInfo(hostUid, dbname)
         .then(res => {
           if (res?.spaceinfo) {
             const pageSize = parseInt(res.pagesize || 0);
@@ -97,10 +109,7 @@ export default function DeleteDatabaseModal() {
         .catch(() => {})
         .finally(() => setFetchingVolumes(false));
     }
-    // Only when the modal opens: a successful delete clears selectedDatabase,
-    // and re-running this then would reset the success view to the form.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDeleteDBModalOpen]);
+  }, [isDeleteDBModalOpen, resetAction, atOpen]);
 
   if (!isDeleteDBModalOpen) return null;
 

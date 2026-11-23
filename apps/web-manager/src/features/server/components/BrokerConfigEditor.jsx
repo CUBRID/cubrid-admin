@@ -12,6 +12,7 @@ import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
 
 import ConfigEditorToolbar from './broker/ConfigEditorToolbar';
 import ConfigSourceEditor from './broker/ConfigSourceEditor';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 export default function BrokerConfigEditor({ hostUid }) {
   const CM = useCM();
@@ -39,6 +40,8 @@ export default function BrokerConfigEditor({ hostUid }) {
   const [rawContent, setRawContent] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
 
+  // The labels as they are when a read ends (a locale switch is no reason to read again).
+  const cmRef = useLatestRef(CM);
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     try {
@@ -54,24 +57,28 @@ export default function BrokerConfigEditor({ hostUid }) {
       console.error('Failed to fetch broker config:', err);
       dispatch(showStatusModal({
         type: 'error',
-        title: CM.fetchFailed,
-        message: CM.brokerConfigRetrieveError,
-        guidance: CM.brokerOperationGuidance,
+        title: cmRef.current.fetchFailed,
+        message: cmRef.current.brokerConfigRetrieveError,
+        guidance: cmRef.current.brokerOperationGuidance,
         detail: err?.response?.data?.note || err?.message,
       }));
     } finally {
       setLoading(false);
     }
-  }, [hostUid, dispatch, tabId]);
+  }, [hostUid, dispatch, tabId, cmRef]);
 
   useEffect(() => {
-    fetchConfig();
+    const read = async () => { await fetchConfig(); };
+    void read();
   }, [fetchConfig]);
 
   useEffect(() => {
     if (refreshCounter <= lastRefreshCounterRef.current) return;
     lastRefreshCounterRef.current = refreshCounter;
-    if (refreshTabId === tabId) fetchConfig();
+    if (refreshTabId === tabId) {
+      const read = async () => { await fetchConfig(); };
+      void read();
+    }
   }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
   const handleSourceChange = (text) => {

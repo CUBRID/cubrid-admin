@@ -10,6 +10,19 @@ import { isAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
 
 const NO_TABS = [];
 
+// Declared once, outside the component: a component made during render is a
+// new type on every render, so React would unmount and mount it each time.
+const MenuLabel = ({ children }) => (
+  <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 tracking-wide group-hover:text-amber-500 transition-colors">
+    {children}
+  </span>
+);
+
+// A section heading of the folded menu.
+const Heading = ({ children }) => (
+  <div className="px-3 pt-2 pb-1 text-11 font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">{children}</div>
+);
+
 export default function HeaderMenu({ folded = false }) {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -35,12 +48,6 @@ export default function HeaderMenu({ folded = false }) {
       onClick: () => runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, anyModalOpen: isAnyModalOpen() }),
     };
   };
-
-  const MenuLabel = ({ children }) => (
-    <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 tracking-wide group-hover:text-amber-500 transition-colors">
-      {children}
-    </span>
-  );
 
   // Each menu's items, shown as three menus or, when the header is too
   // narrow for them (see Header.jsx), folded into one.
@@ -176,9 +183,6 @@ export default function HeaderMenu({ folded = false }) {
 
   if (folded) {
     // No submenu inside: the config file items are listed in place.
-    const Heading = ({ children }) => (
-      <div className="px-3 pt-2 pb-1 text-11 font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">{children}</div>
-    );
     return (
       <nav className="flex items-center font-sans" data-testid="header-menu-folded">
         <DropdownMenu label={<MenuLabel>{CM.headerMenu}</MenuLabel>} minWidth="min-w-64">

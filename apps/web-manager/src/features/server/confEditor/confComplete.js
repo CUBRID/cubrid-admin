@@ -30,7 +30,7 @@ export function confCompletionSource(ctx) {
     const line = context.state.doc.lineAt(context.pos);
     const after = line.text.slice(context.pos - line.from);
     const params = paramsFor(kind, paramSchemas);
-    let options = [];
+    let options;
     let rest;
     if (where.place === 'heading') {
       rest = /^[^\]\s]*/.exec(after)[0];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import {
   fetchBackupSchedule,
@@ -47,11 +47,11 @@ export default function DBJobAutomationSection({ pollingProps }) {
     shallowEqual
   );
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     if (!hostUid || !dbname) return;
     dispatch(fetchBackupSchedule({ hostUid, dbname }));
     dispatch(fetchQueryPlan({ hostUid, dbname }));
-  };
+  }, [dispatch, hostUid, dbname]);
 
   const wasActiveAndExpanded = useRef(false);
   useEffect(() => {
@@ -60,7 +60,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
       refresh();
     }
     wasActiveAndExpanded.current = currentActiveAndExpanded;
-  }, [isTabActive, isCollapsed, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, hostUid, dbname, refresh]);
 
   useEffect(() => {
     let interval;
@@ -68,18 +68,18 @@ export default function DBJobAutomationSection({ pollingProps }) {
       interval = setInterval(refresh, refreshInterval * 1000);
     }
     return () => clearInterval(interval);
-  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname, refresh]);
 
-  const openBackupDetail = (row) => {
+  const openBackupDetail = useCallback((row) => {
     dispatch(setSelectedDatabase(dbname));
     dispatch(setSelectedBackupId(row.backupid));
     dispatch(openEditBackupPlanModal());
-  };
+  }, [dispatch, dbname]);
 
-  const openQueryDetail = (row) => {
+  const openQueryDetail = useCallback((row) => {
     dispatch(setSelectedDatabase(dbname));
     dispatch(openEditQueryPlanModal(row.query_id));
-  };
+  }, [dispatch, dbname]);
 
   const backupColumns = useMemo(() => [
     {
@@ -117,7 +117,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
         </button>
       ),
     },
-  ], [CM]);
+  ], [CM, openBackupDetail]);
 
   const queryColumns = useMemo(() => [
     {
@@ -150,7 +150,7 @@ export default function DBJobAutomationSection({ pollingProps }) {
         </button>
       ),
     },
-  ], [CM]);
+  ], [CM, openQueryDetail]);
 
   return (
     <Card

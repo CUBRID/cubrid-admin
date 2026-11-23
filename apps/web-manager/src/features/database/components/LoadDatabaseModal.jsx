@@ -24,6 +24,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess,
   ModalStatusError,
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function LoadDatabaseModal() {
   const CM = useCM();
@@ -109,14 +110,17 @@ export default function LoadDatabaseModal() {
     setDataSource(convertedList);
   };
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isLoadDBModalOpen && selectedDatabase) {
-      resetAction();
       setFormData((prev) => ({
         ...prev,
         targetDbName: selectedDatabase,
       }));
-
+    }
+  }, [isLoadDBModalOpen, selectedDatabase]);
+  useEffect(() => {
+    if (isLoadDBModalOpen && selectedDatabase) {
+      resetAction();
       if (!isLoggedIn) return;
 
       databaseApi.getUnloadInfo(selectedHostUid).then((res) => {

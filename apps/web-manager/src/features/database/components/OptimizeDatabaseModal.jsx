@@ -28,6 +28,7 @@ import {
   CaDialogFieldGrid,
   CaDialogGroup,
 } from '../../../components/ds/layout/CaDialogLayout';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 /**
  * Custom Dropdown for Class Selection
@@ -87,7 +88,7 @@ const ClassSelect = ({ value, userClasses, onChange, disabled, isLoading }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (!isOpen) setSearch('');
   }, [isOpen]);
 
@@ -249,7 +250,7 @@ export default function OptimizeDatabaseModal() {
     }
   }, [selectedHostUid, selectedDatabase, isActive]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isOptimizeDatabaseModalOpen && selectedDatabase) {
       setSelectedClassName('');
       setResultJob(null);
@@ -258,8 +259,13 @@ export default function OptimizeDatabaseModal() {
       // tells the backend to reuse that cache instead of logging in again.
       setDbuser(alreadyLoggedIn ? '' : 'dba');
       setDbpasswd('');
+    }
+  }, [isOptimizeDatabaseModalOpen, selectedDatabase, alreadyLoggedIn]);
+  useEffect(() => {
+    if (isOptimizeDatabaseModalOpen && selectedDatabase) {
       resetAction();
-      fetchClasses();
+      const read = async () => { await fetchClasses(); };
+      void read();
     }
   }, [isOptimizeDatabaseModalOpen, selectedDatabase, alreadyLoggedIn, fetchClasses, resetAction]);
 

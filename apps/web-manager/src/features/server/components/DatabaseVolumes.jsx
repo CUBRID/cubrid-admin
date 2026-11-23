@@ -10,6 +10,7 @@ import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState
 import { useCM } from '../../../constants/useCM';
 import { formatSize } from '../../../infrastructure/utils/format';
 import { volumeGroup } from '../hostMetrics';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const getSizeFormat = (size) => formatSize(size, 1);
 
@@ -103,7 +104,7 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   const [loadFailed, setLoadFailed] = useState(false);
   const dbListSettled = dbListStatus !== 'loading';
 
-  useEffect(() => {
+  useResetEffect(() => {
     setVolumes([]);
     setLoading(false);
     setHasLoadedOnce(false);
@@ -115,14 +116,12 @@ export default function DatabaseVolumes({ hostUid, activeDatabases = [], dbListS
   // keeps showing (and re-fetching) a logged-out database's storage volumes.
   // The same array while the names are the same: a new array would re-read
   // the volumes every time either list is rebuilt with the same content.
-  const lastListRef = useRef([]);
-  const loggedInActiveDatabases = React.useMemo(() => {
-    const next = activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db)));
-    const last = lastListRef.current;
-    if (next.length === last.length && next.every((db, i) => db === last[i])) return last;
-    lastListRef.current = next;
-    return next;
-  }, [activeDatabases, loggedInDatabases, hostUid]);
+  // (A database name never holds a NUL character.)
+  const loggedInActiveKey = activeDatabases.filter((db) => loggedInDatabases.includes(dbKey(hostUid, db))).join('\u0000');
+  const loggedInActiveDatabases = React.useMemo(
+    () => (loggedInActiveKey ? loggedInActiveKey.split('\u0000') : []),
+    [loggedInActiveKey]
+  );
   // Running databases left out of the table for want of a login. Said in a
   // line under the table when some are shown; with none shown the table's
   // own empty message says it.

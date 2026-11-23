@@ -15,7 +15,10 @@ const polling = vi.hoisted(() => ({ isDbLoggedIn: true }));
 vi.mock('../../../infrastructure/hooks/usePollingRefresh', () => ({
   usePollingRefresh: () => ({ isManualRefreshing: false, lastRefreshed: new Date(0), handleRefresh: () => undefined, isDbLoggedIn: polling.isDbLoggedIn }),
 }));
-vi.mock('./dashboard/DBPerformanceSection', () => ({ default: () => null }));
+// Only whether the host memory bar has a read to show (its segments).
+vi.mock('./dashboard/DBPerformanceSection', () => ({
+  default: ({ dbStats }) => <span data-testid="host-memory-bar">{dbStats[0]?.memSegments ? 'shown' : 'hidden'}</span>,
+}));
 vi.mock('./dashboard/DBVolumesSection', () => ({ default: () => null }));
 vi.mock('./dashboard/DBSpaceInfoSection', () => ({ default: () => null }));
 vi.mock('./dashboard/DBLockTransactionSection', () => ({ default: () => null }));
@@ -30,10 +33,10 @@ const cas = (id, qps) => ({
   cpu: '0', psize: '1024', _idNum: id, _pidNum: 100 + id, _qpsNum: qps, _lqsNum: 0,
 });
 
-const makeStore = (brokersCAS, hostExtra = {}) => configureStore({
+const makeStore = (brokersCAS, hostExtra = {}, hostsData = {}) => configureStore({
   reducer: {
     host: (state = { selectedHostUid: 'h1', hosts: [{ uid: 'h1', address: 'a', port: 8001 }], haInfo: {}, hostEnvs: {}, ...hostExtra }) => state,
-    monitoring: (state = { hostsData: {} }) => state,
+    monitoring: (state = { hostsData }) => state,
     databaseMonitoring: (state = {
       dashboardData: { 'h1:demodb': { brokersCAS, casStatus: 'loaded', volumes: [], spaceInfo: [], locks: [], performance: {} } },
       dashboardLoading: {},
@@ -99,4 +102,41 @@ it('shows the not-logged-in state, with no section mounted to read anything, aft
   ));
   expect(container.querySelector('[data-testid="db-login-required"]').textContent).toContain(CM.databaseNotLoggedIn);
   expect(container.querySelector('[data-testid="db-dashboard-cas"]')).toBeNull();
+});
+
+// The host memory read (from the host dashboard's gethoststat) is shown until
+// it is older than hostMemoryMaxAgeMs (a minute at interval 0): a timer set
+// for that moment hides it, instead of the clock at render.
+const renderWithHostMemory = (readAt) => act(async () => root.render(
+  <Provider store={makeStore([], {}, { h1: { currentStatus: { memTotal: 16 * 2 ** 30, memUsed: 6 * 2 ** 30, readAt } } })}>
+    <DatabaseDashboard hostUid="h1" dbname="demodb" />
+  </Provider>
+));
+const memoryBar = () => container.querySelector('[data-testid="host-memory-bar"]').textContent;
+
+it('hides the host memory bar at the moment its read becomes older than allowed', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(1_000_000);
+    await renderWithHostMemory(1_000_000 - 59_000);
+    expect(memoryBar()).toBe('shown');
+    await act(async () => { vi.advanceTimersByTime(999); });
+    expect(memoryBar()).toBe('shown');
+    await act(async () => { vi.advanceTimersByTime(1); });
+    expect(memoryBar()).toBe('hidden');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not show a host memory read that is already too old', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(1_000_000);
+    await renderWithHostMemory(1_000_000 - 61_000);
+    await act(async () => { vi.advanceTimersByTime(0); });
+    expect(memoryBar()).toBe('hidden');
+  } finally {
+    vi.useRealTimers();
+  }
 });

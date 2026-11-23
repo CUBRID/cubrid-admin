@@ -19,6 +19,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function AddQueryPlanModal() {
   const CM = useCM();
@@ -50,8 +51,10 @@ export default function AddQueryPlanModal() {
 
   // Initialization
   useEffect(() => {
+    if (isAddQueryPlanModalOpen && selectedDatabase) resetAction();
+  }, [isAddQueryPlanModalOpen, selectedDatabase, resetAction]);
+  useResetEffect(() => {
     if (isAddQueryPlanModalOpen && selectedDatabase) {
-      resetAction();
       setFormData({
         queryId: `q_${selectedDatabase}_${Date.now().toString().slice(-4)}`,
         username: 'public',
@@ -62,7 +65,7 @@ export default function AddQueryPlanModal() {
         queryString: ''
       });
     }
-  }, [isAddQueryPlanModalOpen, selectedDatabase, resetAction]);
+  }, [isAddQueryPlanModalOpen, selectedDatabase]);
 
   if (!isAddQueryPlanModalOpen) return null;
 
@@ -104,7 +107,7 @@ export default function AddQueryPlanModal() {
     startAction();
 
     const WEEK_ABBRS = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT', 7: 'SUN' };
-    let detail = '';
+    let detail;
     if (formData.periodType === 'DAY') {
       detail = `EVERYDAY ${formData.backupTime}`;
     } else if (formData.periodType === 'DATE') {

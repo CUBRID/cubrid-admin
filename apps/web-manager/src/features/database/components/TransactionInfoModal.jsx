@@ -12,6 +12,8 @@ import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLo
 import { TablePagination } from '../../../components/ds/feedback/Pagination';
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 const PAGE_SIZE = 20;
 
@@ -45,7 +47,7 @@ export default function TransactionInfoModal() {
   }, [transactions, sortDirection]);
   const pager = useClientPagination(sortedTransactions, PAGE_SIZE, `${isTransactionInfoModalOpen}:${selectedHostUid}:${selectedDatabase}`);
   // A selection on another page can't be seen, so Kill must not act on it.
-  useEffect(() => {
+  useResetEffect(() => {
     setSelectedTranIndex(null);
   }, [pager.page]);
 
@@ -81,31 +83,44 @@ export default function TransactionInfoModal() {
     }
   };
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isTransactionInfoModalOpen) {
       setSelectedTranIndex(null);
-      fetchTransactionInfo();
     } else {
       // Reset while hidden so the next open starts on the loading state
       // rather than the previous database's list.
-      requestIdRef.current += 1;
       setTransactions([]);
       setHasLoaded(false);
       setLoading(false);
       setErrorMsg('');
     }
   }, [isTransactionInfoModalOpen, selectedHostUid, selectedDatabase]);
+  // The read as it is now: only an open or another database reads again.
+  const fetchTransactionInfoRef = useLatestRef(fetchTransactionInfo);
+  useEffect(() => {
+    if (isTransactionInfoModalOpen) {
+      const read = async () => { await fetchTransactionInfoRef.current(); };
+      void read();
+    } else {
+      // A read still in flight for the previous open must not land.
+      requestIdRef.current += 1;
+    }
+  }, [isTransactionInfoModalOpen, selectedHostUid, selectedDatabase, fetchTransactionInfoRef]);
 
   // A kill only ever happens from a transaction list this modal already fetched,
   // so the credentials are known-good — safe to silently refetch instead of
   // dropping the user back to the auth screen.
+  // Only the signal triggers this; a signal missed while the list is not
+  // loaded is not replayed later, so the guards are read, not depended on.
   const lastSeenKillSignal = useRef(transactionKillSignal);
+  const killGuardRef = useLatestRef({ isOpen: isTransactionInfoModalOpen, hasLoaded, errorMsg });
   useEffect(() => {
-    if (!isTransactionInfoModalOpen || !hasLoaded || errorMsg) return;
+    const { isOpen, hasLoaded: loaded, errorMsg: error } = killGuardRef.current;
+    if (!isOpen || !loaded || error) return;
     if (lastSeenKillSignal.current === transactionKillSignal) return;
     lastSeenKillSignal.current = transactionKillSignal;
-    fetchTransactionInfo();
-  }, [transactionKillSignal]);
+    fetchTransactionInfoRef.current();
+  }, [transactionKillSignal, killGuardRef, fetchTransactionInfoRef]);
 
   if (!isTransactionInfoModalOpen) return null;
 

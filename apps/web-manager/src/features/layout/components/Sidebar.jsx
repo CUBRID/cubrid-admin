@@ -116,6 +116,7 @@ import { useHostActivation } from '../../host/useHostActivation';
 import { useRefillNavigatorLists } from '../sidebar/useRefillNavigatorLists';
 import { menuOffReason } from '../menuOffReason';
 import { isCmsAdminHost } from '../../host/cmsAdmin';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // A selection updater keeping only the names in `namesText` (newline-joined).
 const keepOnly = (namesText) => (prev) => {
@@ -126,6 +127,9 @@ const keepOnly = (namesText) => (prev) => {
 
 // Stable fallback for a store without reconnectQueue.
 const NO_RECONNECT = [];
+// The same empty lists on every render: a new one would remake every callback on them.
+const NO_DATABASES = [];
+const NO_BROKERS = [];
 
 export default function Sidebar({ isCollapsed, onAddHost }) {
   const CM = useCM();
@@ -255,18 +259,18 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
   // host is currently selected — read straight out of the per-host maps so
   // a still in-flight response for a host the user has since switched away
   // from can never be mistaken for this host's own data.
-  const databases = databasesByHost[selectedHostUid] || [];
+  const databases = databasesByHost[selectedHostUid] || NO_DATABASES;
   // A deleted (or renamed) database or broker leaves the selection, so it
   // can't be acted on unseen, or come back selected under a reused name.
-  useEffect(() => {
+  useResetEffect(() => {
     setSelectedDbNames(keepOnly(navigatorDbNames));
   }, [navigatorDbNames]);
-  useEffect(() => {
+  useResetEffect(() => {
     setSelectedBrokerNames(keepOnly(navigatorBrokerNames));
   }, [navigatorBrokerNames]);
 
   // The database tree remounts per host; its multi-selection starts empty too.
-  useEffect(() => {
+  useResetEffect(() => {
     setSelectedDbNames(new Set());
     setDbMultiContextMenu(null);
     setSelectedBrokerNames(new Set());
@@ -350,7 +354,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
     });
   };
   const haDbNames = haDbNamesByHost[selectedHostUid] || [];
-  const brokers = brokersByHost[selectedHostUid] || [];
+  const brokers = brokersByHost[selectedHostUid] || NO_BROKERS;
 
   // Some Manage Database operations are unsafe (or outright break HA
   // pairing) when run against a database that's a live HA member — block
@@ -456,7 +460,7 @@ export default function Sidebar({ isCollapsed, onAddHost }) {
           message: CM.loginToHostsFailedMsg,
         }));
       });
-  }, [dispatch, hostGroups, authorizedHosts, CM.loginAll]);
+  }, [dispatch, hostGroups, authorizedHosts, CM]);
 
   const handleServiceAction = async (hostUid, action) => {
     if (!hostUid) return;

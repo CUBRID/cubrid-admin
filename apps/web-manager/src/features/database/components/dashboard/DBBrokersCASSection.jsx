@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchDashboardCAS } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -16,11 +16,11 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     if (hostUid && dbname) dispatch(fetchDashboardCAS({ hostUid, dbname }));
-  };
+  }, [dispatch, hostUid, dbname]);
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'cas' }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSectionsRef: pollingProps.collapsedSections, section: 'cas' }, refresh);
 
   useEffect(() => {
     let interval;
@@ -28,7 +28,7 @@ export default function DBBrokersCASSection({ brokersCAS, casStatus, pollingProp
       interval = setInterval(refresh, refreshInterval * 1000);
     }
     return () => clearInterval(interval);
-  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname, refresh]);
 
   const readyCount = brokersCAS.filter(c => isCasIdle(c.status)).length;
   const busyCount  = brokersCAS.filter(c => isCasBusy(c.status)).length;

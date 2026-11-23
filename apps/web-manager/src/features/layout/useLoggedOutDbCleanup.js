@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { closeTab } from './layoutSlice';
 import { databaseLoginLost } from '../database/databaseCoreSlice';
 import { dbKey } from '../database/dbKey';
+import { useLatestRef } from '../../infrastructure/hooks/useLatestRef';
 
 // Tabs that show one database and keep sending its per-db requests while
 // open (dashboard polls, statdump watcher, space/volume info, its logs).
@@ -38,8 +39,7 @@ export function useLoggedOutDbCleanup() {
   const loggedInDatabases = useSelector((state) => state.database.loggedInDatabases);
   const appliedLiveSeqByHost = useSelector((state) => state.database.appliedLiveSeqByHost);
 
-  const appliedLiveSeqRef = useRef(appliedLiveSeqByHost);
-  appliedLiveSeqRef.current = appliedLiveSeqByHost;
+  const appliedLiveSeqRef = useLatestRef(appliedLiveSeqByHost);
   const prevLoggedIn = useRef(loggedInDatabases);
   useEffect(() => {
     const prev = prevLoggedIn.current;
@@ -54,7 +54,7 @@ export function useLoggedOutDbCleanup() {
       if (appliedLiveSeqRef.current[hostUid] === undefined) return;
       dispatch(databaseLoginLost({ hostUid, dbname: key.slice(sep + 1) }));
     });
-  }, [dispatch, loggedInDatabases]);
+  }, [dispatch, loggedInDatabases, appliedLiveSeqRef]);
 
   useEffect(() => {
     openTabs.forEach((tabId) => {

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 /**
  * The password a workspace export is locked with: entered twice and at least
@@ -17,7 +18,7 @@ export default function WorkspacePasswordDialog({ isOpen, title, submitLabel, co
   const [tooShort, setTooShort] = useState(false);
 
   // A new dialog starts empty; nothing typed is kept once it closes.
-  useEffect(() => {
+  useResetEffect(() => {
     setPassword('');
     setAgain('');
     setMismatch(false);

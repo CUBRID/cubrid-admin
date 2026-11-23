@@ -25,6 +25,7 @@ import {
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function EditCMSUserModal() {
   const CM = useCM();
@@ -78,8 +79,10 @@ export default function EditCMSUserModal() {
   const [changePassword, setChangePassword] = useState(false);
 
   useEffect(() => {
+    if (isOpen) resetAction();
+  }, [isOpen, isEditMode, editUser, resetAction]);
+  useResetEffect(() => {
     if (isOpen) {
-      resetAction();
       setChangePassword(false);
       if (isEditMode && editUser) {
         const id = editUser.id || editUser.name || editUser['@id'] || editUser.targetid || '';
@@ -106,7 +109,7 @@ export default function EditCMSUserModal() {
         });
       }
     }
-  }, [isOpen, isEditMode, editUser, resetAction]);
+  }, [isOpen, isEditMode, editUser]);
 
   const settingPassword = !isEditMode || changePassword;
   const passwordProblem = settingPassword ? checkCmsPassword(formData.password) : null;
