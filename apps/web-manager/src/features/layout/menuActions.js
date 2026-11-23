@@ -1,4 +1,4 @@
-import { askWorkspaceSwitch, openTab, showStatusModal } from './layoutSlice';
+import { askWorkspaceSwitch, openTab, openWorkspaceExport, showStatusModal } from './layoutSlice';
 import {
   openAddHostModal,
   openEditHostModal,
@@ -20,6 +20,8 @@ export const MENU_ACTIONS = Object.freeze({
   exportHosts: 'export-hosts',
   importHosts: 'import-hosts',
   switchWorkspace: 'switch-workspace',
+  exportWorkspace: 'export-workspace',
+  importWorkspace: 'import-workspace',
   serviceDashboard: 'service-dashboard',
   cmsAccountManagement: 'cms-account-management',
   editCubridConfig: 'edit-cubrid-config',
@@ -82,6 +84,8 @@ export function getMenuActionEnabled({ selectedHostUid, highlightedHostUid, auth
     [MENU_ACTIONS.importHosts]: true,
     // Desktop app only; the header shows it only there.
     [MENU_ACTIONS.switchWorkspace]: true,
+    [MENU_ACTIONS.exportWorkspace]: true,
+    [MENU_ACTIONS.importWorkspace]: true,
     [MENU_ACTIONS.serviceDashboard]: true,
     // Only for the CMS admin account, as in CA (isCmsAdminHost).
     [MENU_ACTIONS.cmsAccountManagement]:
@@ -139,6 +143,20 @@ export function runMenuAction(id, { dispatch, CM, selectedHostUid, highlightedHo
         return true;
       }
       navigate(DESKTOP_WORKSPACE_PATH);
+      return true;
+    // Over the dashboard: nothing is left, so unsaved edits stay.
+    case MENU_ACTIONS.exportWorkspace:
+      if (anyModalOpen) return true;
+      dispatch(openWorkspaceExport());
+      return true;
+    // Ends in a switch to the imported workspace: the same checks as Switch Workspace.
+    case MENU_ACTIONS.importWorkspace:
+      if (anyModalOpen) return true;
+      if (dirtyTabs.length > 0) {
+        dispatch(askWorkspaceSwitch('import'));
+        return true;
+      }
+      navigate(`${DESKTOP_WORKSPACE_PATH}?do=import`);
       return true;
     case MENU_ACTIONS.serviceDashboard:
       dispatch(openTab('service_dashboard'));

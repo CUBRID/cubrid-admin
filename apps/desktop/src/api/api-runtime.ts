@@ -27,6 +27,11 @@ export function getApiProcess(): ApiProcessHandle | null {
   return apiProcess;
 }
 
+/** Whether a server start is in progress (spawned, not answering yet). */
+export function isDesktopApiStarting(): boolean {
+  return startingProcess !== null;
+}
+
 /** The workspace the running server uses, or null when none runs. */
 export function getRunningWorkspacePaths(): WorkspacePaths | null {
   return apiPaths;
