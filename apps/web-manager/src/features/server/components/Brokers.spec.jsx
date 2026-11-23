@@ -25,6 +25,7 @@ import brokerReducer, { fetchBrokerList, resetBrokerState } from '../../broker/b
 import layoutReducer, { setActiveMainTab } from '../../layout/layoutSlice';
 import { startBrokerAndRefresh, stopBrokerAndRefresh } from '../../broker/brokerSidebarActions';
 import Brokers from './Brokers';
+import { CM } from '../../../constants/cmLabels';
 
 let container;
 let root;
@@ -226,5 +227,26 @@ describe('Brokers as its own tab', () => {
 
     expect(container.textContent).toContain('2222');
     expect(container.textContent).not.toContain('1111');
+  });
+});
+
+describe('access mode column', () => {
+  it('shows ACCESS_MODE right after PORT, and "-" for a stopped broker', async () => {
+    const store = makeStore('host:h1');
+    await render(store, { isSection: true });
+    await act(async () => {
+      brokerApi.getBrokerList.mockResolvedValueOnce({ result: [
+        { name: 'broker1', state: 'ON', pid: '1', port: '30000', access_mode: 'RO' },
+        { name: 'broker2', state: 'OFF', port: '30001' },
+      ] });
+      await store.dispatch(fetchBrokerList('h1'));
+    });
+    const headers = [...container.querySelectorAll('th')].map((th) => th.textContent.trim().toUpperCase());
+    const port = headers.indexOf(CM.port.toUpperCase());
+    expect(port).toBeGreaterThanOrEqual(0);
+    expect(headers[port + 1]).toBe('ACCESS_MODE');
+    const cells = (name) => [...[...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes(name)).querySelectorAll('td')].map((td) => td.textContent.trim());
+    expect(cells('broker1')[port + 1]).toBe('RO');
+    expect(cells('broker2')[port + 1]).toBe('-');
   });
 });
