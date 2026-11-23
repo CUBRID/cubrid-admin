@@ -5,6 +5,13 @@ import { configureStore } from '@reduxjs/toolkit';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+// CodeMirror needs layout jsdom lacks; these tests are about loading and
+// saving, so the editor is a plain textarea with the same test id.
+vi.mock('../confEditor/ConfEditor', () => ({
+  default: ({ value, onChange, readOnly, testId }) => (
+    <textarea data-testid={testId} value={value} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
 vi.mock('../../../infrastructure/hooks/useConfirm', () => ({ useConfirm: () => confirmMock }));
 vi.mock('../../broker/brokerApi', () => ({
   brokerApi: { getBrokerConfig: vi.fn(), updateBrokerConfig: vi.fn() },
@@ -46,9 +53,13 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-const render = () => act(async () => {
-  root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>);
-});
+const render = async () => {
+  await act(async () => {
+    root.render(<Provider store={store}><BrokerConfigEditor hostUid="host" /></Provider>);
+  });
+  // The editor is a lazy chunk.
+  await act(async () => { await vi.dynamicImportSettled(); });
+};
 const element = (id) => container.querySelector(`[data-testid="broker-config-${id}"]`);
 
 // A plain `.value =` bypasses React's change handling, so Save would stay disabled.

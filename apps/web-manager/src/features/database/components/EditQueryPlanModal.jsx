@@ -27,7 +27,6 @@ export default function EditQueryPlanModal() {
   const { isEditQueryPlanModalOpen, selectedQueryPlanId } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
-  const { theme } = useSelector((state) => state.layout, shallowEqual);
   const { queryPlans } = useSelector((state) => state.databaseOperation, shallowEqual);
   
   const { 
@@ -370,37 +369,17 @@ export default function EditQueryPlanModal() {
             title={CM.sqlStatementSection}
             icon="code"
           />
-          <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e1e1e] transition-all focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-500/60">
+          <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-editor-bg transition-all focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-500/60">
             <div className="absolute top-4 left-4 z-10 opacity-40 group-focus-within:opacity-100 transition-opacity pointer-events-none">
               <Icon name="terminal" size="sm" weight={300} className="text-amber-500" />
             </div>
             <div className="pl-10">
               <Editor
                 height="168px"
-                language="sql"
-                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                testId="edit-query-plan-sql"
                 value={formData.queryString}
-                onChange={val => handleInputChange('queryString', val || '')}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  lineNumbers: 'off',
-                  glyphMargin: false,
-                  folding: false,
-                  lineDecorationsWidth: 0,
-                  lineNumbersMinChars: 0,
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  padding: { top: 16, bottom: 16 },
-                  fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', monospace",
-                  renderLineHighlight: 'all',
-                  scrollbar: {
-                    vertical: 'visible',
-                    horizontal: 'hidden',
-                    useShadows: false,
-                    verticalScrollbarSize: 8
-                  }
-                }}
+                onChange={val => handleInputChange('queryString', val)}
+                placeholder={CM.sqlQueryPlaceholder}
               />
             </div>
           </div>

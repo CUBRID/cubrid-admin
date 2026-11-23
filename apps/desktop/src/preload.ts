@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { DESKTOP_API_BASE_URL } from './config/constants';
 import type { DesktopBridge, DesktopConfig } from './ipc/bridge-types';
+import { EDIT_REDO_CHANNEL, redoInPage, type PageDocument } from './window/edit-redo';
 
 function resolveApiBaseUrl(): string {
   const prefix = '--cwm-api-base-url=';
@@ -77,3 +78,8 @@ contextBridge.exposeInMainWorld('desktopConfig', {
 } satisfies DesktopConfig);
 
 contextBridge.exposeInMainWorld('desktopBridge', desktopBridge);
+
+// Edit > Redo (see window/edit-redo.ts).
+ipcRenderer.on(EDIT_REDO_CHANNEL, () => {
+  redoInPage((globalThis as unknown as { document: PageDocument }).document);
+});

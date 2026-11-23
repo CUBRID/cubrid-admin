@@ -1,9 +1,10 @@
-import { Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { BrowserWindow, Menu, shell, type BaseWindow, type MenuItemConstructorOptions } from 'electron';
 import * as fs from 'fs';
 import { getDesktopSettingsPath } from '../config/desktop-settings';
 import { getDesktopDataRoot } from '../config/portable-root';
 import { getMainWindow } from '../window/window-registry';
 import { applyZoom, type ZoomAction } from '../window/zoom';
+import { EDIT_REDO_CHANNEL, redoAccelerator } from '../window/edit-redo';
 
 export const PRODUCT_NAME = 'CUBRID Admin';
 
@@ -181,6 +182,14 @@ function sendRefreshView(): void {
   }
 }
 
+/** Edit > Redo: to the window the menu acts on (the focused one), see window/edit-redo.ts. */
+function sendEditRedo(_item: unknown, target?: BaseWindow): void {
+  const window = target instanceof BrowserWindow ? target : (BrowserWindow.getFocusedWindow() ?? getMainWindow());
+  if (window && !window.isDestroyed()) {
+    window.webContents.send(EDIT_REDO_CHANNEL);
+  }
+}
+
 function sendMenuAction(id: MenuActionId): void {
   const window = getMainWindow();
   if (window && !window.isDestroyed()) {
@@ -287,7 +296,8 @@ export function buildApplicationMenuTemplate(
       label: L.edit,
       submenu: [
         { role: 'undo', label: L.undo },
-        { role: 'redo', label: L.redo },
+        // Not the redo role: it cannot redo in the editors (window/edit-redo.ts).
+        { label: L.redo, accelerator: redoAccelerator(), click: sendEditRedo },
         { type: 'separator' },
         { role: 'cut', label: L.cut },
         { role: 'copy', label: L.copy },

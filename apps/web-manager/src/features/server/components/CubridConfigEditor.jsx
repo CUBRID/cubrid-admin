@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { lazy, useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { hostApi } from '../../host/hostApi';
+import { fetchHostEnv } from '../../host/hostSlice';
 import { showStatusModal, setTabDirty } from '../../layout/layoutSlice';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
@@ -10,30 +11,10 @@ import { useCM } from '../../../constants/useCM';
 import { createSingleFlight } from '../../../infrastructure/utils/singleFlight';
 import { confSaveProblems, confSaveWarnings, isConfChangedSinceLoaded } from '../confSaveProblems';
 import { useConfirm } from '../../../infrastructure/hooks/useConfirm';
+import EditorLoadBoundary from '../../../components/domain/EditorLoadBoundary';
 
-// ── Highlighted Source View ────────────────────────────────────────────────
-function renderHighlighted(content) {
-  return content.split('\n').map((line, i) => {
-    const t = line.trim();
-    if (t.startsWith('#'))
-      return <span key={i} className="text-slate-400 dark:text-editor-comment">{line}{'\n'}</span>;
-    if (t.startsWith('[') && t.endsWith(']'))
-      return <span key={i} className="text-amber-600 dark:text-editor-section font-semibold">{line}{'\n'}</span>;
-    const eq = line.indexOf('=');
-    if (eq > 0) {
-      const k = line.substring(0, eq);
-      const v = line.substring(eq);
-      return (
-        <span key={i}>
-          <span className="text-sky-600 dark:text-editor-key">{k}</span>
-          <span className="text-slate-500 dark:text-editor-value">{v}</span>
-          {'\n'}
-        </span>
-      );
-    }
-    return <span key={i}>{line}{'\n'}</span>;
-  });
-}
+// The editor (CodeMirror) is loaded only when a conf file is opened.
+const ConfEditor = lazy(() => import('../confEditor/ConfEditor'));
 
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function CubridConfigEditor({ hostUid, confname }) {
@@ -41,7 +22,10 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   const tabId = `edit_config:${hostUid}:${confname}`;
   const dispatch = useDispatch();
   const confirm = useConfirm();
-  const { hosts } = useSelector((state) => state.host, shallowEqual);
+  const { hosts, authorizedHosts } = useSelector((state) => state.host, shallowEqual);
+  // Parameter names, rules and defaults for completion, hints and underlines.
+  const hostEnv = useSelector((state) => state.host.hostEnvs?.[hostUid]);
+  const isAuthorized = Boolean(hostUid && authorizedHosts?.includes(hostUid));
   const { refreshCounter, refreshTabId } = useSelector((state) => state.layout, shallowEqual);
   const currentHost = hosts.find(h => h.uid === hostUid);
   const hostDisplayName = currentHost ? (currentHost.alias || currentHost.id) : CM.unknownHost;
@@ -56,8 +40,10 @@ export default function CubridConfigEditor({ hostUid, confname }) {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const textareaRef = useRef(null);
-  const preRef = useRef(null);
+  useEffect(() => {
+    // undefined = not read yet; a failed read leaves null and is not retried here.
+    if (isAuthorized && hostEnv === undefined) dispatch(fetchHostEnv(hostUid));
+  }, [isAuthorized, hostEnv, hostUid, dispatch]);
 
   const fetchConfig = useCallback(async () => {
     if (!hostUid || !confname) return;
@@ -103,8 +89,7 @@ export default function CubridConfigEditor({ hostUid, confname }) {
     if (refreshTabId === tabId) fetchConfig();
   }, [fetchConfig, refreshCounter, refreshTabId, tabId]);
 
-  const handleSourceChange = (e) => {
-    const val = e.target.value;
+  const handleSourceChange = (val) => {
     setContent(val);
     const changed = val !== originalContentRef.current;
     setHasChanges(changed);
@@ -167,13 +152,6 @@ export default function CubridConfigEditor({ hostUid, confname }) {
       }));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const syncScroll = (e) => {
-    if (preRef.current) {
-      preRef.current.scrollTop = e.target.scrollTop;
-      preRef.current.scrollLeft = e.target.scrollLeft;
     }
   };
 
@@ -249,44 +227,23 @@ export default function CubridConfigEditor({ hostUid, confname }) {
               <span className="text-13 font-semibold text-slate-500 dark:text-slate-400 font-mono">{confname}</span>
             </div>
             <span className="text-12 font-medium text-slate-400 dark:text-slate-500 font-mono uppercase tracking-widest">
-              {lineCount} lines
+              {CM.linesLabel(lineCount)}
             </span>
           </div>
 
           {/* Editor Container */}
           <div className="config-source-editor flex-1 relative overflow-hidden bg-white dark:bg-editor-bg">
-            {/* Line Numbers */}
-            <div className="absolute left-0 top-0 bottom-0 w-12 bg-slate-50 dark:bg-editor-gutter border-r border-slate-100 dark:border-editor-border overflow-hidden pointer-events-none z-10">
-              <div className="p-0 pt-6 flex flex-col items-end pr-3">
-                {content.split('\n').map((_, i) => (
-                  <span key={i} className="text-14 font-mono text-slate-300 dark:text-editor-line leading-relaxed select-none h-[25.2px]">
-                    {i + 1}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Highlight layer */}
-            <pre
-              ref={preRef}
-              className="absolute inset-0 left-12 p-6 font-mono text-14 leading-relaxed text-slate-800 dark:text-editor-text pointer-events-none whitespace-pre-wrap break-all overflow-hidden"
-              aria-hidden="true"
-            >
-              {renderHighlighted(content)}
-            </pre>
-
-            {/* Edit layer */}
-            <textarea
-              data-testid="cubrid-config-textarea"
-              ref={textareaRef}
-              value={content}
-              readOnly={loading || saving || !loaded}
-              onChange={handleSourceChange}
-              onScroll={syncScroll}
-              spellCheck="false"
-              className="config-source-input absolute inset-0 left-12 w-[calc(100%-3rem)] h-full bg-transparent p-6 font-mono text-14 leading-relaxed text-transparent caret-slate-800 dark:caret-editor-section focus-visible:outline-2 focus-visible:outline-amber-500/70 dark:focus-visible:outline-editor-key/60 focus-visible:outline-offset-[-2px] resize-none whitespace-pre-wrap break-all overflow-auto"
-              placeholder={CM.configPlaceholder}
-            />
+            <EditorLoadBoundary className="absolute inset-0" fallback={<div className="absolute inset-0 flex items-center justify-center"><Spinner size="md" /></div>}>
+              <ConfEditor
+                testId="cubrid-config-textarea"
+                kind={confname}
+                value={content}
+                onChange={handleSourceChange}
+                readOnly={loading || saving || !loaded}
+                paramSchemas={hostEnv?.paramSchemas}
+                placeholder={CM.configPlaceholder}
+              />
+            </EditorLoadBoundary>
           </div>
 
           {/* Source Footer */}
