@@ -1,5 +1,6 @@
 ; CUBRID Admin Server setup for Windows x64, built by scripts/package-server-installers.mjs:
-;   makensis -DVERSION=0.1.0.0001 -DVERSION4=0.1.0.1 -DYEAR=2026 -DSRCDIR=<files> -DOUTFILE=<setup.exe> installer.nsi
+;   makensis -DVERSION=0.1.0.0001 -DVERSION4=0.1.0.1 -DYEAR=2026 -DSRCDIR=<files> -DICON=<icon.ico>
+;            -DSIDEBAR=<164x314 bmp> -DOUTFILE=<setup.exe> installer.nsi
 ; Program files go to Program Files; settings and data stay in
 ; %ProgramData%\CUBRID Admin Server, which upgrade and uninstall never remove.
 ; The Windows service is WinSW (cubrid-admin-service.exe + cubrid-admin-service.xml).
@@ -37,6 +38,12 @@ VIAddVersionKey "FileDescription" "${PRODUCT} Setup"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "Copyright © ${YEAR} ${COMPANY}"
+
+; CUBRID icon and left image (apps/desktop/build-resources, as in the desktop setup).
+!define MUI_ICON "${ICON}"
+!define MUI_UNICON "${ICON}"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "${SIDEBAR}"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "${SIDEBAR}"
 
 !define MUI_FINISHPAGE_TITLE "${PRODUCT} is installed"
 !define MUI_FINISHPAGE_TEXT "Settings: %ProgramData%\${PRODUCT}\conf\cwm.conf$\r$\n$\r$\nOn a new install the service is registered but not started, because PORT (8080 by default) may be in use. Set PORT, then start the $\"${PRODUCT}$\" service (services.msc, or: sc start cubrid-admin).$\r$\n$\r$\nOn an upgrade the service is started again if it was running."
