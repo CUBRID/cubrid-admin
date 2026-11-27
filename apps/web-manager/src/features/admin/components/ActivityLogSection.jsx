@@ -6,13 +6,15 @@ import { Select } from '../../../components/ds/forms/Select';
 import { Pagination } from '../../../components/ds/feedback/Pagination';
 import { useCM } from '../../../constants/useCM';
 import { requestErrorText } from '../../../infrastructure/errors/serverErrorText';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { adminApi } from '../adminApi';
+import { fetchAllEntries } from '../fetchAllEntries';
 import AdminPageHeader from './AdminPageHeader';
 import { auditActionText, auditCsv, auditDetailText, dayBoundary, formatTime } from '../accountView';
 
 export const ACTIVITY_PAGE_SIZE = 50;
 /** What one export reads at most (the server's largest page). */
-const EXPORT_LIMIT = 5000;
 /** Lets Excel read the CSV as UTF-8, so non-English ids show correctly. */
 const BOM = String.fromCharCode(0xfeff);
 
@@ -50,20 +52,24 @@ export default function ActivityLogSection({ reloadKey }) {
     [actor, target, action, fromDay, toDay]
   );
 
-  useEffect(() => {
-    let live = true;
+  // CM: only the error's wording, not a reason to read again.
+  const cmRef = useLatestRef(CM);
+  // Each new read (filter, page, reload) shows as loading, with no old error.
+  useResetEffect(() => {
     setLoading(true);
     setError(null);
+  }, [filter, page, reloadKey]);
+  useEffect(() => {
+    let live = true;
     adminApi
       .queryAudit({ ...filter(), limit: ACTIVITY_PAGE_SIZE, offset: (page - 1) * ACTIVITY_PAGE_SIZE })
       .then((res) => live && setResult({ entries: res?.entries ?? [], total: res?.total ?? 0 }))
-      .catch((err) => live && setError(requestErrorText(err, CM)))
+      .catch((err) => live && setError(requestErrorText(err, cmRef.current)))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-    // CM: only the error's wording, not a reason to read again.
-  }, [filter, page, reloadKey]);
+  }, [filter, page, reloadKey, cmRef]);
 
   // A new filter starts from the first page.
   const set = (setter) => (e) => {
@@ -74,8 +80,8 @@ export default function ActivityLogSection({ reloadKey }) {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const res = await adminApi.queryAudit({ ...filter(), limit: EXPORT_LIMIT, offset: 0 });
-      const blob = new Blob([BOM + auditCsv(res?.entries ?? [], CM)], { type: 'text/csv;charset=utf-8' });
+      const entries = await fetchAllEntries(adminApi.queryAudit, filter());
+      const blob = new Blob([BOM + auditCsv(entries, CM)], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

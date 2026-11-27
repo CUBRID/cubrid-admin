@@ -12,6 +12,9 @@ import {
 import { User, UpdateUserDto, UserPreferenceDto } from '@type/index';
 import * as util from '@util';
 
+// The session a request came with: version 0, from before account ids were in tokens.
+const SESSION = { sessionVersion: 0 };
+
 describe('UserService', () => {
   let service: UserService;
   let repository: jest.Mocked<UserRepositoryService>;
@@ -102,7 +105,7 @@ describe('UserService', () => {
       passwordService.comparePlainAndHash.mockResolvedValue(true);
       passwordService.getHashedValue.mockResolvedValue('new-hashed-password');
 
-      await service.changePassword(mockUserId, mockRequest);
+      await service.changePassword(mockUserId, mockRequest, SESSION);
 
       expect(repository.atomicUpdateUser).toHaveBeenCalledWith(
         mockUserId,
@@ -123,7 +126,7 @@ describe('UserService', () => {
       });
       passwordService.comparePlainAndHash.mockResolvedValue(false);
 
-      await expect(service.changePassword(mockUserId, mockRequest)).rejects.toThrow(UserError);
+      await expect(service.changePassword(mockUserId, mockRequest, SESSION)).rejects.toThrow(UserError);
 
       expect(repository.atomicUpdateUser).toHaveBeenCalled();
       expect(passwordService.comparePlainAndHash).toHaveBeenCalledWith(
@@ -145,7 +148,7 @@ describe('UserService', () => {
       });
       passwordService.comparePlainAndHash.mockResolvedValue(true);
 
-      await expect(service.changePassword(mockUserId, mockRequest)).rejects.toThrow(UserError);
+      await expect(service.changePassword(mockUserId, mockRequest, SESSION)).rejects.toThrow(UserError);
 
       expect(repository.atomicUpdateUser).toHaveBeenCalled();
       expect(passwordService.comparePlainAndHash).toHaveBeenCalled();
@@ -160,7 +163,7 @@ describe('UserService', () => {
         UserError.UserNotFound({ userId: mockUserId })
       );
 
-      await expect(service.changePassword(mockUserId, mockRequest)      ).rejects.toThrow(UserError);
+      await expect(service.changePassword(mockUserId, mockRequest, SESSION)).rejects.toThrow(UserError);
 
       expect(repository.atomicUpdateUser).toHaveBeenCalled();
     });
@@ -432,7 +435,9 @@ describe('UserService', () => {
 
   describe('account control', () => {
     const runModifier = async (user: User) => {
-      const modifier = repository.atomicUpdateUser.mock.calls[0][1];
+      // The latest save's callback, run on the account as it is under the lock.
+      const calls = repository.atomicUpdateUser.mock.calls;
+      const modifier = calls[calls.length - 1][1];
       return modifier(user);
     };
 
@@ -471,7 +476,7 @@ describe('UserService', () => {
       passwordService.comparePlainAndHash.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
       passwordService.getHashedValue.mockResolvedValue('new-hash');
       repository.atomicUpdateUser.mockResolvedValue(mockUser);
-      await service.changePassword('testuser', { oldPassword: 'old', newPassword: 'NewPassw0rd' });
+      await service.changePassword('testuser', { oldPassword: 'old', newPassword: 'NewPassw0rd' }, SESSION);
       const updated = await runModifier({ ...mockUser, mustChangePassword: true });
       expect(updated.mustChangePassword).toBeUndefined();
     });
@@ -479,7 +484,7 @@ describe('UserService', () => {
     it('refuses to set the temporary password again', async () => {
       passwordService.comparePlainAndHash.mockResolvedValue(true);
       repository.atomicUpdateUser.mockResolvedValue(mockUser);
-      await service.changePassword('testuser', { oldPassword: 'Temp1234', newPassword: 'Temp1234' });
+      await service.changePassword('testuser', { oldPassword: 'Temp1234', newPassword: 'Temp1234' }, SESSION);
       await expect(runModifier({ ...mockUser, mustChangePassword: true })).rejects.toMatchObject({
         code: 'PASSWORD_UNCHANGED',
       });
@@ -489,7 +494,7 @@ describe('UserService', () => {
       passwordService.comparePlainAndHash.mockResolvedValue(false);
       passwordService.getHashedValue.mockResolvedValue('new-hash');
       repository.atomicUpdateUser.mockResolvedValue(mockUser);
-      await service.setInitialPassword('testuser', 'Mine5678');
+      await service.setInitialPassword('testuser', 'Mine5678', SESSION);
       const updated = await runModifier({ ...mockUser, mustChangePassword: true });
       expect(updated.password).toBe('new-hash');
       expect(updated.mustChangePassword).toBeUndefined();
@@ -498,7 +503,7 @@ describe('UserService', () => {
     it('refuses a first password when no change is pending', async () => {
       passwordService.getHashedValue.mockResolvedValue('new-hash');
       repository.atomicUpdateUser.mockResolvedValue(mockUser);
-      await service.setInitialPassword('testuser', 'Mine5678');
+      await service.setInitialPassword('testuser', 'Mine5678', SESSION);
       await expect(runModifier({ ...mockUser })).rejects.toMatchObject({
         code: 'PERMISSION_DENIED',
         additionalData: expect.objectContaining({ reason: 'NO_PENDING_PASSWORD_CHANGE' }),
@@ -509,10 +514,51 @@ describe('UserService', () => {
       passwordService.comparePlainAndHash.mockResolvedValue(true);
       passwordService.getHashedValue.mockResolvedValue('same-hash');
       repository.atomicUpdateUser.mockResolvedValue(mockUser);
-      await service.setInitialPassword('testuser', 'Temp1234');
+      await service.setInitialPassword('testuser', 'Temp1234', SESSION);
       await expect(runModifier({ ...mockUser, mustChangePassword: true })).rejects.toMatchObject({ code: 'PASSWORD_UNCHANGED' });
 
-      await expect(service.setInitialPassword('testuser', 'weak')).rejects.toMatchObject({ code: 'BAD_NEW_PASSWORD' });
+      await expect(service.setInitialPassword('testuser', 'weak', SESSION)).rejects.toMatchObject({ code: 'BAD_NEW_PASSWORD' });
+    });
+
+    it('refuses a new password from a session an admin ended while it was hashed', async () => {
+      passwordService.comparePlainAndHash.mockResolvedValue(false);
+      passwordService.getHashedValue.mockResolvedValue('attacker-hash');
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      // Let in at version 1; the admin's reset since raised it to 2.
+      await service.setInitialPassword('testuser', 'Mine5678', { sessionVersion: 1, accountUuid: 'u-1' });
+      const reset = { ...mockUser, uuid: 'u-1', sessionVersion: 2, mustChangePassword: true, password: 'temp-hash' };
+      await expect(runModifier(reset)).rejects.toMatchObject({
+        code: 'INVALID_TOKEN',
+        additionalData: expect.objectContaining({ reason: 'SESSION_REVOKED' }),
+      });
+
+      // Nor from a deleted account's session on a new account of the same name.
+      await service.setInitialPassword('testuser', 'Mine5678', { sessionVersion: 2, accountUuid: 'old' });
+      await expect(runModifier(reset)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+
+      await service.setInitialPassword('testuser', 'Mine5678', { sessionVersion: 2, accountUuid: 'u-1' });
+      await expect(runModifier(reset)).resolves.toMatchObject({ password: 'attacker-hash' });
+    });
+
+    it('refuses a password change from an ended session', async () => {
+      passwordService.comparePlainAndHash.mockResolvedValue(true);
+      repository.atomicUpdateUser.mockResolvedValue(mockUser);
+      await service.changePassword('testuser', { oldPassword: 'old', newPassword: 'NewPassw0rd' }, { sessionVersion: 0 });
+      await expect(runModifier({ ...mockUser, sessionVersion: 1 })).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+      expect(passwordService.getHashedValue).not.toHaveBeenCalled();
+    });
+
+    it('checks the role it has inside the queue, not the one read before it', async () => {
+      // Read as a plain user while the password is checked; an admin then
+      // promoted this account and left, so it is the last admin by the time
+      // the delete runs.
+      repository.loadUserById
+        .mockResolvedValueOnce({ ...mockUser, role: 'user' })
+        .mockResolvedValueOnce({ ...mockUser, role: 'admin' });
+      passwordService.comparePlainAndHash.mockResolvedValue(true);
+      repository.listUsers.mockResolvedValue([{ ...mockUser, role: 'admin' }]);
+      await expect(service.deleteUser('testuser', { password: 'pw' })).rejects.toMatchObject({ code: 'LAST_ADMIN' });
+      expect(repository.deleteUser).not.toHaveBeenCalled();
     });
 
     it('refuses to delete the last active admin', async () => {

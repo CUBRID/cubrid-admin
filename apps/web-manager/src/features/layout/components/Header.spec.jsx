@@ -53,9 +53,9 @@ afterEach(async () => {
 });
 
 let actions = [];
-const render = (user = { id: 'admin1' }) => act(async () => {
+const render = (user = { id: 'admin1' }, dirtyTabs = []) => act(async () => {
   actions = [];
-  const state = { auth: { user, isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } } };
+  const state = { auth: { user, isAuthenticated: true }, user: { preferences: { uiLocale: 'en' } }, layout: { dirtyTabs } };
   const store = configureStore({ reducer: (s = state, action) => { actions.push(action); return s; } });
   root.render(
     <Provider store={store}>
@@ -111,6 +111,26 @@ describe('Header account control', () => {
     await render({ id: 'root', isAdmin: true });
     expect(accountsButton()).not.toBeNull();
     await act(async () => accountsButton().click());
+    expect(container.querySelector('[data-testid="admin-page"]')).not.toBeNull();
+  });
+
+  it('asks before leaving unsaved edits for User Administration', async () => {
+    await render({ id: 'root', isAdmin: true }, ['conf-cubrid']);
+    const byId = (id) => document.querySelector(`[data-testid="user-administration-unsaved-${id}"]`);
+
+    await act(async () => accountsButton().click());
+    expect(container.querySelector('[data-testid="admin-page"]')).toBeNull();
+    expect(byId('cancel-btn')).not.toBeNull();
+
+    // Cancel keeps the dashboard and its edits.
+    await act(async () => byId('cancel-btn').click());
+    expect(container.querySelector('[data-testid="admin-page"]')).toBeNull();
+    expect(actions.some((a) => a.type === 'layout/clearDirtyTabs')).toBe(false);
+
+    // Going on drops the unsaved marks and opens the page.
+    await act(async () => accountsButton().click());
+    await act(async () => byId('confirm-btn').click());
+    expect(actions.some((a) => a.type === 'layout/clearDirtyTabs')).toBe(true);
     expect(container.querySelector('[data-testid="admin-page"]')).not.toBeNull();
   });
 

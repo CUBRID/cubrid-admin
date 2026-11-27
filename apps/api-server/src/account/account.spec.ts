@@ -57,6 +57,19 @@ describe('account control storage', () => {
       await expect(make(false).isRegistrationEnabled()).resolves.toBe(true);
     });
 
+    it('keeps both of two settings saved at the same time', async () => {
+      const service = make(undefined);
+      await Promise.all([service.setRegistrationEnabled(false), service.setRegistrationApproval(false)]);
+      AccountSettingsService.reset();
+      const settings = await make(undefined).getSettings();
+      expect(settings).toMatchObject({
+        registrationEnabled: false,
+        registrationSource: 'admin',
+        registrationApproval: false,
+        registrationApprovalSource: 'admin',
+      });
+    });
+
     it('left unset, stays open whether or not an admin exists, even without approval', async () => {
       const service = make(undefined);
       await expect(service.isRegistrationEnabled()).resolves.toBe(true);

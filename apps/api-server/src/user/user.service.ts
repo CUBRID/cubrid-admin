@@ -32,6 +32,21 @@ import { passwordValidityChecker } from '@util';
  * @category Business Services
  * @since 1.0.0
  */
+/** The session a request came with: its token's session version and account id. */
+export type RequestSession = { sessionVersion: number; accountUuid?: string };
+
+/**
+ * Refuses a change from a session that has ended since the request was let in:
+ * an admin reset the password or ended the sessions (a new session version),
+ * or the account was deleted and its name taken again (another uuid).
+ */
+function assertSameSession(user: User, session: RequestSession): void {
+  const sameAccount = session.accountUuid === undefined || session.accountUuid === user.uuid;
+  if (!sameAccount || (user.sessionVersion ?? 0) !== session.sessionVersion) {
+    throw AuthError.InvalidToken({ userId: user.id, reason: 'SESSION_REVOKED' });
+  }
+}
+
 @Injectable()
 export class UserService {
   constructor(
@@ -59,8 +74,9 @@ export class UserService {
    * ```
    */
   @HandleUserErrors()
-  async changePassword(userId: string, dto: ChangePasswordRequest) {
+  async changePassword(userId: string, dto: ChangePasswordRequest, session: RequestSession) {
     const changePasswordCallback = async (user: User): Promise<User> => {
+      assertSameSession(user, session);
       if (await this.password.comparePlainAndHash(dto.oldPassword, user.password)) {
         if (!passwordValidityChecker(dto.newPassword)) {
           throw UserError.BadNewPassword();
@@ -92,12 +108,15 @@ export class UserService {
    * for the current password.
    */
   @HandleUserErrors()
-  async setInitialPassword(userId: string, newPassword: string): Promise<void> {
+  async setInitialPassword(userId: string, newPassword: string, session: RequestSession): Promise<void> {
     if (!passwordValidityChecker(newPassword)) {
       throw UserError.BadNewPassword();
     }
     const hash = await this.password.getHashedValue(newPassword);
     await this.repository.atomicUpdateUser(userId, async (user: User) => {
+      // Checked under the account's lock: an admin may have reset the password
+      // (ending this session) while the new one was being hashed.
+      assertSameSession(user, session);
       if (!user.mustChangePassword) {
         throw AuthError.PermissionDenied({ userId, reason: 'NO_PENDING_PASSWORD_CHANGE' });
       }
@@ -227,7 +246,10 @@ export class UserService {
     // the same rule applies. Checked and deleted in the same queue as the
     // admin actions, so a concurrent demotion can't slip in between.
     await AccountAccessService.exclusive(async () => {
-      if (this.accountAccess.isActiveAdmin(user)) {
+      // Read again inside the queue: an admin may have promoted this account
+      // (and then left) while its password was being checked.
+      const current = await this.repository.loadUserById(userId);
+      if (this.accountAccess.isActiveAdmin(current)) {
         const others = (await this.repository.listUsers()).filter(
           (u) => u.id !== userId && this.accountAccess.isActiveAdmin(u)
         );

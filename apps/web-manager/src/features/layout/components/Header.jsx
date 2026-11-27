@@ -3,7 +3,6 @@ import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { logoutUser, fetchUser } from '../../auth/authSlice';
 import { fetchPreferences } from '../../user/userSlice';
 import UserProfileModal from '../../user/components/UserProfileModal';
-import { useNavigate } from 'react-router-dom';
 
 
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -14,6 +13,7 @@ import { isDesktopApp } from '../../desktop/isDesktopApp';
 import { usePendingApprovals } from '../../admin/usePendingApprovals';
 import { ToastContext } from '../../../infrastructure/context/toastContextValue';
 import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
+import { useOpenUserAdministration } from '../useOpenUserAdministration';
 
 export default function Header({ theme, toggleTheme }) {
   const CM = useCM();
@@ -29,9 +29,9 @@ export default function Header({ theme, toggleTheme }) {
   const headerRef = useRef(null);
   const rowRef = useRef(null);
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading, error: authError } = useSelector((state) => state.auth, shallowEqual);
   const toast = useContext(ToastContext);
+  const { open: openUserAdministration, confirmDialog: userAdministrationConfirm } = useOpenUserAdministration();
   // Every administrator hears of new sign-ups: a count on the button, and a
   // note when one arrives while they work.
   const pendingApprovals = usePendingApprovals(!desktopApp && user?.isAdmin === true, (added) =>
@@ -122,7 +122,7 @@ export default function Header({ theme, toggleTheme }) {
                   <button
                     data-testid="header-user-accounts-btn"
                     className={`${iconBtn} relative`}
-                    onClick={() => navigate('/admin/accounts')}
+                    onClick={openUserAdministration}
                     title={pendingApprovals ? `${CM.userAdministration} · ${CM.pendingApprovalsBadge(pendingApprovals)}` : CM.userAdministration}
                     aria-label={pendingApprovals ? `${CM.userAdministration}, ${CM.pendingApprovalsBadge(pendingApprovals)}` : CM.userAdministration}
                   >
@@ -187,6 +187,7 @@ export default function Header({ theme, toggleTheme }) {
       </header>
 
       {!desktopApp && <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
+      {!desktopApp && userAdministrationConfirm}
     </>
   );
 }

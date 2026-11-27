@@ -6,7 +6,10 @@ import { Select } from '../../../components/ds/forms/Select';
 import { Pagination } from '../../../components/ds/feedback/Pagination';
 import { useCM } from '../../../constants/useCM';
 import { requestErrorText } from '../../../infrastructure/errors/serverErrorText';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { adminApi } from '../adminApi';
+import { fetchAllEntries } from '../fetchAllEntries';
 import { formatTime } from '../accountView';
 import {
   API_LOG_CATEGORIES,
@@ -23,7 +26,6 @@ import {
 import AdminPageHeader from './AdminPageHeader';
 
 export const API_LOG_PAGE_SIZE = 50;
-const EXPORT_LIMIT = 5000;
 const BOM = String.fromCharCode(0xfeff);
 const EMPTY = { entries: [], total: 0, summary: null };
 
@@ -184,10 +186,15 @@ export default function ApiLogSection({ reloadKey }) {
     [range, user, category, result, target]
   );
 
-  useEffect(() => {
-    let live = true;
+  // CM: only the error's wording, not a reason to read again.
+  const cmRef = useLatestRef(CM);
+  // Each new read (filter, page, reload) shows as loading, with no old error.
+  useResetEffect(() => {
     setLoading(true);
     setError(null);
+  }, [filter, page, reloadKey]);
+  useEffect(() => {
+    let live = true;
     adminApi
       .queryApiLog({ ...filter(), limit: API_LOG_PAGE_SIZE, offset: (page - 1) * API_LOG_PAGE_SIZE })
       .then((res) => {
@@ -197,13 +204,12 @@ export default function ApiLogSection({ reloadKey }) {
         const card = cardRef.current;
         if (card && card.getBoundingClientRect().top < 0) card.scrollIntoView?.({ block: 'start' });
       })
-      .catch((err) => live && setError(requestErrorText(err, CM)))
+      .catch((err) => live && setError(requestErrorText(err, cmRef.current)))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-    // CM: only the error's wording, not a reason to read again.
-  }, [filter, page, reloadKey]);
+  }, [filter, page, reloadKey, cmRef]);
 
   const set = (setter) => (e) => {
     setter(e.target.value);
@@ -213,8 +219,8 @@ export default function ApiLogSection({ reloadKey }) {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const res = await adminApi.queryApiLog({ ...filter(), limit: EXPORT_LIMIT, offset: 0 });
-      const blob = new Blob([BOM + apiLogCsv(res?.entries ?? [], CM)], { type: 'text/csv;charset=utf-8' });
+      const entries = await fetchAllEntries(adminApi.queryApiLog, filter());
+      const blob = new Blob([BOM + apiLogCsv(entries, CM)], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

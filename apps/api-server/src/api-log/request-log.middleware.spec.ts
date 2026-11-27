@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { REQUEST_ACTION, RequestAction } from './log-action.decorator';
-import { formatDuration, lineLevel, requestLogMiddleware, shouldRecord } from './request-log.middleware';
+import { formatDuration, lineLevel, oneLine, requestLogMiddleware, shouldRecord } from './request-log.middleware';
 
 function run(
   req: Record<string | symbol, unknown>,
@@ -62,6 +62,24 @@ describe('request log', () => {
     const recorded = apiLog.record.mock.calls[0][0];
     expect(recorded).toMatchObject({ user: 'bob', ok: false, status: 401, errorCode: 'INVALID_CREDENTIALS', error: 'Wrong id or password.' });
     expect(JSON.stringify(recorded)).not.toContain('"x"');
+  });
+
+  it('keeps a sign-in id with a line break on one line, escaped and cut short', () => {
+    const forged = `bob\n2026-11-27 12:00:00 LOG alice  POST  /api/admin/accounts  200${'x'.repeat(300)}`;
+    const { apiLog, logger } = run(
+      { method: 'POST', originalUrl: '/api/auth/login', body: { id: forged, password: 'x' } },
+      { status: 401, tag: tag('auth.sign_in') }
+    );
+    const line = logger.warn.mock.calls[0][0] as string;
+    expect(line).not.toMatch(/[\n\r]/);
+    expect(line.startsWith('bob\\n2026-11-27')).toBe(true);
+    expect(apiLog.record.mock.calls[0][0].user.length).toBeLessThanOrEqual(129);
+  });
+
+  it('escapes control characters and leaves plain text alone', () => {
+    expect(oneLine('alice')).toBe('alice');
+    expect(oneLine('a\r\nb\tc\u0000d\u2028e')).toBe('a\\r\\nb\\tc\\u0000d\\u2028e');
+    expect(oneLine('abcdef', 3)).toBe('abc…');
   });
 
   it('does not record reads, skipped routes or polling', () => {

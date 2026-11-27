@@ -7,6 +7,7 @@ import { isCmsAdminHost } from '../../host/cmsAdmin';
 import { useCM } from '../../../constants/useCM';
 import { isDesktopApp } from '../../desktop/isDesktopApp';
 import { isAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
+import { useOpenUserAdministration } from '../useOpenUserAdministration';
 
 const NO_TABS = [];
 
@@ -29,6 +30,7 @@ export default function HeaderMenu({ folded = false }) {
   const navigate = useNavigate();
   const { selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts } = useSelector((state) => state.host, shallowEqual);
   const dirtyTabs = useSelector((state) => state.layout?.dirtyTabs ?? NO_TABS, shallowEqual);
+  const { open: openUserAdministration, confirmDialog: userAdministrationConfirm } = useOpenUserAdministration();
   // Web Manager account control: administrators in a browser only (the
   // desktop app has no app accounts), so not one of the shared MENU_ACTIONS.
   const isAdmin = useSelector((state) => state.auth?.user?.isAdmin === true);
@@ -134,7 +136,7 @@ export default function HeaderMenu({ folded = false }) {
         <MenuItem
           icon="manage_accounts"
           label={CM.userAdministration}
-          onClick={() => navigate('/admin/accounts')}
+          onClick={openUserAdministration}
         />
       )}
       <MenuDivider />
@@ -205,6 +207,7 @@ export default function HeaderMenu({ folded = false }) {
           <Heading>{CM.help}</Heading>
           {helpItems}
         </DropdownMenu>
+        {userAdministrationConfirm}
       </nav>
     );
   }
@@ -222,6 +225,7 @@ export default function HeaderMenu({ folded = false }) {
       <DropdownMenu label={<MenuLabel>{CM.help}</MenuLabel>} minWidth="min-w-56">
         {helpItems}
       </DropdownMenu>
+      {userAdministrationConfirm}
     </nav>
   );
 }

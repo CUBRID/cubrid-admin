@@ -31,6 +31,21 @@ const ACTION_FROM_BODY: Record<string, (body: Record<string, unknown>) => string
   'admin.set_role': (b) => (b.role === 'admin' ? 'admin.grant_admin' : b.role === 'user' ? 'admin.revoke_admin' : undefined),
 };
 const MAX_ERROR_TEXT = 300;
+// A user id or target comes from the request (a sign-in's id, a name in the body).
+const MAX_FIELD = 128;
+
+/**
+ * Text from the request, made safe for one log line: control characters
+ * (a line break that would start a fake log line) shown escaped, and cut to
+ * a length. Anyone can send it, signed in or not.
+ */
+export function oneLine(text: string, max = MAX_FIELD): string {
+  // eslint-disable-next-line no-control-regex
+  const escaped = text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) =>
+    c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+  return escaped.length > max ? `${escaped.slice(0, max)}…` : escaped;
+}
 
 export function formatDuration(ms: number): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
@@ -94,16 +109,18 @@ export function requestLogMiddleware(apiLog: ApiLogService, apiPrefix: string | 
       const tag = (req as unknown as Record<symbol, RequestAction | undefined>)[REQUEST_ACTION];
       const action = refineAction(tag?.action, req.body);
       const bodyId = (req.body as { id?: unknown } | undefined)?.id;
-      const user =
+      const rawUser =
         (req as Request & { user?: { sub?: string } }).user?.sub ??
         (action && ACCOUNT_FROM_BODY.has(action) && typeof bodyId === 'string' ? bodyId : undefined);
+      const user = rawUser === undefined ? undefined : oneLine(rawUser);
       const errorCode = res.locals?.[ERROR_CODE_LOCAL] as string | undefined;
-      const target = targetOf(action, tag?.params ?? {}, req.body);
+      const rawTarget = targetOf(action, tag?.params ?? {}, req.body);
+      const target = rawTarget === undefined ? undefined : oneLine(rawTarget);
 
       const line = [
         user ?? '-',
         req.method,
-        path,
+        oneLine(path, 512),
         status,
         formatDuration(durationMs),
         target,

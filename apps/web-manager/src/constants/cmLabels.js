@@ -2204,6 +2204,8 @@ export const CM = {
   switchWorkspaceUnsavedDesc: 'You have unsaved changes. Switching the workspace will discard them.',
   workspaceJobsUnknownDesc: "Couldn't check whether a job is still running. Switch the workspace anyway?",
   switchWorkspaceConfirmBtn: 'Switch',
+  openUserAdministrationUnsavedDesc: 'You have unsaved changes. Opening User Administration will discard them.',
+  openUserAdministrationConfirmBtn: 'Open',
   unsavedReloadDesc: (name) => `You have unsaved changes in "${name}". Reloading will discard them.`,
 
   // Footer

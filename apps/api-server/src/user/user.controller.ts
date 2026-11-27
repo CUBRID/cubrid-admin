@@ -5,6 +5,8 @@ import { UpdateUserInfoRequest, UserResponse } from '@api-interfaces';
 import { AllowPendingPasswordChange, NotOnDesktop } from '@common';
 import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 import { AuthThrottlerGuard } from '../auth/auth-throttle';
+import type { AuthenticatedUser } from '@token/jwt-auth.guard';
+import type { RequestSession } from './user.service';
 
 /**
  * Controller for handling user-related operations.
@@ -16,6 +18,12 @@ import { AuthThrottlerGuard } from '../auth/auth-throttle';
  * @category Controllers
  * @since 1.0.0
  */
+/** The token's session version and account id, which a password change checks under the account lock. */
+const requestSession = (req: { user: AuthenticatedUser }): RequestSession => ({
+  sessionVersion: req.user.sv ?? 0,
+  accountUuid: req.user.uid,
+});
+
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -88,7 +96,7 @@ export class UserController {
   @Post('credential')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req): Promise<void> {
     const userId = req.user.sub;
-    await this.userService.changePassword(userId, dto);
+    await this.userService.changePassword(userId, dto, requestSession(req));
   }
 
   /**
@@ -102,7 +110,7 @@ export class UserController {
   @LogAction('account.set_password')
   @Post('initial-password')
   async setInitialPassword(@Body() dto: SetInitialPasswordDto, @Request() req): Promise<void> {
-    await this.userService.setInitialPassword(req.user.sub, dto.newPassword);
+    await this.userService.setInitialPassword(req.user.sub, dto.newPassword, requestSession(req));
   }
 
   /**

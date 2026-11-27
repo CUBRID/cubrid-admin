@@ -2492,6 +2492,9 @@ export const CM_KO = {
   switchWorkspaceUnsavedDesc: '저장하지 않은 변경이 있습니다. 워크스페이스를 바꾸면 변경 내용이 사라집니다.',
   workspaceJobsUnknownDesc: '실행 중인 작업이 있는지 확인하지 못했습니다. 그래도 워크스페이스를 바꿀까요?',
   switchWorkspaceConfirmBtn: '전환',
+  // TODO(ko): English placeholders until Korean staff provide translations.
+  openUserAdministrationUnsavedDesc: 'You have unsaved changes. Opening User Administration will discard them.',
+  openUserAdministrationConfirmBtn: 'Open',
   unsavedReloadDesc: (name) => `"${name}"에 저장하지 않은 변경 사항이 있습니다. 다시 불러오면 변경 사항이 사라집니다.`,
 
   // Footer

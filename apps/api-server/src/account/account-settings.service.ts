@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -30,6 +31,7 @@ export class AccountSettingsService {
 
   // Static: one copy for the process even if a module provides its own instance.
   private static stored: StoredSettings | null = null;
+  private static saving: Promise<void> = Promise.resolve();
   private static adminPresence: { at: number; exists: boolean } | null = null;
 
   constructor(
@@ -92,14 +94,29 @@ export class AccountSettingsService {
     await this.save({ registrationApproval: required });
   }
 
-  private async save(change: StoredSettings): Promise<void> {
-    const next = { ...(await this.load()), ...change };
-    const file = AccountSettingsService.settingsPath();
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
-    await fs.writeFile(tmp, JSON.stringify(next, null, 2), 'utf8');
-    await fs.rename(tmp, file);
-    AccountSettingsService.stored = next;
+  /**
+   * One save at a time, from reading the current settings to updating the
+   * cache: two admins changing different settings at once must not have the
+   * second write put back what the first changed.
+   */
+  private save(change: StoredSettings): Promise<void> {
+    const run = AccountSettingsService.saving.then(async () => {
+      const next = { ...(await this.load()), ...change };
+      const file = AccountSettingsService.settingsPath();
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      const tmp = `${file}.tmp-${process.pid}-${randomUUID()}`;
+      try {
+        await fs.writeFile(tmp, JSON.stringify(next, null, 2), 'utf8');
+        await fs.rename(tmp, file);
+      } catch (err) {
+        await fs.rm(tmp, { force: true }).catch(() => undefined);
+        throw err;
+      }
+      AccountSettingsService.stored = next;
+    });
+    // A failed save must not stop the ones after it.
+    AccountSettingsService.saving = run.catch(() => undefined);
+    return run;
   }
 
   /** Call after any change to who is an active admin (register, role, status, delete). */
@@ -135,6 +152,7 @@ export class AccountSettingsService {
 
   /** For tests. */
   static reset(): void {
+    AccountSettingsService.saving = Promise.resolve();
     AccountSettingsService.stored = null;
     AccountSettingsService.adminPresence = null;
   }
