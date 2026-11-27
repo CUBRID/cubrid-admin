@@ -51,6 +51,18 @@ export default function LoginPage() {
   const location = useLocation();
   const { loading } = useSelector((state) => state.auth, shallowEqual);
   const { theme } = useSelector((state) => state.layout, shallowEqual);
+  // The sign-up notice arrives in history state, which survives reloads. Read it
+  // once, then drop it from history so it does not linger after approval.
+  const [signUpNotice, setSignUpNotice] = useState(() => {
+    if (location.state?.registrationPending) return 'pending';
+    if (location.state?.registrationSuccess) return 'success';
+    return null;
+  });
+  useEffect(() => {
+    if (location.state?.registrationPending || location.state?.registrationSuccess) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const validate = () => {
     const errs = {};
@@ -66,6 +78,7 @@ export default function LoginPage() {
     setErrors({});
     setApiError('');
     setAwaitingApproval(false);
+    setSignUpNotice(null);
     dispatch(loginStart());
     try {
       const response = await authApi.login(username, password);
@@ -154,12 +167,12 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        {location.state?.registrationSuccess && (
+        {signUpNotice === 'success' && (
           <InfoBanner variant="success" title={CM.registrationSuccessfulTitle} className="mb-3">
             {CM.registrationSuccessfulMessage}
           </InfoBanner>
         )}
-        {location.state?.registrationPending && !awaitingApproval && (
+        {signUpNotice === 'pending' && !awaitingApproval && (
           <div data-testid="login-registration-pending">
             <InfoBanner variant="info" title={CM.registrationPendingTitle} className="mb-3">
               {CM.registrationPendingMessage}
