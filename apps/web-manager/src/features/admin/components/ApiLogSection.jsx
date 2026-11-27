@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { Input } from '../../../components/ds/forms/Input';
@@ -28,8 +28,22 @@ const BOM = String.fromCharCode(0xfeff);
 const EMPTY = { entries: [], total: 0, summary: null };
 
 const CARD = 'rounded-2xl border border-slate-200/70 dark:border-white/6 bg-white dark:bg-background-dark';
-const TH = 'px-4 py-2.5 text-left text-11 font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap';
-const TD = 'px-4 py-3 text-13 whitespace-nowrap';
+const TH = 'bg-slate-50/60 dark:bg-white/2 px-4 py-2.5 text-left text-11 font-bold uppercase tracking-widest text-slate-400 whitespace-nowrap';
+const TD = 'px-4 py-3 text-13 whitespace-nowrap truncate';
+
+/** Column widths, shared by the column names and the rows, which are separate tables. */
+function Columns() {
+  return (
+    <colgroup>
+      <col className="w-[210px]" />
+      <col className="w-[14%]" />
+      <col className="w-[20%]" />
+      <col />
+      <col className="w-[24%]" />
+      <col className="w-[100px]" />
+    </colgroup>
+  );
+}
 
 function Stat({ label, value, tone, testId }) {
   const color = tone === 'danger' ? 'text-rose-500' : tone === 'warning' ? 'text-amber-500' : 'text-slate-800 dark:text-slate-100';
@@ -156,6 +170,7 @@ export default function ApiLogSection({ reloadKey }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const cardRef = useRef(null);
 
   const filter = useCallback(
     () => ({
@@ -175,7 +190,13 @@ export default function ApiLogSection({ reloadKey }) {
     setError(null);
     adminApi
       .queryApiLog({ ...filter(), limit: API_LOG_PAGE_SIZE, offset: (page - 1) * API_LOG_PAGE_SIZE })
-      .then((res) => live && setData({ entries: res?.entries ?? [], total: res?.total ?? 0, summary: res?.summary ?? null }))
+      .then((res) => {
+        if (!live) return;
+        setData({ entries: res?.entries ?? [], total: res?.total ?? 0, summary: res?.summary ?? null });
+        // A new page starts at its first row: bring the table's top back if it was scrolled past.
+        const card = cardRef.current;
+        if (card && card.getBoundingClientRect().top < 0) card.scrollIntoView?.({ block: 'start' });
+      })
       .catch((err) => live && setError(requestErrorText(err, CM)))
       .finally(() => live && setLoading(false));
     return () => {
@@ -249,7 +270,9 @@ export default function ApiLogSection({ reloadKey }) {
 
       {summary && <ActivityChart summary={summary} />}
 
-      <div className={`${CARD} overflow-hidden`}>
+      {/* One page scroll. The filters and column names are one sticky block, so no rows show between them. */}
+      <div ref={cardRef} className={CARD}>
+        <div className="sticky top-0 z-20 rounded-t-2xl bg-white dark:bg-background-dark">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 py-4 border-b border-slate-100 dark:border-white/5">
           <Input data-testid="admin-api-log-user" label={CM.apiLogUser} icon="person" value={user} onChange={set(setUser)} />
           <Select
@@ -272,6 +295,20 @@ export default function ApiLogSection({ reloadKey }) {
           />
           <Input data-testid="admin-api-log-target" label={CM.apiLogTarget} icon="dns" value={target} onChange={set(setTarget)} />
         </div>
+        <table className="w-full table-fixed border-b border-slate-100 dark:border-white/5">
+          <Columns />
+          <thead>
+            <tr>
+              <th className={TH}>{CM.apiLogTime}</th>
+              <th className={TH}>{CM.apiLogUser}</th>
+              <th className={TH}>{CM.apiLogAction}</th>
+              <th className={TH}>{CM.apiLogTarget}</th>
+              <th className={TH}>{CM.apiLogResult}</th>
+              <th className={`${TH} text-right`}>{CM.apiLogDuration}</th>
+            </tr>
+          </thead>
+        </table>
+        </div>
 
         {error && (
           <div role="alert" className="flex items-start gap-3 m-4 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
@@ -280,18 +317,10 @@ export default function ApiLogSection({ reloadKey }) {
           </div>
         )}
 
-        <div className="overflow-x-auto" data-testid="admin-api-log-table">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-white/5 bg-slate-50/60 dark:bg-white/2">
-                <th className={TH}>{CM.apiLogTime}</th>
-                <th className={TH}>{CM.apiLogUser}</th>
-                <th className={TH}>{CM.apiLogAction}</th>
-                <th className={TH}>{CM.apiLogTarget}</th>
-                <th className={TH}>{CM.apiLogResult}</th>
-                <th className={`${TH} text-right`}>{CM.apiLogDuration}</th>
-              </tr>
-            </thead>
+        {/* No horizontal scroll: it would stop the column names sticking. Long cells are cut short. */}
+        <div data-testid="admin-api-log-table">
+          <table className="w-full table-fixed" aria-label={CM.adminSectionApiLog}>
+            <Columns />
             <tbody>
               {loading && data.entries.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center"><div className="mx-auto h-4 w-32 bg-slate-100 dark:bg-white/5 rounded animate-pulse" /></td></tr>
@@ -303,12 +332,12 @@ export default function ApiLogSection({ reloadKey }) {
                     <td className={`${TD} text-slate-500 tabular-nums`}>{formatTime(e.at)}</td>
                     <td className={`${TD} font-bold text-slate-700 dark:text-slate-200`}>{e.user ?? '—'}</td>
                     <td className={TD} title={`${e.method} ${e.path}`}>{apiActionText(e, CM)}</td>
-                    <td className={`${TD} text-slate-500 max-w-[260px] truncate`}>{apiTargetText(e) || '—'}</td>
+                    <td className={`${TD} text-slate-500`} title={apiTargetText(e) || undefined}>{apiTargetText(e) || '—'}</td>
                     <td className={TD}>
                       {e.ok ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold">{CM.apiLogOk}</span>
                       ) : (
-                        <span className="inline-flex items-center gap-2 max-w-[320px]" title={e.error ?? e.errorCode ?? ''}>
+                        <span className="flex items-center gap-2 min-w-0" title={e.error ?? e.errorCode ?? ''}>
                           <span className="text-rose-500 font-bold">{CM.apiLogFailed}</span>
                           <span className="text-12 text-slate-400 truncate">{e.error ?? e.errorCode ?? e.status}</span>
                         </span>
