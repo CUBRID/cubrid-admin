@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeManageGroupMembersModal, moveHost } from '../hostSlice';
 import { flattenHostsFromGroups, findGroupIdForHost, UNGROUPED_GROUP_ID } from '../hostGroupUtils';
@@ -10,6 +10,7 @@ import { Table } from '../../../components/ds/layout/Table';
 import { Typography } from '../../../components/ds/foundation/Typography';
 import { Icon } from '../../../components/ds/foundation/Icon';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function ManageGroupMembersModal() {
   const CM = useCM();
@@ -29,7 +30,8 @@ export default function ManageGroupMembersModal() {
 
   const allHosts = useMemo(() => flattenHostsFromGroups(hostGroups), [hostGroups]);
 
-  useEffect(() => {
+  // The members as they are when the modal opens (or targets another group).
+  useResetEffect(({ allHosts, hostGroups }) => {
     if (isManageGroupMembersModalOpen && groupToEditId) {
       const currentMembers = new Set(
         allHosts.filter((h) => findGroupIdForHost(hostGroups, h.uid) === groupToEditId).map((h) => h.uid)
@@ -39,8 +41,7 @@ export default function ManageGroupMembersModal() {
       setFilter('');
       setSaveError('');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isManageGroupMembersModalOpen, groupToEditId]);
+  }, [isManageGroupMembersModalOpen, groupToEditId], { allHosts, hostGroups });
 
   if (!isManageGroupMembersModalOpen) return null;
 

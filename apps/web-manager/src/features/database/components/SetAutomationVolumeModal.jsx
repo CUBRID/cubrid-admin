@@ -18,6 +18,7 @@ import {
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const BYTES_TO_MB = 1024 * 1024;
 
@@ -197,18 +198,22 @@ export default function SetAutomationVolumeModal() {
       .finally(() => setReadingSpace(false));
   }, [isSetAutomationVolumeModalOpen, pageSize, canReadSpace, entryKey, selectedHostUid, selectedDatabase, dispatch]);
 
-  useEffect(() => {
+  // Reset local state before fetching new config to avoid stale view
+  useResetEffect(() => {
     if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
-      resetAction();
-      // Reset local state before fetching new config to avoid stale view
       setCombinedEnabled(false);
       setLoadedExtPages(null);
       setLoadedExt(null);
+    }
+  }, [isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase]);
+  useEffect(() => {
+    if (isSetAutomationVolumeModalOpen && selectedHostUid && selectedDatabase) {
+      resetAction();
       dispatch(fetchAutoVolumeConfig({ hostUid: selectedHostUid, dbname: selectedDatabase }));
     }
   }, [isSetAutomationVolumeModalOpen, selectedHostUid, selectedDatabase, dispatch, resetAction]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (!selectedDatabase || !autoVolumeConfigs) return;
     const config = autoVolumeConfigs[dbKey(selectedHostUid, selectedDatabase)];
     if (config) {
@@ -227,7 +232,7 @@ export default function SetAutomationVolumeModal() {
     }
   }, [autoVolumeConfigs, selectedHostUid, selectedDatabase]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (pageSize && loadedExtPages) setCombinedAddSize(pagesToMib(loadedExtPages, pageSize));
   }, [pageSize, loadedExtPages]);
 
@@ -260,7 +265,7 @@ export default function SetAutomationVolumeModal() {
     } catch (err) {
       endError(typeof err === 'string' ? err : (err?.message || CM.saveConfigFailedRetryMsg));
     }
-  }, [saveBlockedReason, pageSize, loadedExt, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError]);
+  }, [saveBlockedReason, pageSize, loadedExt, combinedEnabled, combinedThreshold, combinedAddSize, selectedHostUid, selectedDatabase, dispatch, startAction, endSuccess, endError, CM]);
 
   const handleClose = () => dispatch(closeSetAutomationVolumeModal());
 

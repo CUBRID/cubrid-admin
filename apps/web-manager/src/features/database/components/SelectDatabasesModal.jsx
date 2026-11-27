@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { shallowEqual, useSelector } from 'react-redux';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -10,6 +10,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { useCM } from '../../../constants/useCM';
 import { MULTI_DB_ACTIONS, MULTI_DB_ACTION_ICONS, databaseSelectionRows, splitByAction } from '../databaseMultiActions';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 
 // What the actions go by, in words: running or not, logged in, saved login, HA.
@@ -47,14 +48,14 @@ export default function SelectDatabasesModal({ isOpen, hostUid, initialSelected,
   // As in the single login dialog: on by default, and off saves nothing.
   const [saveCredentials, setSaveCredentials] = useState(true);
 
-  useEffect(() => {
+  useResetEffect(({ initialSelected }) => {
     if (!isOpen) return;
     setSelected(new Set(initialSelected || []));
     setFilter('');
     setLoginPending(false);
     setCredentialsByDb({});
     setSaveCredentials(true);
-  }, [isOpen, hostUid]);
+  }, [isOpen, hostUid], { initialSelected });
 
   const selectedRows = useMemo(() => rows.filter((row) => selected.has(row.dbname)), [rows, selected]);
   if (!isOpen) return null;

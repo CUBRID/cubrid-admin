@@ -2,10 +2,24 @@ import { Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs
 import { BaseExceptionFilter } from '@nestjs/core';
 import { Response } from 'express';
 import { AppError } from './app-error';
+import { AuthErrorCode, isExpectedAuthRejection } from './auth/auth-error';
 import { StandardResponse } from '@api-interfaces';
 import { ERROR_CODE_LOCAL, ERROR_TEXT_LOCAL } from '@api-log/request-log.middleware';
 
 const INTERNAL_ERROR_NOTE = 'An internal server error occurred.';
+
+/**
+ * An error the user caused (bad input, a wrong password, an ended session, no
+ * CSRF header, a refused admin route) or a refresh racing another: the
+ * request line already shows it, so its details go only to `debug`. A CMS
+ * failure, and a desktop-mode call to a server-only route (a bug), stay errors.
+ */
+function isExpectedAppError(exception: AppError, status: number): boolean {
+  if (isExpectedAuthRejection(exception)) return true;
+  if (status >= 500 || exception.kind === 'CMS') return false;
+  const reason = (exception as AppError & { additionalData?: { reason?: unknown } }).additionalData?.reason;
+  return !(exception.code === AuthErrorCode.PERMISSION_DENIED && reason === 'NOT_ON_DESKTOP');
+}
 
 /** What a client maps an error by when it is not an AppError. */
 const internalErrorData = () => ({
@@ -72,6 +86,8 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
       }
 
       if (status < 500) {
+        // Expected (no login, the login rate limit, bad input): the request
+        // line already shows the status.
         this.logger.debug(`HTTP Exception [${status}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         this.logger.error(
@@ -98,8 +114,11 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         detail: note,
       };
 
-      if (status < 500 && exception.kind !== 'CMS') {
-        // Expected: the request line already shows the code.
+      if (isExpectedAppError(exception, status)) {
+        // Expected (our own login missing or invalid, no CSRF header, bad
+        // input): the request line already shows the code. A CMS-side 401
+        // (lost CMS token, changed cm.pass, CMS restart) is an operational
+        // fault and keeps the full ERROR with its details below.
         this.logger.debug(`App Error [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         // A server fault, or a CMS one (lost CMS token, changed cm.pass, CMS

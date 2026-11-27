@@ -11,6 +11,7 @@ import ContextMenuWrapper from '../../../components/common/ContextMenuWrapper';
 import { MenuItem, MenuDivider } from '../../../components/common/DropdownMenu';
 import { menuOffReason } from '../../layout/menuOffReason';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MODE_KEYS = [
@@ -102,7 +103,7 @@ const SQLHighlight = ({ sql }) => {
     parts.push(<span key={key++} className={COLORS[type] || ''}>{m[0]}</span>);
     pos = m.index + m[0].length;
   }
-  if (pos < sql.length) parts.push(<span key={key++}>{sql.substring(pos)}</span>);
+  if (pos < sql.length) parts.push(<span key={key}>{sql.substring(pos)}</span>);
   return <>{parts}</>;
 };
 
@@ -151,11 +152,16 @@ function LogViewer({ hostUid, path }) {
     dispatch(fetchLogContent({ hostUid, path, start: String(startLine), end: String(endLine) }));
   }, [dispatch, hostUid, path, currentPage, isAll, startLine, endLine, isTop]);
 
+  // Top SQL analyzes the log again each time it is entered or refreshed: until
+  // that result lands, the earlier one is not shown as complete (copy and
+  // export stay off).
+  useResetEffect(() => {
+    if (isTop) setTopAnalysis({ hostUid, path, revision: topRevision, loading: true });
+  }, [isTop, hostUid, path, topRevision]);
   useEffect(() => {
     if (!isTop) return undefined;
     const controller = new AbortController();
     const identity = { hostUid, path, revision: topRevision };
-    setTopAnalysis({ ...identity, loading: true });
     analyzeTopSQL(() => brokerApi.captureLogSnapshot(hostUid, path), { signal: controller.signal })
       .then(result => {
         if (!controller.signal.aborted) setTopAnalysis({ ...identity, ...result, loading: false });
@@ -168,7 +174,7 @@ function LogViewer({ hostUid, path }) {
     return () => controller.abort();
   }, [hostUid, path, topRevision, isTop]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isRawOnlyLog && viewMode !== 'raw') {
       setViewMode('raw');
     }

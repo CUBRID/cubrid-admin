@@ -64,4 +64,28 @@ describe('ending a job followed after a restart keeps locks written meanwhile', 
     const ops = await store.readGlobalOperations();
     expect(Object.values(ops).map((e) => e.jobId)).toEqual(['new-job']);
   });
+
+  it('ends the orphan but drops no lock entry when the file lock is compromised before the write', async () => {
+    const broken = { assertHeld: () => { throw new Error('Lock compromised'); } };
+    const before = await store.readGlobalOperations();
+    await expect(store.finalizeOrphanedJob('uk', job('orphan-1'), (fn) => fn(broken))).rejects.toThrow('Lock compromised');
+    expect(await store.readGlobalOperations()).toEqual(before);
+    // The orphan itself was saved as finished before the lock was needed.
+    expect((await store.getJob('uk', 'orphan-1'))?.status).toBe('succeeded');
+  });
+
+  it('purgeExpiredJobs and failOrphanedActiveJobs clear lock entries only under the lock', async () => {
+    const seen: string[] = [];
+    const underLock = (fn: (lock: { assertHeld: () => void }) => Promise<void>) =>
+      lockService.withLock(GLOBAL, async (lock) => { seen.push('locked'); await fn(lock); });
+    await store.saveJob('uk', { ...job('orphan-1'), status: 'running' });
+    const failed = await store.failOrphanedActiveJobs({ message: 'restarted' }, underLock);
+    expect(failed).toBe(1);
+    expect(Object.values(await store.readGlobalOperations()).map((e) => e.jobId)).toEqual(['orphan-2']);
+    await store.saveJob('uk', { ...job('orphan-2'), status: 'succeeded', finishedAt: '2020-01-01T00:00:00Z' });
+    const removed = await store.purgeExpiredJobs(1, 1, underLock);
+    expect(removed).toBeGreaterThanOrEqual(1);
+    expect(await store.readGlobalOperations()).toEqual({});
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+  });
 });

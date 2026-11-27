@@ -16,6 +16,10 @@ import {
   ModalStatusError
 } from '../../../components/ds/feedback/ActionStatus';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
+
+// The same empty list on every render: a new one would count as a change.
+const NO_USERS = [];
 
 export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }) {
   const CM = useCM();
@@ -23,7 +27,7 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
   const isEditMode = !!editingUser;
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
   const { databaseUsers: allUsers } = useSelector((state) => state.user, shallowEqual);
-  const databaseUsers = allUsers[dbKey(selectedHostUid, dbname)] || [];
+  const databaseUsers = allUsers[dbKey(selectedHostUid, dbname)] || NO_USERS;
 
   const {
     error: actionError,
@@ -48,6 +52,14 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
   // dispatch(fetchDatabaseUsers(...)) below (which changes that length) kept
   // re-triggering this effect and calling resetAction(), silently reverting
   // the just-shown success screen back to a blank form.
+  // The form starts blank when the modal opens, once per opening.
+  useResetEffect(({ isEditMode }) => {
+    if (!isOpen) return;
+    setErrors({});
+    if (!isEditMode) {
+      setFormData({ name: '', password: '', confirmPassword: '' });
+    }
+  }, [isOpen], { isEditMode });
   const hasInitializedRef = useRef(false);
   useEffect(() => {
     if (!isOpen) {
@@ -56,40 +68,35 @@ export default function CreateUserModal({ isOpen, onClose, dbname, editingUser }
     }
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
-    setErrors({});
 
     if (dbname && selectedHostUid) {
       resetAction();
       dispatch(fetchDatabaseUsers({ hostUid: selectedHostUid, dbname }));
     }
-
-    if (!isEditMode) {
-      setFormData({ name: '', password: '', confirmPassword: '' });
-    }
-  }, [isOpen, dbname, selectedHostUid, isEditMode, resetAction]);
+  }, [isOpen, dbname, selectedHostUid, resetAction, dispatch]);
 
   // Reacts to the user list arriving (it may still be loading when the modal
-  // opens) — in edit mode, prefills the form. Uses a guard ref instead of
-  // depending on databaseUsers.length directly, so it doesn't clobber
-  // in-progress edits on later refetches.
-  const prefilledEditUserRef = useRef(null);
-  useEffect(() => {
-    if (!isOpen || !isEditMode || databaseUsers.length === 0) return;
-    if (prefilledEditUserRef.current === editingUser) return;
+  // opens) — in edit mode, prefills the form. Remembers which user it was
+  // prefilled for instead of depending on databaseUsers.length directly, so it
+  // doesn't clobber in-progress edits on later refetches.
+  const [prefilledEditUser, setPrefilledEditUser] = useState(null);
+  useResetEffect(({ prefilledEditUser }) => {
+    if (!isOpen) {
+      if (prefilledEditUser !== null) setPrefilledEditUser(null);
+      return;
+    }
+    if (!isEditMode || databaseUsers.length === 0) return;
+    if (prefilledEditUser === editingUser) return;
     const userToEdit = databaseUsers.find(u => (u.name || u) === editingUser);
     if (!userToEdit) return;
-    prefilledEditUserRef.current = editingUser;
+    setPrefilledEditUser(editingUser);
 
     setFormData({
       name: userToEdit.name || userToEdit,
       password: '',
       confirmPassword: '',
     });
-  }, [isOpen, databaseUsers, isEditMode, editingUser]);
-
-  useEffect(() => {
-    if (!isOpen) prefilledEditUserRef.current = null;
-  }, [isOpen]);
+  }, [isOpen, databaseUsers, isEditMode, editingUser], { prefilledEditUser });
 
   if (!isOpen) return null;
 

@@ -9,6 +9,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { useCM } from '../../../constants/useCM';
 import { closeUpdateCheck } from '../appBarSlice';
 import { dismissUpdate, fetchUpdateStatus, openUpdateUrl } from '../../update/updateCheckClient';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const LOADING_VIEW = { phase: 'loading', status: null };
 
@@ -52,19 +53,18 @@ export default function UpdateCheckModal() {
     }
   }, []);
 
+  useResetEffect(() => {
+    if (!isOpen) setView(LOADING_VIEW);
+    else if (preloadedStatus) setView({ phase: 'done', status: preloadedStatus });
+  }, [isOpen, preloadedStatus]);
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || preloadedStatus) {
       // Drop any still-in-flight result so it can't land in a later opening.
       requestIdRef.current += 1;
-      setView(LOADING_VIEW);
       return;
     }
-    if (preloadedStatus) {
-      requestIdRef.current += 1;
-      setView({ phase: 'done', status: preloadedStatus });
-    } else {
-      runCheck();
-    }
+    const check = async () => { await runCheck(); };
+    void check();
   }, [isOpen, preloadedStatus, runCheck]);
 
   if (!isOpen) return null;

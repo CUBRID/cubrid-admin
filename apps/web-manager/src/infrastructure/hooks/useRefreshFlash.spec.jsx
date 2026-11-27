@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import React, { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Icon } from '../../components/ds/foundation/Icon';
@@ -24,7 +24,8 @@ afterEach(async () => {
 });
 
 function Harness({ refreshCounter }) {
-  flashing = useRefreshFlash(refreshCounter);
+  const value = useRefreshFlash(refreshCounter);
+  useEffect(() => { flashing = value; });
   return (
     <>
       <button type="button" data-testid="refresh"><Icon name="refresh" /> Refresh</button>

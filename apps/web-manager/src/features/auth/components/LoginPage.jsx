@@ -11,6 +11,7 @@ import LanguageToggle from '../../layout/components/LanguageToggle';
 import { useCM } from '../../../constants/useCM';
 import { APP_VERSION } from '../../../constants/appVersion';
 import { useRegistrationOpen } from '../useRegistrationOpen';
+import { tooManyAttemptsText } from '../../../infrastructure/errors/serverErrorText';
 
 export default function LoginPage() {
   const CM = useCM();
@@ -68,12 +69,12 @@ export default function LoginPage() {
     dispatch(loginStart());
     try {
       const response = await authApi.login(username, password);
-      if (!response?.token || !response?.refreshToken) {
+      // The tokens come as cookies; the answer says how long the access lasts.
+      if (!Number.isFinite(response?.expiresIn)) {
         throw new Error(CM.loginTokenMissingMsg);
       }
       dispatch(loginSuccess({
-        token: response.token,
-        refreshToken: response.refreshToken,
+        expiresIn: response.expiresIn,
         user: { id: username },
       }));
       navigate('/home', { replace: true });
@@ -87,7 +88,9 @@ export default function LoginPage() {
         setAwaitingApproval(true);
         return;
       }
-      const msg = wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg);
+      // The login rate limit says how long to wait.
+      const msg = tooManyAttemptsText(err, CM)
+        ?? (wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg));
       dispatch(loginFailure(msg));
       setApiError(msg);
     }

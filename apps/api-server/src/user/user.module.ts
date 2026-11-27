@@ -5,6 +5,7 @@ import { SecurityModule } from '@security';
 import { UserService } from './user.service';
 import { TokenModule } from '@token';
 import { AccountModule } from '@account/account.module';
+import { ConfigModule } from '@config/config.module';
 
 /**
  * User management module for handling user-related operations.
@@ -19,7 +20,7 @@ import { AccountModule } from '@account/account.module';
 @Module({
   controllers: [UserController],
   providers: [UserService],
-  imports: [UserRepositoryModule, SecurityModule, TokenModule, AccountModule],
+  imports: [UserRepositoryModule, SecurityModule, TokenModule, AccountModule, ConfigModule],
   exports: [UserService],
 })
 export class UserModule {}

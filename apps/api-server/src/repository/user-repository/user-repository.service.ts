@@ -184,7 +184,7 @@ export class UserRepositoryService {
   ): Promise<User> {
     const hashedId = this.encryptionService.getHashedValue(id);
 
-    const updated = await this.lockService.withLock(hashedId, async () => {
+    const updated = await this.lockService.withLock(hashedId, async (lock) => {
       const encrypted: string = await this.storageService.readUnsafe(hashedId);
       const decrypted: string = await this.encryptionService.decryptValue(encrypted);
       const userJson: User = JSON.parse(decrypted);
@@ -192,6 +192,7 @@ export class UserRepositoryService {
       await modifierCallback(userJson);
 
       const newEncryted = await this.encryptionService.encryptValue(JSON.stringify(userJson));
+      lock.assertHeld();
       await this.storageService.writeUnsafe(hashedId, newEncryted);
 
       return userJson;

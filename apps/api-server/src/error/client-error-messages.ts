@@ -156,6 +156,8 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'This account is waiting for an administrator to approve it.';
       case AuthErrorCode.PASSWORD_CHANGE_REQUIRED:
         return 'Set a new password before continuing.';
+      case AuthErrorCode.REFRESH_IN_PROGRESS:
+        return 'The session is being refreshed. Try again shortly.';
       case AuthErrorCode.INTERNAL_ERROR:
       case AuthErrorCode.UNKNOWN:
       default:

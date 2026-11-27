@@ -13,12 +13,9 @@ export const authApi = {
     return apiClient.post('/auth/login', { id, password });
   },
 
-  refresh: (refreshToken) => {
-    return apiClient.post('/auth/refresh', { refreshToken });
-  },
-
-  logout: (refreshToken) => {
-    return apiClient.post('/auth/logout', { refreshToken: refreshToken || undefined });
+  // The session's cookies go with it; the server clears them.
+  logout: () => {
+    return apiClient.post('/auth/logout');
   },
 
   getUserInfo: () => {
@@ -28,6 +25,11 @@ export const authApi = {
   // Only while an admin-required password change is pending.
   setInitialPassword: (newPassword) => {
     return apiClient.post('/user/initial-password', { newPassword });
+  },
+
+  // The session the cookies hold: { expiresIn, expiresLeft, user }.
+  getSession: (config) => {
+    return apiClient.get('/auth/session', config);
   },
 
   updatePassword: (oldPassword, newPassword) => {

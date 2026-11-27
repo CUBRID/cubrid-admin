@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchDatabaseSpaceInfo } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -14,11 +14,11 @@ export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, polling
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     if (hostUid && dbname) dispatch(fetchDatabaseSpaceInfo({ hostUid, dbname }));
-  };
+  }, [dispatch, hostUid, dbname]);
 
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'files' }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSectionsRef: pollingProps.collapsedSections, section: 'files' }, refresh);
 
   useEffect(() => {
     let interval;
@@ -26,7 +26,7 @@ export default function DBSpaceInfoSection({ spaceInfo, spaceInfoStatus, polling
       interval = setInterval(refresh, refreshInterval * 1000);
     }
     return () => clearInterval(interval);
-  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname, refresh]);
 
   const columns = useMemo(() => [
     {

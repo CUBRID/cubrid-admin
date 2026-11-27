@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../../api/apiClient', () => ({ default: {
-  defaults: { headers: { common: { Authorization: 'session-a' } } },
-  get: vi.fn(),
-  post: vi.fn(),
-} }));
+// The login session the shared reads are keyed by (appSessionKey).
+const session = vi.hoisted(() => ({ key: 'session-a' }));
+vi.mock('../../api/apiClient', () => ({
+  default: { get: vi.fn(), post: vi.fn() },
+  appSessionKey: () => session.key,
+}));
 import apiClient from '../../api/apiClient';
 import { databaseApi } from './databaseApi';
 
 describe('volume read coalescing', () => {
   beforeEach(() => {
     apiClient.get.mockReset();
-    apiClient.defaults.headers.common.Authorization = 'session-a';
+    session.key = 'session-a';
   });
 
   it('shares concurrent reads but fetches again after completion', async () => {
@@ -31,7 +32,7 @@ describe('volume read coalescing', () => {
   it('does not share different databases, hosts, or sessions', async () => {
     apiClient.get.mockResolvedValue({});
     const reads = [databaseApi.getVolumeInfo('host', 'one'), databaseApi.getVolumeInfo('host', 'two'), databaseApi.getVolumeInfo('other', 'one')];
-    apiClient.defaults.headers.common.Authorization = 'session-b';
+    session.key = 'session-b';
     reads.push(databaseApi.getVolumeInfo('host', 'one'));
     await Promise.all(reads);
     expect(apiClient.get).toHaveBeenCalledTimes(4);

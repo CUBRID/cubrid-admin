@@ -48,8 +48,8 @@ export function HandleLockFsErrors() {
             throw LockError.LockAlreadyHeld({ filePath: err.file || err.path }, err);
           case 'ENOTACQUIRED': // proper-lockfile code
             throw LockError.LockNotFound({ filePath: err.file }, err);
-          case 'ECOMPROMISED': // proper-lockfile code
-            throw LockError.Unknown({ reason: 'Lock compromised', filePath: err.file }, err);
+          case 'ECOMPROMISED': // proper-lockfile code: the lock is no longer ours
+            throw LockError.StaleLock({ reason: 'Lock compromised', filePath: err.file || err.path }, err);
           case 'ERELEASED': // proper-lockfile code
             throw LockError.LockNotFound(
               {

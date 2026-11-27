@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCM } from '../../../constants/useCM';
@@ -9,6 +9,7 @@ import {
   MENU_ACTIONS,
 } from '../../layout/menuActions';
 import { isAnyModalOpen, useAnyModalOpen } from '../../../infrastructure/hooks/useAnyModalOpen';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // Stable fallback for a store without the list, so the selector stays equal.
 const NO_HOSTS = [];
@@ -56,13 +57,14 @@ export function useDesktopMenuActions() {
       ...getMenuActionEnabled({ selectedHostUid, highlightedHostUid, authorizedHosts, reconnectQueue, hosts }),
       // Not over an open modal (it would close with what it holds).
       [MENU_ACTIONS.switchWorkspace]: !anyModalOpen,
+      [MENU_ACTIONS.exportWorkspace]: !anyModalOpen,
+      [MENU_ACTIONS.importWorkspace]: !anyModalOpen,
     }
     : NO_DASHBOARD_MENU_ACTIONS;
   const enabledKey = JSON.stringify(enabled);
   const stableEnabled = useMemo(() => JSON.parse(enabledKey), [enabledKey]);
 
-  const latest = useRef(null);
-  latest.current = { dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, enabled: stableEnabled };
+  const latest = useLatestRef({ dispatch, CM, selectedHostUid, highlightedHostUid, navigate, dirtyTabs, enabled: stableEnabled });
 
   useEffect(() => {
     const setMenuState = window.desktopBridge?.setMenuState;
@@ -81,5 +83,5 @@ export function useDesktopMenuActions() {
       if (!ctx.enabled[actionId]) return;
       runMenuAction(actionId, { ...ctx, anyModalOpen: isAnyModalOpen() });
     });
-  }, []);
+  }, [latest]);
 }

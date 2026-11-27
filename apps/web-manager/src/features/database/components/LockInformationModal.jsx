@@ -17,6 +17,8 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { ContentLoadingOverlay } from '../../../components/ds/feedback/ContentLoadingOverlay';
 import { useCM } from '../../../constants/useCM';
 import { useClientPagination } from '../../../infrastructure/hooks/useClientPagination';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 // The engine prints "Timeout_period : <value>" (since 2012; before that,
 // "Timeout_period <seconds>"). A CMS without the CBRD-27825 fix keeps only the
@@ -103,15 +105,13 @@ export default function LockInformationModal() {
     if (objects == null) fetchLockInfo({ withObjects: true });
   };
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isLockInfoModalOpen) {
       setActiveTab('sessions');
       setLockView('summary');
-      fetchLockInfo();
     } else {
       // Reset while hidden so the next open starts on the loading state
       // rather than the previous database's locks.
-      requestIdRef.current += 1;
       setOverview(EMPTY_OVERVIEW);
       setSummaryRows([]);
       setObjects(null);
@@ -120,6 +120,19 @@ export default function LockInformationModal() {
       setError(null);
     }
   }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase]);
+  // Read when the modal opens or its database changes, with the read as it
+  // is then (its identity follows isActive and the labels, not a reason to
+  // read again).
+  const fetchLockInfoRef = useLatestRef(fetchLockInfo);
+  useEffect(() => {
+    if (isLockInfoModalOpen) {
+      const read = async () => { await fetchLockInfoRef.current(); };
+      void read();
+    } else {
+      // A read still in flight for the previous open must not land.
+      requestIdRef.current += 1;
+    }
+  }, [isLockInfoModalOpen, selectedHostUid, selectedDatabase, fetchLockInfoRef]);
 
   const transactions = useMemo(() => {
     const counts = new Map();

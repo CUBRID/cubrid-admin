@@ -1,7 +1,10 @@
 import { CanActivate } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
+import { AccountAccessService } from '@account/account-access.service';
 import { ConfigService } from '@config/config.service';
 import { JwtAuthGuard } from '@token';
+import { TokenBlacklistService } from '@token/token-blacklist.service';
 import { DesktopUserGuard } from './desktop-user.guard';
 
 /**
@@ -9,5 +12,13 @@ import { DesktopUserGuard } from './desktop-user.guard';
  * the listen mode by: no app login only in desktop mode, which listens on
  * the desktop app's socket alone.
  */
-export const selectAppGuard = (configService: ConfigService, reflector: Reflector): CanActivate =>
-  configService.isDesktopMode() ? new DesktopUserGuard(reflector) : new JwtAuthGuard(reflector);
+export const selectAppGuard = (
+  configService: ConfigService,
+  reflector: Reflector,
+  jwt: JwtService,
+  tokenBlacklist: TokenBlacklistService,
+  accountAccess: AccountAccessService
+): CanActivate =>
+  configService.isDesktopMode()
+    ? new DesktopUserGuard(reflector)
+    : new JwtAuthGuard(reflector, jwt, tokenBlacklist, accountAccess);

@@ -25,6 +25,8 @@ import { newDbNameIssue, takenDbNames } from '../newDbNameIssue';
 import { useFreshDbList } from '../useFreshDbList';
 import { inputIssueText } from '../inputIssueText';
 import { normalizeCopyVolumes, canCopyIndividualVolumes, buildCopyVolumeMappings } from '../copyDatabaseVolumes';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
 
 const getPathSeparator = (path) => (path && path.includes('\\') ? '\\' : '/');
 
@@ -85,25 +87,21 @@ export default function CopyDatabaseModal() {
   const [volumes, setVolumes] = useState([]);
   const [volInfoLoading, setVolInfoLoading] = useState(false);
 
-  // Read by the setup effect below, which must not re-run on them.
-  const busyRef = useRef(false);
-  useEffect(() => { busyRef.current = isLoading || isSuccess; }, [isLoading, isSuccess]);
+  // Read by the setup effect below, which must not re-run on them; the same
+  // values the form reset reads in the render before it.
+  const busy = isLoading || isSuccess;
+  const busyRef = useLatestRef(busy);
+  const hasCurrentDbRef = useLatestRef(Boolean(currentDb));
   const wasOpenRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    // Set up when the modal opens, and again if the source changes on the
-    // form. A copy that deletes its source drops it from the list while the
-    // job runs and after it succeeds, which changes currentDb; that re-run
-    // must not throw the job's progress or result back to an empty form.
-    const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
-    wasOpenRef.current = isCopyDatabaseModalOpen;
-    if (isCopyDatabaseModalOpen && (justOpened || !busyRef.current)) {
-      resetAction();
+  // The form, set up when the modal opens, and again if the source changes on
+  // the form. A copy that deletes its source drops it from the list while the
+  // job runs and after it succeeds, which changes currentDb; that re-run must
+  // not throw the job's progress or result back to an empty form.
+  useResetEffect(({ busy }, previous) => {
+    const justOpened = isCopyDatabaseModalOpen && !previous?.[0];
+    if (isCopyDatabaseModalOpen && (justOpened || !busy)) {
       setWarnings([]);
-      if (selectedHostUid && !currentDb) {
-        dispatch(fetchDatabaseStartInfo(selectedHostUid));
-      }
       const defaultPath = currentDb?.dbdir || '';
       setFormData({
         destName: '',
@@ -122,9 +120,20 @@ export default function CopyDatabaseModal() {
       setSrcLogDir('');
       setDiskInfo({ freeSpace: '-', dbSize: '-' });
       setVolumes([]);
+      if (selectedHostUid && selectedDatabase) setVolInfoLoading(true);
+    }
+  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir], { busy });
+  useEffect(() => {
+    let cancelled = false;
+    const justOpened = isCopyDatabaseModalOpen && !wasOpenRef.current;
+    wasOpenRef.current = isCopyDatabaseModalOpen;
+    if (isCopyDatabaseModalOpen && (justOpened || !busyRef.current)) {
+      resetAction();
+      if (selectedHostUid && !hasCurrentDbRef.current) {
+        dispatch(fetchDatabaseStartInfo(selectedHostUid));
+      }
 
       if (selectedHostUid && selectedDatabase) {
-        setVolInfoLoading(true);
         databaseApi.getVolumeInfo(selectedHostUid, selectedDatabase)
           .then((res) => {
             if (cancelled) return;
@@ -157,10 +166,10 @@ export default function CopyDatabaseModal() {
     // object itself re-ran this effect on that refresh alone and called
     // resetAction() right after endSuccess(), silently bouncing the modal
     // from its success view back to the form.
-  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir, resetAction, dispatch]);
+  }, [isCopyDatabaseModalOpen, selectedHostUid, selectedDatabase, currentDb?.dbdir, resetAction, dispatch, busyRef, hasCurrentDbRef]);
 
   // Desktop EditListener alignment: Auto-update target paths and volume mapping when destName changes
-  useEffect(() => {
+  useResetEffect(() => {
     if (!formData.destName) return;
 
     const parentDir = getParentDirectory(currentDb?.dbdir || '');

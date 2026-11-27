@@ -11,6 +11,8 @@ import { UserRepositoryModule } from '@repository';
 import { EncryptionService, SecurityModule } from '@security';
 import { StorageModule, StorageService } from '@storage';
 import { TokenModule } from '@token';
+import { TokenBlacklistService } from '@token/token-blacklist.service';
+import { JwtService } from '@nestjs/jwt';
 import { UserModule } from '@user';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,7 +25,10 @@ import { CmsHttpsClientModule } from '@cms-https-client/cms-https-client.module'
 import { LogModule } from './log/log.module';
 import { HaModule } from '@ha';
 import { CmsJobModule } from '@cms-job/cms-job.module';
+import { AccountAccessService } from '@account/account-access.service';
 import { selectAppGuard } from './desktop/select-app-guard';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AUTH_THROTTLE_OPTIONS } from './auth/auth-throttle';
 import { DesktopUserService } from './desktop/desktop-user.service';
 import { VersionModule } from './version/version.module';
 import { AccountModule } from '@account/account.module';
@@ -42,6 +47,8 @@ import { ApiLogModule } from '@api-log/api-log.module';
  */
 @Module({
   imports: [
+    // In memory; its guard is used on the login routes only (auth-throttle.ts).
+    ThrottlerModule.forRoot(AUTH_THROTTLE_OPTIONS),
     ConfigModule,
     SecurityModule,
     StorageModule,
@@ -74,7 +81,11 @@ import { ApiLogModule } from '@api-log/api-log.module';
     EncryptionService,
     StorageService,
     DesktopUserService,
-    { provide: APP_GUARD, useFactory: selectAppGuard, inject: [ConfigService, Reflector] },
+    {
+      provide: APP_GUARD,
+      useFactory: selectAppGuard,
+      inject: [ConfigService, Reflector, JwtService, TokenBlacklistService, AccountAccessService],
+    },
   ],
 })
 export class AppModule {}

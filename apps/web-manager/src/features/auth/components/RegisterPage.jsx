@@ -6,6 +6,7 @@ import { Input } from '../../../components/ds/forms/Input';
 import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { useCM } from '../../../constants/useCM';
 import { useRegistrationOpen } from '../useRegistrationOpen';
+import { tooManyAttemptsText } from '../../../infrastructure/errors/serverErrorText';
 
 export default function RegisterPage() {
   const CM = useCM();
@@ -77,7 +78,8 @@ export default function RegisterPage() {
       const pending = result?.status === 'pending';
       navigate('/login', { replace: true, state: pending ? { registrationPending: true } : { registrationSuccess: true } });
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.error || CM.registrationFailed;
+      // The sign-up rate limit says how long to wait.
+      const msg = tooManyAttemptsText(err, CM) ?? (err.response?.data?.message || err.response?.data?.error || CM.registrationFailed);
       setApiError(msg);
     } finally {
       setLoading(false);

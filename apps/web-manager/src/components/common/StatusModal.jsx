@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeStatusModal } from '../../features/layout/layoutSlice';
 import { Icon } from '../ds/foundation/Icon';
@@ -7,6 +7,7 @@ import { Modal } from '../ds/layout/Modal';
 import { useCM } from '../../constants/useCM';
 import { FailureTable } from '../ds/feedback/FailureTable';
 import { haFollowUpAction } from '../../features/host/hostSlice';
+import { useResetEffect } from '../../infrastructure/hooks/useResetEffect';
 
 const THEME_STYLES = {
   success: {
@@ -51,7 +52,7 @@ export default function StatusModal() {
   const t = THEME_STYLES[type] || THEME_STYLES.info;
   const tLabel = { success: CM.jobStatusSucceeded, error: CM.jobStatusFailed, info: CM.statusNotice }[type] ?? CM.statusNotice;
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isOpen) {
       setShowDetail(false);
       setOpenedFollowUps([]);

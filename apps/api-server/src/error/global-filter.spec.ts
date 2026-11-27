@@ -71,6 +71,41 @@ describe('GlobalExceptionFilter', () => {
     expect(typeof (res as any).locals.cwmErrorText).toBe('string');
   });
 
+  it.each([
+    ['a wrong password (401)', () => AuthError.InvalidCredentials({ userId: 'u' }), 401, /^App Error \[AUTH:INVALID_CREDENTIALS\]/],
+    ['a request without the CSRF header (403)', () => AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' }), 403, /^App Error \[AUTH:PERMISSION_DENIED\]/],
+    ['a refresh racing another for the same token (503)', () => AuthError.RefreshInProgress(), 503, /^App Error \[AUTH:REFRESH_IN_PROGRESS\]/],
+  ])('logs %s only at debug, with no stack trace and no ERROR: the request line is its warning', (_name, make, status, line) => {
+    const filter = new GlobalExceptionFilter();
+    const logger = (filter as any).logger;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const debug = jest.spyOn(logger, 'debug').mockImplementation(() => undefined);
+    const { host, res } = mockHost('/api/auth/login');
+
+    filter.catch(make(), host);
+
+    expect(res.statusCode).toBe(status);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(debug.mock.calls[0]).toHaveLength(2);
+    expect(String(debug.mock.calls[0][0])).toMatch(line);
+  });
+
+  it('keeps a desktop-mode call to a server-only route as an ERROR', () => {
+    const filter = new GlobalExceptionFilter();
+    const logger = (filter as any).logger;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const { host } = mockHost('/api/auth/login');
+
+    filter.catch(AuthError.PermissionDenied({ reason: 'NOT_ON_DESKTOP' }), host);
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a CMS-side 401 (lost CMS token) as an ERROR with its details', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;

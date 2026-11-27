@@ -117,6 +117,26 @@ describe('LogViewer complete-log Top SQL', () => {
     expect(container.querySelector('[data-testid="top-sql-row"]')).not.toBeNull();
   });
 
+  it('analyzes again when Top SQL is entered again, showing loading instead of the earlier result until then', async () => {
+    await render();
+    await click('[data-testid="log-viewer-mode-top"]');
+    expect(container.querySelector('[data-testid="top-sql-row"]')).not.toBeNull();
+    await click('[data-testid="log-viewer-mode-raw"]');
+    let finish;
+    brokerApi.captureLogSnapshot.mockImplementationOnce(() => new Promise(resolve => {
+      finish = () => resolve({ total: String(lines.length), log: [{ line: lines }] });
+    }));
+    await click('[data-testid="log-viewer-mode-top"]');
+    expect(brokerApi.captureLogSnapshot).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-testid="top-sql-row"]')).toBeNull();
+    expect(container.textContent).toContain(CM.loadingLogLines);
+    expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(true);
+    await act(async () => finish());
+    await act(async () => vi.runAllTimersAsync());
+    expect(container.querySelector('[data-testid="top-sql-row"]')).not.toBeNull();
+    expect(container.querySelector(`[title="${CM.downloadExcel}"]`).disabled).toBe(false);
+  });
+
   it('does not show results from a cancelled analysis after leaving Top SQL', async () => {
     await render();
     let finish;

@@ -5,11 +5,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-vi.mock('../features/auth/authSlice', () => ({ fetchUser: () => ({ type: 'test/fetchUser' }) }));
-vi.mock('../features/user/userSlice', () => ({ fetchPreferences: () => ({ type: 'test/fetchPreferences' }) }));
-vi.mock('../features/auth/components/ForcedPasswordChangePage', () => ({ default: () => <div data-testid="forced" /> }));
-vi.mock('../components/common/LoadingOverlay', () => ({ default: () => <div data-testid="loading" /> }));
-import ProtectedRoute from './ProtectedRoute';
+vi.mock('../authSlice', () => ({ checkSession: () => ({ type: 'test/checkSession' }), fetchUser: () => ({ type: 'test/fetchUser' }) }));
+vi.mock('../../user/userSlice', () => ({ fetchPreferences: () => ({ type: 'test/fetchPreferences' }) }));
+vi.mock('./ForcedPasswordChangePage', () => ({ default: () => <div data-testid="forced" /> }));
+vi.mock('../../../components/common/LoadingOverlay', () => ({ default: () => <div data-testid="loading" /> }));
+import { ProtectedRoute } from './AuthRoutes';
 
 let container;
 let root;

@@ -31,6 +31,7 @@ import { CaDialogField,
 import { DatePicker } from '../../../components/ds/forms/DatePicker';
 import { TimePicker } from '../../../components/ds/forms/TimePicker';
 import { RESTORE_YEAR_MIN } from '@api-interfaces';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // view states
 const VIEW_FORM    = 'form';
@@ -113,6 +114,9 @@ const SectionLabel = ({ children, count }) => (
 );
 
 /* ── main component ─────────────────────────────────────────── */
+// The same empty value on every render: a new one would rebuild allBackups each time.
+const NO_BACKUP_DATA = {};
+
 export default function RestoreDatabaseModal() {
   const CM = useCM();
   const dispatch = useDispatch();
@@ -169,7 +173,7 @@ export default function RestoreDatabaseModal() {
     });
   };
 
-  const backupData = databaseBackups[dbKey(selectedHostUid, selectedDatabase)] || {};
+  const backupData = databaseBackups[dbKey(selectedHostUid, selectedDatabase)] || NO_BACKUP_DATA;
   const allBackups = useMemo(() => {
     return [
       ...(Array.isArray(backupData.level0) ? backupData.level0.map(b => ({ ...b, level: 0 })) : parseBackupString(backupData.level0, 0)),
@@ -184,7 +188,7 @@ export default function RestoreDatabaseModal() {
 
 
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isRestoreDatabaseModalOpen && selectedHostUid && selectedDatabase) {
       const now = new Date();
       const localYear = now.getFullYear();
@@ -214,13 +218,17 @@ export default function RestoreDatabaseModal() {
         changeRestorePath: false
       });
       setFilter('all');
+    }
+  }, [isRestoreDatabaseModalOpen, selectedHostUid, selectedDatabase]);
+  useEffect(() => {
+    if (isRestoreDatabaseModalOpen && selectedHostUid && selectedDatabase) {
       resetAction();
       dispatch(fetchBackupList({ hostUid: selectedHostUid, dbname: selectedDatabase }));
     }
   }, [isRestoreDatabaseModalOpen, selectedHostUid, selectedDatabase, dispatch, resetAction]);
   // Auto-populate manual path inputs from the catalog. restoredb's -B takes a
   // directory (not the backup file itself), so store the containing folder.
-  useEffect(() => {
+  useResetEffect(() => {
     if (allBackups && allBackups.length > 0) {
       const b0 = allBackups.find(b => b.level === 0);
       const b1 = allBackups.find(b => b.level === 1);
@@ -353,7 +361,7 @@ export default function RestoreDatabaseModal() {
     }
 
     return null;
-  }, [formData, allBackups]);
+  }, [formData, allBackups, CM]);
 
   const isExecuteDisabled = !!validationError;
 
@@ -370,7 +378,7 @@ export default function RestoreDatabaseModal() {
   };
 
   const handleRestore = async () => {
-    let levelVal = '';
+    let levelVal;
     let pathnameVal = '';
     let backupDate = null;
 

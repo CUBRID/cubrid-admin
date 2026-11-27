@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchDashboardPerformance } from '../../databaseSlice';
 import { Icon } from '../../../../components/ds/foundation/Icon';
@@ -17,12 +17,12 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
   const { hostUid, dbname, isTabActive, autoRefresh, refreshInterval } = pollingProps;
 
   // Manual refresh helper
-  const refresh = () => {
+  const refresh = useCallback(() => {
     if (hostUid && dbname) dispatch(fetchDashboardPerformance({ hostUid, dbname }));
-  };
+  }, [dispatch, hostUid, dbname]);
 
   // Logic: Refresh once when becoming visible AND expanded
-  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSections: pollingProps.collapsedSections, section: 'performance' }, refresh);
+  useRefreshWhenShown({ hostUid, dbname, isTabActive, isCollapsed, refreshInterval, collapsedSectionsRef: pollingProps.collapsedSections, section: 'performance' }, refresh);
 
   // Logic: Interval polling when active AND expanded AND autoRefresh enabled
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function DBPerformanceSection({ dbStats, pollingProps }) {
       interval = setInterval(refresh, refreshInterval * 1000);
     }
     return () => clearInterval(interval);
-  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname]);
+  }, [isTabActive, isCollapsed, autoRefresh, refreshInterval, hostUid, dbname, refresh]);
 
   const columns = useMemo(() => [
     {

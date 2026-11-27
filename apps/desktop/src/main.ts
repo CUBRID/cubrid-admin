@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, powerMonitor, session, type MessageBoxSyncOptions } from 'electron';
 import { isDesktopApiQuitting, startApiForWorkspace, stopDesktopApiOnQuit } from './api/api-runtime';
 import { DESKTOP_API_BASE_URL } from './config/constants';
-import { getDesktopSettingsPath, needsWorkspaceSetup } from './config/desktop-settings';
+import { getDesktopSettingsPath } from './config/desktop-settings';
 import { getDesktopDataRoot } from './config/portable-root';
+import { prepareDesktopStartup } from './config/legacy-settings';
 import { registerDesktopIpcHandlers, setWorkspaceStartupError } from './ipc/handlers';
 import { getMenuLanguage, installApplicationMenu } from './menu/application-menu';
 import { registerAppProtocol, registerPrivilegedAppScheme } from './protocol/register-app-protocol';
@@ -16,6 +17,7 @@ import { getMainWindow, setMainWindow } from './window/window-registry';
 import { installDownloadDialogDefaults } from './window/dialog-paths';
 import { confirmUnloadWithUnsavedChanges } from './window/unsaved-changes';
 import { confirmQuit, createQuitFlow, hasPageUnsavedChanges, listenForQuitSignals, setPageUnsavedChanges, whenSessionEnds } from './window/quit-flow';
+import { forgetOpenedArchiveWhenPageGoes } from './workspace/workspace-import';
 
 registerPrivilegedAppScheme();
 
@@ -89,6 +91,15 @@ async function bootstrap(): Promise<void> {
   registerDesktopIpcHandlers();
   installDownloadDialogDefaults(session.defaultSession, () => app.getPath('documents'));
 
+  // Before anything reads the settings: a 0.1.0 app updated in place keeps its
+  // workspace; otherwise the workspace page may offer the one used last.
+  const { adopted, requiresSetup, previous } = prepareDesktopStartup();
+  if (adopted) {
+    console.log(`[desktop] settings from ${adopted.from} copied to ${adopted.to}; workspace ${adopted.workspaceRoot}`);
+  }
+  if (previous) {
+    console.log('[desktop] workspace used last, offered on the workspace page:', previous.workspaceRoot);
+  }
   console.log('[desktop] settings folder:', getDesktopDataRoot());
   console.log('[desktop] settings file:', getDesktopSettingsPath());
   console.log('[desktop] default workspace:', getDefaultWorkspaceRoot());
@@ -96,7 +107,6 @@ async function bootstrap(): Promise<void> {
   const rendererRoot = getRendererDistDir();
   registerAppProtocol(rendererRoot);
 
-  const requiresSetup = needsWorkspaceSetup();
   const mainWindow = createAppWindow(DESKTOP_API_BASE_URL);
   setMainWindow(mainWindow);
   // The workspace page shows the server start's progress.
@@ -104,6 +114,7 @@ async function bootstrap(): Promise<void> {
     if (!mainWindow.isDestroyed()) mainWindow.webContents.send('desktop:api-start-status', status);
   });
   whenSessionEnds(quitFlow, powerMonitor, mainWindow);
+  forgetOpenedArchiveWhenPageGoes(mainWindow.webContents);
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (

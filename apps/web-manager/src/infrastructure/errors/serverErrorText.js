@@ -87,6 +87,17 @@ export function serverErrorText(apiData, CM) {
 }
 
 /**
+ * The sign-in rate limit turned the request away (429): "too many attempts"
+ * in the UI language, with the wait from Retry-After when the server sent it.
+ * Null for any other error.
+ */
+export function tooManyAttemptsText(err, CM = getCM(getStoredLocale())) {
+  if (err?.response?.status !== 429) return null;
+  const seconds = Number.parseInt(err.response.headers?.['retry-after'], 10);
+  return CM.tooManyAttemptsMsg(seconds > 0 ? seconds : undefined);
+}
+
+/**
  * The message for a failed request, as a thunk or component reports it: the
  * one apiClient already put in the UI language, also when no response came
  * back at all.

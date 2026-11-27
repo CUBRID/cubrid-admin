@@ -1,6 +1,7 @@
 const { test, expect } = require('../fixture');
 const { AuthPage } = require('../pages/AuthPage');
 const { HostTreePage } = require('../pages/HostTreePage');
+const { loadedEditorText, editorText } = require('../pages/codeEditor');
 const { Given, When, Then, And, bddMeta, action } = require('../bdd');
 
 const E2E_HOST_ADDRESS = process.env.E2E_HOST_ADDRESS || 'localhost';
@@ -50,8 +51,7 @@ test.describe('Feature: CUBRID Configuration Editor', () => {
       textarea = page.getByTestId('cubrid-config-textarea');
       await action('Verify cubrid configuration textarea is visible', () => expect(textarea).toBeVisible({ timeout: 15000 }), 'cubrid configuration textarea is not visible.');
       await expect(textarea).toBeEditable();
-      await action('Verify cubrid configuration textarea has content', () => expect(textarea).not.toHaveValue('', { timeout: 25000 }), 'cubrid configuration textarea remained empty.');
-      originalContent = await textarea.inputValue();
+      await action('Verify cubrid configuration textarea has content', () => loadedEditorText(textarea, 25000).then((text) => { originalContent = text; }), 'cubrid configuration textarea remained empty.');
 
       saveBtn = page.getByTestId('cubrid-config-save-btn');
       undoBtn = page.getByTestId('cubrid-config-undo-btn');
@@ -73,7 +73,7 @@ test.describe('Feature: CUBRID Configuration Editor', () => {
 
     await And('clicking Undo reverts the content to original state', async () => {
       await action('Click Undo button to revert changes', () => undoBtn.click(), 'Could not click Undo button.');
-      await action('Verify configuration textarea reverted to original content', () => expect(textarea).toHaveValue(originalContent, { timeout: 10000 }), 'Textarea content did not match original content after undo.');
+      await action('Verify configuration reverted to original content', () => expect.poll(() => editorText(textarea), { timeout: 10000 }).toBe(originalContent), 'Editor content did not match original content after undo.');
       await action('Verify Save button is disabled after undo', () => expect(saveBtn).toBeDisabled({ timeout: 10000 }), 'Save button remained enabled after undo.');
       await action('Verify Undo button is disabled after undo', () => expect(undoBtn).toBeDisabled({ timeout: 10000 }), 'Undo button remained enabled after undo.');
     });

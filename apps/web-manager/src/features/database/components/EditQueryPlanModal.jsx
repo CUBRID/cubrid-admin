@@ -20,6 +20,7 @@ import { ModalStatusLoading,
   ModalStatusSuccess, 
   ModalStatusError 
 } from '../../../components/ds/feedback/ActionStatus';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function EditQueryPlanModal() {
   const CM = useCM();
@@ -27,7 +28,6 @@ export default function EditQueryPlanModal() {
   const { isEditQueryPlanModalOpen, selectedQueryPlanId } = useSelector((state) => state.databaseUI, shallowEqual);
   const { selectedDatabase } = useSelector((state) => state.database, shallowEqual);
   const { selectedHostUid } = useSelector((state) => state.host, shallowEqual);
-  const { theme } = useSelector((state) => state.layout, shallowEqual);
   const { queryPlans } = useSelector((state) => state.databaseOperation, shallowEqual);
   
   const { 
@@ -58,21 +58,27 @@ export default function EditQueryPlanModal() {
     }
   }, [isEditQueryPlanModalOpen, resetAction]);
 
-  // Initialization
+  // Initialization: a plan not loaded yet is read.
   useEffect(() => {
     if (isEditQueryPlanModalOpen && selectedDatabase && selectedQueryPlanId && !isLoading && !isSuccess && !isError) {
       const plans = queryPlans[dbKey(selectedHostUid, selectedDatabase)] || [];
       const plan = plans.find(p => p.query_id === selectedQueryPlanId);
-      
       if (!plan) {
         dispatch(fetchQueryPlan({ hostUid: selectedHostUid, dbname: selectedDatabase }));
       }
+    }
+  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid, dispatch]);
+  // The form follows the plan shown.
+  useResetEffect(() => {
+    if (isEditQueryPlanModalOpen && selectedDatabase && selectedQueryPlanId && !isLoading && !isSuccess && !isError) {
+      const plans = queryPlans[dbKey(selectedHostUid, selectedDatabase)] || [];
+      const plan = plans.find(p => p.query_id === selectedQueryPlanId);
       
       if (plan) {
         const ABBR_TO_NUM = { MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6, SUN: 7 };
         const periodType = plan.period || 'DAY';
         const detailStr = plan.detail || '';
-        let time = '12:00';
+        let time;
         let periodDetail = [];
 
         if (periodType === 'DAY') {
@@ -110,7 +116,8 @@ export default function EditQueryPlanModal() {
         });
       }
     }
-  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid, dispatch]);
+  }, [isEditQueryPlanModalOpen, selectedDatabase, selectedQueryPlanId, queryPlans, isLoading, isSuccess, isError, selectedHostUid]);
+
 
   if (!isEditQueryPlanModalOpen) return null;
 
@@ -152,7 +159,7 @@ export default function EditQueryPlanModal() {
     startAction();
 
     const WEEK_ABBRS = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT', 7: 'SUN' };
-    let detail = '';
+    let detail;
     if (formData.periodType === 'DAY') {
       detail = `EVERYDAY ${formData.backupTime}`;
     } else if (formData.periodType === 'DATE') {
@@ -370,37 +377,17 @@ export default function EditQueryPlanModal() {
             title={CM.sqlStatementSection}
             icon="code"
           />
-          <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e1e1e] transition-all focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-500/60">
+          <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-editor-bg transition-all focus-within:ring-4 focus-within:ring-amber-500/10 focus-within:border-amber-500/60">
             <div className="absolute top-4 left-4 z-10 opacity-40 group-focus-within:opacity-100 transition-opacity pointer-events-none">
               <Icon name="terminal" size="sm" weight={300} className="text-amber-500" />
             </div>
             <div className="pl-10">
               <Editor
                 height="168px"
-                language="sql"
-                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                testId="edit-query-plan-sql"
                 value={formData.queryString}
-                onChange={val => handleInputChange('queryString', val || '')}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  lineNumbers: 'off',
-                  glyphMargin: false,
-                  folding: false,
-                  lineDecorationsWidth: 0,
-                  lineNumbersMinChars: 0,
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  padding: { top: 16, bottom: 16 },
-                  fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', monospace",
-                  renderLineHighlight: 'all',
-                  scrollbar: {
-                    vertical: 'visible',
-                    horizontal: 'hidden',
-                    useShadows: false,
-                    verticalScrollbarSize: 8
-                  }
-                }}
+                onChange={val => handleInputChange('queryString', val)}
+                placeholder={CM.sqlQueryPlaceholder}
               />
             </div>
           </div>

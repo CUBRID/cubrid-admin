@@ -20,15 +20,14 @@ import { brokerApi } from './brokerApi';
 import reducer, { fetchBrokerList, readSharedBrokerList, fetchDetailedBrokerStatus, fetchBrokerLogs, fetchLogContent } from './brokerSlice';
 import { hostKey } from '../host/hostKey';
 import { closeTab } from '../layout/layoutSlice';
-import apiClient from '../../api/apiClient';
+import { setAppSession } from '../../api/apiClient';
 import { closeHostTabs } from '../layout/layoutSlice';
 
-// List reads are shared per login session (the Authorization header); a new
-// session per test keeps one test's unfinished read away from the next.
-let session = 0;
+// List reads are shared per login session (appSessionKey); a new session
+// per test keeps one test's unfinished read away from the next.
 beforeEach(() => {
   vi.resetAllMocks();
-  apiClient.defaults.headers.common.Authorization = `Bearer test-${++session}`;
+  setAppSession(null);
 });
 
 const makeStore = () => configureStore({ reducer: { broker: reducer } });

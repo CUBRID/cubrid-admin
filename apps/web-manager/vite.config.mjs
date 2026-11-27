@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 
@@ -68,6 +69,8 @@ export default defineConfig(({ mode, command }) => {
   plugins: [
     react(),
     tailwindcss(),
+    // Tells an Nx task waiting on the dev or preview server that it listens; does nothing otherwise.
+    nxReadySignal(),
     ...(isDevServer ? [devServiceWorkerCleanup] : []),
   ].concat(
     disablePwa
@@ -77,8 +80,6 @@ export default defineConfig(({ mode, command }) => {
             registerType: 'autoUpdate',
             injectRegister: 'auto',
             includeAssets: ['cubrid-logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
-            // The bundled Monaco editor chunk (about 2.7 MB) is over the 2 MiB default.
-            workbox: { maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 },
             manifest: {
               name: 'CUBRID Admin',
               short_name: 'CUBRID Admin',

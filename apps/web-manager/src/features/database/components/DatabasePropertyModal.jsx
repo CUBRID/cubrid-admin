@@ -22,6 +22,7 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import { checkEffectiveParams, parseConfText, parseEngineSizeToBytes } from '@api-interfaces';
 import { paramIssuesText } from '../../../infrastructure/errors/paramIssueText';
 import { ParamScopeBadge } from './ParamScopeBadge';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 // The param list itself — which keys exist, their category/type/guard/
 // default — no longer lives here. It comes from the connected host's
@@ -281,8 +282,9 @@ export default function DatabasePropertyModal() {
   // ports are what there is to show.
   const brokerHostAddress = hosts?.find((h) => h.uid === selectedHostUid)?.address;
   // The database's character set, read once per opened database (see
-  // dbCharset.js): { value } or { reason } (why it can't be shown).
-  const [charset, setCharset] = useState(null);
+  // dbCharset.js): what the read gave for a (host, database) key,
+  // { key, value } or { key, reason } (why it can't be shown).
+  const [charsetRead, setCharsetRead] = useState(null);
   const charsetKeyRef = useRef(null);
   // Which (host, database) `params` holds; the charset waits for it.
   const [paramsKey, setParamsKey] = useState(null);
@@ -294,16 +296,20 @@ export default function DatabasePropertyModal() {
   // Numbers each config read; only the latest one ends the spinner.
   const fetchSeqRef = useRef(0);
 
-  useEffect(() => {
+  useResetEffect(() => {
     if (isDatabasePropertyModalOpen) {
       setParams({});
       setSectionParams({});
       setCommonKeys(new Set());
       setBufferMode(DEFAULT_BUFFER_MODE);
       setActiveSidebar('Server Parameter');
-      fetchedConfigKeyRef.current = null;
       setParamsKey(null);
-      setCharset(null);
+      setCharsetRead(null);
+    }
+  }, [isDatabasePropertyModalOpen, selectedDatabase]);
+  useEffect(() => {
+    if (isDatabasePropertyModalOpen) {
+      fetchedConfigKeyRef.current = null;
       charsetKeyRef.current = null;
     }
   }, [isDatabasePropertyModalOpen, selectedDatabase]);
@@ -312,26 +318,27 @@ export default function DatabasePropertyModal() {
   // running (paramdump in SA mode leaves the client values empty). When
   // cubrid.conf sets intl_collation, the dump shows that setting, not the
   // database's charset, so there is nothing to read.
+  const charsetKey = `${selectedHostUid}:${selectedDatabase || ''}`;
+  const charsetHint = !isDbLoggedIn ? CM.dbLoginRequiredHint
+    : !isDbRunning ? CM.dbStartRequiredHint
+      : paramsKey === charsetKey && params.intl_collation?.trim() ? CM.charsetCollationSetHint
+        : null;
+  const charset = !selectedDatabase ? null : charsetHint ? { reason: charsetHint } : charsetRead?.key === charsetKey ? charsetRead : null;
   useEffect(() => {
-    const key = `${selectedHostUid}:${selectedDatabase || ''}`;
-    if (!isDatabasePropertyModalOpen || !selectedDatabase) return;
-    if (!isDbLoggedIn) { setCharset({ reason: CM.dbLoginRequiredHint }); return; }
-    if (!isDbRunning) { setCharset({ reason: CM.dbStartRequiredHint }); return; }
-    if (paramsKey !== key) return;
-    if (params.intl_collation?.trim()) { setCharset({ reason: CM.charsetCollationSetHint }); return; }
+    const key = charsetKey;
+    if (!isDatabasePropertyModalOpen || !selectedDatabase || charsetHint || paramsKey !== key) return;
     if (charsetKeyRef.current === key) return;
     charsetKeyRef.current = key;
-    setCharset(null);
     databaseApi.getParamDump(selectedHostUid, selectedDatabase, 'y')
       .then((dump) => {
         if (charsetKeyRef.current !== key) return;
         const value = dbCharsetFromParamDump(dump);
-        setCharset(value ? { value } : { reason: CM.charsetUnreadHint });
+        setCharsetRead(value ? { key, value } : { key, reason: CM.charsetUnreadHint });
       })
       .catch(() => {
-        if (charsetKeyRef.current === key) setCharset({ reason: CM.charsetUnreadHint });
+        if (charsetKeyRef.current === key) setCharsetRead({ key, reason: CM.charsetUnreadHint });
       });
-  }, [isDatabasePropertyModalOpen, selectedHostUid, selectedDatabase, isDbLoggedIn, isDbRunning, paramsKey, params, CM]);
+  }, [isDatabasePropertyModalOpen, selectedHostUid, selectedDatabase, charsetKey, charsetHint, paramsKey, CM]);
 
   useEffect(() => {
     if (isDatabasePropertyModalOpen && selectedHostUid && isAuthorized && !hostEnv) {

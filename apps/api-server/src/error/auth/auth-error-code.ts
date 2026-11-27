@@ -12,5 +12,7 @@ export enum AuthErrorCode {
   ACCOUNT_PENDING_APPROVAL = 'ACCOUNT_PENDING_APPROVAL',
   PASSWORD_CHANGE_REQUIRED = 'PASSWORD_CHANGE_REQUIRED',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+  /** The same refresh token is still being rotated by another request: retry shortly. */
+  REFRESH_IN_PROGRESS = 'REFRESH_IN_PROGRESS',
   UNKNOWN = 'UNKNOWN',
 }

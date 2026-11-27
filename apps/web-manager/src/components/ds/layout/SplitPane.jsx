@@ -57,7 +57,7 @@ export const SplitPane = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, minSize, maxSize, isVertical]);
+  }, [isDragging, minSize, maxSize, isVertical, setSize]);
 
   // Read the first two children as Pane 1 and Pane 2
   const childrenArray = React.Children.toArray(children);

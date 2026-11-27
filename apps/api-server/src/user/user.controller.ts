@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Post, Put, Request } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Put, Request, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto, SetInitialPasswordDto } from '@type/index';
 import { UpdateUserInfoRequest, UserResponse } from '@api-interfaces';
 import { AllowPendingPasswordChange, NotOnDesktop } from '@common';
 import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
+import { AuthThrottlerGuard } from '../auth/auth-throttle';
 
 /**
  * Controller for handling user-related operations.
@@ -83,6 +84,7 @@ export class UserController {
   @NotOnDesktop()
   @AllowPendingPasswordChange()
   @LogAction('account.change_password')
+  @UseGuards(AuthThrottlerGuard)
   @Post('credential')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req): Promise<void> {
     const userId = req.user.sub;
@@ -122,6 +124,7 @@ export class UserController {
    */
   @NotOnDesktop()
   @LogAction('account.delete')
+  @UseGuards(AuthThrottlerGuard)
   @Delete('account')
   async deleteUser(@Request() req, @Body() body: DeleteUserDto): Promise<boolean> {
     await this.userService.deleteUser(req.user.sub, body);

@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { acquireStatdumpWatcher, restartFrozenStatdumpWatcher, setStatdumpWatcherPaused } from './statdumpWatcher';
 import { dbKey } from './dbKey';
 import { useAnyModalOpen } from '../../infrastructure/hooks/useAnyModalOpen';
+import { useLatestRef } from '../../infrastructure/hooks/useLatestRef';
 
 /**
  * Keeps a statdump watcher attached to host+db while the calling dashboard
@@ -26,13 +27,12 @@ export function useStatdumpWatcher(hostUid, dbname, perfSample) {
   const canWatch = isAuthorized && isLoggedIn;
   const paused = isPendingReconnect || anyModalOpen;
   // Read at acquire time only; later changes go through the effect below.
-  const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+  const pausedRef = useLatestRef(paused);
 
   useEffect(() => {
     if (!canWatch) return undefined;
     return acquireStatdumpWatcher(hostUid, dbname, undefined, { paused: pausedRef.current });
-  }, [canWatch, hostUid, dbname]);
+  }, [canWatch, hostUid, dbname, pausedRef]);
 
   useEffect(() => {
     if (!canWatch) return;

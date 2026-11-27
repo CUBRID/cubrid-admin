@@ -1,9 +1,9 @@
 import { usePollingRefresh } from '../../../infrastructure/hooks/usePollingRefresh';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useSelector, useDispatch , shallowEqual } from 'react-redux';
 import { fetchBrokerList } from '../../broker/brokerSlice';
 import { useShownBrokers } from '../../broker/brokerRestartState';
-import { brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from '../../broker/brokerState';
+import { brokerAccessModeOf, brokerStateOf, brokerStateVariant, isBrokerOn, isBrokerRunning } from '../../broker/brokerState';
 import { openTab } from '../../layout/layoutSlice';
 import MonitoringSettingsPopover from '../../user/components/MonitoringSettingsPopover';
 import { Card } from '../../../components/ds/layout/Card';
@@ -12,6 +12,7 @@ import { Icon } from '../../../components/ds/foundation/Icon';
 import { StatusBadge } from '../../../components/ds/foundation/StatusBadge';
 import { FetchEmptyState } from '../../../components/ds/feedback/FetchEmptyState';
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 const Component = function Brokers({ hostUid, isSection = false }) {
   const CM = useCM();
@@ -33,7 +34,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   const sharedLoading = useSelector((state) => !!state.broker.loadingByHost[hostUid]);
   const sharedFailed = useSelector((state) => !!state.broker.brokerListFailedByHost[hostUid]);
 
-  useEffect(() => {
+  useResetEffect(() => {
     setBrokers([]);
     setLoading(false);
     setHasLoadedOnce(false);
@@ -43,7 +44,7 @@ const Component = function Brokers({ hostUid, isSection = false }) {
   // brokersByHost[hostUid] is deleted when focus leaves this host
   // (resetBrokerState) and blanked when a fetch fails; keep showing the last
   // list until the next successful fetch.
-  useEffect(() => {
+  useResetEffect(() => {
     if (isSection && Array.isArray(sharedBrokers) && !sharedFailed) {
       setBrokers(sharedBrokers);
       setHasLoadedOnce(true);
@@ -96,6 +97,8 @@ const Component = function Brokers({ hostUid, isSection = false }) {
     },
     { header: CM.pid,  accessor: 'pid',         render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
     { header: CM.port, accessor: 'port', render: (val) => <span className="font-mono text-14 text-slate-500">{val}</span> },
+    // The cubrid_broker.conf parameter, named and valued as there in every language.
+    { header: 'ACCESS_MODE', accessor: 'access_mode', render: (_, row) => <span className="font-mono text-14 text-slate-500">{brokerAccessModeOf(row) || '-'}</span> },
     { header: CM.asLabel, accessor: 'as', render: (val) => <span className="font-mono text-14">{val}</span> },
     { header: CM.jqLabel, accessor: 'jq', render: (val) => <span className="font-mono text-14">{val}</span> },
     { header: CM.reqLabel, accessor: 'req', render: (val) => <span className="font-mono text-14 font-semibold">{val}</span> },

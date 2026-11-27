@@ -176,6 +176,8 @@ export class AppError extends Error {
           case AuthErrorCode.ACCOUNT_PENDING_APPROVAL:
           case AuthErrorCode.PASSWORD_CHANGE_REQUIRED:
             return 403;
+          case AuthErrorCode.REFRESH_IN_PROGRESS:
+            return 503;
           case AuthErrorCode.INTERNAL_ERROR:
             return 500;
           case AuthErrorCode.UNKNOWN:

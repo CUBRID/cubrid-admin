@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { closeImportExportModal,
   addHost,
@@ -35,6 +35,7 @@ import { Typography } from '../../../components/ds/foundation/Typography';
 import { Checkbox } from '../../../components/ds/forms/Checkbox';
 
 import { useCM } from '../../../constants/useCM';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 
 export default function ImportExportHostModal() {
   const CM = useCM();
@@ -50,7 +51,7 @@ export default function ImportExportHostModal() {
   const [exportFormat, setExportFormat] = useState('nativeXml');
   const [importGroupName, setImportGroupName] = useState(CM.importedPlaceholder);
 
-  useEffect(() => {
+  useResetEffect(({ importedPlaceholder }) => {
     if (isImportExportModalOpen) {
       if (importExportMode === 'export') {
         // Row selection (select-all + per-row checkboxes) is keyed by
@@ -66,10 +67,10 @@ export default function ImportExportHostModal() {
         setPendingPasswordHosts([]);
         setPasswordDrafts({});
         setShowPasswordPrompt(false);
-        setImportGroupName(CM.importedPlaceholder);
+        setImportGroupName(importedPlaceholder);
       }
     }
-  }, [isImportExportModalOpen, importExportMode, hosts]);
+  }, [isImportExportModalOpen, importExportMode, hosts], { importedPlaceholder: CM.importedPlaceholder });
 
   if (!isImportExportModalOpen) return null;
 
