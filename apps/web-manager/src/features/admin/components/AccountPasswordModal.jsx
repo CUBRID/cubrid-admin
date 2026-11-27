@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { Modal } from '../../../components/ds/layout/Modal';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Input } from '../../../components/ds/forms/Input';
@@ -28,7 +29,8 @@ export default function AccountPasswordModal({ isOpen, accountId = null, onSubmi
   const [generated, setGenerated] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
+  // Opened (or opened for another account): an empty form.
+  useResetEffect(() => {
     if (isOpen) {
       setId('');
       setPassword('');

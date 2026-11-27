@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { Badge } from '../../../components/ds/foundation/Badge';
 import { Button } from '../../../components/ds/foundation/Button';
@@ -45,10 +47,10 @@ export default function AccountsSection({ reloadKey }) {
   const [passwordDialog, setPasswordDialog] = useState(null);
 
   const load = useCallback(async () => {
-    setLoadError(null);
     try {
       const list = await adminApi.listAccounts();
       const next = Array.isArray(list) ? list : [];
+      setLoadError(null);
       setAccounts(next);
       // Drop selections and details for accounts that are gone.
       const ids = new Set(next.map((a) => a.id));
@@ -61,11 +63,15 @@ export default function AccountsSection({ reloadKey }) {
     }
   }, [CM]);
 
-  useEffect(() => {
+  // Again on the tab's reload, not when `load` changes with the language.
+  useResetEffect(() => {
     setLoading(true);
-    void load();
-    // Again on the tab's reload; `load` itself changes only with the language.
+    setLoadError(null);
   }, [reloadKey]);
+  const loadRef = useLatestRef(load);
+  useEffect(() => {
+    void loadRef.current();
+  }, [reloadKey, loadRef]);
 
 
   const stats = useMemo(() => accountStats(accounts), [accounts]);
@@ -73,10 +79,12 @@ export default function AccountsSection({ reloadKey }) {
   // A request that came in while this page is open shows without a reload.
   // The console page polls; this only listens.
   const pendingCount = usePendingCount();
+  // Only when the server's count moves, not on every list change.
+  const listRef = useLatestRef({ loading, awaiting: stats.awaitingApproval });
   useEffect(() => {
-    if (!loading && pendingCount !== null && pendingCount !== stats.awaitingApproval) void load();
-    // Only when the server's count moves, not on every list change.
-  }, [pendingCount]);
+    const { loading: listLoading, awaiting } = listRef.current;
+    if (!listLoading && pendingCount !== null && pendingCount !== awaiting) void loadRef.current();
+  }, [pendingCount, listRef, loadRef]);
   const requests = useMemo(() => pendingAccounts(accounts), [accounts]);
   // Role picked per request before approving; a plain user unless changed.
   const [approveRoles, setApproveRoles] = useState({});

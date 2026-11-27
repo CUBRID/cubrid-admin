@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
+import { useLatestRef } from '../../infrastructure/hooks/useLatestRef';
 import { adminApi } from './adminApi';
 
 /** How often an administrator's screens ask for new sign-up requests. */
@@ -11,9 +12,19 @@ const listeners = new Set();
 let inFlight = null;
 
 function publish(next) {
+  const previous = count;
   count = next;
-  for (const listener of listeners) listener(next);
+  for (const listener of listeners) listener(next, previous);
 }
+
+// For useSyncExternalStore: every screen reads the one count.
+function subscribe(listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+const getCount = () => count;
 
 /**
  * Reads the count again now, e.g. after approving or rejecting. A failure
@@ -41,23 +52,17 @@ export function refreshPendingApprovals() {
  * the first answer, so a new request can be announced.
  */
 export function usePendingApprovals(enabled, onIncrease) {
-  const [value, setValue] = useState(enabled ? count : null);
-  const onIncreaseRef = useRef(onIncrease);
-  onIncreaseRef.current = onIncrease;
+  const value = useSyncExternalStore(subscribe, getCount);
+  const onIncreaseRef = useLatestRef(onIncrease);
 
   useEffect(() => {
-    if (!enabled) {
-      setValue(null);
-      return undefined;
-    }
-    let previous = count;
-    const listener = (next) => {
-      if (previous !== null && next > previous) onIncreaseRef.current?.(next - previous, next);
-      previous = next;
-      setValue(next);
-    };
-    listeners.add(listener);
-    setValue(count);
+    if (!enabled) return undefined;
+    // Not for the first answer this screen sees: only a rise after it.
+    let seen = count !== null;
+    const unsubscribe = subscribe((next, previous) => {
+      if (seen && previous !== null && next > previous) onIncreaseRef.current?.(next - previous, next);
+      seen = true;
+    });
     void refreshPendingApprovals();
 
     const timer = setInterval(() => void refreshPendingApprovals(), PENDING_POLL_MS);
@@ -67,27 +72,19 @@ export function usePendingApprovals(enabled, onIncrease) {
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
-      listeners.delete(listener);
+      unsubscribe();
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [enabled]);
+  }, [enabled, onIncreaseRef]);
 
-  return value;
+  return enabled ? value : null;
 }
 
 /** The shared count without asking the server; null until someone has. */
 export function usePendingCount() {
-  const [value, setValue] = useState(count);
-  useEffect(() => {
-    listeners.add(setValue);
-    setValue(count);
-    return () => {
-      listeners.delete(setValue);
-    };
-  }, []);
-  return value;
+  return useSyncExternalStore(subscribe, getCount);
 }
 
 /** For tests. */

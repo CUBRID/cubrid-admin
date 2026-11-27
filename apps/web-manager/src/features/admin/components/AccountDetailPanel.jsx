@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { Badge } from '../../../components/ds/foundation/Badge';
 import { Button } from '../../../components/ds/foundation/Button';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -18,19 +19,22 @@ export default function AccountDetailPanel({ account, selfId, busy, reloadKey, o
   const CM = useCM();
   const [activity, setActivity] = useState(null);
 
-  useEffect(() => {
-    if (!account) return undefined;
-    let live = true;
+  const accountId = account?.id;
+  // Another account, or a change (reloadKey): its activity is read again.
+  useResetEffect(() => {
     setActivity(null);
+  }, [accountId, reloadKey]);
+  useEffect(() => {
+    if (!accountId) return undefined;
+    let live = true;
     adminApi
-      .queryAudit({ target: account.id, limit: RECENT_ACTIVITY })
+      .queryAudit({ target: accountId, limit: RECENT_ACTIVITY })
       .then((page) => live && setActivity(page?.entries ?? []))
       .catch(() => live && setActivity([]));
     return () => {
       live = false;
     };
-    // Read again for another account or after a change (reloadKey).
-  }, [account?.id, reloadKey]);
+  }, [accountId, reloadKey]);
 
   if (!account) {
     return (

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useLatestRef } from '../../../infrastructure/hooks/useLatestRef';
+import { useResetEffect } from '../../../infrastructure/hooks/useResetEffect';
 import { useDispatch } from 'react-redux';
 import { Badge } from '../../../components/ds/foundation/Badge';
 import { Icon } from '../../../components/ds/foundation/Icon';
@@ -19,18 +21,21 @@ export default function AdminSettingsSection({ reloadKey }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // CM: only the error's wording, not a reason to read again.
+  const cmRef = useLatestRef(CM);
+  useResetEffect(() => {
+    setError(null);
+  }, [reloadKey]);
   useEffect(() => {
     let live = true;
-    setError(null);
     adminApi
       .getSettings()
       .then((s) => live && setSettings(s ?? null))
-      .catch((err) => live && setError(requestErrorText(err, CM)));
+      .catch((err) => live && setError(requestErrorText(err, cmRef.current)));
     return () => {
       live = false;
     };
-    // CM: only the error's wording, not a reason to read again.
-  }, [reloadKey]);
+  }, [reloadKey, cmRef]);
 
   const save = async (request) => {
     setSaving(true);

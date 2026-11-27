@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import React, { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
@@ -86,7 +86,11 @@ afterEach(async () => {
 
 let currentPath = '';
 function PathProbe() {
-  currentPath = useLocation().pathname;
+  const { pathname } = useLocation();
+  // After render, not during it: a component must not write outside itself while rendering.
+  useEffect(() => {
+    currentPath = pathname;
+  }, [pathname]);
   return null;
 }
 const render = async (path = '/admin/accounts') =>
@@ -378,13 +382,14 @@ describe('User Administration page', () => {
     await render('/admin/activity');
     // Only the download link's click is stubbed, after the page is open.
     const clicks = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    let downloaded = false;
-    try {
-      await click(el('admin-activity-export'));
-      downloaded = clicks.mock.calls.length > 0;
-    } finally {
-      clicks.mockRestore();
-    }
+    const downloaded = await (async () => {
+      try {
+        await click(el('admin-activity-export'));
+        return clicks.mock.calls.length > 0;
+      } finally {
+        clicks.mockRestore();
+      }
+    })();
     expect(adminApi.queryAudit).toHaveBeenLastCalledWith({ limit: 5000, offset: 0 });
     expect(downloaded).toBe(true);
     // jsdom's Blob has no text(); read it the way a browser's FileReader does.
