@@ -9,17 +9,20 @@ import {
   UpdateHostClientDto,
   MarkHaDto,
 } from '@type/index';
+import { LogAction } from '@api-log/log-action.decorator';
 
 @Controller('host')
 export class HostController {
   constructor(private readonly hostService: HostService) {}
 
+  @LogAction('host.add')
   @Post()
   async addHost(@Request() request, @Body() hostInfo: AddHostDto): Promise<GetHostsResponse> {
     const userId = request.user.sub;
     return { host_groups: await this.hostService.addHost(userId, hostInfo) };
   }
 
+  @LogAction('host.add_group')
   @Post('group')
   async createGroup(
     @Request() request,
@@ -29,6 +32,7 @@ export class HostController {
     return { host_groups: await this.hostService.createHostGroup(userId, body.name) };
   }
 
+  @LogAction('host.change_group')
   @Put('group/:groupId')
   async updateGroup(
     @Request() request,
@@ -39,6 +43,7 @@ export class HostController {
     return { host_groups: await this.hostService.updateHostGroup(userId, groupId, body) };
   }
 
+  @LogAction('host.delete_group')
   @Delete('group/:groupId')
   async deleteGroup(
     @Request() request,
@@ -60,6 +65,7 @@ export class HostController {
     return await this.hostService.findHost(userId, hostUid);
   }
 
+  @LogAction('host.change')
   @Put(':hostUid')
   async updateHost(
     @Request() request,
@@ -70,6 +76,7 @@ export class HostController {
     return { host_groups: await this.hostService.updateHost(userId, hostUid, hostInfo) };
   }
 
+  @LogAction('host.move')
   @Post(':hostUid/move')
   async moveHost(
     @Request() request,
@@ -82,6 +89,7 @@ export class HostController {
     };
   }
 
+  @LogAction('host.delete')
   @Delete(':hostUid')
   async deleteHost(
     @Request() request,
@@ -91,6 +99,7 @@ export class HostController {
     return { host_groups: await this.hostService.deleteHost(userId, hostUid) };
   }
 
+  @LogAction('host.mark_ha')
   @Post(':hostUid/mark-ha')
   async markHa(
     @Request() request,

@@ -25,11 +25,15 @@ import { CmsHttpsClientModule } from '@cms-https-client/cms-https-client.module'
 import { LogModule } from './log/log.module';
 import { HaModule } from '@ha';
 import { CmsJobModule } from '@cms-job/cms-job.module';
+import { AccountAccessService } from '@account/account-access.service';
 import { selectAppGuard } from './desktop/select-app-guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AUTH_THROTTLE_OPTIONS } from './auth/auth-throttle';
 import { DesktopUserService } from './desktop/desktop-user.service';
 import { VersionModule } from './version/version.module';
+import { AccountModule } from '@account/account.module';
+import { AdminModule } from '@admin/admin.module';
+import { ApiLogModule } from '@api-log/api-log.module';
 
 /**
  * Root application module that configures all feature modules and global providers.
@@ -66,6 +70,9 @@ import { VersionModule } from './version/version.module';
     LogModule,
     HaModule,
     VersionModule,
+    AccountModule,
+    AdminModule,
+    ApiLogModule,
   ],
   controllers: [AppController],
   providers: [
@@ -77,7 +84,7 @@ import { VersionModule } from './version/version.module';
     {
       provide: APP_GUARD,
       useFactory: selectAppGuard,
-      inject: [ConfigService, Reflector, JwtService, TokenBlacklistService],
+      inject: [ConfigService, Reflector, JwtService, TokenBlacklistService, AccountAccessService],
     },
   ],
 })

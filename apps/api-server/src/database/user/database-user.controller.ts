@@ -25,6 +25,7 @@ import {
   DatabaseLoginBodyDto,
 } from '@type/index';
 import { validateRequiredFields } from '@util';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for managing database users.
@@ -53,7 +54,7 @@ export class DatabaseUserController {
     @Param('dbname') dbname: string
   ): Promise<UserInfoClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(`Getting user info for database: ${dbname} on host: ${hostUid}`);
+    this.logger.debug(`Getting user info for database: ${dbname} on host: ${hostUid}`);
     return await this.databaseUserService.getUserInfo(userId, hostUid, dbname);
   }
 
@@ -62,6 +63,7 @@ export class DatabaseUserController {
    *
    * @route POST /:hostUid/database/users/verify
    */
+  @SkipActionLog()
   @Post('verify')
   async userVerify(
     @Request() req,
@@ -84,6 +86,7 @@ export class DatabaseUserController {
    *
    * @route POST /:hostUid/database/users
    */
+  @LogAction('database.create_user')
   @Post()
   async createUser(
     @Request() req,
@@ -108,6 +111,7 @@ export class DatabaseUserController {
    *
    * @route DELETE /:hostUid/database/users/:dbname/:username
    */
+  @LogAction('database.delete_user')
   @Delete(':dbname/:username')
   async deleteUser(
     @Request() req,
@@ -133,7 +137,7 @@ export class DatabaseUserController {
   ): Promise<UserInfoClientResponse> {
     const userId = req.user.sub;
     validateRequiredFields({ dbname }, ['dbname'], 'database/users', this.logger);
-    this.logger.log(`Getting database users for database: ${dbname} on host: ${hostUid}`);
+    this.logger.debug(`Getting database users for database: ${dbname} on host: ${hostUid}`);
     return await this.databaseUserService.getDatabaseUsers(userId, hostUid, dbname);
   }
 
@@ -153,6 +157,7 @@ export class DatabaseUserController {
    * // POST /host-uid/database/users/login/demodb
    * // Body: { "id": "user", "password": "pass" }
    */
+  @LogAction('database.sign_in')
   @Post('login/:dbname')
   async loginDatabase(
     @Request() req,
@@ -183,6 +188,7 @@ export class DatabaseUserController {
    * @param dbname Database name from path parameter
    * @returns boolean True on success
    */
+  @LogAction('database.sign_in')
   @Post('login-with-profile/:dbname')
   async loginDatabaseWithProfile(
     @Request() req,
@@ -207,6 +213,7 @@ export class DatabaseUserController {
    * @example
    * // POST /host-uid/database/users/logout/demodb
    */
+  @LogAction('database.sign_out')
   @Post('logout/:dbname')
   async logoutDatabase(
     @Request() req,
@@ -234,6 +241,7 @@ export class DatabaseUserController {
    * // PUT /host-uid/database/users/demodb/yifan
    * // Body: { "userpass": "1111", "groups": { "group": ["public"] }, "authorization": [] }
    */
+  @LogAction('database.change_user')
   @Put(':dbname/:username')
   async updateUser(
     @Request() req,

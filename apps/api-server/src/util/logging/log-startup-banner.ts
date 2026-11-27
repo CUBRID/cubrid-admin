@@ -73,7 +73,7 @@ export function logStartupBanner(
     `  Secrets (vault)   : ${resolveVaultSource()}`,
     `  TLS certificate   : ${resolveTlsSource()}`,
     `  CORS origins      : ${configService.getAllowedOrigins().join(', ') || '(same-origin only)'}`,
-    `  Registration open : ${configService.isAuthRegistrationEnabled()}`,
+    `  Registration open : ${configService.getAuthRegistrationSetting() ?? 'true (default)'}`,
     `  CMS TLS verify    : ${configService.getCmsRejectUnauthorized()}`,
     `  CMS requests/host : ${cmsMaxConcurrentFromEnv()} at a time`,
     `  Top SQL log limit : ${topSqlLimitsFromEnv().maxLines} lines / ${topSqlLimitsFromEnv().maxMiB} MiB`,

@@ -9,4 +9,7 @@ import { User } from '../models/user';
  * @category Responses
  * @since 1.0.0
  */
-export type UserResponse = Omit<User, 'password' | 'uuid' | 'token'>;
+export type UserResponse = Omit<User, 'password' | 'uuid' | 'token' | 'sessionVersion'> & {
+  /** Effective admin rights: the stored role or the ADMIN_USERS setting. */
+  isAdmin: boolean;
+};

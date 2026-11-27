@@ -11,6 +11,7 @@ import {
   StatdumpClientResponse,
   StatdumpWatcherClientResponse,
 } from '@api-interfaces';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling CMS environment configuration operations.
@@ -55,7 +56,7 @@ export class CmsConfigController {
     @Param('confname') confname: string
   ): Promise<GetAddBrokerInfoClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(
+    this.logger.debug(
       `Getting broker config for confname: ${confname} on host: ${hostUid}`,
       'CmsConfigController'
     );
@@ -66,7 +67,7 @@ export class CmsConfigController {
   async getEnv(@Request() req, @Param('hostUid') hostUid: string): Promise<GetEnvClientResponse> {
     const userId = req.user.sub;
 
-    Logger.log(`Getting environment info for host: ${hostUid}`, 'CmsConfigController');
+    Logger.debug(`Getting environment info for host: ${hostUid}`, 'CmsConfigController');
     const response = await this.cmsConfigService.getEnv(userId, hostUid);
     return response;
   }
@@ -94,7 +95,7 @@ export class CmsConfigController {
   ): Promise<ParamdumpClientResponse> {
     const userId = req.user.sub;
 
-    Logger.log(
+    Logger.debug(
       `Getting paramdump info for host: ${hostUid}, dbname: ${dbname}`,
       'CmsConfigController'
     );
@@ -122,7 +123,7 @@ export class CmsConfigController {
   ): Promise<StatdumpClientResponse> {
     const userId = req.user.sub;
 
-    Logger.log(
+    Logger.debug(
       `Getting statdump info for host: ${hostUid}, dbname: ${dbname}`,
       'CmsConfigController'
     );
@@ -136,6 +137,7 @@ export class CmsConfigController {
    *
    * @route POST /:hostUid/cms-config/stat-dump/:dbname/watcher/start
    */
+  @SkipActionLog()
   @Post('stat-dump/:dbname/watcher/start')
   async startStatDumpWatcher(
     @Request() req,
@@ -151,6 +153,7 @@ export class CmsConfigController {
    *
    * @route POST /:hostUid/cms-config/stat-dump/:dbname/watcher/stop
    */
+  @SkipActionLog()
   @Post('stat-dump/:dbname/watcher/stop')
   async stopStatDumpWatcher(
     @Request() req,
@@ -175,7 +178,7 @@ export class CmsConfigController {
   ): Promise<PlandumpClientResponse> {
     const userId = req.user.sub;
 
-    Logger.log(
+    Logger.debug(
       `Getting plandump for host: ${hostUid}, dbname: ${dbname}`,
       'CmsConfigController'
     );
@@ -202,7 +205,7 @@ export class CmsConfigController {
     const userId = req.user.sub;
     const confname = req.query.confname as string;
 
-    Logger.log(
+    Logger.debug(
       `Getting all system parameters for host: ${hostUid}, confname: ${confname}`,
       'CmsConfigController'
     );
@@ -223,6 +226,7 @@ export class CmsConfigController {
    * // POST /host-uid/cms-config/set-sys-param
    * // Body: { "confname": "cubridconf", "confdata": ["# comment", "[section]", "key=value"], "loaded": [...] }
    */
+  @LogAction('config.set_system_param')
   @Post('set-sys-param')
   async setSystemParam(
     @Request() req,
@@ -253,6 +257,7 @@ export class CmsConfigController {
    * // POST /host-uid/cms-config/broker-set-param
    * // Body: { "confdata": ["[broker]", "SERVICE=ON", ...] }
    */
+  @LogAction('config.set_broker_param')
   @Post('broker-set-param')
   async setBrokerParam(
     @Request() req,

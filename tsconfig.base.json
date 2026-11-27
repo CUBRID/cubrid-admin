@@ -16,6 +16,12 @@
     "paths": {
       "@api-interfaces": ["./libs/api-interfaces/src"],
       "@api-interfaces/*": ["./libs/api-interfaces/src/*"],
+      "@api-log": ["./apps/api-server/src/api-log/index"],
+      "@api-log/*": ["./apps/api-server/src/api-log/*"],
+      "@account": ["./apps/api-server/src/account/index"],
+      "@account/*": ["./apps/api-server/src/account/*"],
+      "@admin": ["./apps/api-server/src/admin/index"],
+      "@admin/*": ["./apps/api-server/src/admin/*"],
       "@auth": ["./apps/api-server/src/auth/index"],
       "@auth/*": ["./apps/api-server/src/auth/*"],
       "@broker": ["./apps/api-server/src/broker/index"],

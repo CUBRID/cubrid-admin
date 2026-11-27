@@ -19,16 +19,22 @@ describe('logout ends every token of the session (refresh family)', () => {
   const refreshTokens = new RefreshTokenService();
   const blacklist = new TokenBlacklistService();
   const config = { isAuthRegistrationEnabled: () => true, getSecretKey: () => 'logout-family-spec' };
+  // An existing, enabled account at session version 0.
+  const accountAccess = {
+    get: async () => ({ exists: true, isAdmin: false, disabled: false, mustChangePassword: false, sessionVersion: 0 }),
+  };
   const service = new AuthService(
     { loadUserById: async () => ({ id: 'user1', password: 'hash' }) } as never,
     jwt,
     { comparePlainAndHash: async () => true } as never,
     config as never,
     refreshTokens,
-    blacklist
+    blacklist,
+    accountAccess as never,
+    {} as never
   );
   // The guard's check of an access token (the cookie it reads, already taken out).
-  const guard = new JwtAuthGuard(new Reflector(), jwt, blacklist) as unknown as { verify: (token: string) => Promise<unknown> };
+  const guard = new JwtAuthGuard(new Reflector(), jwt, blacklist, accountAccess as never) as unknown as { verify: (token: string) => Promise<unknown> };
   const accessOk = (token: string) => guard.verify(token);
 
   it('after a logout with a rotated token: the newest access 401, its refresh 401, the rotated one 401', async () => {

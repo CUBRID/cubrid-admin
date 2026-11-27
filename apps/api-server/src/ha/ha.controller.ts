@@ -3,6 +3,7 @@ import { HeartbeatListClientResponse } from '@api-interfaces';
 import { HaReloadCmsResponse } from '@type/cms-response';
 import { HeartbeatListDto } from '@type/index';
 import { HaService } from './ha.service';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 @Controller(':hostUid/ha')
 export class HaController {
@@ -16,6 +17,7 @@ export class HaController {
    *
    * @route POST /:hostUid/ha/heartbeat-list
    */
+  @SkipActionLog()
   @Post('heartbeat-list')
   async heartbeatList(
     @Request() req,
@@ -23,7 +25,7 @@ export class HaController {
     @Body() body: HeartbeatListDto
   ): Promise<HeartbeatListClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(`Getting HA heartbeat list on host: ${hostUid}`);
+    this.logger.debug(`Getting HA heartbeat list on host: ${hostUid}`);
     return await this.haService.heartbeatList(userId, hostUid, body);
   }
 
@@ -33,6 +35,7 @@ export class HaController {
    *
    * @route POST /:hostUid/ha/reload
    */
+  @LogAction('ha.reload')
   @Post('reload')
   async haReload(
     @Request() req,

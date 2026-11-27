@@ -5,6 +5,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// layoutSlice (Header's admin button) reads the OS theme at import time.
+vi.hoisted(() => {
+  window.matchMedia ??= () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined });
+});
 vi.mock('../layout/components/HeaderMenu', () => ({ default: () => null }));
 vi.mock('../layout/components/LanguageToggle', () => ({ default: () => null }));
 vi.mock('../user/components/UserProfileModal', () => ({ default: () => null }));
@@ -69,11 +73,11 @@ describe('desktop app without an app login', () => {
 
   it('shows no account or logout in the header on the desktop, but does in a browser', async () => {
     window.desktopConfig = { isDesktop: true };
-    await act(async () => root.render(<Provider store={store()}><Header theme="light" toggleTheme={() => undefined} /></Provider>));
+    await act(async () => root.render(<Provider store={store()}><MemoryRouter><Header theme="light" toggleTheme={() => undefined} /></MemoryRouter></Provider>));
     expect(container.querySelector(`[title="${CM.logout}"]`)).toBeNull();
 
     delete window.desktopConfig;
-    await act(async () => root.render(<Provider store={store()}><Header theme="dark" toggleTheme={() => undefined} /></Provider>));
+    await act(async () => root.render(<Provider store={store()}><MemoryRouter><Header theme="dark" toggleTheme={() => undefined} /></MemoryRouter></Provider>));
     expect(container.querySelector(`[title="${CM.logout}"]`)).not.toBeNull();
   });
 

@@ -4,8 +4,12 @@ import {
   UpdateUserInfoRequest,
   UserResponse,
 } from '@api-interfaces';
+import { AccountAccessService } from '@account/account-access.service';
+import { AccountSettingsService } from '@account/account-settings.service';
+import { INITIAL_ADMIN_ID, removeInitialAdminPasswordFile } from '@account/initial-admin.service';
 import { HandleUserErrors } from '@common';
 import { UserError } from '@error/user/user-error';
+import { AuthError } from '@error/auth/auth-error';
 import { readGroupHosts, readHostGroups } from '@host/host-group.util';
 import { Injectable } from '@nestjs/common';
 import { UserRepositoryService } from '@repository';
@@ -28,11 +32,27 @@ import { passwordValidityChecker } from '@util';
  * @category Business Services
  * @since 1.0.0
  */
+/** The session a request came with: its token's session version and account id. */
+export type RequestSession = { sessionVersion: number; accountUuid?: string };
+
+/**
+ * Refuses a change from a session that has ended since the request was let in:
+ * an admin reset the password or ended the sessions (a new session version),
+ * or the account was deleted and its name taken again (another uuid).
+ */
+function assertSameSession(user: User, session: RequestSession): void {
+  const sameAccount = session.accountUuid === undefined || session.accountUuid === user.uuid;
+  if (!sameAccount || (user.sessionVersion ?? 0) !== session.sessionVersion) {
+    throw AuthError.InvalidToken({ userId: user.id, reason: 'SESSION_REVOKED' });
+  }
+}
+
 @Injectable()
 export class UserService {
   constructor(
     private readonly repository: UserRepositoryService,
-    private readonly password: PasswordService
+    private readonly password: PasswordService,
+    private readonly accountAccess: AccountAccessService
   ) {}
   /**
    * Changes a user's password with validation.
@@ -54,21 +74,61 @@ export class UserService {
    * ```
    */
   @HandleUserErrors()
-  async changePassword(userId: string, dto: ChangePasswordRequest) {
+  async changePassword(userId: string, dto: ChangePasswordRequest, session: RequestSession) {
     const changePasswordCallback = async (user: User): Promise<User> => {
+      assertSameSession(user, session);
       if (await this.password.comparePlainAndHash(dto.oldPassword, user.password)) {
         if (!passwordValidityChecker(dto.newPassword)) {
           throw UserError.BadNewPassword();
+        }
+        // An admin-set password must really be replaced, not set again.
+        if (user.mustChangePassword && (await this.password.comparePlainAndHash(dto.newPassword, user.password))) {
+          throw UserError.PasswordUnchanged();
         }
       } else {
         throw UserError.OldPasswordMismatch();
       }
 
       user.password = await this.password.getHashedValue(dto.newPassword);
+      // Setting their own password ends the change an admin asked for.
+      delete user.mustChangePassword;
 
       return user;
     };
     await this.repository.atomicUpdateUser(userId, changePasswordCallback);
+    this.accountAccess.invalidate(userId);
+    if (userId === INITIAL_ADMIN_ID) await removeInitialAdminPasswordFile();
+  }
+
+  /**
+   * Sets the user's own password while an admin-required change is pending
+   * (after an admin created the account or reset its password). Needs no old
+   * password: the session itself was opened with the temporary one, and
+   * outside a pending change this is refused, so a normal change still asks
+   * for the current password.
+   */
+  @HandleUserErrors()
+  async setInitialPassword(userId: string, newPassword: string, session: RequestSession): Promise<void> {
+    if (!passwordValidityChecker(newPassword)) {
+      throw UserError.BadNewPassword();
+    }
+    const hash = await this.password.getHashedValue(newPassword);
+    await this.repository.atomicUpdateUser(userId, async (user: User) => {
+      // Checked under the account's lock: an admin may have reset the password
+      // (ending this session) while the new one was being hashed.
+      assertSameSession(user, session);
+      if (!user.mustChangePassword) {
+        throw AuthError.PermissionDenied({ userId, reason: 'NO_PENDING_PASSWORD_CHANGE' });
+      }
+      if (await this.password.comparePlainAndHash(newPassword, user.password)) {
+        throw UserError.PasswordUnchanged();
+      }
+      user.password = hash;
+      delete user.mustChangePassword;
+      return user;
+    });
+    this.accountAccess.invalidate(userId);
+    if (userId === INITIAL_ADMIN_ID) await removeInitialAdminPasswordFile();
   }
 
   /**
@@ -95,8 +155,8 @@ export class UserService {
   @HandleUserErrors()
   async getUserData(userId: string): Promise<UserResponse> {
     const user = await this.repository.loadUserById(userId);
-    
-    const { password, uuid, ...userResponse } = user;
+
+    const { password, uuid, sessionVersion, ...userResponse } = user;
 
     const sanitizedGroups: Record<string, any> = {};
     for (const [groupId, group] of Object.entries(readHostGroups(userResponse))) {
@@ -125,6 +185,9 @@ export class UserService {
 
     const result: UserResponse = {
       ...userResponse,
+      role: user.role ?? 'user',
+      status: user.status ?? 'active',
+      isAdmin: this.accountAccess.isAdmin(user),
       host_groups: sanitizedGroups,
     };
 
@@ -178,8 +241,26 @@ export class UserService {
       throw UserError.OldPasswordMismatch();
     }
 
-    // Password verified, proceed with deletion
-    await this.repository.deleteUser(userId);
+    // The last active admin can't delete themselves and leave no one to
+    // manage accounts. A cwm.conf admin couldn't sign up again either, so
+    // the same rule applies. Checked and deleted in the same queue as the
+    // admin actions, so a concurrent demotion can't slip in between.
+    await AccountAccessService.exclusive(async () => {
+      // Read again inside the queue: an admin may have promoted this account
+      // (and then left) while its password was being checked.
+      const current = await this.repository.loadUserById(userId);
+      if (this.accountAccess.isActiveAdmin(current)) {
+        const others = (await this.repository.listUsers()).filter(
+          (u) => u.id !== userId && this.accountAccess.isActiveAdmin(u)
+        );
+        if (others.length === 0) throw UserError.LastAdmin({ userId });
+      }
+
+      // Password verified, proceed with deletion
+      await this.repository.deleteUser(userId);
+      this.accountAccess.invalidate(userId);
+      AccountSettingsService.adminsChanged();
+    });
   }
 
   /**
@@ -270,9 +351,12 @@ export class UserService {
   @HandleUserErrors()
   async updateUser(userId: string, update: UpdateUserInfoRequest): Promise<User> {
     return await this.repository.atomicUpdateUser(userId, async (user: User) => {
-      Object.entries(update).forEach(([key, value]) => {
-        (user as any)[key] = value;
-      });
+      // Only the fields this endpoint is for. The body is a plain type the
+      // validation pipe can't check, and copying every key would let a user
+      // set their own role, status, password hash or hosts.
+      if (typeof update?.department === 'string') {
+        user.department = update.department;
+      }
       return user;
     });
   }

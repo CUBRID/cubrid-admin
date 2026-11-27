@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { JwtService } from '@nestjs/jwt';
@@ -10,6 +10,9 @@ import { AuthError, AuthErrorCode } from '@error/auth/auth-error';
 import { DesktopUserGuard } from '../desktop/desktop-user.guard';
 import { selectAppGuard } from '../desktop/select-app-guard';
 import { ConfigService } from '@config/config.service';
+import { AccountAccess, AccountAccessService } from '@account/account-access.service';
+import { AdminOnly } from '@common/decorators/admin-only.decorator';
+import { AllowPendingPasswordChange } from '@common/decorators/allow-pending-password-change.decorator';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CSRF_HEADER, authCookieNames, resetAuthCookieNamesForTest } from './auth-cookies';
 import { TokenBlacklistService } from './token-blacklist.service';
@@ -25,7 +28,21 @@ const blacklist = {
   isBlacklisted: jest.fn().mockResolvedValue(false),
   isFamilyRevoked: jest.fn().mockResolvedValue(false),
 };
-const newGuard = () => new JwtAuthGuard(new Reflector(), jwt, blacklist as unknown as TokenBlacklistService);
+const ACTIVE: AccountAccess = {
+  exists: true,
+  isAdmin: false,
+  disabled: false,
+  mustChangePassword: false,
+  sessionVersion: 0,
+};
+const accountAccess = { get: jest.fn() };
+const newGuard = () =>
+  new JwtAuthGuard(
+    new Reflector(),
+    jwt,
+    blacklist as unknown as TokenBlacklistService,
+    accountAccess as unknown as AccountAccessService
+  );
 
 @Controller('host')
 class HostController {
@@ -58,6 +75,7 @@ beforeAll(() => {
 beforeEach(() => {
   blacklist.isBlacklisted.mockReset().mockResolvedValue(false);
   blacklist.isFamilyRevoked.mockReset().mockResolvedValue(false);
+  accountAccess.get.mockReset().mockResolvedValue(ACTIVE);
 });
 
 describe('JwtAuthGuard CSRF header', () => {
@@ -157,9 +175,96 @@ describe('JwtAuthGuard access token', () => {
 
 describe('desktop mode CSRF header', () => {
   it('is not checked: the desktop guard lets a POST without it in', () => {
-    const guard = selectAppGuard({ isDesktopMode: () => true } as ConfigService, new Reflector(), jwt, blacklist as never);
+    const guard = selectAppGuard(
+      { isDesktopMode: () => true } as ConfigService,
+      new Reflector(),
+      jwt,
+      blacklist as never,
+      accountAccess as never
+    );
     expect(guard).toBeInstanceOf(DesktopUserGuard);
     const request: Record<string, unknown> = { method: 'POST', headers: {} };
     expect(guard.canActivate(contextFor(HostController, HostController.prototype.list, request))).toBe(true);
+  });
+});
+
+@Controller('admin')
+class AdminController {
+  @AdminOnly()
+  @Get()
+  list() {
+    return [];
+  }
+}
+
+@Controller('user')
+class AccountController {
+  @AllowPendingPasswordChange()
+  @Post('password')
+  changePassword() {
+    return {};
+  }
+}
+
+describe('JwtAuthGuard account', () => {
+  const signedIn = async (extra: Record<string, unknown> = {}) => ({
+    method: 'GET',
+    headers: { [CSRF_HEADER]: '1' },
+    cookies: { [ACCESS]: await jwt.signAsync({ sub: 'alice', jti: 'j1', type: 'access', ...extra }) },
+  });
+
+  it("adds the account's rights to request.user", async () => {
+    accountAccess.get.mockResolvedValue({ ...ACTIVE, isAdmin: true });
+    const request: Record<string, unknown> = await signedIn();
+    await expect(newGuard().canActivate(hostRoute(request))).resolves.toBe(true);
+    expect(request.user).toMatchObject({ sub: 'alice', isAdmin: true, mustChangePassword: false });
+  });
+
+  it.each([
+    ['a deleted account', { ...ACTIVE, exists: false }, {}, 'ACCOUNT_NOT_FOUND'],
+    ['a disabled account', { ...ACTIVE, disabled: true }, {}, 'ACCOUNT_DISABLED'],
+    ['an ended session', { ...ACTIVE, sessionVersion: 2 }, { sv: 1 }, 'SESSION_REVOKED'],
+    ['an ended session issued before versions', { ...ACTIVE, sessionVersion: 1 }, {}, 'SESSION_REVOKED'],
+    ["a deleted account's token on a new account with the same name", { ...ACTIVE, uuid: 'new' }, { uid: 'old' }, 'ACCOUNT_NOT_FOUND'],
+  ])('refuses %s with INVALID_TOKEN', async (_label, current, extra, reason) => {
+    accountAccess.get.mockResolvedValue(current);
+    const err = await rejection(async () => newGuard().canActivate(hostRoute(await signedIn(extra))));
+    expect(err?.code).toBe(AuthErrorCode.INVALID_TOKEN);
+    expect(err?.additionalData).toEqual(expect.objectContaining({ reason }));
+  });
+
+  it('accepts a token from before account ids were in tokens', async () => {
+    accountAccess.get.mockResolvedValue({ ...ACTIVE, uuid: 'any' });
+    await expect(newGuard().canActivate(hostRoute(await signedIn()))).resolves.toBe(true);
+  });
+
+  it('refuses a revoked token before reading the account', async () => {
+    blacklist.isBlacklisted.mockResolvedValue(true);
+    expect(await rejection(async () => newGuard().canActivate(hostRoute(await signedIn())))).toBeInstanceOf(AuthError);
+    expect(accountAccess.get).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-admin on an admin route and lets an admin through', async () => {
+    const adminRoute = async () => contextFor(AdminController, AdminController.prototype.list, await signedIn());
+    const err = await rejection(async () => newGuard().canActivate(await adminRoute()));
+    expect(err?.code).toBe(AuthErrorCode.PERMISSION_DENIED);
+    expect(err?.additionalData).toEqual(expect.objectContaining({ reason: 'ADMIN_REQUIRED' }));
+
+    accountAccess.get.mockResolvedValue({ ...ACTIVE, isAdmin: true });
+    await expect(newGuard().canActivate(await adminRoute())).resolves.toBe(true);
+  });
+
+  it('holds a pending password change on every route not marked for it, admin ones too', async () => {
+    accountAccess.get.mockResolvedValue({ ...ACTIVE, isAdmin: true, mustChangePassword: true });
+    for (const context of [
+      hostRoute(await signedIn()),
+      contextFor(AdminController, AdminController.prototype.list, await signedIn()),
+    ]) {
+      expect((await rejection(() => newGuard().canActivate(context)))?.code).toBe(AuthErrorCode.PASSWORD_CHANGE_REQUIRED);
+    }
+    const request = { ...(await signedIn()), method: 'POST' };
+    await expect(
+      newGuard().canActivate(contextFor(AccountController, AccountController.prototype.changePassword, request))
+    ).resolves.toBe(true);
   });
 });

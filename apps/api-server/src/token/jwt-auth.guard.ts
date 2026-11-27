@@ -3,6 +3,10 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { AuthError } from '@error/auth/auth-error';
+import { AccountAccessService, sameAccount } from '@account/account-access.service';
+import { ADMIN_ONLY } from '@common/decorators/admin-only.decorator';
+import { ALLOW_PENDING_PASSWORD_CHANGE } from '@common/decorators/allow-pending-password-change.decorator';
+import { tagRequestAction } from '@api-log/log-action.decorator';
 import { CSRF_HEADER, readAccessCookie } from './auth-cookies';
 import { TokenBlacklistService } from './token-blacklist.service';
 
@@ -18,35 +22,92 @@ export function hasCsrfHeader(request: { method?: string; headers?: Record<strin
   return request.headers?.[CSRF_HEADER] === '1';
 }
 
-type AccessTokenPayload = { sub?: string; jti?: string; type?: string; exp?: number; fam?: string };
+export type AccessTokenPayload = {
+  sub?: string;
+  jti?: string;
+  type?: string;
+  exp?: number;
+  iat?: number;
+  /** The refresh family the token was issued with, revoked at logout. */
+  fam?: string;
+  /** The account's session version when the token was issued; absent = 0. */
+  sv?: number;
+  /** The account record's uuid when issued; absent in tokens from before it. */
+  uid?: string;
+};
+
+/** request.user on an authenticated request. */
+export type AuthenticatedUser = AccessTokenPayload & {
+  sub: string;
+  isAdmin: boolean;
+  mustChangePassword: boolean;
+};
 
 /**
  * The global guard in server mode (selectAppGuard). Every route needs the
  * access JWT from the httpOnly cookie, unless it is marked @Public: a valid
  * signature, not expired, an access token, not revoked at logout (itself or
- * its whole refresh family). The payload becomes request.user.
+ * its whole refresh family), and an account that still exists, is enabled and
+ * has not had its sessions ended. The payload, with the account's role,
+ * becomes request.user. Then @AdminOnly and a pending password change.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
-    private readonly tokenBlacklist: TokenBlacklistService
+    private readonly tokenBlacklist: TokenBlacklistService,
+    private readonly accountAccess: AccountAccessService
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request & { user?: AccessTokenPayload }>();
+    // First: the API log names the action even when the request is refused.
+    tagRequestAction(this.reflector, context);
+    const request = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
     if (!hasCsrfHeader(request)) {
       throw AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' });
     }
-    const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPublic) return true;
+    if (this.flag(context, 'isPublic')) return true;
 
-    request.user = await this.verify(readAccessCookie(request));
+    const user = await this.authenticate(await this.verify(readAccessCookie(request)));
+    request.user = user;
+    // Before the admin check: an admin with a pending password change
+    // still has to set it first.
+    if (user.mustChangePassword && !this.flag(context, ALLOW_PENDING_PASSWORD_CHANGE)) {
+      throw AuthError.PasswordChangeRequired({ userId: user.sub });
+    }
+    if (this.flag(context, ADMIN_ONLY) && !user.isAdmin) {
+      throw AuthError.PermissionDenied({ userId: user.sub, reason: 'ADMIN_REQUIRED' });
+    }
     return true;
+  }
+
+  /**
+   * A token outlives changes to its account (it lasts a day), so the account
+   * is checked on every request: deleted, disabled, or its sessions ended by
+   * an admin (a password reset raises sessionVersion).
+   */
+  private async authenticate(payload: AccessTokenPayload): Promise<AuthenticatedUser> {
+    if (!payload.sub) {
+      throw AuthError.InvalidToken({ reason: 'INVALID_TOKEN_SUBJECT' });
+    }
+    const access = await this.accountAccess.get(payload.sub);
+    // A deleted account whose name was taken again is gone all the same.
+    if (!access.exists || !sameAccount(payload.uid, access)) {
+      throw AuthError.InvalidToken({ userId: payload.sub, reason: 'ACCOUNT_NOT_FOUND' });
+    }
+    if (access.disabled) {
+      throw AuthError.InvalidToken({ userId: payload.sub, reason: 'ACCOUNT_DISABLED' });
+    }
+    if ((payload.sv ?? 0) !== access.sessionVersion) {
+      throw AuthError.InvalidToken({ userId: payload.sub, reason: 'SESSION_REVOKED' });
+    }
+    return {
+      ...payload,
+      sub: payload.sub,
+      isAdmin: access.isAdmin,
+      mustChangePassword: access.mustChangePassword,
+    };
   }
 
   // Every way in which the token fails gives the same answer to the client
@@ -77,5 +138,9 @@ export class JwtAuthGuard implements CanActivate {
       throw AuthError.InvalidToken({ userId: 'unknown' }, new Error('Access token revoked'));
     }
     return payload;
+  }
+
+  private flag(context: ExecutionContext, key: string): boolean {
+    return this.reflector.getAllAndOverride<boolean>(key, [context.getHandler(), context.getClass()]) === true;
   }
 }

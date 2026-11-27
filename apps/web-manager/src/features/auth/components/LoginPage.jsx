@@ -10,10 +10,12 @@ import { InfoBanner } from '../../../components/ds/foundation/InfoBanner';
 import LanguageToggle from '../../layout/components/LanguageToggle';
 import { useCM } from '../../../constants/useCM';
 import { APP_VERSION } from '../../../constants/appVersion';
+import { useRegistrationOpen } from '../useRegistrationOpen';
 import { tooManyAttemptsText } from '../../../infrastructure/errors/serverErrorText';
 
 export default function LoginPage() {
   const CM = useCM();
+  const registrationOpen = useRegistrationOpen();
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -43,11 +45,24 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState('');
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const { loading } = useSelector((state) => state.auth, shallowEqual);
   const { theme } = useSelector((state) => state.layout, shallowEqual);
+  // The sign-up notice arrives in history state, which survives reloads. Read it
+  // once, then drop it from history so it does not linger after approval.
+  const [signUpNotice, setSignUpNotice] = useState(() => {
+    if (location.state?.registrationPending) return 'pending';
+    if (location.state?.registrationSuccess) return 'success';
+    return null;
+  });
+  useEffect(() => {
+    if (location.state?.registrationPending || location.state?.registrationSuccess) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const validate = () => {
     const errs = {};
@@ -62,6 +77,8 @@ export default function LoginPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     setApiError('');
+    setAwaitingApproval(false);
+    setSignUpNotice(null);
     dispatch(loginStart());
     try {
       const response = await authApi.login(username, password);
@@ -76,7 +93,14 @@ export default function LoginPage() {
       navigate('/home', { replace: true });
     } catch (err) {
       // A wrong ID or password says so in plain words in every language.
-      const wrongLogin = err.response?.data?.data?.type === '/errors/auth/invalid_credentials';
+      const errorType = err.response?.data?.data?.type;
+      const wrongLogin = errorType === '/errors/auth/invalid_credentials';
+      // Right password, but no administrator has approved the sign-up yet.
+      if (errorType === '/errors/auth/account_pending_approval') {
+        dispatch(loginFailure(CM.accountPendingApprovalMsg));
+        setAwaitingApproval(true);
+        return;
+      }
       // The login rate limit says how long to wait.
       const msg = tooManyAttemptsText(err, CM)
         ?? (wrongLogin ? CM.loginFailedMsg : (err.response?.data?.message || err.response?.data?.error || CM.loginFailedMsg));
@@ -143,10 +167,24 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        {location.state?.registrationSuccess && (
+        {signUpNotice === 'success' && (
           <InfoBanner variant="success" title={CM.registrationSuccessfulTitle} className="mb-3">
             {CM.registrationSuccessfulMessage}
           </InfoBanner>
+        )}
+        {signUpNotice === 'pending' && !awaitingApproval && (
+          <div data-testid="login-registration-pending">
+            <InfoBanner variant="info" title={CM.registrationPendingTitle} className="mb-3">
+              {CM.registrationPendingMessage}
+            </InfoBanner>
+          </div>
+        )}
+        {awaitingApproval && (
+          <div data-testid="login-awaiting-approval">
+            <InfoBanner variant="warning" title={CM.accountPendingApprovalTitle} className="mb-3">
+              {CM.accountPendingApprovalMsg}
+            </InfoBanner>
+          </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-3">
           <Input
@@ -200,11 +238,13 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Create account link */}
-        <p className="mt-5 text-center text-14 text-slate-500 dark:text-slate-400">
-          {CM.newToCubrid}{' '}
-          <Link to="/register" className="font-bold text-slate-900 dark:text-amber-500 hover:underline underline-offset-4">{CM.createAccount}</Link>
-        </p>
+        {/* Create account link, only while the server takes sign-ups. */}
+        {registrationOpen !== false && (
+          <p className="mt-5 text-center text-14 text-slate-500 dark:text-slate-400">
+            {CM.newToCubrid}{' '}
+            <Link to="/register" className="font-bold text-slate-900 dark:text-amber-500 hover:underline underline-offset-4">{CM.createAccount}</Link>
+          </p>
+        )}
 
         {typeof window !== 'undefined' &&
           (window.location.protocol === 'app:' ||

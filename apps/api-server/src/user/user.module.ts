@@ -4,6 +4,7 @@ import { UserRepositoryModule } from '@repository';
 import { SecurityModule } from '@security';
 import { UserService } from './user.service';
 import { TokenModule } from '@token';
+import { AccountModule } from '@account/account.module';
 import { ConfigModule } from '@config/config.module';
 
 /**
@@ -19,7 +20,7 @@ import { ConfigModule } from '@config/config.module';
 @Module({
   controllers: [UserController],
   providers: [UserService],
-  imports: [UserRepositoryModule, SecurityModule, TokenModule, ConfigModule],
+  imports: [UserRepositoryModule, SecurityModule, TokenModule, AccountModule, ConfigModule],
   exports: [UserService],
 })
 export class UserModule {}

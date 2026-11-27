@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 
-import { User, UserDTO } from '@type/index';
+import { User, UserDTO, UserRole } from '@type/index';
+import { getStoragePath } from '@util';
 
 import { LockService } from '@lock/lock.service';
 import { EncryptionService } from '@security/encryption/encryption.service';
@@ -19,8 +21,20 @@ import { HandleUserRepoErrors } from '@decorators/handle-user-repo-errors.decora
  * @category Infrastructure Services
  * @since 1.0.0
  */
+/** Account files are named by the SHA-256 hex of the account id. */
+const ACCOUNT_FILE_NAME = /^[0-9a-f]{64}$/;
+
+export type CreateUserOptions = {
+  role?: UserRole;
+  mustChangePassword?: boolean;
+  /** `pending` for a sign-up that waits for an administrator. */
+  status?: 'active' | 'pending';
+};
+
 @Injectable()
 export class UserRepositoryService {
+  private readonly logger = new Logger(UserRepositoryService.name);
+
   constructor(
     private readonly encryptionService: EncryptionService,
     private readonly passwordService: PasswordService,
@@ -55,7 +69,7 @@ export class UserRepositoryService {
    * @throws UserError.UserAlreadyExists if a user with the given ID already exists.
    */
   @HandleUserRepoErrors()
-  async createUser(dto: UserDTO): Promise<void> {
+  async createUser(dto: UserDTO, options: CreateUserOptions = {}): Promise<void> {
     const hashedId = this.encryptionService.getHashedValue(dto.id);
     const uuid = uuidv4();
 
@@ -68,11 +82,56 @@ export class UserRepositoryService {
       ha_mon_list: {},
       resource_mon_list: {},
       user_preference: { dashboardInterval: 3, brokerStatusInterval: 0 },
+      role: options.role ?? 'user',
+      status: options.status ?? 'active',
+      ...(options.mustChangePassword ? { mustChangePassword: true } : {}),
+      sessionVersion: 0,
+      createdAt: new Date().toISOString(),
     };
     await this.storageService.createAndWrite(
       hashedId,
       this.encryptionService.encryptValue(JSON.stringify(userJson))
     );
+  }
+
+  /**
+   * Loads every account in storage. There is no separate index: account files
+   * are the ones named like a hashed id that decrypt to an account record, so
+   * the list can never disagree with what login reads. A file that fails to
+   * read or decrypt is skipped and logged, not fatal to the whole list.
+   */
+  async listUsers(): Promise<User[]> {
+    const names = await this.accountFileNames();
+
+    const users: User[] = [];
+    for (const name of names) {
+      try {
+        const user = JSON.parse(this.encryptionService.decryptValue(await this.storageService.read(name))) as User;
+        if (typeof user?.id === 'string' && typeof user?.password === 'string') users.push(user);
+      } catch (err: unknown) {
+        this.logger.warn(`Skipping unreadable account file ${name}: ${String(err)}`);
+      }
+    }
+    return users;
+  }
+
+  /**
+   * Whether storage holds any account file, readable or not. A fresh install
+   * has none; an install whose files can't be decrypted (a changed master
+   * key) still has them and is not fresh.
+   */
+  async hasAccountFiles(): Promise<boolean> {
+    return (await this.accountFileNames()).length > 0;
+  }
+
+  private async accountFileNames(): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(getStoragePath(), { withFileTypes: true });
+      return entries.filter((e) => e.isFile() && ACCOUNT_FILE_NAME.test(e.name)).map((e) => e.name);
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return [];
+      throw err;
+    }
   }
 
   /**

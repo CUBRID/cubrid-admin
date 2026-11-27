@@ -5,6 +5,10 @@ export const authApi = {
     return apiClient.post('/auth/register', { id, password });
   },
 
+  getRegistration: () => {
+    return apiClient.get('/auth/registration');
+  },
+
   login: (id, password) => {
     return apiClient.post('/auth/login', { id, password });
   },
@@ -16,6 +20,11 @@ export const authApi = {
 
   getUserInfo: () => {
     return apiClient.get('/user');
+  },
+
+  // Only while an admin-required password change is pending.
+  setInitialPassword: (newPassword) => {
+    return apiClient.post('/user/initial-password', { newPassword });
   },
 
   // The session the cookies hold: { expiresIn, expiresLeft, user }.

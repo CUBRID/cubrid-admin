@@ -1,6 +1,7 @@
 import { CanActivate } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { AccountAccessService } from '@account/account-access.service';
 import { ConfigService } from '@config/config.service';
 import { JwtAuthGuard } from '@token';
 import { TokenBlacklistService } from '@token/token-blacklist.service';
@@ -15,8 +16,9 @@ export const selectAppGuard = (
   configService: ConfigService,
   reflector: Reflector,
   jwt: JwtService,
-  tokenBlacklist: TokenBlacklistService
+  tokenBlacklist: TokenBlacklistService,
+  accountAccess: AccountAccessService
 ): CanActivate =>
   configService.isDesktopMode()
     ? new DesktopUserGuard(reflector)
-    : new JwtAuthGuard(reflector, jwt, tokenBlacklist);
+    : new JwtAuthGuard(reflector, jwt, tokenBlacklist, accountAccess);

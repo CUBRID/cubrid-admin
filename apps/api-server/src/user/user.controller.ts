@@ -1,9 +1,12 @@
 import { Body, Controller, Delete, Get, Post, Put, Request, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
-import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto } from '@type/index';
+import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto, SetInitialPasswordDto } from '@type/index';
 import { UpdateUserInfoRequest, UserResponse } from '@api-interfaces';
-import { NotOnDesktop } from '@common';
+import { AllowPendingPasswordChange, NotOnDesktop } from '@common';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 import { AuthThrottlerGuard } from '../auth/auth-throttle';
+import type { AuthenticatedUser } from '@token/jwt-auth.guard';
+import type { RequestSession } from './user.service';
 
 /**
  * Controller for handling user-related operations.
@@ -15,6 +18,12 @@ import { AuthThrottlerGuard } from '../auth/auth-throttle';
  * @category Controllers
  * @since 1.0.0
  */
+/** The token's session version and account id, which a password change checks under the account lock. */
+const requestSession = (req: { user: AuthenticatedUser }): RequestSession => ({
+  sessionVersion: req.user.sv ?? 0,
+  accountUuid: req.user.uid,
+});
+
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -34,6 +43,7 @@ export class UserController {
    * // Returns: { uuid: "123", id: "user1", department: "IT", host_groups: {}, ... }
    * ```
    */
+  @AllowPendingPasswordChange()
   @Get()
   async getUserData(@Request() req): Promise<UserResponse> {
     const userId = req.user.sub;
@@ -55,6 +65,8 @@ export class UserController {
    * // Returns: { dashboardInterval: 10, brokerStatusInterval: 20 }
    * ```
    */
+  // The UI language comes from preferences, also on the password-change screen.
+  @AllowPendingPasswordChange()
   @Get('preferences')
   async getUserPreferences(@Request() req): Promise<UserPreference> {
     const userId = req.user.sub;
@@ -78,11 +90,27 @@ export class UserController {
    * ```
    */
   @NotOnDesktop()
+  @AllowPendingPasswordChange()
+  @LogAction('account.change_password')
   @UseGuards(AuthThrottlerGuard)
   @Post('credential')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req): Promise<void> {
     const userId = req.user.sub;
-    await this.userService.changePassword(userId, dto);
+    await this.userService.changePassword(userId, dto, requestSession(req));
+  }
+
+  /**
+   * Sets the first password after an admin created the account or reset its
+   * password; refused when no such change is pending.
+   *
+   * POST /user/initial-password  Body: { newPassword }
+   */
+  @NotOnDesktop()
+  @AllowPendingPasswordChange()
+  @LogAction('account.set_password')
+  @Post('initial-password')
+  async setInitialPassword(@Body() dto: SetInitialPasswordDto, @Request() req): Promise<void> {
+    await this.userService.setInitialPassword(req.user.sub, dto.newPassword, requestSession(req));
   }
 
   /**
@@ -103,6 +131,7 @@ export class UserController {
    * ```
    */
   @NotOnDesktop()
+  @LogAction('account.delete')
   @UseGuards(AuthThrottlerGuard)
   @Delete('account')
   async deleteUser(@Request() req, @Body() body: DeleteUserDto): Promise<boolean> {
@@ -142,6 +171,7 @@ export class UserController {
    * // Body: { dashboardInterval: 30 }
    * ```
    */
+  @SkipActionLog()
   @Put('preferences')
   async updateUserPreferences(@Request() req, @Body() body: UserPreferenceDto): Promise<void> {
     const userId = req.user.sub;
@@ -165,6 +195,7 @@ export class UserController {
    * ```
    */
   @NotOnDesktop()
+  @LogAction('account.change')
   @Post('account')
   async updateUser(@Request() req, @Body() body: UpdateUserInfoRequest): Promise<void> {
     const userId = req.user.sub;

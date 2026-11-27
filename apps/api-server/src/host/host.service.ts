@@ -89,10 +89,10 @@ export class HostService {
 
   @HandleHostErrors()
   async getHostList(userId: string): Promise<GetHostsResponse> {
-    this.logger.log(`Getting host list for user: ${userId}`);
+    this.logger.debug(`Getting host list for user: ${userId}`);
     const user = await this.repository.loadUserById(userId);
     const hostGroups = sanitizeHostGroups(user);
-    this.logger.log(
+    this.logger.debug(
       `Found ${countAllHosts(user)} hosts in ${Object.keys(hostGroups).length} groups`
     );
     return { host_groups: hostGroups };

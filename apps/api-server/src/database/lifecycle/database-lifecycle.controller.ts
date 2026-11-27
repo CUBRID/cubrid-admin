@@ -15,6 +15,7 @@ import {
 import { BulkDatabaseActionResult, DatabaseLifecycleService, ServiceRestartResult } from './database-lifecycle.service';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { assertValidGeneralVolumeSize } from './database-volume-size';
+import { LogAction } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling database lifecycle operations.
@@ -53,7 +54,7 @@ export class DatabaseLifecycleController {
   ): Promise<StartInfoClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(`Getting start info for host: ${hostUid}`);
+    this.logger.debug(`Getting start info for host: ${hostUid}`);
     const response = await this.lifecycleService.startInfo(userId, hostUid);
     return response;
   }
@@ -76,7 +77,7 @@ export class DatabaseLifecycleController {
   ): Promise<GetCreatedbInfoClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(`Getting create info for host: ${hostUid}`);
+    this.logger.debug(`Getting create info for host: ${hostUid}`);
     return await this.lifecycleService.getCreatedbInfo(userId, hostUid);
   }
 
@@ -92,6 +93,7 @@ export class DatabaseLifecycleController {
    * @example
    * // POST /host-uid/database/start/demodb
    */
+  @LogAction('database.start')
   @Post('start/:dbname')
   async startDatabase(
     @Request() req,
@@ -117,6 +119,7 @@ export class DatabaseLifecycleController {
    * @example
    * // POST /host-uid/database/stop/demodb
    */
+  @LogAction('database.stop')
   @Post('stop/:dbname')
   async stopDatabase(
     @Request() req,
@@ -142,6 +145,7 @@ export class DatabaseLifecycleController {
    * @example
    * // POST /host-uid/database/restart/demodb
    */
+  @LogAction('database.restart')
   @Post('restart/:dbname')
   async restartDatabase(
     @Request() req,
@@ -168,6 +172,7 @@ export class DatabaseLifecycleController {
    * // POST /host-uid/database/bulk
    * // Body: { "action": "restart", "dbnames": ["demodb", "testdb"] }
    */
+  @LogAction('database.bulk_action')
   @Post('bulk')
   async runSelectedDatabasesAction(
     @Request() req,
@@ -194,6 +199,7 @@ export class DatabaseLifecycleController {
    * // POST /host-uid/database/start-all
    * // Body: { "dbnames": ["demodb", "testdb"] }
    */
+  @LogAction('database.start_all')
   @Post('start-all')
   async startAllDatabases(
     @Request() req,
@@ -219,6 +225,7 @@ export class DatabaseLifecycleController {
    * // POST /host-uid/database/stop-all
    * // Body: { "dbnames": ["demodb", "testdb"] }
    */
+  @LogAction('database.stop_all')
   @Post('stop-all')
   async stopAllDatabases(
     @Request() req,
@@ -243,6 +250,7 @@ export class DatabaseLifecycleController {
    * @example
    * // POST /host-uid/database/service/start
    */
+  @LogAction('database.start_service')
   @Post('service/start')
   async startWholeService(
     @Request() req,
@@ -266,6 +274,7 @@ export class DatabaseLifecycleController {
    * @example
    * // POST /host-uid/database/service/stop
    */
+  @LogAction('database.stop_service')
   @Post('service/stop')
   async stopWholeService(
     @Request() req,
@@ -289,6 +298,7 @@ export class DatabaseLifecycleController {
    * @example
    * // POST /host-uid/database/service/restart
    */
+  @LogAction('database.restart_service')
   @Post('service/restart')
   async restartWholeService(
     @Request() req,
@@ -314,6 +324,7 @@ export class DatabaseLifecycleController {
    * // POST /host-uid/database/register/demodb
    * // Body: { "id": "user" } or { "id": "user", "password": "pass" }
    */
+  @LogAction('database.save_login')
   @Post('register/:dbname')
   async saveDatabaseProfile(
     @Request() req,
@@ -344,6 +355,7 @@ export class DatabaseLifecycleController {
    * @example
    * // DELETE /host-uid/database/register/demodb
    */
+  @LogAction('database.delete_login')
   @Delete('register/:dbname')
   async deleteDatabaseProfile(
     @Request() req,
@@ -374,6 +386,7 @@ export class DatabaseLifecycleController {
    * //   "setAutoStart": { "confname": "cubridconf", "dbname": "testdb" }
    * // }
    */
+  @LogAction('database.create')
   @Post('create')
   @HttpCode(HttpStatus.ACCEPTED)
   async createDatabase(
@@ -408,7 +421,7 @@ export class DatabaseLifecycleController {
   ): Promise<DatabaseVolumeInfoClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting volume info for database: ${dbname} on host: ${hostUid}`
     );
     const response = await this.lifecycleService.getDBSpaceInfo(userId, hostUid, dbname);
@@ -430,6 +443,7 @@ export class DatabaseLifecycleController {
    * // DELETE /host-uid/database/testdb
    * // Body: { "delbackup": "y" }
    */
+  @LogAction('database.delete')
   @Delete(':dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async deleteDatabase(

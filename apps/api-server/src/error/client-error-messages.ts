@@ -146,7 +146,16 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
       case AuthErrorCode.INVALID_TOKEN:
         return 'The authentication token is invalid.';
       case AuthErrorCode.PERMISSION_DENIED:
+        if (additionalData?.reason === 'RESERVED_ADMIN_ID') {
+          return 'This account ID is reserved for an administrator. Ask an administrator to create it.';
+        }
         return 'You do not have permission to perform this action.';
+      case AuthErrorCode.ACCOUNT_DISABLED:
+        return 'This account is disabled. Ask an administrator to enable it.';
+      case AuthErrorCode.ACCOUNT_PENDING_APPROVAL:
+        return 'This account is waiting for an administrator to approve it.';
+      case AuthErrorCode.PASSWORD_CHANGE_REQUIRED:
+        return 'Set a new password before continuing.';
       case AuthErrorCode.REFRESH_IN_PROGRESS:
         return 'The session is being refreshed. Try again shortly.';
       case AuthErrorCode.INTERNAL_ERROR:
@@ -179,6 +188,20 @@ export function getPublicClientErrorMessage(payload: PublicErrorPayload): string
         return 'The current password does not match.';
       case UserErrorCode.BAD_NEW_PASSWORD:
         return 'The new password does not meet the policy.';
+      case UserErrorCode.ADMIN_SELF_CHANGE:
+        return 'You cannot change your own account here. Use your profile to change your password.';
+      case UserErrorCode.LAST_ADMIN:
+        return 'At least one active administrator must remain.';
+      case UserErrorCode.ADMIN_BY_CONFIG:
+        return 'This account is an administrator by ADMIN_USERS in cwm.conf. Change it there.';
+      case UserErrorCode.INVALID_ACCOUNT_ID:
+        return 'The account ID must be at least 3 characters, with no spaces at the start or end.';
+      case UserErrorCode.PASSWORD_UNCHANGED:
+        return 'Choose a password different from the temporary one.';
+      case UserErrorCode.ACCOUNT_PENDING:
+        return 'This account is waiting for approval. Approve or reject it first.';
+      case UserErrorCode.NOT_PENDING:
+        return 'This sign-up request was already approved or rejected.';
       case UserErrorCode.UNKNOWN:
       default:
         return GENERIC_INTERNAL;

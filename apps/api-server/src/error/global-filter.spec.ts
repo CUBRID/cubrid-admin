@@ -29,22 +29,23 @@ function mockHost(url = '/api/host-uid/database/start/testdb') {
 }
 
 describe('GlobalExceptionFilter', () => {
-  it('logs a 401 as one warning line, with no stack trace and no ERROR', () => {
+  it('logs a 401 only at debug: the request line already shows it', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const debug = jest.spyOn(logger, 'debug').mockImplementation(() => undefined);
     const { host, res } = mockHost('/api/version');
 
     filter.catch(new UnauthorizedException('Invalid token'), host);
 
     expect(res.statusCode).toBe(401);
     expect(error).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]).toEqual(['Unauthorized: Invalid token', 'GET /api/version']);
+    expect(warn).not.toHaveBeenCalled();
+    expect(debug.mock.calls[0]).toEqual(['HTTP Exception [401]: Invalid token', 'GET /api/version']);
   });
 
-  it('logs an AppError with status 401 (invalid token) as a warning too', () => {
+  it('logs an AppError with status 401 (invalid token) only at debug too', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
@@ -55,31 +56,44 @@ describe('GlobalExceptionFilter', () => {
 
     expect(res.statusCode).toBe(401);
     expect(error).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toMatch(/^Unauthorized \[/);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the error code and text for the request line', () => {
+    const filter = new GlobalExceptionFilter();
+    jest.spyOn((filter as any).logger, 'debug').mockImplementation(() => undefined);
+    const { host, res } = mockHost('/api/version');
+    (res as any).locals = {};
+
+    filter.catch(AuthError.InvalidToken(), host);
+
+    expect((res as any).locals.cwmErrorCode).toBe('INVALID_TOKEN');
+    expect(typeof (res as any).locals.cwmErrorText).toBe('string');
   });
 
   it.each([
-    ['a wrong password (401)', () => AuthError.InvalidCredentials({ userId: 'u' }), 401, /^Unauthorized \[AUTH:INVALID_CREDENTIALS\]/],
-    ['a request without the CSRF header (403)', () => AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' }), 403, /^Forbidden \[AUTH:PERMISSION_DENIED\]/],
-    ['a refresh racing another for the same token (503)', () => AuthError.RefreshInProgress(), 503, /^Service Unavailable \[AUTH:REFRESH_IN_PROGRESS\]/],
-  ])('logs %s as one warning line, with no stack trace and no ERROR', (_name, make, status, line) => {
+    ['a wrong password (401)', () => AuthError.InvalidCredentials({ userId: 'u' }), 401, /^App Error \[AUTH:INVALID_CREDENTIALS\]/],
+    ['a request without the CSRF header (403)', () => AuthError.PermissionDenied({ reason: 'CSRF_HEADER_MISSING' }), 403, /^App Error \[AUTH:PERMISSION_DENIED\]/],
+    ['a refresh racing another for the same token (503)', () => AuthError.RefreshInProgress(), 503, /^App Error \[AUTH:REFRESH_IN_PROGRESS\]/],
+  ])('logs %s only at debug, with no stack trace and no ERROR: the request line is its warning', (_name, make, status, line) => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const debug = jest.spyOn(logger, 'debug').mockImplementation(() => undefined);
     const { host, res } = mockHost('/api/auth/login');
 
     filter.catch(make(), host);
 
     expect(res.statusCode).toBe(status);
     expect(error).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]).toHaveLength(2);
-    expect(String(warn.mock.calls[0][0])).toMatch(line);
+    expect(warn).not.toHaveBeenCalled();
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(debug.mock.calls[0]).toHaveLength(2);
+    expect(String(debug.mock.calls[0][0])).toMatch(line);
   });
 
-  it('keeps another permission refusal (not the CSRF header) as an ERROR', () => {
+  it('keeps a desktop-mode call to a server-only route as an ERROR', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);

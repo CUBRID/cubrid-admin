@@ -17,6 +17,10 @@ export type RefreshTokenRecord = {
   familyId: string;
   expiresAt: string;
   createdAt: string;
+  /** The account's session version when issued; absent (older tokens) = 0. */
+  sessionVersion?: number;
+  /** The account record's uuid when issued; absent in older tokens. */
+  accountUuid?: string;
 };
 
 type ConsumedRefreshTokenRecord = RefreshTokenRecord & {
@@ -89,7 +93,12 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async create(userId: string, familyId?: string): Promise<{ token: string; familyId: string }> {
+  async create(
+    userId: string,
+    familyId?: string,
+    sessionVersion = 0,
+    accountUuid?: string
+  ): Promise<{ token: string; familyId: string }> {
     const token = crypto.randomBytes(32).toString('base64url');
     const family = familyId ?? crypto.randomUUID();
     const now = new Date();
@@ -98,6 +107,8 @@ export class RefreshTokenService implements OnModuleInit, OnModuleDestroy {
       familyId: family,
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + REFRESH_TOKEN_EXPIRES_MS).toISOString(),
+      sessionVersion,
+      ...(accountUuid ? { accountUuid } : {}),
     };
 
     await fs.mkdir(this.root(), { recursive: true });

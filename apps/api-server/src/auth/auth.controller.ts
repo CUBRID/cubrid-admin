@@ -2,9 +2,10 @@ import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { UserDTO } from '@type/index';
-import { LoginResponse, SessionResponse } from '@api-interfaces';
-import { NotOnDesktop, Public } from '@common';
+import { LoginResponse, RegisterResponse, SessionResponse } from '@api-interfaces';
+import { AllowPendingPasswordChange, NotOnDesktop, Public } from '@common';
 import { AuthError, AuthErrorCode } from '@error/auth/auth-error';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 import {
   clearAuthCookies,
   readAccessCookie,
@@ -23,6 +24,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @LogAction('auth.sign_in')
   @UseGuards(AuthThrottlerGuard)
   @Post('login')
   async login(
@@ -36,6 +38,7 @@ export class AuthController {
   }
 
   @Public()
+  @SkipActionLog()
   // Not rate limited: it needs the signed refresh cookie (auth-throttle.ts).
   @Post('refresh')
   async refresh(
@@ -63,7 +66,9 @@ export class AuthController {
 
   // The session the access cookie holds (the guard checked it): the page
   // asks when it opens, since it keeps the session's expiry in localStorage,
-  // which another port of the same host name does not share.
+  // which another port of the same host name does not share. Also while a
+  // new password is pending: that page needs the session too.
+  @AllowPendingPasswordChange()
   @Get('session')
   session(@Req() req: Request): SessionResponse {
     const payload = (req as Request & { user?: { sub?: string; iat?: number; exp?: number } }).user ?? {};
@@ -78,23 +83,34 @@ export class AuthController {
 
   // Public: an expired access token must still end the session.
   @Public()
+  @LogAction('auth.sign_out')
   @Post('logout')
   async logout(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<{ success: true }> {
     try {
-      await this.authService.logout(readAccessCookie(req), readRefreshCookie(req));
+      const userId = await this.authService.logout(readAccessCookie(req), readRefreshCookie(req));
+      // Public, so the guard set no user: the API log learns it from the token.
+      if (userId) (req as Request & { user?: { sub: string } }).user = { sub: userId };
     } finally {
       clearAuthCookies(req, res);
     }
     return { success: true };
   }
 
+  /** Whether the sign-up page is open, so the login page can hide its link. */
   @Public()
+  @Get('registration')
+  async registration(): Promise<{ enabled: boolean }> {
+    return { enabled: await this.authService.isRegistrationEnabled() };
+  }
+
+  @Public()
+  @LogAction('auth.register')
   @UseGuards(AuthThrottlerGuard)
   @Post('register')
-  async register(@Body() userDTO: UserDTO): Promise<void> {
-    await this.authService.register(userDTO);
+  async register(@Body() userDTO: UserDTO): Promise<RegisterResponse> {
+    return this.authService.register(userDTO);
   }
 }

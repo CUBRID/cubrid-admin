@@ -14,6 +14,7 @@ import {
 import { BackupScheduleDto, DeleteBackupScheduleDto, BackupDbDto, RestoreDbDto } from '@type/index';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { DatabaseBackupService } from './database-backup.service';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling database backup operations.
@@ -48,6 +49,7 @@ export class DatabaseBackupController {
    * // POST /host-uid/database/backup-schedule/demodb
    * // Body: { "backupid": "test_backup", "path": "/path/to/backup", ... }
    */
+  @LogAction('database.add_backup_schedule')
   @Post('backup-schedule/:dbname')
   async addBackupSchedule(
     @Request() req,
@@ -77,6 +79,7 @@ export class DatabaseBackupController {
    * // PUT /host-uid/database/backup-schedule/demodb
    * // Body: { "backupid": "t2", "path": "/path/to/backup", ... }
    */
+  @LogAction('database.change_backup_schedule')
   @Put('backup-schedule/:dbname')
   async setBackupSchedule(
     @Request() req,
@@ -106,6 +109,7 @@ export class DatabaseBackupController {
    * // DELETE /host-uid/database/backup-schedule/demodb
    * // Body: { "backupid": "t2" }
    */
+  @LogAction('database.delete_backup_schedule')
   @Delete('backup-schedule/:dbname')
   async deleteBackupSchedule(
     @Request() req,
@@ -141,7 +145,7 @@ export class DatabaseBackupController {
   ): Promise<GetBackupInfoClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting backup schedule for database: ${dbname} on host: ${hostUid}`
     );
     return await this.backupService.getBackupSchedule(userId, hostUid, dbname);
@@ -165,7 +169,7 @@ export class DatabaseBackupController {
     @Param('dbname') dbname: string
   ): Promise<BackupDbInfoClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(`Getting backup db info for database: ${dbname} on host: ${hostUid}`);
+    this.logger.debug(`Getting backup db info for database: ${dbname} on host: ${hostUid}`);
     return await this.backupService.getBackupDbInfo(userId, hostUid, { dbname });
   }
 
@@ -182,7 +186,7 @@ export class DatabaseBackupController {
     @Param('dbname') dbname: string
   ): Promise<BackupDbListClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(`Getting backup db list for database: ${dbname} on host: ${hostUid}`);
+    this.logger.debug(`Getting backup db list for database: ${dbname} on host: ${hostUid}`);
     const request: BackupDbListClientRequest = { dbname };
     return await this.backupService.getBackupList(userId, hostUid, request);
   }
@@ -200,6 +204,7 @@ export class DatabaseBackupController {
    * // POST /host-uid/database/backup-db/demodb
    * // Body: { "level": "0", "backupdir": "/path/to/backup", "removelog": "y", "check": "y", "mt": "2", "zip": "y", "safereplication": "n" }
    */
+  @LogAction('database.backup')
   @Post('backup-db/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async backupDb(
@@ -220,6 +225,7 @@ export class DatabaseBackupController {
    *
    * @route POST /:hostUid/database/restore-db/:dbname
    */
+  @LogAction('database.restore')
   @Post('restore-db/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async restoreDb(
@@ -247,6 +253,7 @@ export class DatabaseBackupController {
    * // POST /host-uid/database/auto-backup-db-err-log
    * // Body: {}
    */
+  @SkipActionLog()
   @Post('auto-backup-db-err-log')
   async getAutoBackupDbErrLog(
     @Request() req,
@@ -255,7 +262,7 @@ export class DatabaseBackupController {
   ): Promise<GetAutoBackupDbErrLogResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting auto-backup database error log on host: ${hostUid}`
     );
     return await this.backupService.getAutoBackupDbErrLog(userId, hostUid, body);

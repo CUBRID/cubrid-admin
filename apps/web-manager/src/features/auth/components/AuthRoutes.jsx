@@ -1,7 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
-import { checkSession } from '../authSlice';
+import { checkSession, fetchUser } from '../authSlice';
+import { fetchPreferences } from '../../user/userSlice';
+import { isDesktopApp } from '../../desktop/isDesktopApp';
+import LoadingOverlay from '../../../components/common/LoadingOverlay';
+import ForcedPasswordChangePage from './ForcedPasswordChangePage';
 import { useCM } from '../../../constants/useCM';
 import { Spinner } from '../../../components/ds/foundation/Spinner';
 
@@ -28,9 +32,34 @@ export function SessionGate({ children }) {
   );
 }
 
+/**
+ * The dashboard, for a signed-in session only. In a browser the account is
+ * read once per session before the dashboard mounts — also right after login,
+ * when only the id typed there is known — because whether it is an admin and
+ * whether an admin-set password must be changed first come from it; the
+ * server refuses the dashboard's requests until such a password is changed.
+ * A failed read doesn't hold the dashboard back. The desktop app has no app
+ * account.
+ */
 export function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useSelector((state) => state.auth, shallowEqual);
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  const dispatch = useDispatch();
+  const { isAuthenticated, user, userFetchSettled } = useSelector((state) => state.auth, shallowEqual);
+  const desktop = isDesktopApp();
+  const waitForUser = isAuthenticated && !desktop && !userFetchSettled;
+  const requested = useRef(false);
+
+  useEffect(() => {
+    if (waitForUser && !requested.current) {
+      requested.current = true;
+      dispatch(fetchUser());
+      dispatch(fetchPreferences());
+    }
+  }, [waitForUser, dispatch]);
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (waitForUser) return <LoadingOverlay isVisible />;
+  if (!desktop && user?.mustChangePassword) return <ForcedPasswordChangePage />;
+  return children;
 }
 
 export function RootRedirect() {

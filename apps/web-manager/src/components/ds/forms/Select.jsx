@@ -139,10 +139,12 @@ export const Select = ({
       style={dropdownStyle}
       className="bg-white dark:bg-[#1A1C1E] border border-slate-200 dark:border-white/10 rounded-lg shadow-[0_12px_40px_rgba(0,0,0,0.35)] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
     >
-      <div className="p-1 px-1.5 max-h-[190px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10 scrollbar-track-transparent flex flex-col gap-0.5">
+      <div className="p-1 px-1.5 max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10 scrollbar-track-transparent flex flex-col gap-0.5">
         {options.length === 0 ? (
           <div className="px-3 py-2 text-12 text-slate-400 italic">{CM.noOptionsAvailableLabel}</div>
         ) : (
+          // Rows are shrink-0: in this capped-height column they would
+          // otherwise squeeze together instead of the list scrolling.
           options.map((opt, index) => (
             <div
               key={opt.value}
@@ -153,7 +155,7 @@ export const Select = ({
               role="option"
               aria-selected={opt.value === value}
               aria-disabled={opt.disabled || undefined}
-              className={`flex items-center justify-between px-3 h-9 rounded-lg text-15 font-medium transition-all cursor-pointer group relative overflow-hidden ${opt.value === value
+              className={`flex shrink-0 items-center justify-between px-3 h-9 rounded-lg text-15 font-medium transition-all cursor-pointer group relative overflow-hidden ${opt.value === value
                   ? 'bg-amber-500/8 text-amber-500'
                   : activeIndex === index
                     ? 'bg-slate-50 dark:bg-white/4 text-slate-900 dark:text-white'

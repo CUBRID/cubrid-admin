@@ -78,6 +78,7 @@ import BrokerStatus from '../features/broker/components/BrokerStatus';
 import BrokerPropertyModal from '../features/broker/components/BrokerPropertyModal';
 import Brokers from '../features/server/components/Brokers';
 import ServiceDashboard from '../features/server/components/ServiceDashboard';
+import AdminConsolePage from '../features/admin/components/AdminConsolePage';
 
 import CreateUserModal from '../features/user/components/CreateUserModal';
 import DropUserModal from '../features/user/components/DropUserModal';
@@ -598,6 +599,11 @@ function App() {
         <Route path="/login" element={isDesktopApp() ? <Navigate to="/home" replace /> : <LoginRoute><LoginPage /></LoginRoute>} />
         <Route path="/desktop/workspace" element={<DesktopWorkspaceSettingsPage />} />
         <Route path="/register" element={isDesktopApp() ? <Navigate to="/home" replace /> : <RegisterPage />} />
+        {/* User Administration: its own full page, browser only (the desktop app has no app accounts). */}
+        <Route
+          path="/admin/*"
+          element={isDesktopApp() ? <Navigate to="/home" replace /> : <ProtectedRoute><AdminConsolePage /></ProtectedRoute>}
+        />
         <Route
           path="/*"
           element={
