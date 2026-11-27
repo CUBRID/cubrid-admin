@@ -41,10 +41,35 @@ function displayLevel(level: string): string {
   return level === 'info' ? 'LOG' : level.toUpperCase();
 }
 
+/** Log files: full ISO time, for reading across days and machines. */
 const lineFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${displayLevel(String(level))}: ${message}`)
 );
+
+const LEVEL_COLORS: Record<string, string> = { error: '\x1b[31m', warn: '\x1b[33m', debug: '\x1b[90m', verbose: '\x1b[90m' };
+
+/**
+ * The console: local time and a fixed-width level, so a line per request
+ * reads as a column. Colored only on a terminal, never in a redirected file.
+ */
+export function consoleLine(time: Date, level: string, message: string, color: boolean): string {
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+  const clock = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`;
+  const tag = displayLevel(level).padEnd(5);
+  const tint = color ? LEVEL_COLORS[level] : undefined;
+  return tint ? `${clock} ${tint}${tag}\x1b[0m ${message}` : `${clock} ${tag} ${message}`;
+}
+
+const consoleFormat = winston.format.printf(({ level, message }) =>
+  consoleLine(new Date(), String(level), String(message), process.stdout.isTTY === true)
+);
+
+/**
+ * Nest's own start-up lines (every module loaded, every route mapped: about
+ * 600 lines) say nothing an operator needs. They are kept at `verbose`.
+ */
+const STARTUP_CONTEXTS = new Set(['InstanceLoader', 'RoutesResolver', 'RouterExplorer', 'NestFactory', 'NestApplication']);
 
 /**
  * Truncates today's current rotation file so a restart starts with a clean
@@ -67,7 +92,8 @@ class WinstonNestLogger implements LoggerService {
   constructor(private readonly logger: winston.Logger) {}
 
   log(message: unknown, context?: string): void {
-    this.logger.log('info', formatMessage(message, context));
+    const level = context && STARTUP_CONTEXTS.has(context) ? 'verbose' : 'info';
+    this.logger.log(level, formatMessage(message, context));
   }
 
   error(message: unknown, trace?: string, context?: string): void {
@@ -124,7 +150,7 @@ let activeConfigService: ConfigService | null = null;
  */
 export function createWinstonLogger(configService: ConfigService): LoggerService {
   const transports: winston.transport[] = [
-    new winston.transports.Console({ format: lineFormat }),
+    new winston.transports.Console({ format: consoleFormat }),
   ];
 
   activeFileTransport = configService.isLogToFileEnabled() ? buildFileTransport(configService) : null;

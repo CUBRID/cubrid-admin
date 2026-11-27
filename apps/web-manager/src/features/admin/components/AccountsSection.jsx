@@ -208,7 +208,6 @@ export default function AccountsSection({ reloadKey }) {
     <div>
       <AdminPageHeader
         title={CM.adminSectionAccounts}
-        subtitle={CM.accountsPageSubtitle}
         action={
           <Button data-testid="admin-create-account-btn" icon="person_add" onClick={() => setPasswordDialog({ accountId: null })}>
             {CM.createAccountBtn}
@@ -226,7 +225,6 @@ export default function AccountsSection({ reloadKey }) {
             <Icon name="how_to_reg" size="20px" weight={300} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-14 font-bold text-slate-800 dark:text-slate-100">{CM.pendingApprovalsTitle(requests.length)}</p>
-              <p className="text-12 text-slate-500 dark:text-slate-400 mt-0.5">{CM.pendingApprovalsHint}</p>
             </div>
           </div>
           <ul className="divide-y divide-amber-500/10">

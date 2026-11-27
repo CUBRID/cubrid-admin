@@ -201,7 +201,7 @@ export class CmsAuthService {
       clientver: '11.4', // Request-shaped only; arbitrary string, no CMS behavior impact
     };
 
-    this.logger.log(
+    this.logger.debug(
       formatAuditLog('cms_request', {
         user: userId,
         method: 'POST',
@@ -214,7 +214,7 @@ export class CmsAuthService {
 
     const response = await this.client.postPublic<LoginCmsRequest, LoginCmsResponse>(url, request, options);
 
-    this.logger.log(
+    this.logger.debug(
       formatAuditLog('cms_response', {
         user: userId,
         method: 'POST',
@@ -368,7 +368,7 @@ export class CmsAuthService {
       clientver: '13.23', // Same as login: request placeholder, no behavioral effect
     };
 
-    this.logger.log(
+    this.logger.debug(
       formatAuditLog('cms_request', {
         method: 'POST',
         address: url,
@@ -382,7 +382,7 @@ export class CmsAuthService {
       requestData
     );
 
-    this.logger.log(
+    this.logger.debug(
       formatAuditLog('cms_response', {
         method: 'POST',
         address: url,

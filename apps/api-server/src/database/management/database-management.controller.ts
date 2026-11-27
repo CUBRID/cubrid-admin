@@ -38,6 +38,7 @@ import {
 } from '@type/index';
 import { CmsJobService } from '@cms-job/cms-job.service';
 import { DatabaseManagementService } from './database-management.service';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling database management operations.
@@ -64,6 +65,7 @@ export class DatabaseManagementController {
    *
    * @route POST /:hostUid/database/copy
    */
+  @LogAction('database.copy')
   @Post('copy')
   @HttpCode(HttpStatus.ACCEPTED)
   async copyDb(
@@ -92,6 +94,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/unload/demodb
    * // Body: { "targetdir": "/path/to/backup", "isSchemaIncluded": true, "isDataIncluded": true, "dbuser": "user", "dbpasswd": "pass" }
    */
+  @LogAction('database.unload')
   @Post('unload/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async unloadDatabase(
@@ -124,7 +127,7 @@ export class DatabaseManagementController {
   ): Promise<UnloadInfoClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(`Getting unload info for host: ${hostUid}`);
+    this.logger.debug(`Getting unload info for host: ${hostUid}`);
     return await this.managementService.getUnloadInfo(userId, hostUid);
   }
 
@@ -142,6 +145,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/load/empty
    * // Body: { "checkoption": "both", "period": "none", "user": "dba", "estimated": "none", "oiduse": "yes", "statisticsuse": "yes", "nolog": "no", "schema": "/path/to/schema", "object": "/path/to/object", "index": "none", "errorcontrolfile": "none", "ignoreclassfile": "none" }
    */
+  @LogAction('database.load')
   @Post('load/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async loadDatabase(
@@ -170,6 +174,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/optimize/empty
    * // Body: { "class": [{ "classname": "dba.test4" }] } (optional - if not provided, optimizes entire database)
    */
+  @LogAction('database.optimize')
   @Post('optimize/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async optimizeDatabase(
@@ -198,6 +203,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/check/test
    * // Body: { "repairdb": "n" } (n = check only, y = check and repair)
    */
+  @LogAction('database.check')
   @Post('check/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async checkDatabase(
@@ -226,6 +232,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/compact/test
    * // Body: { "verbose": "y" } (y = include log output, n = exclude log output)
    */
+  @LogAction('database.compact')
   @Post('compact/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async compactDatabase(
@@ -254,6 +261,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/rename/rename_test
    * // Body: { "rename": "renamed_db", "exvolpath": "none", "advanced": "on", "volume": [{ "/old/path": "/new/path" }], "forcedel": "n" }
    */
+  @LogAction('database.rename')
   @Post('rename/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async renameDatabase(
@@ -288,7 +296,7 @@ export class DatabaseManagementController {
   ): Promise<GetAddVolStatusResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting add vol status for database: ${dbname} on host: ${hostUid}`
     );
     return await this.managementService.getAddVolStatus(userId, hostUid, dbname);
@@ -308,6 +316,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/add-vol/test
    * // Body: { "volname": "", "purpose": "generic", "path": "/path/to/vol", "numberofpages": "32768", "size_need_mb": "512.000(MB)" }
    */
+  @LogAction('database.add_volume')
   @Post('add-vol/:dbname')
   @HttpCode(HttpStatus.ACCEPTED)
   async addVolDb(
@@ -336,6 +345,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/lock/demodb
    * // Body: {}
    */
+  @SkipActionLog()
   @Post('lock/:dbname')
   async lockDatabase(
     @Request() req,
@@ -345,7 +355,7 @@ export class DatabaseManagementController {
   ): Promise<LockDatabaseResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting lock information for database: ${dbname} on host: ${hostUid}`
     );
     return await this.managementService.lockDatabase(userId, hostUid, dbname, body);
@@ -365,6 +375,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/transaction-info/demodb
    * // Body: { "dbuser": "dba", "dbpasswd": "" }
    */
+  @SkipActionLog()
   @Post('transaction-info/:dbname')
   async getTransactionInfo(
     @Request() req,
@@ -374,7 +385,7 @@ export class DatabaseManagementController {
   ): Promise<GetTransactionInfoResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting transaction information for database: ${dbname} on host: ${hostUid}`
     );
     return await this.managementService.getTransactionInfo(userId, hostUid, dbname, body);
@@ -398,6 +409,7 @@ export class DatabaseManagementController {
    * // POST /host-uid/database/kill-transaction/demodb
    * // Body: { "type": "d" } or { "type": "i", "parameter": "1" }
    */
+  @LogAction('database.kill_transaction')
   @Post('kill-transaction/:dbname')
   async killTransaction(
     @Request() req,

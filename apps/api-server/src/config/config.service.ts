@@ -273,9 +273,8 @@ export class ConfigService {
       return parseBooleanEnv(raw);
     }
 
-    // Left out: sign-up is open until an administrator exists, so a fresh
-    // install can register its first (admin) account and then closes by
-    // itself. An install without an admin stays open as before.
+    // Left out: sign-up is open (AccountSettingsService), unless an
+    // administrator turns it off in User Accounts.
     return undefined;
   }
 

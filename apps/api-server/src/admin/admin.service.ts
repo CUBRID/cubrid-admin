@@ -13,6 +13,7 @@ import {
 import { AccountAccessService } from '@account/account-access.service';
 import { AccountSettingsService } from '@account/account-settings.service';
 import { isValidAccountId } from '@account/account-id';
+import { INITIAL_ADMIN_ID, removeInitialAdminPasswordFile } from '@account/initial-admin.service';
 import { HandleUserErrors } from '@common';
 import { UserError, UserErrorCode } from '@error/user/user-error';
 import { UserRepositoryService } from '@repository';
@@ -177,6 +178,8 @@ export class AdminService {
         return user;
       });
       this.accountAccess.invalidate(id);
+      // The saved first password is no longer the account's.
+      if (id === INITIAL_ADMIN_ID) await removeInitialAdminPasswordFile();
       await this.audit.record(actor, 'reset_password', id);
       return this.summarize(updated);
     });
@@ -210,6 +213,7 @@ export class AdminService {
       await this.refuseLastAdmin(target);
       await this.repository.deleteUser(id);
       this.accountAccess.invalidate(id);
+      if (id === INITIAL_ADMIN_ID) await removeInitialAdminPasswordFile();
       AccountSettingsService.adminsChanged();
       await this.audit.record(actor, 'delete', id);
     });

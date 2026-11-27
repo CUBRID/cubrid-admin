@@ -5,6 +5,7 @@ import { JsonWebTokenError, TokenExpiredError } from '@nestjs/jwt';
 import { AuthError } from '@error/auth/auth-error';
 import { ADMIN_ONLY } from '@common/decorators/admin-only.decorator';
 import { ALLOW_PENDING_PASSWORD_CHANGE } from '@common/decorators/allow-pending-password-change.decorator';
+import { tagRequestAction } from '@api-log/log-action.decorator';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -13,6 +14,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    tagRequestAction(this.reflector, context);
     if (this.flag(context, 'isPublic')) return true;
 
     const authenticated = await (super.canActivate(context) as Promise<boolean>);

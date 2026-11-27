@@ -23,9 +23,6 @@ import { TokenBlacklistService } from '@token/token-blacklist.service';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  // Serializes registrations so two sign-ups on a fresh install can't both
-  // see "no accounts yet" and both become admin.
-  private static registration: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly usersRepo: UserRepositoryService,
@@ -149,23 +146,15 @@ export class AuthService {
       throw UserError.BadNewPassword({ userId: dto.id });
     }
 
-    const run = AuthService.registration.then(async (): Promise<RegisterResponse> => {
-      // A fresh install's first account is its admin. An install that
-      // already has accounts never promotes a newcomer this way.
-      const firstAccount = (await this.usersRepo.listUsers()).length === 0;
-      // The first account has no admin to approve it, so needsApproval says no.
-      const status = !firstAccount && (await this.accountSettings.needsApproval()) ? 'pending' : 'active';
-      await this.usersRepo.createUser(dto, { role: firstAccount ? 'admin' : 'user', status });
-      AccountSettingsService.adminsChanged();
-      if (firstAccount) {
-        this.logger.log(`First account "${dto.id}" registered as administrator.`);
-      } else if (status === 'pending') {
-        this.logger.log(`Account "${dto.id}" signed up and waits for an administrator to approve it.`);
-      }
-      return { status };
-    });
-    AuthService.registration = run.then(() => undefined, () => undefined);
-    return run;
+    // A sign-up is never an administrator: every install starts with the
+    // built-in `admin` account (InitialAdminService), so nobody can become
+    // one by signing up first.
+    const status = (await this.accountSettings.needsApproval()) ? 'pending' : 'active';
+    await this.usersRepo.createUser(dto, { role: 'user', status });
+    if (status === 'pending') {
+      this.logger.log(`Account "${dto.id}" signed up and waits for an administrator to approve it.`);
+    }
+    return { status };
   }
 
   /** Best-effort: a failure to note the time must not fail the login. */

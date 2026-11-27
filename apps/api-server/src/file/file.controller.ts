@@ -1,6 +1,7 @@
 import { Body, Controller, Param, Post, Request } from '@nestjs/common';
 import { FileService } from './file.service';
 import { CheckFileClientRequest, CheckFileClientResponse } from '@api-interfaces';
+import { SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for file operations.
@@ -27,6 +28,7 @@ export class FileController {
    * @example
    * // POST /host-uid/file/checkfile
    */
+  @SkipActionLog()
   @Post('checkfile')
   async checkFile(
     @Request() request: any,

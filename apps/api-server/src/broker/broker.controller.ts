@@ -11,6 +11,7 @@ import {
 } from '@api-interfaces';
 import { AddDbmtUserDto, GetBrokerStatusBulkDto, UpdateDbmtUserDto } from '@type/index';
 import { BrokerService } from './broker.service';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling broker-related operations.
@@ -42,6 +43,7 @@ export class BrokerController {
    * @example
    * // POST /host-uid/broker/start-all
    */
+  @LogAction('broker.start_all')
   @Post('start-all')
   async startAllBrokers(
     @Request() req,
@@ -62,6 +64,7 @@ export class BrokerController {
    * @example
    * // POST /host-uid/broker/stop-all
    */
+  @LogAction('broker.stop_all')
   @Post('stop-all')
   async stopAllBrokers(
     @Request() req,
@@ -84,6 +87,7 @@ export class BrokerController {
    * // POST /host-uid/broker/dbmt-user
    * // Body: { "targetid": "test_user_2", "password": "1234", "casauth": "none", "dbcreate": "none", "statusmonitorauth": "none" }
    */
+  @LogAction('cms.add_user')
   @Post('dbmt-user')
   async addDbmtUser(
     @Request() req,
@@ -108,6 +112,7 @@ export class BrokerController {
    * // Body: { "targetid": "test_user_2", "casauth": "none", "dbcreate": "none", "statusmonitorauth": "none" }
    * // or with dbauth: { "targetid": "test_user_2", "dbauth": [], "casauth": "none", "dbcreate": "none", "statusmonitorauth": "none" }
    */
+  @LogAction('cms.change_user')
   @Put('dbmt-user')
   async updateDbmtUser(
     @Request() req,
@@ -151,6 +156,7 @@ export class BrokerController {
    * @example
    * // POST /host-uid/broker/stop/query_editor
    */
+  @LogAction('broker.stop')
   @Post('stop/:bname')
   async stopBroker(
     @Request() req,
@@ -174,6 +180,7 @@ export class BrokerController {
    * @example
    * // POST /host-uid/broker/start/query_editor
    */
+  @LogAction('broker.start')
   @Post('start/:bname')
   async startBroker(
     @Request() req,
@@ -197,6 +204,7 @@ export class BrokerController {
    * @example
    * // POST /host-uid/broker/restart/query_editor
    */
+  @LogAction('broker.restart')
   @Post('restart/:bname')
   async restartBroker(
     @Request() req,
@@ -224,6 +232,7 @@ export class BrokerController {
    * // POST /host-uid/broker/status/bulk
    * // Body: { "bnames": ["query_editor", "broker1"] }
    */
+  @SkipActionLog()
   @Post('status/bulk')
   @HttpCode(200)
   async getBrokerStatusBulk(
@@ -254,7 +263,7 @@ export class BrokerController {
   ): Promise<GetBrokerStatusClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(`Getting broker status: ${bname} on host: ${hostUid}`);
+    this.logger.debug(`Getting broker status: ${bname} on host: ${hostUid}`);
     const response = await this.brokerService.getBrokerStatus(userId, hostUid, bname);
     return response;
   }

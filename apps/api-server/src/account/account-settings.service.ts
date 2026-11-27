@@ -13,10 +13,8 @@ type StoredSettings = { registrationEnabled?: boolean; registrationApproval?: bo
  * Whether self-registration is open, decided in this order:
  * 1. the switch an administrator set in User Accounts;
  * 2. AUTH_REGISTRATION_ENABLED when cwm.conf sets it;
- * 3. otherwise open while sign-ups need approval (an administrator sees each
- *    one before it can sign in). Without approval, open only until an
- *    active administrator exists, so a fresh install registers its first
- *    (admin) account and then closes by itself.
+ * 3. otherwise open. Sign-ups never make an administrator: every install
+ *    starts with the built-in `admin` account (InitialAdminService).
  *
  * Whether a sign-up needs approval follows the same order: the admin switch,
  * then AUTH_REGISTRATION_APPROVAL, then yes. It only applies while an active
@@ -51,8 +49,7 @@ export class AccountSettingsService {
     if (stored.registrationEnabled !== undefined) return stored.registrationEnabled;
     const configured = this.config.getAuthRegistrationSetting();
     if (configured !== undefined) return configured;
-    if (await this.isApprovalRequired()) return true;
-    return !(await this.activeAdminExists());
+    return true;
   }
 
   /** The approval switch alone, whether or not an admin exists to approve. */
@@ -64,9 +61,8 @@ export class AccountSettingsService {
 
   /**
    * Whether a sign-up made now waits for approval. Not while no active
-   * administrator exists: nobody could approve it, so it is active at once
-   * as before (a fresh install's first account, or an install whose admins
-   * come from nowhere yet).
+   * administrator exists (an older install upgraded without one): nobody
+   * could approve it, so it is active at once.
    */
   async needsApproval(): Promise<boolean> {
     return (await this.isApprovalRequired()) && (await this.activeAdminExists(true));

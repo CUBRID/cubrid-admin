@@ -221,7 +221,6 @@ export default function AccountPasswordModal({ isOpen, accountId = null, onSubmi
             disabled={busy}
           />
         )}
-        <p className="text-12 text-slate-400 leading-relaxed">{CM.temporaryPasswordHint}</p>
       </div>
     </Modal>
   );

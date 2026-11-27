@@ -76,7 +76,7 @@ export function auditDetailText(entry, CM) {
   return '';
 }
 
-const csvCell = (value) => {
+export const csvCell = (value) => {
   const text = String(value ?? '');
   // Quote everything; a leading =, +, - or @ is prefixed so a spreadsheet
   // shows the text instead of running it as a formula.

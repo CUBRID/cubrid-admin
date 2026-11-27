@@ -1,6 +1,7 @@
 import { Body, Controller, Post, Request } from '@nestjs/common';
 import { TestHostConnectionDto } from '@type/index';
 import { CmsAuthService } from './cms-auth.service';
+import { SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Checks a host's connection settings before the host is saved, so there is
@@ -17,6 +18,7 @@ export class CmsConnectionTestController {
    *
    * @route POST /cms-auth/test
    */
+  @SkipActionLog()
   @Post('test')
   async test(@Request() request: any, @Body() target: TestHostConnectionDto) {
     return this.cmsAuthService.testConnection(request.user.sub, target);

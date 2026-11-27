@@ -3,6 +3,7 @@ import { BaseExceptionFilter } from '@nestjs/core';
 import { Response } from 'express';
 import { AppError } from './app-error';
 import { StandardResponse } from '@api-interfaces';
+import { ERROR_CODE_LOCAL, ERROR_TEXT_LOCAL } from '@api-log/request-log.middleware';
 
 const INTERNAL_ERROR_NOTE = 'An internal server error occurred.';
 
@@ -21,6 +22,11 @@ const HTTP_EXCEPTION_FIELDS = ['reason', 'jobId', 'maxLines', 'maxBytes'];
  * Global exception filter for handling all unhandled exceptions across the application.
  * It catches various types of exceptions (HttpException, AppError, and others)
  * and formats the response according to RFC 7807 Problem Details for AppError instances.
+ *
+ * Every request already gets one console line with its status and error
+ * code (request-log.middleware.ts), so an error the user caused (bad input,
+ * an ended session, a wrong password) adds its details only at `debug`.
+ * Server faults and CMS failures are logged as errors with their details.
  *
  * @category Errors
  * @since 1.0.0
@@ -65,9 +71,8 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         };
       }
 
-      if (status === HttpStatus.UNAUTHORIZED) {
-        // A request without a valid login: expected traffic, not a server fault.
-        this.logger.warn(`Unauthorized: ${exception.message}`, `${req.method} ${req.url}`);
+      if (status < 500) {
+        this.logger.debug(`HTTP Exception [${status}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
         this.logger.error(
           `HTTP Exception [${status}]: ${exception.message}`,
@@ -93,12 +98,12 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
         detail: note,
       };
 
-      if (status === HttpStatus.UNAUTHORIZED && exception.kind === 'AUTH') {
-        // Our own login (JWT) missing or invalid: expected traffic, not a server fault.
-        // A CMS-side 401 (lost CMS token, changed cm.pass, CMS restart) is an
-        // operational fault and keeps the full ERROR with its details below.
-        this.logger.warn(`Unauthorized [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
+      if (status < 500 && exception.kind !== 'CMS') {
+        // Expected: the request line already shows the code.
+        this.logger.debug(`App Error [${exception.kind}:${exception.code}]: ${exception.message}`, `${req.method} ${req.url}`);
       } else {
+        // A server fault, or a CMS one (lost CMS token, changed cm.pass, CMS
+        // restart): an operational problem, with its details.
         const logDetails = exception.toLogDetails(req.url);
         this.logger.error(
           `App Error [${exception.kind}:${exception.code}]: ${exception.message}`,
@@ -125,6 +130,10 @@ export class GlobalExceptionFilter extends BaseExceptionFilter {
       note: note,
     };
 
+    if (res.locals) {
+      res.locals[ERROR_CODE_LOCAL] = typeof errorData?.code === 'string' ? errorData.code : undefined;
+      res.locals[ERROR_TEXT_LOCAL] = note;
+    }
     res.status(status).json(standardResponse);
   }
 }

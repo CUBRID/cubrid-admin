@@ -182,10 +182,10 @@ describe('sign-up approval', () => {
     adminApi.getSettings.mockResolvedValue({ registrationEnabled: true, registrationSource: 'auto', registrationApproval: true, registrationApprovalSource: 'auto', configuredAdmins: [] });
     adminApi.setRegistrationApproval.mockResolvedValue({ registrationEnabled: true, registrationSource: 'auto', registrationApproval: false, registrationApprovalSource: 'admin', configuredAdmins: [] });
     await render('/admin/settings');
-    expect(el('admin-registration-approval-source').textContent).toContain('Default: approval required.');
+    expect(el('admin-registration-approval-source').textContent).toContain('Default: required.');
     await click(el('admin-registration-approval-toggle'));
     expect(adminApi.setRegistrationApproval).toHaveBeenCalledWith(false);
-    expect(el('admin-registration-approval-source').textContent).toContain('Set by an administrator here.');
+    expect(el('admin-registration-approval-source').textContent).toContain('Set by an administrator.');
   });
 });
 
@@ -400,7 +400,7 @@ describe('User Administration page', () => {
     adminApi.setRegistrationEnabled.mockResolvedValue({ registrationEnabled: true, registrationSource: 'admin', configuredAdmins: ['boss'] });
     await render();
     await click(el('admin-section-settings'));
-    expect(el('admin-registration-source').textContent).toContain('Automatic');
+    expect(el('admin-registration-source').textContent).toContain('Default');
     expect(el('admin-configured-admins').textContent).toContain('boss');
     await click(el('admin-registration-toggle'));
     expect(adminApi.setRegistrationEnabled).toHaveBeenCalledWith(true);

@@ -29,22 +29,23 @@ function mockHost(url = '/api/host-uid/database/start/testdb') {
 }
 
 describe('GlobalExceptionFilter', () => {
-  it('logs a 401 as one warning line, with no stack trace and no ERROR', () => {
+  it('logs a 401 only at debug: the request line already shows it', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const debug = jest.spyOn(logger, 'debug').mockImplementation(() => undefined);
     const { host, res } = mockHost('/api/version');
 
     filter.catch(new UnauthorizedException('Invalid token'), host);
 
     expect(res.statusCode).toBe(401);
     expect(error).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]).toEqual(['Unauthorized: Invalid token', 'GET /api/version']);
+    expect(warn).not.toHaveBeenCalled();
+    expect(debug.mock.calls[0]).toEqual(['HTTP Exception [401]: Invalid token', 'GET /api/version']);
   });
 
-  it('logs an AppError with status 401 (invalid token) as a warning too', () => {
+  it('logs an AppError with status 401 (invalid token) only at debug too', () => {
     const filter = new GlobalExceptionFilter();
     const logger = (filter as any).logger;
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
@@ -55,8 +56,19 @@ describe('GlobalExceptionFilter', () => {
 
     expect(res.statusCode).toBe(401);
     expect(error).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toMatch(/^Unauthorized \[/);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the error code and text for the request line', () => {
+    const filter = new GlobalExceptionFilter();
+    jest.spyOn((filter as any).logger, 'debug').mockImplementation(() => undefined);
+    const { host, res } = mockHost('/api/version');
+    (res as any).locals = {};
+
+    filter.catch(AuthError.InvalidToken(), host);
+
+    expect((res as any).locals.cwmErrorCode).toBe('INVALID_TOKEN');
+    expect(typeof (res as any).locals.cwmErrorText).toBe('string');
   });
 
   it('keeps a CMS-side 401 (lost CMS token) as an ERROR with its details', () => {

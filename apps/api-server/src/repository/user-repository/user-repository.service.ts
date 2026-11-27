@@ -101,14 +101,7 @@ export class UserRepositoryService {
    * read or decrypt is skipped and logged, not fatal to the whole list.
    */
   async listUsers(): Promise<User[]> {
-    let names: string[];
-    try {
-      const entries = await fs.readdir(getStoragePath(), { withFileTypes: true });
-      names = entries.filter((e) => e.isFile() && ACCOUNT_FILE_NAME.test(e.name)).map((e) => e.name);
-    } catch (err: any) {
-      if (err?.code === 'ENOENT') return [];
-      throw err;
-    }
+    const names = await this.accountFileNames();
 
     const users: User[] = [];
     for (const name of names) {
@@ -120,6 +113,25 @@ export class UserRepositoryService {
       }
     }
     return users;
+  }
+
+  /**
+   * Whether storage holds any account file, readable or not. A fresh install
+   * has none; an install whose files can't be decrypted (a changed master
+   * key) still has them and is not fresh.
+   */
+  async hasAccountFiles(): Promise<boolean> {
+    return (await this.accountFileNames()).length > 0;
+  }
+
+  private async accountFileNames(): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(getStoragePath(), { withFileTypes: true });
+      return entries.filter((e) => e.isFile() && ACCOUNT_FILE_NAME.test(e.name)).map((e) => e.name);
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return [];
+      throw err;
+    }
   }
 
   /**

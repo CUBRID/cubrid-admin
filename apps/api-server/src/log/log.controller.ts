@@ -8,6 +8,7 @@ import {
   GetAdminLogInfoClientResponse,
 } from '@api-interfaces';
 import { LogSnapshotDto, ViewLogDto } from '@type/index';
+import { SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling log-related operations.
@@ -42,7 +43,7 @@ export class LogController {
     @Param('bname') bname: string
   ): Promise<GetBrokerLogListClientResponse> {
     const userId = req.user.sub;
-    Logger.log(`Getting broker log list: ${bname} on host: ${hostUid}`, 'LogController');
+    Logger.debug(`Getting broker log list: ${bname} on host: ${hostUid}`, 'LogController');
     return await this.logService.getBrokerLogList(userId, hostUid, bname);
   }
 
@@ -64,7 +65,7 @@ export class LogController {
     @Param('dbname') dbname: string
   ): Promise<GetDatabaseLogListClientResponse> {
     const userId = req.user.sub;
-    Logger.log(`Getting database log list: ${dbname} on host: ${hostUid}`, 'LogController');
+    Logger.debug(`Getting database log list: ${dbname} on host: ${hostUid}`, 'LogController');
     return await this.logService.getDatabaseLogList(userId, hostUid, dbname);
   }
 
@@ -84,7 +85,7 @@ export class LogController {
     @Param('hostUid') hostUid: string
   ): Promise<LoadAccessLogClientResponse> {
     const userId = req.user.sub;
-    Logger.log(`Getting CMS log list for host: ${hostUid}`, 'LogController');
+    Logger.debug(`Getting CMS log list for host: ${hostUid}`, 'LogController');
     return await this.logService.getCMSLogList(userId, hostUid);
   }
 
@@ -104,11 +105,12 @@ export class LogController {
     @Param('hostUid') hostUid: string
   ): Promise<GetAdminLogInfoClientResponse> {
     const userId = req.user.sub;
-    Logger.log(`Getting admin log info for host: ${hostUid}`, 'LogController');
+    Logger.debug(`Getting admin log info for host: ${hostUid}`, 'LogController');
     return await this.logService.getAdminLogInfo(userId, hostUid);
   }
 
   /** Capture a complete, size-limited input for Top SQL in one CMS read. */
+  @SkipActionLog()
   @Post('snapshot')
   async captureLogSnapshot(
     @Request() req,
@@ -131,6 +133,7 @@ export class LogController {
    * // POST /host-uid-1/log/view
    * // Body: { "path": "/path/to/log.err", "start": "1", "end": "100" }
    */
+  @SkipActionLog()
   @Post('view')
   async viewLog(
     @Request() req,

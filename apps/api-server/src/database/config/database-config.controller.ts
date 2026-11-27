@@ -23,6 +23,7 @@ import {
   UpdateAutoExecQueryPlanDto,
 } from '@type/index';
 import { DatabaseConfigService } from './database-config.service';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling database configuration operations.
@@ -54,6 +55,7 @@ export class DatabaseConfigController {
    * // POST /host-uid/database/auto-exec-query/demodb
    * // Body: { "planlist": [{ "queryplan": [...] }] }
    */
+  @LogAction('database.set_auto_query')
   @Post('auto-exec-query/:dbname')
   async setAutoExecQuery(
     @Request() req,
@@ -89,7 +91,7 @@ export class DatabaseConfigController {
   ): Promise<GetAutoExecQueryClientResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting auto-exec query for database: ${dbname} on host: ${hostUid}`
     );
     return await this.configService.getAutoExecQuery(userId, hostUid, dbname);
@@ -108,6 +110,7 @@ export class DatabaseConfigController {
    * // POST /host-uid/database/auto-start
    * // Body: { "confname": "cubridconf", "dbname": "testdb" }
    */
+  @LogAction('database.set_auto_start')
   @Post('auto-start/set')
   async setAutoStart(
     @Request() req,
@@ -136,6 +139,7 @@ export class DatabaseConfigController {
    * // POST /host-uid/database/auto-start/remove
    * // Body: { "confname": "cubridconf", "dbname": "testdb" }
    */
+  @LogAction('database.remove_auto_start')
   @Post('auto-start/remove')
   async removeAutoStart(
     @Request() req,
@@ -161,7 +165,7 @@ export class DatabaseConfigController {
     @Param('dbname') dbname: string
   ): Promise<GetDbSizeClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(`Getting db size for database: ${dbname} on host: ${hostUid}`);
+    this.logger.debug(`Getting db size for database: ${dbname} on host: ${hostUid}`);
     return await this.configService.getDbSize(userId, hostUid, dbname);
   }
 
@@ -179,7 +183,7 @@ export class DatabaseConfigController {
     @Param('dbname') dbname: string
   ): Promise<GetAutoAddVolClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(
+    this.logger.debug(
       `Getting auto-add volume for database: ${dbname} on host: ${hostUid}`
     );
     return await this.configService.getAutoAddVol(userId, hostUid, dbname);
@@ -199,6 +203,7 @@ export class DatabaseConfigController {
    * // POST /host-uid/database/auto-add-vol/testdb
    * // Body: { "data": "ON", "data_warn_outofspace": "0.15", "data_ext_page": "32768", "index": "ON", "index_warn_outofspace": "0.15", "index_ext_page": "32768" }
    */
+  @LogAction('database.set_auto_add_volume')
   @Post('auto-add-vol/:dbname')
   async setAutoAddVol(
     @Request() req,
@@ -228,6 +233,7 @@ export class DatabaseConfigController {
    * // POST /host-uid/database/class-info/empty
    * // Body: { "dbstatus": "off" }
    */
+  @SkipActionLog()
   @Post('class-info/:dbname')
   async getClassInfo(
     @Request() req,
@@ -237,7 +243,7 @@ export class DatabaseConfigController {
   ): Promise<ClassInfoResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting class info for database: ${dbname} on host: ${hostUid}`
     );
     return await this.configService.getClassInfo(userId, hostUid, dbname, body);
@@ -248,6 +254,7 @@ export class DatabaseConfigController {
    *
    * @route POST /:hostUid/database/auto-exec-query/:dbname/append
    */
+  @LogAction('database.add_auto_query')
   @Post('auto-exec-query/:dbname/append')
   async appendAutoExecQueryPlan(
     @Request() req,
@@ -266,6 +273,7 @@ export class DatabaseConfigController {
    *
    * @route POST /:hostUid/database/auto-exec-query/:dbname/update
    */
+  @LogAction('database.change_auto_query')
   @Post('auto-exec-query/:dbname/update')
   async updateAutoExecQueryPlan(
     @Request() req,
@@ -283,6 +291,7 @@ export class DatabaseConfigController {
    *
    * @route POST /:hostUid/database/auto-exec-query/:dbname/remove
    */
+  @LogAction('database.remove_auto_query')
   @Post('auto-exec-query/:dbname/remove')
   async removeAutoExecQueryPlan(
     @Request() req,
@@ -310,6 +319,7 @@ export class DatabaseConfigController {
    * // POST /host-uid/database/auto-exec-query-err-log
    * // Body: {}
    */
+  @SkipActionLog()
   @Post('auto-exec-query-err-log')
   async getAutoExecQueryErrLog(
     @Request() req,
@@ -318,7 +328,7 @@ export class DatabaseConfigController {
   ): Promise<GetAutoExecQueryErrLogResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(
+    this.logger.debug(
       `Getting auto-exec query error log on host: ${hostUid}`
     );
     return await this.configService.getAutoExecQueryErrLog(userId, hostUid, body);
@@ -338,7 +348,7 @@ export class DatabaseConfigController {
   ): Promise<GetAutoAddVolLogResponse> {
     const userId = req.user.sub;
 
-    this.logger.log(`Getting auto-add volume log on host: ${hostUid}`);
+    this.logger.debug(`Getting auto-add volume log on host: ${hostUid}`);
     return await this.configService.getAutoAddVolLog(userId, hostUid, {
       start_time: startTime,
       end_time: endTime,

@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { NOT_ON_DESKTOP } from '@decorators/not-on-desktop.decorator';
 import { AuthError } from '@error/auth/auth-error';
+import { tagRequestAction } from '@api-log/log-action.decorator';
 
 /** The one user whose data a desktop workspace holds; every desktop request acts as it. */
 export const DESKTOP_USER_ID = 'desktop';
@@ -17,6 +18,7 @@ export class DesktopUserGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    tagRequestAction(this.reflector, context);
     const notOnDesktop = this.reflector.getAllAndOverride<boolean>(NOT_ON_DESKTOP, [
       context.getHandler(),
       context.getClass(),

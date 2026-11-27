@@ -7,12 +7,14 @@ import LanguageToggle from '../../layout/components/LanguageToggle';
 import { toggleTheme } from '../../layout/layoutSlice';
 import AccountsSection from './AccountsSection';
 import ActivityLogSection from './ActivityLogSection';
+import ApiLogSection from './ApiLogSection';
 import AdminSettingsSection from './AdminSettingsSection';
 import { usePendingApprovals } from '../usePendingApprovals';
 import StatusModal from '../../../components/common/StatusModal';
 
 const SECTIONS = [
   { path: 'accounts', icon: 'group', label: (CM) => CM.adminSectionAccounts },
+  { path: 'api-log', icon: 'query_stats', label: (CM) => CM.adminSectionApiLog },
   { path: 'activity', icon: 'history', label: (CM) => CM.adminSectionActivity },
   { path: 'settings', icon: 'tune', label: (CM) => CM.adminSectionSettings },
 ];
@@ -21,8 +23,8 @@ const ICON_BTN =
   'h-8 w-8 flex items-center justify-center rounded-sm border bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/6 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-all active:scale-[0.98]';
 
 /**
- * User Administration as its own full page (/admin/accounts, /activity,
- * /settings): administrators manage Web Manager accounts here, away from
+ * User Administration as its own full page (/admin/accounts, /api-log,
+ * /activity, /settings): administrators manage Web Manager accounts here, away from
  * the host dashboard. Refresh reads the open section again.
  */
 export default function AdminConsolePage() {
@@ -144,6 +146,7 @@ export default function AdminConsolePage() {
             <Routes>
               <Route index element={<Navigate to="accounts" replace />} />
               <Route path="accounts" element={<AccountsSection reloadKey={reloadKey} />} />
+              <Route path="api-log" element={<ApiLogSection reloadKey={reloadKey} />} />
               <Route path="activity" element={<ActivityLogSection reloadKey={reloadKey} />} />
               <Route path="settings" element={<AdminSettingsSection reloadKey={reloadKey} />} />
               <Route path="*" element={<Navigate to="accounts" replace />} />

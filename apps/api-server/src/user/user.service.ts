@@ -6,6 +6,7 @@ import {
 } from '@api-interfaces';
 import { AccountAccessService } from '@account/account-access.service';
 import { AccountSettingsService } from '@account/account-settings.service';
+import { INITIAL_ADMIN_ID, removeInitialAdminPasswordFile } from '@account/initial-admin.service';
 import { HandleUserErrors } from '@common';
 import { UserError } from '@error/user/user-error';
 import { AuthError } from '@error/auth/auth-error';
@@ -80,6 +81,7 @@ export class UserService {
     };
     await this.repository.atomicUpdateUser(userId, changePasswordCallback);
     this.accountAccess.invalidate(userId);
+    if (userId === INITIAL_ADMIN_ID) await removeInitialAdminPasswordFile();
   }
 
   /**
@@ -107,6 +109,7 @@ export class UserService {
       return user;
     });
     this.accountAccess.invalidate(userId);
+    if (userId === INITIAL_ADMIN_ID) await removeInitialAdminPasswordFile();
   }
 
   /**

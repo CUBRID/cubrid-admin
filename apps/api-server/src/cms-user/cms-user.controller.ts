@@ -8,6 +8,7 @@ import {
 } from '@api-interfaces';
 import { AddDbmtUserDto, UpdateDbmtUserDto, SetDbmtPasswdDto } from '@type/index';
 import { CmsUserService } from './cms-user.service';
+import { LogAction } from '@api-log/log-action.decorator';
 
 /**
  * Controller for CMS (DBMT) user management: get list, update, delete, set password.
@@ -28,6 +29,7 @@ export class CmsUserController {
    * Response: dblist, userlist (same shape as CMS response).
    * @route POST /:hostUid/cms-user
    */
+  @LogAction('cms.add_user')
   @Post()
   async addDbmtUser(
     @Request() req,
@@ -49,7 +51,7 @@ export class CmsUserController {
     @Param('hostUid') hostUid: string
   ): Promise<GetDbmtUserInfoClientResponse> {
     const userId = req.user.sub;
-    this.logger.log(`Getting DBMT user info on host: ${hostUid}`);
+    this.logger.debug(`Getting DBMT user info on host: ${hostUid}`);
     return await this.cmsUserService.getDbmtUserInfo(userId, hostUid);
   }
 
@@ -57,6 +59,7 @@ export class CmsUserController {
    * Update DBMT user. CMS task: updatedbmtuser.
    * @route PUT /:hostUid/cms-user
    */
+  @LogAction('cms.change_user')
   @Put()
   async updateDbmtUser(
     @Request() req,
@@ -72,6 +75,7 @@ export class CmsUserController {
    * Delete DBMT user. CMS task: deletedbmtuser.
    * @route DELETE /:hostUid/cms-user/:targetid
    */
+  @LogAction('cms.delete_user')
   @Delete(':targetid')
   async deleteDbmtUser(
     @Request() req,
@@ -87,6 +91,7 @@ export class CmsUserController {
    * Set DBMT user password. CMS task: setdbmtpasswd.
    * @route PUT /:hostUid/cms-user/set-password
    */
+  @LogAction('cms.change_password')
   @Put('set-password')
   async setDbmtPasswd(
     @Request() req,

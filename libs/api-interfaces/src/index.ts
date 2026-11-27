@@ -20,3 +20,4 @@ export * from './password-rules';
 // Web Manager account control (admin user management).
 export type { UserRole, AccountStatus } from './models/user';
 export * from './models/admin-account';
+export * from './models/api-log';

@@ -11,7 +11,9 @@ import { embeddedPublicFiles } from './util/standalone-executable';
 import { GlobalExceptionFilter } from '@error/global-filter';
 import { createValidationPipe } from '@error/validation/create-validation-pipe';
 import { ConfigService } from '@config/config.service';
-import { SuccessResponseInterceptor, LoggingInterceptor } from '@common'; // Updated import
+import { SuccessResponseInterceptor } from '@common';
+import { ApiLogService } from '@api-log/api-log.service';
+import { requestLogMiddleware } from '@api-log/request-log.middleware';
 
 async function bootstrap() {
   loadRuntimeEnv();
@@ -26,13 +28,13 @@ async function bootstrap() {
   const appLogger = createWinstonLogger(bootConfig);
   const app = await NestFactory.create(AppModule, {
     httpsOptions,
-    // Includes 'log' — LoggingInterceptor's incoming/outgoing request audit
-    // trail is emitted at that level. Without it, only errors and warnings
-    // would be recorded, silently dropping ordinary traffic.
     logger: appLogger,
   });
   app.getHttpAdapter().getInstance().set('trust proxy', true);
   const configService = app.get(ConfigService);
+  // Before Nest's routes (added when the app starts listening): one console
+  // line per API request, and the API log, also for requests a guard refuses.
+  app.use(requestLogMiddleware(app.get(ApiLogService), configService.isDesktopMode() ? null : '/api'));
   const port: string = configService.getPort();
   const listenHost = configService.getListenHost();
   const allowedOrigins = configService.getAllowedOrigins();
@@ -78,7 +80,7 @@ async function bootstrap() {
     app.setGlobalPrefix('api');
   }
   app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor(), new SuccessResponseInterceptor());
+  app.useGlobalInterceptors(new SuccessResponseInterceptor());
   // Only affects @Body()/@Param()/@Query() parameters typed as an actual
   // class with class-validator decorators (currently just UserDTO) — every
   // other endpoint still uses plain interface types and passes through

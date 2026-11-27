@@ -211,9 +211,9 @@ describe('AuthService', () => {
       expect(refreshTokenService.create).toHaveBeenCalledWith('user1', 'family-1', 2, undefined);
     });
 
-    it('makes the first account on a fresh install an admin', async () => {
-      await service.register({ id: 'first', password: 'Passw0rd!' });
-      expect(usersRepo.createUser).toHaveBeenCalledWith({ id: 'first', password: 'Passw0rd!' }, { role: 'admin', status: 'active' });
+    it('never makes a sign-up an admin, even on an install with no accounts', async () => {
+      await expect(service.register({ id: 'first', password: 'Passw0rd!' })).resolves.toEqual({ status: 'active' });
+      expect(usersRepo.createUser).toHaveBeenCalledWith(expect.anything(), { role: 'user', status: 'active' });
     });
 
     it('does not promote a newcomer when accounts already exist', async () => {
@@ -227,12 +227,6 @@ describe('AuthService', () => {
       accountSettings.needsApproval.mockResolvedValue(true);
       await expect(service.register({ id: 'newbie', password: 'Passw0rd!' })).resolves.toEqual({ status: 'pending' });
       expect(usersRepo.createUser).toHaveBeenCalledWith(expect.anything(), { role: 'user', status: 'pending' });
-    });
-
-    it('never makes the first account on a fresh install wait', async () => {
-      accountSettings.needsApproval.mockResolvedValue(true);
-      await expect(service.register({ id: 'first', password: 'Passw0rd!' })).resolves.toEqual({ status: 'active' });
-      expect(usersRepo.createUser).toHaveBeenCalledWith(expect.anything(), { role: 'admin', status: 'active' });
     });
 
     it('refuses a waiting sign-up only after the password matched', async () => {
@@ -254,12 +248,6 @@ describe('AuthService', () => {
         additionalData: expect.objectContaining({ reason: 'RESERVED_ADMIN_ID' }),
       });
       expect(usersRepo.createUser).not.toHaveBeenCalled();
-    });
-
-    it('still makes the first account admin when ADMIN_USERS names someone else', async () => {
-      configuredAdmins.add('boss');
-      await service.register({ id: 'first', password: 'Passw0rd!' });
-      expect(usersRepo.createUser).toHaveBeenCalledWith(expect.anything(), { role: 'admin', status: 'active' });
     });
 
     it.each(['ab', ' alice', 'alice ', '   '])('refuses the account id %j', async (id) => {
@@ -288,7 +276,7 @@ describe('AuthService', () => {
       expect(refreshTokenService.revokeFamily).toHaveBeenCalledWith('family-1');
     });
 
-    it('serializes registrations so only one becomes the first admin', async () => {
+    it('makes concurrent sign-ups on an empty install plain users', async () => {
       const created: string[] = [];
       usersRepo.listUsers.mockImplementation(async () => created.map((id) => ({ id, password: 'h' }) as any));
       usersRepo.createUser.mockImplementation(async (dto) => {
@@ -301,7 +289,7 @@ describe('AuthService', () => {
         service.register({ id: 'bbb', password: 'Passw0rd!' }),
       ]);
       const roles = usersRepo.createUser.mock.calls.map(([, options]) => options?.role);
-      expect(roles.sort()).toEqual(['admin', 'user']);
+      expect(roles).toEqual(['user', 'user']);
     });
 
     it('follows the admin-set registration switch', async () => {

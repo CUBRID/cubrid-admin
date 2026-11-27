@@ -1,5 +1,6 @@
 import { Controller, Get, Post } from '@nestjs/common';
 import { AppService } from './app.service';
+import { SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Root controller for handling basic application endpoints.
@@ -45,6 +46,7 @@ export class AppController {
    * // Returns: "POST /"
    * ```
    */
+  @SkipActionLog()
   @Post()
   postNothing(): string {
     return 'POST /';

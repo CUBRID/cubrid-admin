@@ -57,33 +57,22 @@ describe('account control storage', () => {
       await expect(make(false).isRegistrationEnabled()).resolves.toBe(true);
     });
 
-    it('left unset, is open until an active admin exists, then closes', async () => {
+    it('left unset, stays open whether or not an admin exists, even without approval', async () => {
       const service = make(undefined);
       await expect(service.isRegistrationEnabled()).resolves.toBe(true);
 
-      users = [{ id: 'old', password: 'h' }];
-      AccountSettingsService.adminsChanged();
-      // An install with accounts but no admin stays open, as before.
-      await expect(service.isRegistrationEnabled()).resolves.toBe(true);
-
-      users = [{ id: 'root', password: 'h', role: 'admin' }];
-      AccountSettingsService.adminsChanged();
-      await expect(service.isRegistrationEnabled()).resolves.toBe(false);
-
-      // A disabled admin doesn't count.
-      users = [{ id: 'root', password: 'h', role: 'admin', status: 'disabled' }];
+      users = [{ id: 'admin', password: 'h', role: 'admin' }];
       AccountSettingsService.adminsChanged();
       await expect(service.isRegistrationEnabled()).resolves.toBe(true);
     });
 
-    it('lets cwm.conf and then the admin switch override the automatic close', async () => {
-      users = [{ id: 'root', password: 'h', role: 'admin' }];
-      await expect(make(true).isRegistrationEnabled()).resolves.toBe(true);
+    it('lets cwm.conf and then the admin switch close it', async () => {
+      users = [{ id: 'admin', password: 'h', role: 'admin' }];
+      await expect(make(false).isRegistrationEnabled()).resolves.toBe(false);
 
       const service = make(undefined);
+      await service.setRegistrationEnabled(false);
       await expect(service.isRegistrationEnabled()).resolves.toBe(false);
-      await service.setRegistrationEnabled(true);
-      await expect(service.isRegistrationEnabled()).resolves.toBe(true);
     });
 
     it('left unset with approval required (the default), stays open after an admin exists', async () => {
@@ -137,13 +126,6 @@ describe('account control storage', () => {
       const service = make(false);
       await service.setRegistrationEnabled(true);
       await expect(service.getSettings()).resolves.toMatchObject({ registrationEnabled: true, registrationSource: 'admin' });
-    });
-
-    it('reuses the admin check briefly, since the sign-up page asks it unauthenticated', async () => {
-      const service = make(undefined);
-      await service.isRegistrationEnabled();
-      await service.isRegistrationEnabled();
-      expect(repository.listUsers).toHaveBeenCalledTimes(1);
     });
 
     it('keeps its file out of the storage root the key migration decrypts', async () => {

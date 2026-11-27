@@ -28,6 +28,7 @@ import { DesktopUserService } from './desktop/desktop-user.service';
 import { VersionModule } from './version/version.module';
 import { AccountModule } from '@account/account.module';
 import { AdminModule } from '@admin/admin.module';
+import { ApiLogModule } from '@api-log/api-log.module';
 
 /**
  * Root application module that configures all feature modules and global providers.
@@ -64,6 +65,7 @@ import { AdminModule } from '@admin/admin.module';
     VersionModule,
     AccountModule,
     AdminModule,
+    ApiLogModule,
   ],
   controllers: [AppController],
   providers: [

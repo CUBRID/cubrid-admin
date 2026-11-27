@@ -3,6 +3,7 @@ import { ConfigService } from '@config/config.service';
 import { AuthError } from '@error/auth/auth-error';
 import { CmsHttpsClientService } from './cms-https-client.service';
 import { CmsForwardClientRequest } from '@api-interfaces';
+import { LogAction } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling CMS HTTPS client requests.
@@ -37,6 +38,7 @@ export class CmsHttpsClientController {
    * // POST /host-uid-1/cms-https-client/forward
    * // Body: { "task": "getbrokersinfo" }
    */
+  @LogAction('cms.forward')
   @Post('forward')
   async forwardRequest(
     @Req() req,

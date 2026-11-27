@@ -46,7 +46,7 @@ export default function AdminSettingsSection({ reloadKey }) {
   if (error) {
     return (
       <div>
-        <AdminPageHeader title={CM.adminSectionSettings} subtitle={CM.settingsPageSubtitle} />
+        <AdminPageHeader title={CM.adminSectionSettings} />
         <div role="alert" className="flex items-start gap-3 px-4 py-3 bg-rose-500/5 border border-rose-500/15 rounded-xl">
           <Icon name="error_outline" size="sm" weight={300} className="text-rose-500 shrink-0 mt-0.5" />
           <p className="text-13 text-rose-500 font-medium flex-1 leading-relaxed">{error}</p>
@@ -57,7 +57,7 @@ export default function AdminSettingsSection({ reloadKey }) {
   if (!settings) {
     return (
       <div className="max-w-3xl">
-        <AdminPageHeader title={CM.adminSectionSettings} subtitle={CM.settingsPageSubtitle} />
+        <AdminPageHeader title={CM.adminSectionSettings} />
         <div className="h-24 rounded-2xl bg-slate-100 dark:bg-white/5 animate-pulse" />
       </div>
     );
@@ -76,11 +76,10 @@ export default function AdminSettingsSection({ reloadKey }) {
 
   return (
     <div className="max-w-3xl space-y-4">
-      <AdminPageHeader title={CM.adminSectionSettings} subtitle={CM.settingsPageSubtitle} />
+      <AdminPageHeader title={CM.adminSectionSettings} />
       <div className={`${CARD} flex items-start justify-between gap-6`}>
         <div className="min-w-0">
           <p className="text-15 font-bold text-slate-700 dark:text-slate-200">{CM.selfRegistrationLabel}</p>
-          <p className="text-13 text-slate-400 mt-1">{CM.selfRegistrationHint}</p>
           <p className="text-12 text-slate-500 mt-2 flex items-center gap-1.5" data-testid="admin-registration-source">
             <Icon name="info" size="14px" weight={300} />
             {source}
@@ -97,7 +96,6 @@ export default function AdminSettingsSection({ reloadKey }) {
       <div className={`${CARD} flex items-start justify-between gap-6`} data-testid="admin-registration-approval">
         <div className="min-w-0">
           <p className="text-15 font-bold text-slate-700 dark:text-slate-200">{CM.registrationApprovalLabel}</p>
-          <p className="text-13 text-slate-400 mt-1">{CM.registrationApprovalHint}</p>
           <p className="text-12 text-slate-500 mt-2 flex items-center gap-1.5" data-testid="admin-registration-approval-source">
             <Icon name="info" size="14px" weight={300} />
             {approvalSource}
@@ -113,7 +111,6 @@ export default function AdminSettingsSection({ reloadKey }) {
 
       <div className={CARD} data-testid="admin-configured-admins">
         <p className="text-15 font-bold text-slate-700 dark:text-slate-200">{CM.configuredAdminsTitle}</p>
-        <p className="text-13 text-slate-400 mt-1">{CM.configuredAdminsHint}</p>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {settings.configuredAdmins?.length ? (
             settings.configuredAdmins.map((id) => (

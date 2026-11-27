@@ -3,6 +3,7 @@ import { UserService } from './user.service';
 import { UserPreference, UserPreferenceDto, ChangePasswordDto, DeleteUserDto, SetInitialPasswordDto } from '@type/index';
 import { UpdateUserInfoRequest, UserResponse } from '@api-interfaces';
 import { AllowPendingPasswordChange, NotOnDesktop } from '@common';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 /**
  * Controller for handling user-related operations.
@@ -81,6 +82,7 @@ export class UserController {
    */
   @NotOnDesktop()
   @AllowPendingPasswordChange()
+  @LogAction('account.change_password')
   @Post('credential')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req): Promise<void> {
     const userId = req.user.sub;
@@ -95,6 +97,7 @@ export class UserController {
    */
   @NotOnDesktop()
   @AllowPendingPasswordChange()
+  @LogAction('account.set_password')
   @Post('initial-password')
   async setInitialPassword(@Body() dto: SetInitialPasswordDto, @Request() req): Promise<void> {
     await this.userService.setInitialPassword(req.user.sub, dto.newPassword);
@@ -118,6 +121,7 @@ export class UserController {
    * ```
    */
   @NotOnDesktop()
+  @LogAction('account.delete')
   @Delete('account')
   async deleteUser(@Request() req, @Body() body: DeleteUserDto): Promise<boolean> {
     await this.userService.deleteUser(req.user.sub, body);
@@ -156,6 +160,7 @@ export class UserController {
    * // Body: { dashboardInterval: 30 }
    * ```
    */
+  @SkipActionLog()
   @Put('preferences')
   async updateUserPreferences(@Request() req, @Body() body: UserPreferenceDto): Promise<void> {
     const userId = req.user.sub;
@@ -179,6 +184,7 @@ export class UserController {
    * ```
    */
   @NotOnDesktop()
+  @LogAction('account.change')
   @Post('account')
   async updateUser(@Request() req, @Body() body: UpdateUserInfoRequest): Promise<void> {
     const userId = req.user.sub;

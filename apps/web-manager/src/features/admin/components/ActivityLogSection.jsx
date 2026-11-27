@@ -97,7 +97,6 @@ export default function ActivityLogSection({ reloadKey }) {
     <div>
       <AdminPageHeader
         title={CM.adminSectionActivity}
-        subtitle={CM.activityPageSubtitle}
         action={
           <Button
             data-testid="admin-activity-export"

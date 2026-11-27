@@ -25,4 +25,11 @@ export const adminApi = {
     );
     return apiClient.get('/admin/audit', { params });
   },
+  // { from, to, user, category, result, target, limit, offset, tz } -> { entries, total, summary }
+  queryApiLog: (filter = {}) => {
+    const params = Object.fromEntries(
+      Object.entries(filter).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    );
+    return apiClient.get('/admin/api-log', { params });
+  },
 };

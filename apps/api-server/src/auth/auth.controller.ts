@@ -9,6 +9,7 @@ import {
 } from '@api-interfaces';
 import { AllowPendingPasswordChange, NotOnDesktop, Public } from '@common';
 import { ValidationError } from '@error/validation/validation-error';
+import { LogAction, SkipActionLog } from '@api-log/log-action.decorator';
 
 // The desktop app has no app login (DesktopUserGuard).
 @NotOnDesktop()
@@ -17,12 +18,14 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @LogAction('auth.sign_in')
   @Post('login')
   async login(@Body() userDTO: UserDTO): Promise<LoginResponse> {
     return await this.authService.login(userDTO);
   }
 
   @Public()
+  @SkipActionLog()
   @Post('refresh')
   async refresh(@Body() body: RefreshTokenRequest): Promise<LoginResponse> {
     if (!body?.refreshToken?.trim()) {
@@ -32,6 +35,7 @@ export class AuthController {
   }
 
   @AllowPendingPasswordChange()
+  @LogAction('auth.sign_out')
   @Post('logout')
   async logout(@Request() req, @Body() body: LogoutRequest): Promise<{ success: true }> {
     const { jti, exp } = req.user ?? {};
@@ -47,6 +51,7 @@ export class AuthController {
   }
 
   @Public()
+  @LogAction('auth.register')
   @Post('register')
   async register(@Body() userDTO: UserDTO): Promise<RegisterResponse> {
     return this.authService.register(userDTO);
